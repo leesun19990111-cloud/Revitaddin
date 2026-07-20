@@ -1,0 +1,91 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Revit 2023~2027 동시 지원을 위한 연도별 빌드 구성.
+       Configuration 이름 뒤 4자리(예: Release2026)에서 연도를 뽑아 그 연도에 맞는
+       TargetFramework + Nice3point.Revit.Api 패키지 버전을 고른다.
+       (실측 확인: 2023/2024 -> net48, 2025/2026 -> net8.0-windows, 2027 -> net10.0-windows) -->
+  <PropertyGroup>
+    <Configurations>Debug2023;Debug2024;Debug2025;Debug2026;Debug2027</Configurations>
+    <Configurations>$(Configurations);Release2023;Release2024;Release2025;Release2026;Release2027</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RevitVersion Condition="$(Configuration.EndsWith('2023'))">2023</RevitVersion>
+    <RevitVersion Condition="$(Configuration.EndsWith('2024'))">2024</RevitVersion>
+    <RevitVersion Condition="$(Configuration.EndsWith('2025'))">2025</RevitVersion>
+    <RevitVersion Condition="$(Configuration.EndsWith('2026'))">2026</RevitVersion>
+    <RevitVersion Condition="$(Configuration.EndsWith('2027'))">2027</RevitVersion>
+    <!-- 연도 접미사가 없는 일반 Debug/Release(예: IDE 기본값)로 빌드할 경우를 위한 안전한 기본값 -->
+    <RevitVersion Condition="'$(RevitVersion)'==''">2026</RevitVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework Condition="'$(RevitVersion)'=='2023' or '$(RevitVersion)'=='2024'">net48</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)'=='2025' or '$(RevitVersion)'=='2026'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)'=='2027'">net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- net48은 기본 C# 7.3으로 잡혀 nullable 등 최신 문법을 못 씀 -->
+    <LangVersion>latest</LangVersion>
+    <!-- 리본 버튼 아이콘(BitmapSource)을 로드하기 위해 필요. net48/net8.0-windows/net10.0-windows 모두 지원. -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <!-- 연도별 API 차이가 실제로 발견된 경우에만 추가하는 조건부 컴파일 상수 (Nice3point SDK의 OR_GREATER
+       네이밍을 그대로 따르되, 실제 쓰는 것만 손으로 추가). 첫 사례: Floor.SlabShapeEditor가 2023에서는
+       프로퍼티, 2024부터는 GetSlabShapeEditor() 메서드로 바뀜(2024/2025는 과도기라 둘 다 존재,
+       2026부터는 메서드만) - MetadataLoadContext로 5개 연도 패키지를 모두 리플렉션해 직접 확인함. -->
+  <PropertyGroup>
+    <DefineConstants Condition="'$(RevitVersion)'=='2023'">$(DefineConstants);REVIT2023</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)'=='2024' or '$(RevitVersion)'=='2025' or '$(RevitVersion)'=='2026' or '$(RevitVersion)'=='2027'">$(DefineConstants);REVIT2024_OR_GREATER</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Revit 설치 여부와 무관하게 빌드 가능하도록 NuGet 참조 어셈블리 패키지 사용.
+         ref/ 폴더 전용 패키지라 컴파일 전용이며 출력 폴더로 복사되지 않는다(Autodesk DLL 재배포 방지). -->
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).*-*" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*-*" />
+    <!-- net48에는 System.Text.Json이 기본 내장되어 있지 않아 설정 파일(JSON) 저장/로드를 위해 명시적으로 참조 -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\icon16.png">
+      <LogicalName>WallSplitter.Resources.icon16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon32.png">
+      <LogicalName>WallSplitter.Resources.icon32.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_settings16.png">
+      <LogicalName>WallSplitter.Resources.icon_settings16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_settings32.png">
+      <LogicalName>WallSplitter.Resources.icon_settings32.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_namer16.png">
+      <LogicalName>WallSplitter.Resources.icon_namer16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_namer32.png">
+      <LogicalName>WallSplitter.Resources.icon_namer32.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_toggle16.png">
+      <LogicalName>WallSplitter.Resources.icon_toggle16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_toggle32.png">
+      <LogicalName>WallSplitter.Resources.icon_toggle32.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_floor16.png">
+      <LogicalName>WallSplitter.Resources.icon_floor16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_floor32.png">
+      <LogicalName>WallSplitter.Resources.icon_floor32.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_material16.png">
+      <LogicalName>WallSplitter.Resources.icon_material16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_material32.png">
+      <LogicalName>WallSplitter.Resources.icon_material32.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>SunnyTools_Install</AssemblyName>
+    <RootNamespace>SunnyToolsInstaller</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- 게시 결과 폴더에 .NET 런타임 dll 수십 개가 exe와 함께 흩어져 있으면 실행 파일을 찾기 어렵다는 피드백으로 추가.
+         단일 파일 게시(self-contained + PublishSingleFile)로 묶으면 그 dll들이 exe 안에 번들되어
+         결과 폴더에는 exe(+ 소수의 네이티브 파일)와 Payload\ 폴더만 남는다. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <!-- WallSplitter.csproj를 지원 대상 Revit 연도(2023~2027) 수만큼 각각 빌드해서
+       Payload\{연도}\ 아래로 모아온다.
+       ProjectReference를 쓰지 않는 이유: WallSplitter.csproj는 UseWPF=true(리본 아이콘용)라서
+       일반 ProjectReference로 걸면 self-contained 게시 시 WPF 네이티브 런타임 전체가
+       설치 프로그램에도 딸려와 크기가 5배 이상 불어난다. 설치 프로그램 자신은 DLL을
+       파일로 복사만 할 뿐 실제로 로드/실행하지 않으므로 순수 데이터로만 가져온다.
+
+       WallSplitter.dll 하나만이 아니라 해당 출력 폴더의 *.dll 전부를 복사한다:
+       net48(2023/2024) 빌드는 System.Text.Json 등 net48에 기본 내장되지 않은 의존 DLL이
+       같은 폴더에 함께 생성되며, 이것들도 Revit Addins 폴더에 같이 있어야 로드에 성공한다
+       (net8.0-windows/net10.0-windows는 System.Text.Json이 프레임워크 내장이라 WallSplitter.dll만 있어도 됨,
+       와일드카드로 통일해두면 향후 의존성이 늘어나도 자동으로 챙겨진다). -->
+  <Target Name="BuildWallSplitterPayload" BeforeTargets="Build;Publish">
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\WallSplitter\WallSplitter.csproj&quot; -c Release2023 -v quiet" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\WallSplitter\WallSplitter.csproj&quot; -c Release2024 -v quiet" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\WallSplitter\WallSplitter.csproj&quot; -c Release2025 -v quiet" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\WallSplitter\WallSplitter.csproj&quot; -c Release2026 -v quiet" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\WallSplitter\WallSplitter.csproj&quot; -c Release2027 -v quiet" />
+  </Target>
+
+  <ItemGroup>
+    <None Include="..\WallSplitter\bin\Release2023\net48\*.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="Payload\2023\%(Filename)%(Extension)" Visible="false" />
+    <None Include="..\WallSplitter\bin\Release2024\net48\*.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="Payload\2024\%(Filename)%(Extension)" Visible="false" />
+    <None Include="..\WallSplitter\bin\Release2025\net8.0-windows\*.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="Payload\2025\%(Filename)%(Extension)" Visible="false" />
+    <None Include="..\WallSplitter\bin\Release2026\net8.0-windows\*.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="Payload\2026\%(Filename)%(Extension)" Visible="false" />
+    <None Include="..\WallSplitter\bin\Release2027\net10.0-windows\*.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="Payload\2027\%(Filename)%(Extension)" Visible="false" />
+  </ItemGroup>
+
+  <!-- PublishSingleFile 번들러는 (관리 어셈블리가 아닌) 순수 콘텐츠 파일인 Payload\를 게시 출력 폴더로
+       복사하지 않고 중간 산출물(OutDir, 즉 bin\...\)에만 남겨둔다. 게시할 때마다 빠뜨리지 않도록
+       게시 후 명시적으로 다시 복사한다. -->
+  <Target Name="CopyPayloadToPublishDir" AfterTargets="Publish">
+    <ItemGroup>
+      <PayloadFiles Include="$(OutDir)Payload\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PayloadFiles)" DestinationFiles="@(PayloadFiles->'$(PublishDir)Payload\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

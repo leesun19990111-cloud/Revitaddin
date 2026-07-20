@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "dgSpecHash": "8pahlNAbhGA=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\P95-LTY\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\8.0.0\\microsoft.bcl.asyncinterfaces.8.0.0.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\nice3point.revit.api.revitapi\\2023.1.90\\nice3point.revit.api.revitapi.2023.1.90.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\nice3point.revit.api.revitapiui\\2023.1.90\\nice3point.revit.api.revitapiui.2023.1.90.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.buffers\\4.5.1\\system.buffers.4.5.1.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.numerics.vectors\\4.5.0\\system.numerics.vectors.4.5.0.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.text.encodings.web\\8.0.0\\system.text.encodings.web.8.0.0.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.text.json\\8.0.5\\system.text.json.8.0.5.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.threading.tasks.extensions\\4.5.4\\system.threading.tasks.extensions.4.5.4.nupkg.sha512",
+    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.valuetuple\\4.5.0\\system.valuetuple.4.5.0.nupkg.sha512"
+  ],
+  "logs": []
+}

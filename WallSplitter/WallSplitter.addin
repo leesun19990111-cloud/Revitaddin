@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>WallSplitter</Name>
+    <Assembly>C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\bin\Debug2026\net8.0-windows\WallSplitter.dll</Assembly>
+    <AddInId>E3FC07B6-D2EC-412F-9F78-453F51266352</AddInId>
+    <FullClassName>WallSplitter.App</FullClassName>
+    <VendorId>Sunny</VendorId>
+    <VendorDescription>Sunny Automation, WallSplitter test build</VendorDescription>
+  </AddIn>
+</RevitAddIns>

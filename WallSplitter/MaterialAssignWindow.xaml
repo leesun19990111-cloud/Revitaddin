@@ -1,0 +1,273 @@
+<Window x:Class="WallSplitter.MaterialAssignWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="재료 지정 - 유형 재료 일괄 지정 / 재료 삭제"
+        Height="660" Width="780"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip"
+        Background="White">
+    <!-- 다른 창들과 동일한 이유(Revit 전역 테마 유입 방지)로 색을 명시적으로 고정한다. -->
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#F0F0F0"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="Black"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="Black"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="Black"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="Black"/>
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="Black"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TabControl x:Name="MainTabControl" Grid.Row="0" Background="White">
+            <TabItem Header="재료 지정">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8"
+                               Text="벽/바닥/지붕/천장처럼 레이어 구조를 가진 유형은 레이어가 하나뿐일 때만(예: 벽체 분리·바닥 분리로 만든 단일 재질 유형) 대상이 됩니다. 그 외 유형은 '재료' 파라미터가 있는 경우에만 대상이 됩니다."/>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="필터 대상:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox x:Name="FilterTargetCombo" Width="100" SelectedIndex="0" SelectionChanged="FilterTargetCombo_SelectionChanged">
+                            <ComboBoxItem Content="패밀리/유형"/>
+                            <ComboBoxItem Content="현재 재료"/>
+                            <ComboBoxItem Content="재료 없음"/>
+                        </ComboBox>
+                        <TextBox x:Name="FilterBox" Width="200" Margin="8,0,0,0" VerticalContentAlignment="Center" TextChanged="FilterBox_TextChanged"/>
+                        <ComboBox x:Name="FilterModeCombo" Width="130" Margin="6,0,0,0" SelectedIndex="0" SelectionChanged="FilterModeCombo_SelectionChanged">
+                            <ComboBoxItem Content="포함됨"/>
+                            <ComboBoxItem Content="포함하지 않음"/>
+                            <ComboBoxItem Content="일치함"/>
+                            <ComboBoxItem Content="일치하지 않음"/>
+                            <ComboBoxItem Content="~로 시작하는"/>
+                            <ComboBoxItem Content="~로 끝나는"/>
+                        </ComboBox>
+                        <Button x:Name="SelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="SelectAllButton_Click"/>
+                        <Button x:Name="SelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="SelectNoneButton_Click"/>
+                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="Gray" Margin="14,0,0,0"/>
+                    </StackPanel>
+
+                    <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="지정할 재료:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="Bold"/>
+                            <TextBox x:Name="MaterialFilterBox" Width="160" VerticalContentAlignment="Center" TextChanged="MaterialFilterBox_TextChanged"/>
+                            <ComboBox x:Name="MaterialCombo" Width="240" Margin="8,0,0,0" DisplayMemberPath="DisplayName" SelectionChanged="MaterialCombo_SelectionChanged"/>
+                            <TextBlock x:Name="SelectedMaterialText" VerticalAlignment="Center" Margin="14,0,0,0" Foreground="Gray"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="3" BorderBrush="#CCCCCC" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- NAMER의 이름 열 너비 조절과 같은 이유/방식(자세한 설명은 NamerWindow.xaml.cs
+                                 참고) - 아래 행들은 StackPanel이라 자체 열이 없어서, 두 GridSplitter의
+                                 DragDelta에서 코드로 모든 행의 TextBlock.Width를 다시 써서 맞춘다. -->
+                            <Grid Grid.Row="0" Margin="30,4,4,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition x:Name="TypeNameColumn" Width="260"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition x:Name="CurrentMaterialColumn" Width="160"/>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition x:Name="NewMaterialColumn" Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="패밀리/유형" FontWeight="Bold" Foreground="Gray"/>
+                                <GridSplitter x:Name="TypeNameSplitter" Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="ColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="2" Text="현재 재료" FontWeight="Bold" Foreground="Gray"/>
+                                <GridSplitter x:Name="CurrentMaterialSplitter" Grid.Column="3" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="ColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="4" Text="새 재료" FontWeight="Bold" Foreground="Gray"/>
+                            </Grid>
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="ItemsPanel" Margin="4"
+                                            MouseMove="ItemsPanel_MouseMove"
+                                            MouseLeftButtonUp="ItemsPanel_MouseLeftButtonUp"
+                                            LostMouseCapture="ItemsPanel_LostMouseCapture"/>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Row="4" Margin="0,6,0,0">
+                        <TextBlock x:Name="CountText" Foreground="Gray"/>
+                        <TextBlock x:Name="PendingChangesText" Foreground="#B36B00" FontWeight="SemiBold" Margin="0,2,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="취소" Padding="18,5" Margin="0,0,8,0" Click="CancelButton_Click" IsCancel="True"/>
+                        <Button Content="적용 (창 안에서만)" Padding="18,5" Margin="0,0,16,0" Click="ApplyButton_Click"/>
+                        <Button Content="최종 적용 (모델에 반영)" Padding="18,5" Click="FinalApplyButton_Click" FontWeight="Bold"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="재료 삭제">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8"
+                               Text="문서의 재료 중 여러 개를 검색해서 한 번에 선택하고 삭제합니다. 다른 유형/부재가 사용 중이던 재료라도 삭제는 진행되며, 그 유형/부재의 재료 지정은 해제된 상태로 남습니다."/>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="재료 필터:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox x:Name="DelFilterBox" Width="220" VerticalContentAlignment="Center" TextChanged="DelFilterBox_TextChanged"/>
+                        <ComboBox x:Name="DelFilterModeCombo" Width="130" Margin="6,0,0,0" SelectedIndex="0" SelectionChanged="DelFilterModeCombo_SelectionChanged">
+                            <ComboBoxItem Content="포함됨"/>
+                            <ComboBoxItem Content="포함하지 않음"/>
+                            <ComboBoxItem Content="일치함"/>
+                            <ComboBoxItem Content="일치하지 않음"/>
+                            <ComboBoxItem Content="~로 시작하는"/>
+                            <ComboBoxItem Content="~로 끝나는"/>
+                        </ComboBox>
+                        <Button x:Name="DelSelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="DelSelectAllButton_Click"/>
+                        <Button x:Name="DelSelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="DelSelectNoneButton_Click"/>
+                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="Gray" Margin="14,0,0,0"/>
+                    </StackPanel>
+
+                    <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="DelItemsPanel" Margin="4"
+                                        MouseMove="DelItemsPanel_MouseMove"
+                                        MouseLeftButtonUp="DelItemsPanel_MouseLeftButtonUp"
+                                        LostMouseCapture="DelItemsPanel_LostMouseCapture"/>
+                        </ScrollViewer>
+                    </Border>
+
+                    <StackPanel Grid.Row="3" Margin="0,6,0,0">
+                        <TextBlock x:Name="DelCountText" Foreground="Gray"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="취소" Padding="18,5" Margin="0,0,16,0" Click="CancelButton_Click" IsCancel="True"/>
+                        <Button Content="선택한 재료 삭제 (모델에 반영)" Padding="18,5" Click="DeleteButton_Click" FontWeight="Bold"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="클래스/설명 변경">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8"
+                               Text="문서의 재료를 이름으로 검색해서 여러 개를 한 번에 선택하고, 아이덴티티 데이터의 '클래스' 또는 '설명'을 일괄로 바꿉니다."/>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="재료 필터:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox x:Name="IdFilterBox" Width="220" VerticalContentAlignment="Center" TextChanged="IdFilterBox_TextChanged"/>
+                        <ComboBox x:Name="IdFilterModeCombo" Width="130" Margin="6,0,0,0" SelectedIndex="0" SelectionChanged="IdFilterModeCombo_SelectionChanged">
+                            <ComboBoxItem Content="포함됨"/>
+                            <ComboBoxItem Content="포함하지 않음"/>
+                            <ComboBoxItem Content="일치함"/>
+                            <ComboBoxItem Content="일치하지 않음"/>
+                            <ComboBoxItem Content="~로 시작하는"/>
+                            <ComboBoxItem Content="~로 끝나는"/>
+                        </ComboBox>
+                        <Button x:Name="IdSelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="IdSelectAllButton_Click"/>
+                        <Button x:Name="IdSelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="IdSelectNoneButton_Click"/>
+                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="Gray" Margin="14,0,0,0"/>
+                    </StackPanel>
+
+                    <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="변경할 항목:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="Bold"/>
+                            <ComboBox x:Name="IdTargetFieldCombo" Width="90" SelectedIndex="0" SelectionChanged="IdTargetFieldCombo_SelectionChanged">
+                                <ComboBoxItem Content="클래스"/>
+                                <ComboBoxItem Content="설명"/>
+                            </ComboBox>
+                            <TextBlock Text="새 값:" VerticalAlignment="Center" Margin="14,0,6,0"/>
+                            <TextBox x:Name="IdNewValueBox" Width="260" VerticalContentAlignment="Center" TextChanged="IdNewValueBox_TextChanged"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="3" BorderBrush="#CCCCCC" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 다른 열 너비 조절과 같은 방식(NamerWindow.xaml.cs 참고) - GridSplitter의
+                                 DragDelta에서 코드로 모든 행의 TextBlock.Width를 다시 써서 맞춘다. -->
+                            <Grid Grid.Row="0" Margin="30,4,4,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition x:Name="IdNameColumn" Width="220"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition x:Name="IdClassColumn" Width="180"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition x:Name="IdDescriptionColumn" Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="재료 이름" FontWeight="Bold" Foreground="Gray"/>
+                                <GridSplitter x:Name="IdNameSplitter" Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="IdColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="2" Text="클래스" FontWeight="Bold" Foreground="Gray"/>
+                                <GridSplitter x:Name="IdClassSplitter" Grid.Column="3" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="IdColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="4" Text="설명" FontWeight="Bold" Foreground="Gray"/>
+                            </Grid>
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="IdItemsPanel" Margin="4"
+                                            MouseMove="IdItemsPanel_MouseMove"
+                                            MouseLeftButtonUp="IdItemsPanel_MouseLeftButtonUp"
+                                            LostMouseCapture="IdItemsPanel_LostMouseCapture"/>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Row="4" Margin="0,6,0,0">
+                        <TextBlock x:Name="IdCountText" Foreground="Gray"/>
+                        <TextBlock x:Name="IdPendingChangesText" Foreground="#B36B00" FontWeight="SemiBold" Margin="0,2,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="취소" Padding="18,5" Margin="0,0,8,0" Click="CancelButton_Click" IsCancel="True"/>
+                        <Button Content="적용 (창 안에서만)" Padding="18,5" Margin="0,0,16,0" Click="IdApplyButton_Click"/>
+                        <Button Content="최종 적용 (모델에 반영)" Padding="18,5" Click="IdFinalApplyButton_Click" FontWeight="Bold"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
