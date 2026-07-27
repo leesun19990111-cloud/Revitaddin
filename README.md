@@ -77,6 +77,16 @@ dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release
 - `SunnyToolsInstaller/` — 5개 연도 빌드를 감지·설치하는 독립 설치 프로그램
 - `WallSplitter.slnx` — 솔루션 파일
 - `Old_Versions/` — 과거 설치 프로그램 빌드 산출물 보관용 (최신 산출물은 루트에 별도 유지)
+- `docs/` — 기능별 상세 설계/이력 문서 (`CLAUDE.md`가 이 폴더로 라우팅됨):
+  - `docs/wall-floor-split/` — 벽체 분리 / 바닥 분리, 유형 이름 규칙
+  - `docs/app-shell/` — 리본/앱 시작 (탭·패널·아이콘·매니페스트)
+  - `docs/namer/` — NAMER
+  - `docs/material-assign/` — 재료 지정
+  - `docs/model-sync/` — 모델간 변경 반영
+  - `docs/quick-toggle/` — 빠른 토글 (뷰 저장/되돌리기 포함)
+  - `docs/design-system/` — 화면 디자인 시스템
+  - `docs/build-system/` — 멀티 버전 빌드
+  - `docs/installer/` — 설치 프로그램
 
 ## 알려진 제한사항
 
@@ -88,4 +98,4 @@ dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release
 - 모델간 변경 반영의 변경 기록(change-log.json)은 자동으로 정리되지 않고 계속 쌓이며, 창에서 수동으로만 삭제할 수 있습니다.
 - 빠른 토글 커스텀 툴바는 Revit 메인 창에만 붙으며, 뷰를 별도 창으로 분리하면 그 창은 따라가지 않습니다. 저장하지 않은 새 프로젝트에서는 설정을 저장할 곳이 없어 비활성 상태로 표시됩니다.
 
-더 자세한 설계 배경과 이력은 `CLAUDE.md`를 참고하세요.
+더 자세한 설계 배경과 이력은 `CLAUDE.md`(절대 규칙 + 작업 영역별 문서 라우팅)와 `docs/<영역>/CLAUDE.md`(기능별 상세 이력)를 참고하세요.
