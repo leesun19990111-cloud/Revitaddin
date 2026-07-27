@@ -95,6 +95,12 @@
     <EmbeddedResource Include="Resources\icon_toggle32.png">
       <LogicalName>WallSplitter.Resources.icon_toggle32.png</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_toggle_off16.png">
+      <LogicalName>WallSplitter.Resources.icon_toggle_off16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_toggle_on16.png">
+      <LogicalName>WallSplitter.Resources.icon_toggle_on16.png</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\icon_floor16.png">
       <LogicalName>WallSplitter.Resources.icon_floor16.png</LogicalName>
     </EmbeddedResource>

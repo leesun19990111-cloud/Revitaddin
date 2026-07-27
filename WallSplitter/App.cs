@@ -220,7 +220,7 @@ namespace WallSplitter
                 typeof(ToggleTypeAssignmentPersistenceCommand).FullName)
             {
                 ToolTip = "'유형 직접 지정' 모드에서, 지정한 유형을 다음 벽/바닥에도 이어서 적용할지(복수) 매번 새로 지정할지(단일) 전환합니다 (벽체 분리·바닥 분리가 공유).",
-                Image = LoadIcon("WallSplitter.Resources.icon_toggle16.png"),
+                Image = LoadIcon(ToggleIconResource(currentSettings.TypeAssignmentPersistence == TypeAssignmentPersistence.Multiple)),
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(settingsButtonData, toggleButtonData);
@@ -230,6 +230,11 @@ namespace WallSplitter
 
         private static string ToggleLabel(TypeAssignmentPersistence mode) =>
             mode == TypeAssignmentPersistence.Multiple ? "복수" : "단일";
+
+        // "단일/복수", "표시/숨김" 두 토글 버튼이 공유하는 켜짐/꺼짐 스위치 아이콘 - 지금까지는 텍스트
+        // 라벨만 바뀌고 아이콘은 고정이었는데, 상태를 아이콘으로도 보여달라는 요청(2026-07-27)으로 추가.
+        private static string ToggleIconResource(bool on) =>
+            on ? "WallSplitter.Resources.icon_toggle_on16.png" : "WallSplitter.Resources.icon_toggle_off16.png";
 
         // "빠른 토글" 패널에 "빠른 토글 설정"(뷰템플릿/필터/작업세트 버튼 등록) + "표시/숨김"
         // (커스텀 툴바를 껐다 켬) 두 버튼을 스택으로 붙인다 - AddSettingsStack과 같은 패턴.
@@ -252,7 +257,9 @@ namespace WallSplitter
                 typeof(QuickToggleVisibilityToggleCommand).FullName)
             {
                 ToolTip = "빠른 토글 툴바를 현재 프로젝트 파일에서 표시하거나 숨깁니다.",
-                Image = LoadIcon("WallSplitter.Resources.icon_toggle16.png"),
+                // 문서가 열리기 전이라 실제 프로젝트별 표시 상태를 아직 몰라 일단 "켜짐" 아이콘으로 시작하고,
+                // ViewActivated에서 UpdateQuickToggleVisibilityLabel이 실제 상태로 바로잡는다(라벨과 동일한 방식).
+                Image = LoadIcon(ToggleIconResource(true)),
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(settingsButtonData, toggleButtonData);
@@ -267,15 +274,21 @@ namespace WallSplitter
         internal static void UpdateQuickToggleVisibilityLabel(bool visible)
         {
             foreach (PushButton button in _quickToggleVisibilityButtons)
+            {
                 button.ItemText = QuickToggleVisibilityLabel(visible);
+                button.Image = LoadIcon(ToggleIconResource(visible));
+            }
         }
 
-        // ToggleTypeAssignmentPersistenceCommand가 설정을 바꾼 직후 호출해 리본 버튼 텍스트를 갱신한다.
+        // ToggleTypeAssignmentPersistenceCommand가 설정을 바꾼 직후 호출해 리본 버튼 텍스트/아이콘을 갱신한다.
         // 벽체 분리/바닥 분리 패널 양쪽 토글 버튼 모두 같은 설정을 가리키므로 둘 다 갱신해야 한다.
         internal static void UpdateTypeAssignmentToggleLabel(TypeAssignmentPersistence mode)
         {
             foreach (PushButton toggleButton in _typeAssignmentToggleButtons)
+            {
                 toggleButton.ItemText = ToggleLabel(mode);
+                toggleButton.Image = LoadIcon(ToggleIconResource(mode == TypeAssignmentPersistence.Multiple));
+            }
         }
 
         // Revit은 WPF 기반이 아니라서 프로세스 안에 System.Windows.Application이 하나도 없다.

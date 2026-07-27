@@ -86,12 +86,18 @@ namespace WallSplitter
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.Child = grid;
 
-                Button upButton = new Button { Content = CreateTriangle(pointingUp: true), Width = 22, Margin = new Thickness(0, 0, 2, 0), IsEnabled = index > 0 };
+                // CONFIRMED LIVE BUG (2026-07-27), 수정: 위/아래 버튼이 "투명하게 보여 뭐가 위/아래인지
+                // 안 보인다"는 실측 피드백 - 다크 테마 때는 BaseButtonStyle의 기본 배경이 채워진 색이라
+                // 버튼 자체가 뚜렷했지만, Industry 라이트 테마로 바뀌며 기본 버튼 배경이 투명(테두리만
+                // 있는 "선 그림")이 되어(readme의 .btn-secondary 규칙), 작은 22px 아이콘 버튼에서는 그
+                // 미묘한 하이라인 테두리만으론 존재감이 약했다. 고정: 배경을 명시적으로 Surface로 채우고
+                // (기본 스타일의 투명 배경에 기대지 않음), 삼각형도 더 크고 굵게 키웠다.
+                Button upButton = new Button { Content = CreateTriangle(pointingUp: true), Width = 24, Height = 24, Background = Theme.Surface, Margin = new Thickness(0, 0, 2, 0), IsEnabled = index > 0 };
                 upButton.Click += (s, e) => { MoveButton(index, index - 1); };
                 WpfGrid.SetColumn(upButton, 0);
                 grid.Children.Add(upButton);
 
-                Button downButton = new Button { Content = CreateTriangle(pointingUp: false), Width = 22, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index < _settings.Buttons.Count - 1 };
+                Button downButton = new Button { Content = CreateTriangle(pointingUp: false), Width = 24, Height = 24, Background = Theme.Surface, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index < _settings.Buttons.Count - 1 };
                 downButton.Click += (s, e) => { MoveButton(index, index + 1); };
                 WpfGrid.SetColumn(downButton, 1);
                 grid.Children.Add(downButton);
@@ -105,7 +111,7 @@ namespace WallSplitter
                 WpfGrid.SetColumn(nameArea, 2);
                 grid.Children.Add(nameArea);
 
-                Button deleteButton = new Button { Content = CreateXMark(), Width = 22, Margin = new Thickness(8, 0, 0, 0) };
+                Button deleteButton = new Button { Content = CreateXMark(), Width = 24, Height = 24, Background = Theme.Surface, Margin = new Thickness(8, 0, 0, 0) };
                 deleteButton.Click += (s, e) => { DeleteButton(index); };
                 WpfGrid.SetColumn(deleteButton, 3);
                 grid.Children.Add(deleteButton);
@@ -176,6 +182,7 @@ namespace WallSplitter
 
         private void ShowEmptyEditPanel()
         {
+            EditHeaderHost.Children.Clear();
             EditPanelHost.Children.Clear();
             EditPanelHost.Children.Add(new TextBlock
             {
@@ -185,8 +192,12 @@ namespace WallSplitter
             });
         }
 
+        // 이름 입력칸/카테고리 안내는 EditHeaderHost(고정, 스크롤 안 됨)에 넣고, 실제 대상 목록만
+        // EditPanelHost(스크롤됨)에 넣는다 - 목록이 길어져도 이름 칸이 항상 보이게 하기 위함
+        // (2026-07-27 실측 피드백: "스크롤을 내리면 이름 변경 부분이 같이 사라진다").
         private void BuildEditPanel(QuickToggleButtonConfig cfg)
         {
+            EditHeaderHost.Children.Clear();
             EditPanelHost.Children.Clear();
 
             StackPanel nameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
@@ -194,9 +205,9 @@ namespace WallSplitter
             TextBox nameBox = new TextBox { Width = 240, Text = cfg.Name, VerticalContentAlignment = VerticalAlignment.Center };
             nameBox.TextChanged += (s, e) => { cfg.Name = nameBox.Text; RefreshButtonList(); };
             nameRow.Children.Add(nameBox);
-            EditPanelHost.Children.Add(nameRow);
+            EditHeaderHost.Children.Add(nameRow);
 
-            EditPanelHost.Children.Add(new TextBlock
+            EditHeaderHost.Children.Add(new TextBlock
             {
                 Text = CategoryLabel(cfg.Category) + " 대상 선택" + (cfg.Category == QuickToggleCategory.ViewTemplate ? " (하나만 선택 가능)" : " (여러 개 선택 가능 - 모두 함께 켜고 꺼집니다)"),
                 FontWeight = FontWeights.Bold,
@@ -295,16 +306,16 @@ namespace WallSplitter
         private static Polygon CreateTriangle(bool pointingUp)
         {
             PointCollection points = pointingUp
-                ? new PointCollection { new System.Windows.Point(5, 0), new System.Windows.Point(10, 8), new System.Windows.Point(0, 8) }
-                : new PointCollection { new System.Windows.Point(0, 0), new System.Windows.Point(10, 0), new System.Windows.Point(5, 8) };
-            return new Polygon { Points = points, Fill = Theme.TextPrimary, Width = 10, Height = 8 };
+                ? new PointCollection { new System.Windows.Point(6, 0), new System.Windows.Point(12, 10), new System.Windows.Point(0, 10) }
+                : new PointCollection { new System.Windows.Point(0, 0), new System.Windows.Point(12, 0), new System.Windows.Point(6, 10) };
+            return new Polygon { Points = points, Fill = Theme.TextPrimary, Width = 12, Height = 10 };
         }
 
         private static UIElement CreateXMark()
         {
-            Canvas canvas = new Canvas { Width = 10, Height = 10 };
-            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 0, X2 = 10, Y2 = 10, Stroke = Theme.TextPrimary, StrokeThickness = 1.5 });
-            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 10, X2 = 10, Y2 = 0, Stroke = Theme.TextPrimary, StrokeThickness = 1.5 });
+            Canvas canvas = new Canvas { Width = 12, Height = 12 };
+            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 0, X2 = 12, Y2 = 12, Stroke = Theme.TextPrimary, StrokeThickness = 2 });
+            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 12, X2 = 12, Y2 = 0, Stroke = Theme.TextPrimary, StrokeThickness = 2 });
             return canvas;
         }
 

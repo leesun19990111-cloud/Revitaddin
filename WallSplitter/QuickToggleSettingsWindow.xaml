@@ -47,10 +47,20 @@
                 </StackPanel>
             </Grid>
 
+            <!-- 이름/카테고리 표시는 위쪽에 고정하고(EditHeaderHost), 대상 목록만 아래에서 스크롤되게
+                 나눴다 - 뷰템플릿이 많아 목록이 길어지면 스크롤을 내렸을 때 이름 변경 칸이 같이 사라져서
+                 안 보이는 문제가 있었다(2026-07-27 실측 피드백). -->
             <Border Grid.Column="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6" Background="{DynamicResource SurfaceBrush}" Padding="12">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel x:Name="EditPanelHost"/>
-                </ScrollViewer>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel x:Name="EditHeaderHost" Grid.Row="0"/>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="EditPanelHost"/>
+                    </ScrollViewer>
+                </Grid>
             </Border>
         </Grid>
 

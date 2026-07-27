@@ -10,6 +10,8 @@ namespace WallSplitter
     internal static class Theme
     {
         public static readonly SolidColorBrush TextPrimary = Freeze("#1D1F20");
+        // 위/아래 이동·삭제처럼 작은 아이콘 버튼에 명확한 배경을 줄 때 씀 - Theme.xaml의 SurfaceBrush와 맞춰 유지.
+        public static readonly SolidColorBrush Surface = Freeze("#E9E9EA");
         public static readonly SolidColorBrush TextSecondary = Freeze("#8C1D1F20");
         public static readonly SolidColorBrush Border = Freeze("#291D1F20");
         public static readonly SolidColorBrush WarningText = Freeze("#A67B3D");
