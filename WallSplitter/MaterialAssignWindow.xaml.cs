@@ -20,9 +20,48 @@ namespace WallSplitter
             public MaterialSlot Slot;
         }
 
+        // 유형 하나가 슬롯(레이어/재료 파라미터)을 여러 개 가질 수 있게 되면서, "체크됐는지/무엇으로 바뀔
+        // 예정인지"를 유형 Id 하나만으로는 더 이상 구분할 수 없다 - 같은 유형의 서로 다른 슬롯이 각각 독립된
+        // 후보 행이 되므로, 유형 Id와 슬롯의 정체성(Kind+LayerIndex 또는 Kind+ParameterId)을 함께 묶은 키가
+        // 필요하다. MaterialSlot.SameIdentityAs와 같은 필드로 비교/해시한다.
+        private readonly struct CandidateKey : IEquatable<CandidateKey>
+        {
+            public ElementId TypeId { get; }
+            public MaterialSlotKind Kind { get; }
+            public int LayerIndex { get; }
+            public ElementId ParameterId { get; }
+
+            public CandidateKey(ElementId typeId, MaterialSlot slot)
+            {
+                TypeId = typeId;
+                Kind = slot.Kind;
+                LayerIndex = slot.LayerIndex;
+                ParameterId = slot.ParameterId;
+            }
+
+            public bool Equals(CandidateKey other) =>
+                TypeId == other.TypeId && Kind == other.Kind && LayerIndex == other.LayerIndex && ParameterId == other.ParameterId;
+            public override bool Equals(object? obj) => obj is CandidateKey k && Equals(k);
+
+            // net48(2023/2024 빌드)에는 System.HashCode가 없어서(net8.0-windows/net10.0-windows에만 있음)
+            // HashCode.Combine 대신 직접 조합한다.
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = 17;
+                    hash = hash * 31 + TypeId.GetHashCode();
+                    hash = hash * 31 + (int)Kind;
+                    hash = hash * 31 + LayerIndex;
+                    hash = hash * 31 + ParameterId.GetHashCode();
+                    return hash;
+                }
+            }
+        }
+
         private sealed class MaterialRow
         {
-            public ElementId TypeId = ElementId.InvalidElementId;
+            public CandidateKey Key;
             public string TypeName = "";
             public CheckBox CheckBox = null!;
             public TextBlock TypeNameText = null!;
@@ -50,14 +89,14 @@ namespace WallSplitter
         }
 
         private readonly Document _doc;
-        private readonly HashSet<ElementId> _checkedIds = new();
-        private readonly Dictionary<ElementId, MaterialCandidate> _candidatesById = new();
+        private readonly HashSet<CandidateKey> _checkedIds = new();
+        private readonly Dictionary<CandidateKey, MaterialCandidate> _candidatesById = new();
 
         // "적용"은 이 두 딕셔너리만 갱신하고 모델은 건드리지 않는다 - NamerWindow의 2단계 적용
         // (_trueOriginalNames/_workingNames)과 동일한 설계이며, 최종 적용도 체크 여부와 무관하게
         // _workingMaterialIds를 기준으로 반영한다(NamerWindow의 최근 수정과 동일한 이유).
-        private readonly Dictionary<ElementId, ElementId> _trueOriginalMaterialIds = new();
-        private readonly Dictionary<ElementId, ElementId> _workingMaterialIds = new();
+        private readonly Dictionary<CandidateKey, ElementId> _trueOriginalMaterialIds = new();
+        private readonly Dictionary<CandidateKey, ElementId> _workingMaterialIds = new();
 
         private List<MaterialCandidate> _allCandidates = new();
         private List<MaterialCandidate> _filteredCandidates = new();
@@ -113,7 +152,9 @@ namespace WallSplitter
         private bool _delDragTargetChecked;
         private DeleteRow? _delLastDragRow;
 
-        public List<(ElementId TypeId, ElementId NewMaterialId)>? Result { get; private set; }
+        // MaterialSlot이 internal이라 Result도 internal이어야 한다(CS0053) - 이 프로퍼티는 같은 어셈블리의
+        // MaterialAssignCommand만 읽으므로 public일 필요가 애초에 없었다.
+        internal List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)>? Result { get; private set; }
         public List<ElementId>? DeleteResult { get; private set; }
 
         public MaterialAssignWindow(Document doc, List<ElementId> preSelectedIds)
@@ -126,16 +167,41 @@ namespace WallSplitter
             LoadCandidates();
             LoadMaterials();
 
-            HashSet<ElementId> resolvedPreSelection = ResolvePreSelection(preSelectedIds);
-            foreach (ElementId id in resolvedPreSelection)
+            // 미리 선택된 것은 거의 항상 유형 자체가 아니라 그 유형의 인스턴스이므로, 유형 Id까지만
+            // 해소한다(ResolvePreSelection) - 그 유형에 슬롯이 여러 개면(예: 재료 파라미터가 여러 개인 문)
+            // 어느 슬롯을 골랐는지까지는 알 수 없으므로, 그 유형에 속한 슬롯을 전부 체크해 둔다.
+            HashSet<ElementId> resolvedTypeIds = ResolvePreSelection(preSelectedIds);
+            foreach (MaterialCandidate candidate in _allCandidates)
             {
-                if (_candidatesById.ContainsKey(id)) _checkedIds.Add(id);
+                if (resolvedTypeIds.Contains(candidate.Type.Id)) _checkedIds.Add(new CandidateKey(candidate.Type.Id, candidate.Slot));
             }
 
             RenderRows();
             UpdatePendingChangesText();
             DelRenderRows();
             IdRenderRows();
+
+            // NamerWindow와 동일한 이유(생성자 시점엔 컬럼 ActualWidth가 아직 0이라 첫 페이지 행들의
+            // 이름 TextBlock이 Width=0으로 그려져 텍스트가 안 보인다) - 창이 실제로 표시된 뒤(Loaded)
+            // 이미 그려진 "재료 지정"/"클래스·설명 변경" 탭 행들의 너비를 한 번 다시 써서 고친다.
+            // "재료 삭제" 탭은 고정 Width=300을 쓰므로 영향이 없다.
+            Loaded += MaterialAssignWindow_Loaded;
+        }
+
+        private void MaterialAssignWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            foreach (MaterialRow row in _rows)
+            {
+                row.TypeNameText.Width = TypeNameColumn.ActualWidth;
+                row.CurrentMaterialText.Width = CurrentMaterialColumn.ActualWidth;
+                row.NewMaterialText.Width = NewMaterialColumn.ActualWidth;
+            }
+            foreach (IdentityRow row in _identityRows)
+            {
+                row.NameText.Width = IdNameColumn.ActualWidth;
+                row.ClassText.Width = IdClassColumn.ActualWidth;
+                row.DescriptionText.Width = IdDescriptionColumn.ActualWidth;
+            }
         }
 
         private void LoadMaterials()
@@ -159,7 +225,9 @@ namespace WallSplitter
             return _usedMaterialIds.Contains(m.Id) ? name : $"{name} (지정된 유형 없음)";
         }
 
-        // 문서의 모든 ElementType 중 MaterialSlotFinder가 "현재 재료" 슬롯을 찾을 수 있는 것만 후보로 삼는다.
+        // 문서의 모든 ElementType 중 MaterialSlotFinder가 "재료 지정" 슬롯을 찾을 수 있는 것만 후보로 삼는다 -
+        // 슬롯이 여러 개인 유형(레이어가 여러 개인 벽/바닥, 재료 파라미터가 여러 개인 문/창 등)은 슬롯마다
+        // 하나씩 독립된 후보로 펼쳐진다(같은 Type을 여러 MaterialCandidate가 공유할 수 있음).
         private void LoadCandidates()
         {
             var allTypes = new FilteredElementCollector(_doc).WhereElementIsElementType().ToElements();
@@ -167,14 +235,14 @@ namespace WallSplitter
             foreach (Element el in allTypes)
             {
                 if (el is not ElementType type) continue;
-                MaterialSlot? slot = MaterialSlotFinder.Find(type);
-                if (slot == null) continue;
-
-                var candidate = new MaterialCandidate { Type = type, Slot = slot.Value };
-                _allCandidates.Add(candidate);
-                _candidatesById[type.Id] = candidate;
+                foreach (MaterialSlot slot in MaterialSlotFinder.FindAll(type))
+                {
+                    var candidate = new MaterialCandidate { Type = type, Slot = slot };
+                    _allCandidates.Add(candidate);
+                    _candidatesById[new CandidateKey(type.Id, slot)] = candidate;
+                }
             }
-            _allCandidates = _allCandidates.OrderBy(c => c.Type.Name).ToList();
+            _allCandidates = _allCandidates.OrderBy(c => c.Type.Name).ThenBy(c => c.Slot.LayerIndex).ToList();
 
             _usedMaterialIds = new HashSet<ElementId>(_allCandidates
                 .Select(c => c.Slot.MaterialId)
@@ -201,8 +269,10 @@ namespace WallSplitter
             return resolved;
         }
 
+        private static CandidateKey KeyOf(MaterialCandidate candidate) => new(candidate.Type.Id, candidate.Slot);
+
         private ElementId CurrentMaterialId(MaterialCandidate candidate) =>
-            _workingMaterialIds.TryGetValue(candidate.Type.Id, out ElementId workingId) ? workingId : candidate.Slot.MaterialId;
+            _workingMaterialIds.TryGetValue(KeyOf(candidate), out ElementId workingId) ? workingId : candidate.Slot.MaterialId;
 
         private string CurrentMaterialName(MaterialCandidate candidate) => MaterialNameOf(CurrentMaterialId(candidate));
 
@@ -282,9 +352,9 @@ namespace WallSplitter
                 }
             }
 
-            var allIds = new HashSet<ElementId>(_allCandidates.Select(c => c.Type.Id));
-            var visibleIds = new HashSet<ElementId>(_filteredCandidates.Select(c => c.Type.Id));
-            _checkedIds.RemoveWhere(id => allIds.Contains(id) && !visibleIds.Contains(id));
+            var allKeys = new HashSet<CandidateKey>(_allCandidates.Select(KeyOf));
+            var visibleKeys = new HashSet<CandidateKey>(_filteredCandidates.Select(KeyOf));
+            _checkedIds.RemoveWhere(key => allKeys.Contains(key) && !visibleKeys.Contains(key));
 
             RenderMoreRows();
             UpdatePendingChangesText();
@@ -318,7 +388,13 @@ namespace WallSplitter
             for (int i = start; i < end; i++)
             {
                 MaterialCandidate candidate = _filteredCandidates[i];
-                var row = new MaterialRow { TypeId = candidate.Type.Id, TypeName = candidate.Type.Name ?? "" };
+                // 슬롯이 여러 개인 유형은 같은 유형 이름이 여러 행에 걸쳐 나타나므로, 라벨(레이어 2, 파라미터
+                // 이름 등)을 이름 뒤에 덧붙여 어느 슬롯의 행인지 구분할 수 있게 한다. 슬롯이 하나뿐인 유형은
+                // Label==""이라 기존과 완전히 동일하게 보인다.
+                string displayName = string.IsNullOrEmpty(candidate.Slot.Label)
+                    ? candidate.Type.Name ?? ""
+                    : $"{candidate.Type.Name} · {candidate.Slot.Label}";
+                var row = new MaterialRow { Key = KeyOf(candidate), TypeName = displayName };
 
                 var rowPanel = new StackPanel
                 {
@@ -331,13 +407,13 @@ namespace WallSplitter
 
                 var checkBox = new CheckBox
                 {
-                    IsChecked = _checkedIds.Contains(row.TypeId),
+                    IsChecked = _checkedIds.Contains(row.Key),
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 8, 0),
                     IsHitTestVisible = false
                 };
-                checkBox.Checked += (_, _) => { _checkedIds.Add(row.TypeId); UpdateRowPreview(row); UpdatePendingChangesText(); };
-                checkBox.Unchecked += (_, _) => { _checkedIds.Remove(row.TypeId); UpdateRowPreview(row); UpdatePendingChangesText(); };
+                checkBox.Checked += (_, _) => { _checkedIds.Add(row.Key); UpdateRowPreview(row); UpdatePendingChangesText(); };
+                checkBox.Unchecked += (_, _) => { _checkedIds.Remove(row.Key); UpdateRowPreview(row); UpdatePendingChangesText(); };
                 row.CheckBox = checkBox;
                 rowPanel.Children.Add(checkBox);
 
@@ -355,7 +431,7 @@ namespace WallSplitter
                 {
                     Width = CurrentMaterialColumn.ActualWidth,
                     TextTrimming = TextTrimming.CharacterEllipsis,
-                    Foreground = Brushes.Gray,
+                    Foreground = Theme.TextSecondary,
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 row.CurrentMaterialText = currentMaterialText;
@@ -364,7 +440,7 @@ namespace WallSplitter
                 rowPanel.Children.Add(new TextBlock
                 {
                     Text = " → ",
-                    Foreground = Brushes.Gray,
+                    Foreground = Theme.TextSecondary,
                     VerticalAlignment = VerticalAlignment.Center
                 });
 
@@ -406,22 +482,22 @@ namespace WallSplitter
         // 항상 최신 작업중 상태(이전 "적용"들의 누적 결과)를 보여준다 - NamerWindow의 WorkingNameOf와 동일한 이유.
         private void UpdateRowPreview(MaterialRow row)
         {
-            if (!_candidatesById.TryGetValue(row.TypeId, out MaterialCandidate? candidate)) return;
+            if (!_candidatesById.TryGetValue(row.Key, out MaterialCandidate? candidate)) return;
 
             string currentName = CurrentMaterialName(candidate);
             row.CurrentMaterialText.Text = currentName;
 
-            bool isChecked = _checkedIds.Contains(row.TypeId);
+            bool isChecked = _checkedIds.Contains(row.Key);
             if (isChecked && _selectedMaterialId != ElementId.InvalidElementId)
             {
                 string newName = MaterialNameOf(_selectedMaterialId);
                 row.NewMaterialText.Text = newName;
-                row.NewMaterialText.Foreground = newName != currentName ? Brushes.Black : Brushes.Gray;
+                row.NewMaterialText.Foreground = newName != currentName ? Theme.TextPrimary : Theme.TextSecondary;
             }
             else
             {
                 row.NewMaterialText.Text = currentName;
-                row.NewMaterialText.Foreground = Brushes.Gray;
+                row.NewMaterialText.Foreground = Theme.TextSecondary;
             }
         }
 
@@ -517,13 +593,13 @@ namespace WallSplitter
 
         private void UpdateCountText()
         {
-            int checkedInFiltered = _filteredCandidates.Count(c => _checkedIds.Contains(c.Type.Id));
+            int checkedInFiltered = _filteredCandidates.Count(c => _checkedIds.Contains(KeyOf(c)));
             CountText.Text = $"{_renderedCount} / {_filteredCandidates.Count}개 표시 중 (전체 {_allCandidates.Count}개), 선택됨 {checkedInFiltered}개";
         }
 
         private void SelectAllButton_Click(object sender, RoutedEventArgs e)
         {
-            foreach (MaterialCandidate c in _filteredCandidates) _checkedIds.Add(c.Type.Id);
+            foreach (MaterialCandidate c in _filteredCandidates) _checkedIds.Add(KeyOf(c));
             foreach (MaterialRow row in _rows) row.CheckBox.IsChecked = true;
             UpdateCountText();
             UpdatePendingChangesText();
@@ -531,7 +607,7 @@ namespace WallSplitter
 
         private void SelectNoneButton_Click(object sender, RoutedEventArgs e)
         {
-            foreach (MaterialCandidate c in _filteredCandidates) _checkedIds.Remove(c.Type.Id);
+            foreach (MaterialCandidate c in _filteredCandidates) _checkedIds.Remove(KeyOf(c));
             foreach (MaterialRow row in _rows) row.CheckBox.IsChecked = false;
             UpdateCountText();
             UpdatePendingChangesText();
@@ -547,22 +623,23 @@ namespace WallSplitter
                 return;
             }
 
-            var appliedIds = new List<ElementId>();
+            var appliedKeys = new List<CandidateKey>();
             foreach (MaterialCandidate candidate in _allCandidates)
             {
-                if (!_checkedIds.Contains(candidate.Type.Id)) continue;
+                CandidateKey key = KeyOf(candidate);
+                if (!_checkedIds.Contains(key)) continue;
 
-                ElementId current = _workingMaterialIds.TryGetValue(candidate.Type.Id, out ElementId w) ? w : candidate.Slot.MaterialId;
+                ElementId current = _workingMaterialIds.TryGetValue(key, out ElementId w) ? w : candidate.Slot.MaterialId;
                 if (_selectedMaterialId == current) continue;
 
-                // 이 유형이 세션 중 처음으로 실제 바뀌는 순간에만 "진짜 원래 재료"를 기록한다.
-                if (!_trueOriginalMaterialIds.ContainsKey(candidate.Type.Id))
-                    _trueOriginalMaterialIds[candidate.Type.Id] = candidate.Slot.MaterialId;
-                _workingMaterialIds[candidate.Type.Id] = _selectedMaterialId;
-                appliedIds.Add(candidate.Type.Id);
+                // 이 슬롯이 세션 중 처음으로 실제 바뀌는 순간에만 "진짜 원래 재료"를 기록한다.
+                if (!_trueOriginalMaterialIds.ContainsKey(key))
+                    _trueOriginalMaterialIds[key] = candidate.Slot.MaterialId;
+                _workingMaterialIds[key] = _selectedMaterialId;
+                appliedKeys.Add(key);
             }
 
-            if (appliedIds.Count == 0)
+            if (appliedKeys.Count == 0)
             {
                 MessageBox.Show("변경될 항목이 없습니다.", "재료 지정", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -571,7 +648,7 @@ namespace WallSplitter
             // 적용된 항목은 체크를 자동으로 해제한다 - 그대로 두면 다음에 다른 재료를 골라 "적용"을 또
             // 누를 때 이전에 이미 처리한 항목까지 체크된 채로 남아있어서, 의도치 않게 그 항목들까지 새
             // 재료로 다시 덮어써진다("체크했던 게 캐시처럼 계속 남아있으면 안 된다"는 라이브 피드백으로 수정).
-            foreach (ElementId id in appliedIds) _checkedIds.Remove(id);
+            foreach (CandidateKey key in appliedKeys) _checkedIds.Remove(key);
 
             RenderRows();
             UpdatePendingChangesText();
@@ -581,11 +658,13 @@ namespace WallSplitter
         // (=지난 "적용" 클릭들로 확정된) 변경 사항만 그대로 모델에 옮겨 쓴다.
         private void FinalApplyButton_Click(object sender, RoutedEventArgs e)
         {
-            var result = new List<(ElementId, ElementId)>();
-            foreach (KeyValuePair<ElementId, ElementId> kvp in _workingMaterialIds)
+            var result = new List<(ElementId, MaterialSlot, ElementId)>();
+            foreach (KeyValuePair<CandidateKey, ElementId> kvp in _workingMaterialIds)
             {
                 ElementId trueOriginal = _trueOriginalMaterialIds.TryGetValue(kvp.Key, out ElementId orig) ? orig : kvp.Value;
-                if (kvp.Value != trueOriginal) result.Add((kvp.Key, kvp.Value));
+                if (kvp.Value == trueOriginal) continue;
+                if (!_candidatesById.TryGetValue(kvp.Key, out MaterialCandidate? candidate)) continue;
+                result.Add((candidate.Type.Id, candidate.Slot, kvp.Value));
             }
 
             if (result.Count == 0)
@@ -957,26 +1036,26 @@ namespace WallSplitter
             if (isChecked && targetField == 0 && newValue != workingClass)
             {
                 row.ClassText.Text = $"{workingClass} → {newValue}";
-                row.ClassText.Foreground = Brushes.Black;
+                row.ClassText.Foreground = Theme.TextPrimary;
                 row.ClassText.FontWeight = FontWeights.SemiBold;
             }
             else
             {
                 row.ClassText.Text = workingClass;
-                row.ClassText.Foreground = Brushes.Gray;
+                row.ClassText.Foreground = Theme.TextSecondary;
                 row.ClassText.FontWeight = FontWeights.Normal;
             }
 
             if (isChecked && targetField == 1 && newValue != workingDescription)
             {
                 row.DescriptionText.Text = $"{workingDescription} → {newValue}";
-                row.DescriptionText.Foreground = Brushes.Black;
+                row.DescriptionText.Foreground = Theme.TextPrimary;
                 row.DescriptionText.FontWeight = FontWeights.SemiBold;
             }
             else
             {
                 row.DescriptionText.Text = workingDescription;
-                row.DescriptionText.Foreground = Brushes.Gray;
+                row.DescriptionText.Foreground = Theme.TextSecondary;
                 row.DescriptionText.FontWeight = FontWeights.Normal;
             }
         }

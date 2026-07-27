@@ -61,7 +61,9 @@ namespace WallSplitter
             return new Polygon
             {
                 Points = points,
-                Fill = Brushes.Black,
+                // 다크 테마 버튼 배경(어두운 색) 위에 그려지므로 밝은 색을 써야 보인다 - 라이트 테마였을 때
+                // Brushes.Black을 썼던 것과 같은 대비 원리를 반전한 것 (실측 검증 전이므로 CLAUDE.md 참고).
+                Fill = Theme.TextPrimary,
                 Width = 10,
                 Height = 8,
             };
@@ -71,8 +73,8 @@ namespace WallSplitter
         private static UIElement CreateXMark()
         {
             Canvas canvas = new Canvas { Width = 10, Height = 10 };
-            canvas.Children.Add(new Line { X1 = 0, Y1 = 0, X2 = 10, Y2 = 10, Stroke = Brushes.Black, StrokeThickness = 1.5 });
-            canvas.Children.Add(new Line { X1 = 0, Y1 = 10, X2 = 10, Y2 = 0, Stroke = Brushes.Black, StrokeThickness = 1.5 });
+            canvas.Children.Add(new Line { X1 = 0, Y1 = 0, X2 = 10, Y2 = 10, Stroke = Theme.TextPrimary, StrokeThickness = 1.5 });
+            canvas.Children.Add(new Line { X1 = 0, Y1 = 10, X2 = 10, Y2 = 0, Stroke = Theme.TextPrimary, StrokeThickness = 1.5 });
             return canvas;
         }
 
@@ -87,7 +89,7 @@ namespace WallSplitter
 
                 Border row = new Border
                 {
-                    BorderBrush = Brushes.LightGray,
+                    BorderBrush = Theme.Border,
                     BorderThickness = new Thickness(0, 0, 0, 1),
                     Padding = new Thickness(4, 6, 4, 6),
                 };
@@ -138,7 +140,7 @@ namespace WallSplitter
                     {
                         Text = "(복합벽에서 자동으로 읽어옴)",
                         Width = 160,
-                        Foreground = Brushes.Gray,
+                        Foreground = Theme.TextSecondary,
                         FontStyle = FontStyles.Italic,
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(0, 0, 8, 0),

@@ -11,7 +11,9 @@ namespace WallSplitter
 {
     public partial class NamerWindow : Window
     {
-        private enum NamerCategory { View, Sheet, Family, Type, Legend, Schedule, Material }
+        // internal: ChangeLogEntry.Category와 ChangeReplayEngine이 "어느 카테고리였는지"/"대상 문서에서
+        // 후보를 어떻게 모으는지"를 그대로 재사용하기 위해 이 창 바깥에서도 접근해야 한다.
+        internal enum NamerCategory { View, Sheet, Family, Type, Legend, Schedule, Material, ViewTemplate }
         private enum NamerMode { Replace, Insert, Swap, DeleteRange }
 
         private sealed class RenameRow
@@ -66,6 +68,22 @@ namespace WallSplitter
             NamerCategory initial = DetectInitialCategory(doc, preSelectedIds);
             SetCategoryRadio(initial);
             LoadCategory(initial);
+
+            // 생성자 시점(Loaded 전)엔 OldNameColumn/NewNameColumn의 ActualWidth가 아직 0이라,
+            // LoadCategory가 바로 그린 첫 페이지 행들은 이름 TextBlock의 Width가 0으로 잡혀 텍스트가
+            // 안 보이는 것처럼(체크는 되지만 투명하게) 렌더링된다. 필터에 한 글자 치면 RenderRows가
+            // 다시 그려지는데 그때는 이미 창이 표시돼 ActualWidth가 정상이라 그제서야 보이던 문제.
+            // 창이 실제로 표시된 뒤(Loaded) 이미 그려진 행들의 너비를 한 번 다시 써서 고친다.
+            Loaded += NamerWindow_Loaded;
+        }
+
+        private void NamerWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            foreach (RenameRow row in _rows)
+            {
+                row.OldNameText.Width = OldNameColumn.ActualWidth;
+                row.NewNameText.Width = NewNameColumn.ActualWidth;
+            }
         }
 
         private static NamerCategory DetectInitialCategory(Document doc, List<ElementId> ids)
@@ -75,6 +93,7 @@ namespace WallSplitter
                 Element? el = doc.GetElement(id);
                 if (el is ViewSheet) return NamerCategory.Sheet;
                 if (el is ViewSchedule) return NamerCategory.Schedule;
+                if (el is View vt && vt.IsTemplate) return NamerCategory.ViewTemplate;
                 if (el is View v && v.ViewType == ViewType.Legend) return NamerCategory.Legend;
                 if (el is View) return NamerCategory.View;
                 if (el is Family) return NamerCategory.Family;
@@ -95,6 +114,7 @@ namespace WallSplitter
                 case NamerCategory.Legend: CategoryLegendRadio.IsChecked = true; break;
                 case NamerCategory.Schedule: CategoryScheduleRadio.IsChecked = true; break;
                 case NamerCategory.Material: CategoryMaterialRadio.IsChecked = true; break;
+                case NamerCategory.ViewTemplate: CategoryViewTemplateRadio.IsChecked = true; break;
             }
         }
 
@@ -111,6 +131,7 @@ namespace WallSplitter
                 CategoryTypeRadio.IsChecked == true ? NamerCategory.Type :
                 CategoryLegendRadio.IsChecked == true ? NamerCategory.Legend :
                 CategoryScheduleRadio.IsChecked == true ? NamerCategory.Schedule :
+                CategoryViewTemplateRadio.IsChecked == true ? NamerCategory.ViewTemplate :
                 NamerCategory.Material;
 
             LoadCategory(category);
@@ -193,7 +214,10 @@ namespace WallSplitter
             return resolved;
         }
 
-        private static List<Element> CollectCandidates(Document doc, NamerCategory category)
+        // internal: ChangeReplayEngine이 다른 문서에서 같은 카테고리의 "이름이 Key인 요소"를 찾을 때 그대로
+        // 재사용한다 - 카테고리별 제외 규칙(예: 뷰 카테고리는 범례/일람표/뷰 템플릿을 제외)이 두 곳에서
+        // 따로 유지되면 언젠가 조용히 어긋나므로, 한 곳만 두고 공유한다.
+        internal static List<Element> CollectCandidates(Document doc, NamerCategory category)
         {
             switch (category)
             {
@@ -235,6 +259,15 @@ namespace WallSplitter
                     // Material은 ElementType이 아니라 Element 자체이지만(WhereElementIsElementType에 안 걸림),
                     // Name을 그대로 get/set할 수 있어 다른 카테고리와 동일하게 다룰 수 있다.
                     return new FilteredElementCollector(doc).OfClass(typeof(Material))
+                        .OrderBy(e => e.Name)
+                        .ToList();
+                case NamerCategory.ViewTemplate:
+                    // 뷰 템플릿은 IsTemplate == true인 View일 뿐 별도 클래스가 없다 - "뷰" 카테고리는
+                    // v.IsTemplate으로 이들을 명시적으로 제외하므로 여기서만 별도로 모아야 중복이 안 생긴다.
+                    return new FilteredElementCollector(doc).OfClass(typeof(View))
+                        .Cast<View>()
+                        .Where(v => v.IsTemplate)
+                        .Cast<Element>()
                         .OrderBy(e => e.Name)
                         .ToList();
                 default:
@@ -453,7 +486,7 @@ namespace WallSplitter
                 rowPanel.Children.Add(new TextBlock
                 {
                     Text = " → ",
-                    Foreground = Brushes.Gray,
+                    Foreground = Theme.TextSecondary,
                     VerticalAlignment = VerticalAlignment.Center
                 });
 
@@ -500,7 +533,7 @@ namespace WallSplitter
             bool isChecked = _checkedIds.Contains(row.ElementId);
             string newName = isChecked ? ComputeNewName(row.OriginalName) : row.OriginalName;
             row.NewNameText.Text = newName;
-            row.NewNameText.Foreground = isChecked && newName != row.OriginalName ? Brushes.Black : Brushes.Gray;
+            row.NewNameText.Foreground = isChecked && newName != row.OriginalName ? Theme.TextPrimary : Theme.TextSecondary;
         }
 
         // ===================== 드래그로 여러 행 체크/해제 =====================

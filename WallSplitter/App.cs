@@ -1,8 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Windows;
 using System.Windows.Media.Imaging;
+using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
+using Autodesk.Revit.UI.Events;
 using WpfApplication = System.Windows.Application;
 
 namespace WallSplitter
@@ -15,10 +19,22 @@ namespace WallSplitter
         private const string FloorPanelName = "바닥 분리";
         private const string NamerPanelName = "NAMER";
         private const string MaterialPanelName = "재료 지정";
+        private const string ModelSyncPanelName = "모델간 변경 반영";
+        private const string QuickTogglePanelName = "빠른 토글";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
         private static readonly List<PushButton> _typeAssignmentToggleButtons = new List<PushButton>();
+
+        // 빠른 토글 툴바 "표시/숨김" 리본 버튼의 표시 텍스트 갱신용 (QuickToggleVisibilityToggleCommand가 클릭 후 호출).
+        private static readonly List<PushButton> _quickToggleVisibilityButtons = new List<PushButton>();
+
+        // 빠른 토글 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라, 버튼 클릭 시점에
+        // Revit API 컨텍스트가 열려있지 않다 - ExternalEvent로 요청을 넣어 Revit이 다음 기회에 실행하게 한다
+        // (이 프로젝트에서 ExternalEvent를 쓰는 첫 사례. 기존 창들은 전부 커맨드 Execute 안의 모달
+        // ShowDialog()라 이런 비동기 콜백이 필요 없었다).
+        internal static ExternalEvent? QuickToggleEvent;
+        internal static QuickToggleExternalEventHandler? QuickToggleHandler;
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -101,10 +117,45 @@ namespace WallSplitter
 
             if (materialPanel.AddItem(materialButtonData) is PushButton materialButton)
             {
-                materialButton.ToolTip = "여러 유형을 한 번에 선택해서 재료를 일괄 지정합니다.\n벽/바닥/지붕/천장처럼 레이어가 하나뿐인 유형은 그 레이어의 재료를, 그 외 유형은 '재료' 파라미터를 바꿉니다.\n미리 유형(또는 그 유형의 인스턴스)을 선택해 둔 상태로 누르면 해당 유형이 먼저 체크되어 있습니다.";
+                materialButton.ToolTip = "여러 유형을 한 번에 선택해서 재료를 일괄 지정합니다.\n벽/바닥/지붕/천장은 두께가 있는 레이어마다, 그 외 유형은 재료 파라미터마다 각각 지정할 수 있습니다(하나의 유형이 재료를 여러 개 동시에 쓰면 슬롯별로 행이 나뉘어 보입니다).\n미리 유형(또는 그 유형의 인스턴스)을 선택해 둔 상태로 누르면 해당 유형의 모든 슬롯이 먼저 체크되어 있습니다.";
                 materialButton.LargeImage = LoadIcon("WallSplitter.Resources.icon_material32.png");
                 materialButton.Image = LoadIcon("WallSplitter.Resources.icon_material16.png");
             }
+
+            RibbonPanel modelSyncPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == ModelSyncPanelName)
+                ?? application.CreateRibbonPanel(TabName, ModelSyncPanelName);
+
+            PushButtonData modelSyncButtonData = new PushButtonData(
+                "WallSplitter_ModelSync",
+                "모델간\n변경 반영",
+                assemblyPath,
+                typeof(ModelSyncCommand).FullName);
+
+            if (modelSyncPanel.AddItem(modelSyncButtonData) is PushButton modelSyncButton)
+            {
+                modelSyncButton.ToolTip = "NAMER/재료 지정에서 최종 적용한 변경사항을 다른 중앙모델에도 그대로 재현합니다.\n이름이 같은 대상을 자동으로 찾아 적용하고, 모호하면 직접 고르는 창이 뜹니다.\n파일로 내보내/가져오거나, 같은 세션에 열려 있는 다른 문서에 바로 적용할 수 있습니다.";
+                modelSyncButton.LargeImage = LoadIcon("WallSplitter.Resources.icon_sync32.png");
+                modelSyncButton.Image = LoadIcon("WallSplitter.Resources.icon_sync16.png");
+            }
+
+            RibbonPanel quickTogglePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == QuickTogglePanelName)
+                ?? application.CreateRibbonPanel(TabName, QuickTogglePanelName);
+            AddQuickToggleStack(quickTogglePanel, assemblyPath);
+
+            // 빠른 토글 커스텀 툴바: 실제 Revit 신속접근 도구모음(QAT)에는 API로 버튼을 추가할 수 없어
+            // Revit 메인 창 상단에 고정되는 자체 플로팅 창으로 대체 구현했다 (CLAUDE.md 참고).
+            // ExternalEvent는 OnStartup에서 바로 생성할 수 있지만(유효한 컨텍스트), MainWindowHandle/
+            // ActiveUIDocument에 접근하려면 완전한 UIApplication이 필요하다 - UIControlledApplication에는
+            // 그 인스턴스를 직접 만들 방법이 없다(ControlledApplication은 별개 타입이라 UIApplication
+            // 생성자에 넘길 수 없음 - 실제로 빌드해서 확인). Revit이 세션 중 이 이벤트들을 실제로 발생시킬
+            // 때는 sender로 살아있는 UIApplication을 넘겨주므로, 그 첫 기회(OnQuickToggleViewActivated)에
+            // 지연 생성한다.
+            QuickToggleHandler = new QuickToggleExternalEventHandler();
+            QuickToggleEvent = ExternalEvent.Create(QuickToggleHandler);
+
+            application.ViewActivated += OnQuickToggleViewActivated;
+            application.ControlledApplication.DocumentClosing += OnQuickToggleDocumentClosing;
+            application.Idling += OnQuickToggleIdling;
 
             return Result.Succeeded;
         }
@@ -112,6 +163,37 @@ namespace WallSplitter
         public Result OnShutdown(UIControlledApplication application)
         {
             return Result.Succeeded;
+        }
+
+        // 뷰 전환 시 즉시 툴바 상태(아이콘 색/버튼 목록)를 갱신한다. 설정이 문서(프로젝트 파일)별로
+        // 저장되므로 리본의 "표시/숨김" 라벨도 활성 문서가 바뀔 때마다 다시 맞춰야 한다.
+        // 커스텀 툴바는 여기서 처음 얻는 살아있는 UIApplication으로 지연 생성한다 (위 OnStartup 주석 참고).
+        private static void OnQuickToggleViewActivated(object? sender, ViewActivatedEventArgs e)
+        {
+            if (QuickToggleToolbar.Instance == null && sender is UIApplication uiapp)
+                _ = new QuickToggleToolbar(uiapp); // 생성자가 자기 자신을 QuickToggleToolbar.Instance에 등록한다
+
+            QuickToggleToolbar.Instance?.RefreshState();
+            if (QuickToggleToolbar.Instance?.CurrentToolbarVisible is bool visible)
+                UpdateQuickToggleVisibilityLabel(visible);
+        }
+
+        // 문서가 닫히는 중에는 일단 숨겨둔다 - 다른 문서가 곧이어 활성화되면 뒤따르는 ViewActivated에서
+        // 다시 올바른 상태로 보이게 된다.
+        private static void OnQuickToggleDocumentClosing(object? sender, DocumentClosingEventArgs e)
+        {
+            QuickToggleToolbar.Instance?.HideForNoDocument();
+        }
+
+        // Idling은 유휴 상태마다 매우 자주 발생한다 - 여기서는 디스크 재로드 없이(RefreshState/
+        // EnsureSettingsLoaded 참고) 캐시된 설정으로 아이콘 상태 재판정 + 창 위치 추적(Revit 창 이동/
+        // 리사이즈 대응)만 가볍게 수행한다.
+        private static void OnQuickToggleIdling(object? sender, IdlingEventArgs e)
+        {
+            if (QuickToggleToolbar.Instance == null && sender is UIApplication uiapp)
+                _ = new QuickToggleToolbar(uiapp);
+
+            QuickToggleToolbar.Instance?.RefreshState();
         }
 
         // "설정" 버튼 바로 밑에 작은 "단일/복수" 토글 버튼을 쌓아서(stacked) 붙인다.
@@ -149,6 +231,45 @@ namespace WallSplitter
         private static string ToggleLabel(TypeAssignmentPersistence mode) =>
             mode == TypeAssignmentPersistence.Multiple ? "복수" : "단일";
 
+        // "빠른 토글" 패널에 "빠른 토글 설정"(뷰템플릿/필터/작업세트 버튼 등록) + "표시/숨김"
+        // (커스텀 툴바를 껐다 켬) 두 버튼을 스택으로 붙인다 - AddSettingsStack과 같은 패턴.
+        private static void AddQuickToggleStack(RibbonPanel targetPanel, string assemblyPath)
+        {
+            PushButtonData settingsButtonData = new PushButtonData(
+                "WallSplitter_QuickToggleSettings",
+                "빠른 토글\n설정",
+                assemblyPath,
+                typeof(QuickToggleSettingsCommand).FullName)
+            {
+                ToolTip = "현재 뷰에서 원클릭으로 켜고 끌 뷰템플릿/필터/작업세트 버튼을 등록합니다.\n등록한 버튼은 Revit 창 상단에 별도 툴바로 나타나며, 같은 종류라도 이름을 다르게 지정해 여러 개 추가할 수 있습니다.",
+                Image = LoadIcon("WallSplitter.Resources.icon_quicktoggle16.png"),
+            };
+
+            PushButtonData toggleButtonData = new PushButtonData(
+                "WallSplitter_QuickToggleVisibility",
+                QuickToggleVisibilityLabel(true),
+                assemblyPath,
+                typeof(QuickToggleVisibilityToggleCommand).FullName)
+            {
+                ToolTip = "빠른 토글 툴바를 현재 프로젝트 파일에서 표시하거나 숨깁니다.",
+                Image = LoadIcon("WallSplitter.Resources.icon_toggle16.png"),
+            };
+
+            IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(settingsButtonData, toggleButtonData);
+            if (stackedItems.Count == 2 && stackedItems[1] is PushButton toggleButton)
+                _quickToggleVisibilityButtons.Add(toggleButton);
+        }
+
+        private static string QuickToggleVisibilityLabel(bool visible) => visible ? "켜짐" : "꺼짐";
+
+        // QuickToggleVisibilityToggleCommand/OnQuickToggleViewActivated가 설정 변경 직후 호출해
+        // 리본 버튼 텍스트를 현재 활성 문서(프로젝트 파일) 기준으로 갱신한다.
+        internal static void UpdateQuickToggleVisibilityLabel(bool visible)
+        {
+            foreach (PushButton button in _quickToggleVisibilityButtons)
+                button.ItemText = QuickToggleVisibilityLabel(visible);
+        }
+
         // ToggleTypeAssignmentPersistenceCommand가 설정을 바꾼 직후 호출해 리본 버튼 텍스트를 갱신한다.
         // 벽체 분리/바닥 분리 패널 양쪽 토글 버튼 모두 같은 설정을 가리키므로 둘 다 갱신해야 한다.
         internal static void UpdateTypeAssignmentToggleLabel(TypeAssignmentPersistence mode)
@@ -162,10 +283,34 @@ namespace WallSplitter
         // "Baml2006.TypeConverterMarkupExtension에 대한 값 제공에서 예외가 발생했습니다" 같은 알 수 없는
         // 오류로 창 생성 자체가 실패한다(Button/TextBox 같은 단순 컨트롤만 쓰는 SettingsWindow는 문제없었음).
         // Run()은 호출하지 않고 인스턴스만 만들어 리소스 조회 인프라를 부팅한다.
+        //
+        // CONFIRMED LIVE BUG (2026-07-27), fixed twice:
+        // 1차 수정: 예전 코드는 "Application.Current != null이면 그냥 return"이었다 - Revit은 여러
+        // 애드인을 같은 프로세스에서 로드하는데, Revit 자신의 리본 UI를 포함해 이 PC의 pyRevit/BIMPeers
+        // BIMIL 계열/Metasheet 등 다른 WPF 기반 애드인이 WallSplitter.App.OnStartup보다 먼저 자기
+        // System.Windows.Application을 만들어두면(사실상 항상 그런 상황이다 - Revit 리본 자체가 이미
+        // WPF다), 저 guard 때문에 Theme.xaml이 "이번 세션 내내 단 한 번도" 병합되지 못해 NAMER/재료
+        // 지정/모델간 변경 반영/빠른 토글 설정처럼 창을 여는 커맨드가 XamlParseException으로 죽었다
+        // (벽체 분리는 창을 안 열어서 멀쩡해 보였을 뿐). 그래서 "Application이 이미 있어도 Theme.xaml은
+        // 항상 병합"하도록 고쳤었다.
+        // 2차 수정(사용자 실측 보고로 발견): 그 1차 수정이 Theme.xaml을 Application.Resources(프로세스
+        // 전체 공유)에 병합했는데, 바로 그 이유(Revit 리본/다른 애드인도 같은 Application.Current를 씀)
+        // 때문에 우리의 암시적(TargetType, x:Key 없는) Window/TextBlock/Button 스타일이 Revit 자체
+        // 리본과 다른 애드인 창에까지 그대로 적용되어 버려, 텍스트가 전부 하얗게(우리 다크 테마의 밝은
+        // 전경색으로) 보이는 광범위한 회귀가 생겼다. 근본 원인: 프로세스 전체가 공유하는 Application
+        // 리소스에 "우리만 쓸" 암시적 스타일을 병합하는 것 자체가 애초에 안전하지 않다 - Application이
+        // 정말 우리 소유가 아닐 수 있다는 걸 1차 수정 때는 놓쳤다. 최종 수정: Theme.xaml 병합은 각 창의
+        // 로컬 `Window.Resources`로 옮겼다(SettingsWindow.xaml 등 각 XAML 파일 참고) - 이러면 암시적
+        // 스타일이 그 창(과 그 창이 띄우는 팝업/드롭다운)의 시각적 트리 안에만 적용되고 프로세스 전체로
+        // 번지지 않는다. 이 메서드는 이제 "Application 인스턴스 자체가 없으면 하나 만든다"는 것만 한다
+        // (DataGrid처럼 기본 테마 리소스에 의존하는 복잡한 컨트롤은 Application이 아예 없으면 Baml2006
+        // 예외로 실패하므로 - 이건 여전히 필요) - Theme.xaml을 여기서 전역으로 병합하지 않는다.
         private static void EnsureWpfApplication()
         {
-            if (WpfApplication.Current != null) return;
-            _ = new WpfApplication { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+            if (WpfApplication.Current == null)
+            {
+                _ = new WpfApplication { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+            }
         }
 
         // 리소스로 포함된 PNG 아이콘을 리본 버튼용 BitmapSource로 로드한다.

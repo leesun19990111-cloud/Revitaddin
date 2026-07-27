@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Interop;
@@ -38,40 +39,125 @@ namespace WallSplitter
             return Result.Cancelled;
         }
 
-        private static Result ExecuteAssign(Document doc, List<(ElementId TypeId, ElementId NewMaterialId)> assignments)
+        // 아래 세 TryXxx는 실제 반영 + 확인 로직을 각 ExecuteXxx의 반복문에서 뽑아낸 것이다 (동작은 그대로,
+        // 가시성만 internal로 넓힌 순수 추출) - ChangeReplayEngine이 다른 문서에 같은 변경을 재현할 때도
+        // 이 메서드를 그대로 호출해서 쓴다. 반영 로직이 "재료 지정 도구"와 "모델간 변경 반영" 두 곳에서 서로
+        // 다르게 흘러가면 나중에 조용히 어긋나므로, 한 곳에만 두고 공유한다.
+
+        // MaterialSlotFinder.Apply()가 예외 없이 반환했다고 해서 실제로 반영됐다고 단정하지 않는다 - 커밋 전에
+        // 같은 트랜잭션 안에서 다시 읽어 실제 값이 지정하려던 재료와 일치하는지 확인하고, 다르면 "조용한
+        // 미반영"으로 실패 처리한다("정확하게 반영됐으면 좋겠다"는 라이브 피드백으로 추가된 확인 절차).
+        internal static bool TryAssignMaterial(ElementType type, MaterialSlot targetSlot, ElementId newMaterialId, out ElementId oldMaterialId, out string failureReason)
+        {
+            failureReason = "";
+            bool applied = MaterialSlotFinder.Apply(type, targetSlot, newMaterialId, out MaterialSlot? previousSlot);
+            oldMaterialId = previousSlot?.MaterialId ?? ElementId.InvalidElementId;
+
+            if (!applied)
+            {
+                failureReason = "재료를 지정할 위치를 찾지 못함";
+                return false;
+            }
+
+            MaterialSlot? verify = MaterialSlotFinder.FindSlot(type, targetSlot);
+            if (verify == null || verify.Value.MaterialId != newMaterialId)
+            {
+                failureReason = "반영 확인 실패 - 지정 후에도 이전 재료로 남아있음";
+                return false;
+            }
+            return true;
+        }
+
+        // Document.Delete가 실제로 삭제한 id 목록을 반환값으로 알려준다 - 예외 없이 반환됐다고 삭제가 실제로
+        // 됐다고 단정하지 않고, 그 목록에 이 재료 id가 들어있는지 확인해야 "조용한 미삭제"(예: 시스템 기본
+        // 재료 등 Revit이 내부적으로 보호하는 경우)를 실패로 정확히 보고할 수 있다.
+        internal static bool TryDeleteMaterial(Document doc, ElementId materialId, out string failureReason)
+        {
+            failureReason = "";
+            ICollection<ElementId> deletedIds = doc.Delete(materialId);
+            if (!deletedIds.Contains(materialId))
+            {
+                failureReason = "삭제되지 않음 - Revit이 보호하는 재료일 수 있음";
+                return false;
+            }
+            return true;
+        }
+
+        // Apply 계열 다른 메서드와 같은 이유로, 커밋 전에 같은 트랜잭션 안에서 다시 읽어 실제 값이 지정하려던
+        // 값과 일치하는지 확인한다.
+        internal static bool TrySetMaterialIdentity(Material mat, string? newClass, string? newDescription, out string failureReason)
+        {
+            failureReason = "";
+            Parameter? descriptionParam = newDescription != null
+                ? mat.get_Parameter(BuiltInParameter.ALL_MODEL_DESCRIPTION)
+                : null;
+            if (newDescription != null && descriptionParam == null)
+            {
+                failureReason = "설명 파라미터를 찾지 못함";
+                return false;
+            }
+
+            if (newClass != null) mat.MaterialClass = newClass;
+            if (newDescription != null) descriptionParam!.Set(newDescription);
+
+            bool classOk = newClass == null || mat.MaterialClass == newClass;
+            bool descriptionOk = newDescription == null ||
+                (mat.get_Parameter(BuiltInParameter.ALL_MODEL_DESCRIPTION)?.AsString() ?? "") == newDescription;
+            if (!classOk || !descriptionOk)
+            {
+                failureReason = "반영 확인 실패 - 지정 후에도 이전 값으로 남아있음";
+                return false;
+            }
+            return true;
+        }
+
+        // 유형 하나가 슬롯을 여러 개 가질 수 있으므로(레이어가 여러 개인 벽/바닥, 재료 파라미터가 여러 개인
+        // 문/창 등) 실패 메시지에 어느 슬롯이었는지 덧붙인다 - 슬롯이 하나뿐인 유형(Label=="")은 기존과
+        // 동일하게 유형 이름만 보인다.
+        private static string SlotSuffix(MaterialSlot slot) => string.IsNullOrEmpty(slot.Label) ? "" : $" ({slot.Label})";
+
+        private static Result ExecuteAssign(Document doc, List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)> assignments)
         {
             var failed = new List<string>();
+            var pendingLogEntries = new List<ChangeLogEntry>();
             TransactionStatus status;
 
             using (Transaction tx = new Transaction(doc, "재료 일괄 지정"))
             {
                 tx.Start();
 
-                foreach ((ElementId typeId, ElementId newMaterialId) in assignments)
+                foreach ((ElementId typeId, MaterialSlot slot, ElementId newMaterialId) in assignments)
                 {
                     Element? el = doc.GetElement(typeId);
                     if (el is not ElementType type) continue;
 
                     try
                     {
-                        bool applied = MaterialSlotFinder.Apply(type, newMaterialId);
+                        bool applied = TryAssignMaterial(type, slot, newMaterialId, out ElementId oldMaterialId, out string reason);
                         if (!applied)
                         {
-                            failed.Add($"{type.Name} (재료를 지정할 위치를 찾지 못함)");
+                            failed.Add($"{type.Name}{SlotSuffix(slot)} ({reason})");
                             continue;
                         }
 
-                        // Apply()가 예외 없이 반환했다고 해서 실제로 반영됐다고 단정하지 않는다 - 커밋 전에
-                        // 같은 트랜잭션 안에서 다시 읽어 실제 값이 지정하려던 재료와 일치하는지 확인하고,
-                        // 다르면 "조용한 미반영"으로 실패 목록에 남긴다("정확하게 반영됐으면 좋겠다"는
-                        // 라이브 피드백으로 추가 - 반영 여부를 눈으로 다시 확인하지 않아도 알 수 있어야 한다).
-                        MaterialSlot? verify = MaterialSlotFinder.Find(type);
-                        if (verify == null || verify.Value.MaterialId != newMaterialId)
-                            failed.Add($"{type.Name} (반영 확인 실패 - 지정 후에도 이전 재료로 남아있음)");
+                        // 모델간 변경 반영이 다른 문서에서 "유형 이름이 같고, 지금 재료가 OldValue인" 사례를 찾아
+                        // NewValue로 재현할 수 있도록, 실제 커밋 성공이 확인된 뒤(아래 status 확인 후) 기록한다.
+                        // SlotLabel도 함께 남겨야 유형 하나에 슬롯이 여러 개일 때 재현 시 엉뚱한 슬롯이 아니라
+                        // 바로 이 슬롯을 다시 찾을 수 있다.
+                        pendingLogEntries.Add(new ChangeLogEntry
+                        {
+                            Timestamp = DateTime.Now,
+                            SourceDocumentTitle = doc.Title,
+                            Kind = ChangeKind.MaterialAssign,
+                            Key = type.Name,
+                            SlotLabel = slot.Label,
+                            OldValue = doc.GetElement(oldMaterialId)?.Name,
+                            NewValue = doc.GetElement(newMaterialId)?.Name,
+                        });
                     }
                     catch (System.Exception ex)
                     {
-                        failed.Add($"{type.Name} ({ex.Message})");
+                        failed.Add($"{type.Name}{SlotSuffix(slot)} ({ex.Message})");
                     }
                 }
 
@@ -87,6 +173,8 @@ namespace WallSplitter
                 return Result.Failed;
             }
 
+            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
+
             if (failed.Count > 0)
             {
                 string detail = string.Join("\n", failed.Take(30));
@@ -100,6 +188,7 @@ namespace WallSplitter
         private static Result ExecuteDelete(Document doc, List<ElementId> materialIds)
         {
             var failed = new List<string>();
+            var pendingLogEntries = new List<ChangeLogEntry>();
             TransactionStatus status;
 
             using (Transaction tx = new Transaction(doc, "재료 일괄 삭제"))
@@ -110,20 +199,28 @@ namespace WallSplitter
                 {
                     Element? mat = doc.GetElement(materialId);
                     if (mat == null) continue;
+                    string matName = mat.Name ?? "";
 
                     try
                     {
-                        // Document.Delete가 실제로 삭제한 id 목록을 반환값으로 알려준다 - 예외 없이
-                        // 반환됐다고 삭제가 실제로 됐다고 단정하지 않고, 그 목록에 이 재료 id가 들어있는지
-                        // 확인해야 "조용한 미삭제"(예: 시스템 기본 재료 등 Revit이 내부적으로 보호하는
-                        // 경우)를 실패로 정확히 보고할 수 있다("정확하게 반영됐으면 좋겠다"는 라이브 피드백).
-                        ICollection<ElementId> deletedIds = doc.Delete(materialId);
-                        if (!deletedIds.Contains(materialId))
-                            failed.Add($"{mat.Name} (삭제되지 않음 - Revit이 보호하는 재료일 수 있음)");
+                        bool deleted = TryDeleteMaterial(doc, materialId, out string reason);
+                        if (!deleted)
+                        {
+                            failed.Add($"{matName} ({reason})");
+                            continue;
+                        }
+
+                        pendingLogEntries.Add(new ChangeLogEntry
+                        {
+                            Timestamp = DateTime.Now,
+                            SourceDocumentTitle = doc.Title,
+                            Kind = ChangeKind.MaterialDelete,
+                            Key = matName,
+                        });
                     }
                     catch (System.Exception ex)
                     {
-                        failed.Add($"{mat.Name} ({ex.Message})");
+                        failed.Add($"{matName} ({ex.Message})");
                     }
                 }
 
@@ -136,6 +233,8 @@ namespace WallSplitter
                 TaskDialog.Show("재료 삭제", $"재료 삭제가 모델에 반영되지 않았습니다 (트랜잭션 롤백: {status}).");
                 return Result.Failed;
             }
+
+            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
 
             if (failed.Count > 0)
             {
@@ -150,6 +249,7 @@ namespace WallSplitter
         private static Result ExecuteIdentityEdit(Document doc, List<(ElementId MaterialId, string? NewClass, string? NewDescription)> edits)
         {
             var failed = new List<string>();
+            var pendingLogEntries = new List<ChangeLogEntry>();
             TransactionStatus status;
 
             using (Transaction tx = new Transaction(doc, "재료 클래스/설명 일괄 변경"))
@@ -160,32 +260,54 @@ namespace WallSplitter
                 {
                     Element? el = doc.GetElement(materialId);
                     if (el is not Material mat) continue;
+                    string matName = mat.Name ?? "";
 
                     try
                     {
-                        Parameter? descriptionParam = newDescription != null
-                            ? mat.get_Parameter(BuiltInParameter.ALL_MODEL_DESCRIPTION)
+                        // 값을 덮어쓰기 전에 이전 값을 먼저 읽어둔다 - TrySetMaterialIdentity가 성공적으로 값을
+                        // 바꾸고 나면 이전 값은 더 이상 알 수 없다 (NamerCommand가 el.Name을 바꾸기 전에
+                        // oldName부터 읽어두는 것과 같은 이유).
+                        string? oldClass = newClass != null ? mat.MaterialClass : null;
+                        string? oldDescription = newDescription != null
+                            ? mat.get_Parameter(BuiltInParameter.ALL_MODEL_DESCRIPTION)?.AsString()
                             : null;
-                        if (newDescription != null && descriptionParam == null)
+
+                        bool ok = TrySetMaterialIdentity(mat, newClass, newDescription, out string reason);
+                        if (!ok)
                         {
-                            failed.Add($"{mat.Name} (설명 파라미터를 찾지 못함)");
+                            failed.Add($"{matName} ({reason})");
                             continue;
                         }
 
-                        if (newClass != null) mat.MaterialClass = newClass;
-                        if (newDescription != null) descriptionParam!.Set(newDescription);
-
-                        // Apply 계열 다른 커맨드와 같은 이유("정확하게 반영됐으면 좋겠다")로, 커밋 전에
-                        // 같은 트랜잭션 안에서 다시 읽어 실제 값이 지정하려던 값과 일치하는지 확인한다.
-                        bool classOk = newClass == null || mat.MaterialClass == newClass;
-                        bool descriptionOk = newDescription == null ||
-                            (mat.get_Parameter(BuiltInParameter.ALL_MODEL_DESCRIPTION)?.AsString() ?? "") == newDescription;
-                        if (!classOk || !descriptionOk)
-                            failed.Add($"{mat.Name} (반영 확인 실패 - 지정 후에도 이전 값으로 남아있음)");
+                        // 클래스/설명은 서로 독립적으로 바뀔 수 있으므로(한쪽만 바꾼 세션도 있음), 실제로 바뀐
+                        // 필드마다 별도 기록을 남긴다 - 창의 _workingClass/_workingDescription이 애초에 두 개의
+                        // 독립된 딕셔너리인 것과 같은 이유.
+                        if (newClass != null)
+                            pendingLogEntries.Add(new ChangeLogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                SourceDocumentTitle = doc.Title,
+                                Kind = ChangeKind.MaterialIdentityEdit,
+                                Field = IdentityField.MaterialClass,
+                                Key = matName,
+                                OldValue = oldClass,
+                                NewValue = newClass,
+                            });
+                        if (newDescription != null)
+                            pendingLogEntries.Add(new ChangeLogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                SourceDocumentTitle = doc.Title,
+                                Kind = ChangeKind.MaterialIdentityEdit,
+                                Field = IdentityField.Description,
+                                Key = matName,
+                                OldValue = oldDescription,
+                                NewValue = newDescription,
+                            });
                     }
                     catch (System.Exception ex)
                     {
-                        failed.Add($"{mat.Name} ({ex.Message})");
+                        failed.Add($"{matName} ({ex.Message})");
                     }
                 }
 
@@ -198,6 +320,8 @@ namespace WallSplitter
                 TaskDialog.Show("클래스/설명 변경", $"변경 사항이 모델에 반영되지 않았습니다 (트랜잭션 롤백: {status}).");
                 return Result.Failed;
             }
+
+            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
 
             if (failed.Count > 0)
             {

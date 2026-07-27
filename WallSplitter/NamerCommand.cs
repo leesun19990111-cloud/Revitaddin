@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Interop;
@@ -25,6 +26,7 @@ namespace WallSplitter
 
             var failed = new List<string>();
             var merged = new List<string>();
+            var pendingLogEntries = new List<ChangeLogEntry>();
             TransactionStatus status;
 
             using (Transaction tx = new Transaction(doc, "NAMER 이름 일괄 변경"))
@@ -41,13 +43,36 @@ namespace WallSplitter
                     // 처리한다 - 다른 카테고리는 지금까지와 동일하게 이름 변경을 그대로 시도한다.
                     if (el is Material material)
                     {
+                        int failedBefore = failed.Count;
                         RenameMaterial(doc, material, oldName, newName, window.MergeDuplicateMaterials, failed, merged);
+                        // RenameMaterial의 시그니처를 그대로 두기 위해(성공 여부를 별도로 안 돌려줌), 이 호출로
+                        // failed에 새로 추가된 게 없으면 성공한 것으로 판단한다.
+                        if (failed.Count == failedBefore)
+                            pendingLogEntries.Add(new ChangeLogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                SourceDocumentTitle = doc.Title,
+                                Kind = ChangeKind.Rename,
+                                Category = NamerWindow.NamerCategory.Material,
+                                Key = oldName,
+                                NewValue = newName,
+                                MergeDuplicateMaterials = window.MergeDuplicateMaterials,
+                            });
                         continue;
                     }
 
                     try
                     {
                         el.Name = newName;
+                        pendingLogEntries.Add(new ChangeLogEntry
+                        {
+                            Timestamp = DateTime.Now,
+                            SourceDocumentTitle = doc.Title,
+                            Kind = ChangeKind.Rename,
+                            Category = ClassifyForLog(el),
+                            Key = oldName,
+                            NewValue = newName,
+                        });
                     }
                     catch (System.Exception ex)
                     {
@@ -68,6 +93,10 @@ namespace WallSplitter
                 return Result.Failed;
             }
 
+            // 커밋이 실제로 성공한 뒤에만 기록한다 - 롤백되면 pendingLogEntries 전부가 "실제로는 일어나지
+            // 않은 변경"이 되므로, 모델간 변경 반영이 나중에 이걸 다른 문서에 재현하려 들면 안 된다.
+            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
+
             if (merged.Count > 0)
             {
                 string detail = string.Join("\n", merged.Take(30));
@@ -85,9 +114,26 @@ namespace WallSplitter
             return Result.Succeeded;
         }
 
+        // window.Result((ElementId, NewName)만 담음)는 카테고리 정보를 따로 들고 있지 않으므로, 커밋된 뒤
+        // 기록을 남길 때 요소의 실제 런타임 타입으로부터 다시 분류한다. NamerWindow.CollectCandidates의
+        // 카테고리별 분류 규칙과 같은 우선순위(시트/일람표/뷰 템플릿/범례를 뷰보다 먼저 확인)를 따른다.
+        private static NamerWindow.NamerCategory ClassifyForLog(Element el) => el switch
+        {
+            ViewSheet => NamerWindow.NamerCategory.Sheet,
+            ViewSchedule => NamerWindow.NamerCategory.Schedule,
+            View v when v.IsTemplate => NamerWindow.NamerCategory.ViewTemplate,
+            View v when v.ViewType == ViewType.Legend => NamerWindow.NamerCategory.Legend,
+            View => NamerWindow.NamerCategory.View,
+            Family => NamerWindow.NamerCategory.Family,
+            ElementType => NamerWindow.NamerCategory.Type,
+            _ => NamerWindow.NamerCategory.Type,
+        };
+
         // 재료 하나를 이름 변경한다 - 새 이름을 이미 다른 재료가 쓰고 있으면(재료는 문서 전체에서 이름이
         // 유일해야 함) mergeOnDuplicate에 따라 병합하거나 숫자를 붙인다.
-        private static void RenameMaterial(Document doc, Material material, string oldName, string newName,
+        // internal: ChangeReplayEngine이 다른 문서에 Rename+Category=Material 기록을 재현할 때도 이
+        // 병합/충돌 처리 로직을 그대로 써야 하므로 (중복되면 언젠가 어긋나는 로직이라 공유가 맞다).
+        internal static void RenameMaterial(Document doc, Material material, string oldName, string newName,
             bool mergeOnDuplicate, List<string> failed, List<string> merged)
         {
             Material? existing = new FilteredElementCollector(doc).OfClass(typeof(Material))
