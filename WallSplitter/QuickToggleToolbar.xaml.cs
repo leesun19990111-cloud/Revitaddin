@@ -42,6 +42,15 @@ namespace WallSplitter
         private List<QuickToggleButtonConfig>? _renderedButtons;
         private readonly List<(QuickToggleButtonConfig cfg, Button button, Canvas icon, TextBlock label)> _rows = new();
 
+        // CONFIRMED LIVE BUG (2026-07-27), 세 번째 수정: 위치 재대입(Left/Top)을 고친 뒤에도 "클릭이 잘
+        // 안 된다"는 재보고가 있었다 - UpdateButtonStates가 매 Idling 틱마다 IsEnabled/ToolTip/아이콘
+        // 색을 "값이 같아도" 무조건 다시 대입하고 있었기 때문(같은 근본 패턴이 또 있었다). button.IsEnabled
+        // 재대입은 값이 그대로여도 WPF의 IsEnabled 강제(coerce) 파이프라인을 다시 태우고, button.ToolTip
+        // 재대입은 매번 새 문자열 인스턴스라 ToolTipService가 툴팁을 다시 여닫으려 든다 - 둘 다 마우스를
+        // 누르고 있는 도중이면 ButtonBase의 마우스 캡처를 끊을 수 있다. 고정: 버튼별 마지막 상태를
+        // 기억해두고(_lastStates), 실제로 상태가 바뀐 버튼만 갱신한다.
+        private readonly Dictionary<string, QuickToggleButtonState> _lastStates = new();
+
         public QuickToggleToolbar(UIApplication uiapp)
         {
             InitializeComponent();
@@ -71,8 +80,21 @@ namespace WallSplitter
         {
             // Idling은 매우 자주 발생하므로 그때마다 디스크에서 설정을 다시 읽지 않고, 문서가 바뀐 경우에만
             // 새로 로드한다 (같은 문서에서의 반복 갱신은 캐시된 설정 + 최신 뷰 상태 조회만으로 충분).
-            if (!ReferenceEquals(_cachedDoc, doc))
+            // ReferenceEquals만 믿지 않는다 - Revit API가 같은 열린 문서에 대해 매 호출마다 완전히 같은
+            // .NET 래퍼 인스턴스를 돌려준다는 보장을 문서화된 곳에서 확인하지 못했다. 만약 그 가정이
+            // 틀리면 매 Idling 틱마다 "문서가 바뀐 것"으로 오판해 ForceReloadSettings가 매번 새
+            // QuickToggleSettings(+ 새 Buttons 리스트 참조)를 만들고, 그러면 RefreshState의
+            // "리스트 참조가 바뀐 경우에만 RebuildButtons" 판정도 매 틱마다 참이 되어 클릭이 씹히는 원래
+            // 버그가 다른 경로로 되살아난다 - 그래서 PathName도 함께 비교해 이중으로 방어한다.
+            if (!DocumentsMatch(_cachedDoc, doc))
                 ForceReloadSettings(doc);
+        }
+
+        private static bool DocumentsMatch(RevitDocument? cached, RevitDocument doc)
+        {
+            if (cached == null) return false;
+            if (ReferenceEquals(cached, doc) || cached.Equals(doc)) return true;
+            return !string.IsNullOrEmpty(cached.PathName) && cached.PathName == doc.PathName;
         }
 
         // ViewActivated/Idling 양쪽에서 호출된다 - 뷰 전환 시 즉시 반영 + 유휴 틱마다 다른 경로로 바뀐
@@ -127,10 +149,12 @@ namespace WallSplitter
         {
             ButtonsPanel.Children.Clear();
             _rows.Clear();
+            _lastStates.Clear();
 
             foreach (QuickToggleButtonConfig cfg in _cachedSettings.Buttons)
             {
                 QuickToggleButtonState state = QuickToggleService.DetermineState(view, cfg);
+                _lastStates[cfg.Id] = state;
 
                 Canvas icon = QuickToggleIcons.Create(cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category), BrushFor(state, cfg));
                 TextBlock label = new TextBlock
@@ -170,6 +194,13 @@ namespace WallSplitter
             foreach ((QuickToggleButtonConfig cfg, Button button, Canvas icon, TextBlock label) in _rows)
             {
                 QuickToggleButtonState state = QuickToggleService.DetermineState(view, cfg);
+
+                // 실제로 상태가 바뀐 버튼만 건드린다 - 값이 같아도 매번 IsEnabled/ToolTip을 재대입하면
+                // 마우스를 누르고 있는 도중 캡처가 끊겨 클릭이 씹혔다(위 클래스 주석 참고).
+                if (_lastStates.TryGetValue(cfg.Id, out QuickToggleButtonState lastState) && lastState == state)
+                    continue;
+                _lastStates[cfg.Id] = state;
+
                 QuickToggleIcons.SetBrush(icon, BrushFor(state, cfg));
                 label.Foreground = state == QuickToggleButtonState.Disabled ? Theme.ToggleDisabled : Theme.TextPrimary;
                 button.IsEnabled = state != QuickToggleButtonState.Disabled;
@@ -224,19 +255,19 @@ namespace WallSplitter
             App.QuickToggleEvent.Raise();
         }
 
-        // 버튼 목록이 바뀔 때만(RebuildButtons 직후) 호출 - 내용에 맞춰 창 너비를 계산한다. 예전에는
-        // Revit 메인 창 너비에 맞춰 늘렸지만, 이제 자유롭게 옮길 수 있는 패널이 되면서 그럴 이유가 없어져
-        // 내용 기준으로만 크기를 잡고(버튼이 많아 넘치면 XAML의 가로 스크롤이 처리) 최대 너비만 둔다.
+        // 버튼 목록이 바뀔 때만(RebuildButtons 직후) 호출 - 내용에 맞춰 창 너비를 계산한다.
+        // 2026-07-27, 사용자 요청으로 최대 너비 제한(가로 스크롤로 처리)을 없앴다 - "등록된 버튼이 많으면
+        // 스크롤 대신 툴바 자체가 옆으로 길게 늘어나게 해달라"는 피드백. 이제 버튼이 아무리 많아도 전부
+        // 한 줄에 펴서 보여주고, 창 너비는 그만큼 계속 늘어난다(위쪽 XAML의 가로 스크롤 제거와 짝).
         // GripWidthDip은 XAML의 왼쪽 드래그 그립 열(Width="16")과 반드시 맞춰야 한다.
         private const double MinWidthDip = 160;
-        private const double MaxWidthDip = 480;
         private const double GripWidthDip = 16;
 
         private void ResizeToContent()
         {
             ButtonsPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double contentWidth = ButtonsPanel.DesiredSize.Width + 16;
-            Width = GripWidthDip + Math.Min(MaxWidthDip, Math.Max(MinWidthDip, contentWidth));
+            Width = GripWidthDip + Math.Max(MinWidthDip, contentWidth);
         }
 
         // 왼쪽 드래그 그립을 누르면 호출된다 - 버튼 영역과 완전히 분리된 전용 영역이라(위 클래스 주석

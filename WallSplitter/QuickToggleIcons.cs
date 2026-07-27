@@ -17,6 +17,11 @@ namespace WallSplitter
         Star,
         Flag,
         Dot,
+        // 2026-07-27, "아이콘 갯수를 늘려달라(눈/꽃 모양 등)"는 요청으로 추가.
+        Eye,
+        Flower,
+        Heart,
+        Bolt,
     }
 
     // QuickToggleToolbar(실제 툴바 렌더링)와 QuickToggleSettingsWindow(설정 창의 아이콘 선택 미리보기)가
@@ -42,6 +47,10 @@ namespace WallSplitter
             QuickToggleIconShape.Star => "별",
             QuickToggleIconShape.Flag => "깃발",
             QuickToggleIconShape.Dot => "점",
+            QuickToggleIconShape.Eye => "눈",
+            QuickToggleIconShape.Flower => "꽃",
+            QuickToggleIconShape.Heart => "하트",
+            QuickToggleIconShape.Bolt => "번개",
             _ => "",
         };
 
@@ -108,11 +117,79 @@ namespace WallSplitter
                     break;
 
                 case QuickToggleIconShape.Dot:
-                default:
                     canvas.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = brush });
                     Canvas.SetLeft(canvas.Children[0], 4);
                     Canvas.SetTop(canvas.Children[0], 2);
                     break;
+
+                case QuickToggleIconShape.Eye:
+                {
+                    // 아몬드형 눈 바깥선(위/아래 베지어 곡선)에서 동공(원)을 오려낸 모양 -
+                    // GeometryGroup(EvenOdd)로 큰 도형에서 작은 원을 뺀다.
+                    PathFigure outline = new PathFigure { StartPoint = new Point(0, 8), IsClosed = true };
+                    outline.Segments.Add(new QuadraticBezierSegment(new Point(10, -2), new Point(20, 8), true));
+                    outline.Segments.Add(new QuadraticBezierSegment(new Point(10, 18), new Point(0, 8), true));
+                    PathGeometry almond = new PathGeometry();
+                    almond.Figures.Add(outline);
+                    EllipseGeometry pupil = new EllipseGeometry(new Point(10, 8), 3, 3);
+                    GeometryGroup eyeGroup = new GeometryGroup { FillRule = FillRule.EvenOdd };
+                    eyeGroup.Children.Add(almond);
+                    eyeGroup.Children.Add(pupil);
+                    canvas.Children.Add(new Path { Data = eyeGroup, Fill = brush });
+                    break;
+                }
+
+                case QuickToggleIconShape.Flower:
+                    // 중심에서 6방향으로 뻗는 꽃잎(타원) - RenderTransformOrigin으로 각 타원의
+                    // 아래쪽 끝을 중심점에 고정해두고 회전시켜 방사형으로 배치한다.
+                    for (int i = 0; i < 6; i++)
+                    {
+                        Ellipse petal = new Ellipse
+                        {
+                            Width = 6,
+                            Height = 8,
+                            Fill = brush,
+                            RenderTransformOrigin = new Point(0.5, 1.0),
+                            RenderTransform = new RotateTransform(i * 60),
+                        };
+                        Canvas.SetLeft(petal, 10 - 3);
+                        Canvas.SetTop(petal, 8 - 8);
+                        canvas.Children.Add(petal);
+                    }
+                    break;
+
+                case QuickToggleIconShape.Heart:
+                {
+                    // 원 2개(윗부분 두 봉우리) + 삼각형(아랫부분 뾰족한 끝)을 합쳐서 하트 모양을 만든다.
+                    EllipseGeometry lobeLeft = new EllipseGeometry(new Point(6, 5), 4.5, 4.5);
+                    EllipseGeometry lobeRight = new EllipseGeometry(new Point(14, 5), 4.5, 4.5);
+                    PathFigure tip = new PathFigure { StartPoint = new Point(1.5, 6.5), IsClosed = true };
+                    tip.Segments.Add(new LineSegment(new Point(10, 16), true));
+                    tip.Segments.Add(new LineSegment(new Point(18.5, 6.5), true));
+                    PathGeometry tipGeometry = new PathGeometry();
+                    tipGeometry.Figures.Add(tip);
+                    GeometryGroup heartGroup = new GeometryGroup { FillRule = FillRule.Nonzero };
+                    heartGroup.Children.Add(lobeLeft);
+                    heartGroup.Children.Add(lobeRight);
+                    heartGroup.Children.Add(tipGeometry);
+                    canvas.Children.Add(new Path { Data = heartGroup, Fill = brush });
+                    break;
+                }
+
+                case QuickToggleIconShape.Bolt:
+                    canvas.Children.Add(new Polygon
+                    {
+                        Points = new PointCollection
+                        {
+                            new Point(11, 0), new Point(3, 9), new Point(9, 9),
+                            new Point(7, 16), new Point(17, 6), new Point(11, 6),
+                        },
+                        Fill = brush,
+                    });
+                    break;
+
+                default:
+                    goto case QuickToggleIconShape.Dot;
             }
 
             return canvas;
@@ -131,7 +208,7 @@ namespace WallSplitter
         }
 
         // UpdateButtonStates가 상태만 바뀌었을 때 아이콘 색을 다시 칠하기 위한 헬퍼 - Create가 만드는
-        // 도형 종류(Rectangle/Polygon/Line/Ellipse)에 맞춰 Fill 또는 Stroke를 갱신한다.
+        // 도형 종류(Rectangle/Polygon/Line/Ellipse/Path)에 맞춰 Fill 또는 Stroke를 갱신한다.
         public static void SetBrush(Canvas canvas, Brush brush)
         {
             foreach (UIElement child in canvas.Children)
@@ -142,6 +219,7 @@ namespace WallSplitter
                     case Polygon poly: poly.Fill = brush; break;
                     case Line line: line.Stroke = brush; break;
                     case Ellipse ellipse: ellipse.Fill = brush; break;
+                    case Path path: path.Fill = brush; break;
                 }
             }
         }

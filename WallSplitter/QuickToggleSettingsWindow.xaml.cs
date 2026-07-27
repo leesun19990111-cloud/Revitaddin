@@ -200,7 +200,9 @@ namespace WallSplitter
             EditHeaderHost.Children.Clear();
             EditPanelHost.Children.Clear();
 
-            StackPanel nameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
+            // 2026-07-27, 사용자 요청으로 위쪽(이름/아이콘/색상) 영역의 위아래 여백을 최소로 줄였다 -
+            // "이 부분이 너무 커서 아래 대상 선택 부분이 작아 보인다"는 피드백.
+            StackPanel nameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
             nameRow.Children.Add(new TextBlock { Text = "이름: ", VerticalAlignment = VerticalAlignment.Center });
             TextBox nameBox = new TextBox { Width = 240, Text = cfg.Name, VerticalContentAlignment = VerticalAlignment.Center };
             nameBox.TextChanged += (s, e) => { cfg.Name = nameBox.Text; RefreshButtonList(); };
@@ -213,7 +215,7 @@ namespace WallSplitter
             {
                 Text = CategoryLabel(cfg.Category) + " 대상 선택" + (cfg.Category == QuickToggleCategory.ViewTemplate ? " (하나만 선택 가능)" : " (여러 개 선택 가능 - 모두 함께 켜고 꺼집니다)"),
                 FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 6),
+                Margin = new Thickness(0, 0, 0, 3),
             });
 
             switch (cfg.Category)
@@ -251,16 +253,16 @@ namespace WallSplitter
             QuickToggleIconShape currentShape = cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category);
             string currentColor = string.IsNullOrEmpty(cfg.OnColorHex) ? ColorPalette[0].Hex : cfg.OnColorHex;
 
-            EditHeaderHost.Children.Add(new TextBlock { Text = "아이콘", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
-            WrapPanel iconRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+            EditHeaderHost.Children.Add(new TextBlock { Text = "아이콘", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
+            WrapPanel iconRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
             foreach (QuickToggleIconShape shape in Enum.GetValues(typeof(QuickToggleIconShape)))
             {
                 bool isSelected = shape == currentShape;
                 Border swatch = new Border
                 {
-                    Width = 32,
-                    Height = 32,
-                    Margin = new Thickness(0, 0, 6, 6),
+                    Width = 24,
+                    Height = 24,
+                    Margin = new Thickness(0, 0, 4, 4),
                     BorderThickness = new Thickness(isSelected ? 2 : 1),
                     BorderBrush = isSelected ? (Brush)new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(currentColor)) : Theme.Border,
                     Background = Theme.Surface,
@@ -268,7 +270,7 @@ namespace WallSplitter
                     ToolTip = QuickToggleIcons.LabelFor(shape),
                     Child = new Viewbox
                     {
-                        Width = 20, Height = 16,
+                        Width = 16, Height = 13,
                         Child = QuickToggleIcons.Create(shape, Theme.TextPrimary),
                     },
                 };
@@ -277,16 +279,16 @@ namespace WallSplitter
             }
             EditHeaderHost.Children.Add(iconRow);
 
-            EditHeaderHost.Children.Add(new TextBlock { Text = "켜짐 색상", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
-            WrapPanel colorRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+            EditHeaderHost.Children.Add(new TextBlock { Text = "켜짐 색상", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
+            WrapPanel colorRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
             foreach ((string hex, string name) in ColorPalette)
             {
                 bool isSelected = string.Equals(hex, currentColor, StringComparison.OrdinalIgnoreCase);
                 Border swatch = new Border
                 {
-                    Width = 26,
-                    Height = 26,
-                    Margin = new Thickness(0, 0, 6, 0),
+                    Width = 20,
+                    Height = 20,
+                    Margin = new Thickness(0, 0, 4, 0),
                     BorderThickness = new Thickness(isSelected ? 3 : 1),
                     BorderBrush = isSelected ? Theme.TextPrimary : Theme.Border,
                     Background = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(hex)),

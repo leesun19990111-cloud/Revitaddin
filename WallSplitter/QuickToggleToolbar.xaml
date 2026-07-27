@@ -45,9 +45,10 @@
                 </StackPanel>
             </Border>
 
-            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Margin="4"/>
-            </ScrollViewer>
+            <!-- 2026-07-27, 사용자 요청으로 가로 스크롤을 없앴다 - "스크롤이 너무 짧아서 잡기 힘들고
+                 반대로 되는 느낌"이라는 피드백. 이제 버튼이 많아지면 ResizeToContent()가 창 자체를
+                 그만큼 옆으로 늘린다(더 이상 최대 너비 제한 없음) - QuickToggleToolbar.xaml.cs 참고. -->
+            <StackPanel Grid.Column="1" x:Name="ButtonsPanel" Orientation="Horizontal" Margin="4"/>
         </Grid>
     </Border>
 </Window>
