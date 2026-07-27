@@ -13,6 +13,16 @@ namespace WallSplitter
         public int? ViewTemplateId { get; set; }
         public Dictionary<int, bool> FilterVisibility { get; set; } = new();
         public Dictionary<int, bool> WorksetVisibility { get; set; } = new(); // true = Visible
+
+        // 2026-07-28, "모델/주석/해석모델/가져온카테고리/뷰자르기 및 범위까지 전부 기억해야 한다"는 요청으로
+        // 확장 - V/G 대화상자의 카테고리 표시 체크박스는 탭(모델/주석/해석모델/가져온 카테고리)과 무관하게
+        // 전부 doc.Settings.Categories 트리 하나로 노출되므로(View.GetCategoryHidden/SetCategoryHidden),
+        // 탭별로 따로 나누지 않고 카테고리 전체를 순회해 한 번에 담는다 (QuickToggleService.CaptureViewState).
+        public Dictionary<int, bool> CategoryHidden { get; set; } = new(); // true = Hidden
+        public bool CropBoxActive { get; set; }
+        public bool CropBoxVisible { get; set; }
+        public BoundingBoxXYZ? CropBox { get; set; }
+        public PlanViewRange? PlanViewRange { get; set; } // 평면 뷰가 아니면 null (View Range는 평면 뷰 전용)
     }
 
     // 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라 버튼 클릭이 언제든 일어날 수
@@ -100,54 +110,7 @@ namespace WallSplitter
             using (Transaction tx = new Transaction(doc, "빠른 토글: 뷰 상태 되돌리기"))
             {
                 tx.Start();
-
-                try
-                {
-                    targetView.ViewTemplateId = snapshot.ViewTemplateId.HasValue
-                        ? new ElementId(snapshot.ViewTemplateId.Value)
-                        : ElementId.InvalidElementId;
-                }
-                catch
-                {
-                    // 저장했던 뷰템플릿이 그 사이 삭제되었거나 이 뷰 종류와 안 맞는 경우 - 나머지는 계속 적용
-                }
-
-                ICollection<ElementId> currentFilters;
-                try { currentFilters = targetView.GetFilters(); }
-                catch { currentFilters = new List<ElementId>(); }
-
-                foreach (KeyValuePair<int, bool> kvp in snapshot.FilterVisibility)
-                {
-                    try
-                    {
-                        ElementId filterId = new ElementId(kvp.Key);
-                        // 저장 시점 이후 필터 자체가 뷰에서 빠졌으면(삭제 등) 되살리지 않는다 - 이 기능은
-                        // 표시 상태만 되돌릴 뿐, 필터 목록 구성 자체를 복원하지는 않는다.
-                        if (!currentFilters.Contains(filterId)) continue;
-                        targetView.SetFilterVisibility(filterId, kvp.Value);
-                    }
-                    catch
-                    {
-                        // 개별 필터 실패는 무시하고 나머지는 계속 적용
-                    }
-                }
-
-                if (doc.IsWorkshared)
-                {
-                    foreach (KeyValuePair<int, bool> kvp in snapshot.WorksetVisibility)
-                    {
-                        try
-                        {
-                            targetView.SetWorksetVisibility(new WorksetId(kvp.Key),
-                                kvp.Value ? WorksetVisibility.Visible : WorksetVisibility.Hidden);
-                        }
-                        catch
-                        {
-                            // 삭제된 작업세트 등 - 나머지는 계속 적용
-                        }
-                    }
-                }
-
+                QuickToggleService.RestoreViewState(targetView, snapshot);
                 tx.Commit();
             }
 

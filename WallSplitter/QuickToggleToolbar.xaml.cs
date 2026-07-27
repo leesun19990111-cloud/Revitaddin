@@ -64,7 +64,7 @@ namespace WallSplitter
 
             new WindowInteropHelper(this) { Owner = uiapp.MainWindowHandle };
 
-            SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary) };
+            UpdateSaveButtonVisual();
             RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.ToggleDisabled) };
         }
 
@@ -284,50 +284,60 @@ namespace WallSplitter
             App.QuickToggleEvent.Raise();
         }
 
-        // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 바로 처리한다. 현재 활성 뷰의 뷰템플릿/필터 표시/
-        // 작업세트 표시 상태만 메모리에 찍어둔다("모델의 변경사항은 그대로 유지"라는 요청사항 - 형상/
-        // 파라미터 등 모델 자체는 전혀 건드리지도, 기록하지도 않는다).
+        // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 바로 처리한다. 캡처 로직 자체는
+        // QuickToggleService.CaptureViewState로 옮겨(뷰템플릿/필터/작업세트/카테고리 표시/크롭·범위까지
+        // 전부 포함 - 2026-07-28 확장) 이 파일은 UI 갱신만 담당한다.
         private void SaveViewButton_Click(object sender, RoutedEventArgs e)
         {
             UIDocument? uidoc = _uiapp.ActiveUIDocument;
             RevitView? view = uidoc?.Document?.ActiveView;
             if (view == null) return;
 
-            ViewStateSnapshot snapshot = new ViewStateSnapshot
-            {
-                ViewId = view.Id.ToInt(),
-                ViewTemplateId = view.ViewTemplateId == Autodesk.Revit.DB.ElementId.InvalidElementId
-                    ? (int?)null
-                    : view.ViewTemplateId.ToInt(),
-            };
-
-            try
-            {
-                foreach (Autodesk.Revit.DB.ElementId filterId in view.GetFilters())
-                    snapshot.FilterVisibility[filterId.ToInt()] = view.GetFilterVisibility(filterId);
-            }
-            catch { /* 이 뷰 종류가 필터를 지원하지 않음 - 필터 상태 없이 저장 */ }
-
-            if (uidoc!.Document.IsWorkshared)
-            {
-                try
-                {
-                    foreach (Autodesk.Revit.DB.Workset workset in
-                             new Autodesk.Revit.DB.FilteredWorksetCollector(uidoc.Document).OfKind(Autodesk.Revit.DB.WorksetKind.UserWorkset))
-                    {
-                        snapshot.WorksetVisibility[workset.Id.IntegerValue] =
-                            view.GetWorksetVisibility(workset.Id) == Autodesk.Revit.DB.WorksetVisibility.Visible;
-                    }
-                }
-                catch { /* 이 뷰 종류가 작업세트 표시를 지원하지 않음 */ }
-            }
-
-            _savedViewState = snapshot;
+            _savedViewState = QuickToggleService.CaptureViewState(view);
+            UpdateSaveButtonVisual();
 
             RevertButton.IsEnabled = true;
             RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.TextSecondary) };
             RevertButton.ToolTip = $"'{view.Name}' 뷰의 저장된 상태로 되돌립니다.";
-            SaveViewButton.ToolTip = $"'{view.Name}' 뷰의 현재 상태가 저장되어 있습니다. 다시 누르면 갱신합니다.";
+            SaveViewButton.ToolTip =
+                $"'{view.Name}' 뷰의 현재 상태(모델/주석/해석모델/가져온 카테고리 표시, 필터, 작업세트, " +
+                "뷰템플릿, 크롭 및 범위)가 저장되어 있습니다. 다시 누르면 갱신합니다.";
+        }
+
+        // 2026-07-28, "뷰가 저장이 되고 있는지 전혀 알 수가 없다"는 피드백으로 추가 - 저장된 스냅샷이
+        // 있는 동안은 다른 빠른 토글 버튼의 On 상태와 같은 시각 언어(배경 전체를 강조색으로 채우고,
+        // 아이콘은 그 배경에 대비되는 색)로 "뷰 저장" 버튼 자체를 표시한다. 이 버튼은 RebuildButtons/
+        // UpdateButtonStates가 매 Idling 틱마다 갱신하는 등록형 버튼 목록(_rows)에 속하지 않고 XAML에
+        // 고정된 별도 버튼이라, 여기서 직접 호출할 때만(생성 시/저장 클릭 시) 갱신하면 되고 그 사이에
+        // 다른 코드가 덮어쓸 일이 없다.
+        private void UpdateSaveButtonVisual()
+        {
+            bool hasSnapshot = _savedViewState != null;
+            if (hasSnapshot)
+            {
+                Color color = ((SolidColorBrush)Theme.ToggleOn).Color;
+                SolidColorBrush fill = new SolidColorBrush(color);
+                fill.Freeze();
+                SaveViewButton.Background = fill;
+                SaveViewButton.BorderBrush = fill;
+                SaveViewButton.Content = new Viewbox
+                {
+                    Width = 20,
+                    Height = 16,
+                    Child = QuickToggleIcons.CreateBookmarkIcon(QuickToggleIcons.ContrastingForeground(color)),
+                };
+            }
+            else
+            {
+                SaveViewButton.Background = Brushes.Transparent;
+                SaveViewButton.BorderBrush = Theme.Border;
+                SaveViewButton.Content = new Viewbox
+                {
+                    Width = 20,
+                    Height = 16,
+                    Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary),
+                };
+            }
         }
 
         // "되돌리기" - Revit API 호출(뷰 전환, 뷰템플릿/필터/작업세트 반영)이 필요하므로 다른 버튼들과
