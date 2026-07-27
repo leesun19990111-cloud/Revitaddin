@@ -207,6 +207,8 @@ namespace WallSplitter
             nameRow.Children.Add(nameBox);
             EditHeaderHost.Children.Add(nameRow);
 
+            BuildIconAndColorPicker(cfg);
+
             EditHeaderHost.Children.Add(new TextBlock
             {
                 Text = CategoryLabel(cfg.Category) + " 대상 선택" + (cfg.Category == QuickToggleCategory.ViewTemplate ? " (하나만 선택 가능)" : " (여러 개 선택 가능 - 모두 함께 켜고 꺼집니다)"),
@@ -226,6 +228,75 @@ namespace WallSplitter
                     BuildWorksetPicker(cfg);
                     break;
             }
+        }
+
+        // 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가 -
+        // 카테고리 대상 목록과 달리 이 버튼 자체의 표시 방식이라 스크롤 안 되는 EditHeaderHost에 넣는다.
+        // 색상은 별도 컬러피커 컨트롤 없이(이 프로젝트가 커스텀 컨트롤을 안 쓰는 관례) 미리 정한 팔레트
+        // 스와치 중에서 고르는 방식으로 단순화했다.
+        private static readonly (string Hex, string Name)[] ColorPalette =
+        {
+            ("#5980A6", "스틸블루(기본)"),
+            ("#3D8F5C", "초록"),
+            ("#A6595D", "빨강"),
+            ("#A67B3D", "호박"),
+            ("#6B5DA6", "보라"),
+            ("#3D7A8F", "청록"),
+            ("#8F6B3D", "갈색"),
+            ("#59748F", "슬레이트"),
+        };
+
+        private void BuildIconAndColorPicker(QuickToggleButtonConfig cfg)
+        {
+            QuickToggleIconShape currentShape = cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category);
+            string currentColor = string.IsNullOrEmpty(cfg.OnColorHex) ? ColorPalette[0].Hex : cfg.OnColorHex;
+
+            EditHeaderHost.Children.Add(new TextBlock { Text = "아이콘", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            WrapPanel iconRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+            foreach (QuickToggleIconShape shape in Enum.GetValues(typeof(QuickToggleIconShape)))
+            {
+                bool isSelected = shape == currentShape;
+                Border swatch = new Border
+                {
+                    Width = 32,
+                    Height = 32,
+                    Margin = new Thickness(0, 0, 6, 6),
+                    BorderThickness = new Thickness(isSelected ? 2 : 1),
+                    BorderBrush = isSelected ? (Brush)new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(currentColor)) : Theme.Border,
+                    Background = Theme.Surface,
+                    Cursor = Cursors.Hand,
+                    ToolTip = QuickToggleIcons.LabelFor(shape),
+                    Child = new Viewbox
+                    {
+                        Width = 20, Height = 16,
+                        Child = QuickToggleIcons.Create(shape, Theme.TextPrimary),
+                    },
+                };
+                swatch.MouseLeftButtonDown += (s, e) => { cfg.IconShape = shape; BuildEditPanel(cfg); };
+                iconRow.Children.Add(swatch);
+            }
+            EditHeaderHost.Children.Add(iconRow);
+
+            EditHeaderHost.Children.Add(new TextBlock { Text = "켜짐 색상", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            WrapPanel colorRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+            foreach ((string hex, string name) in ColorPalette)
+            {
+                bool isSelected = string.Equals(hex, currentColor, StringComparison.OrdinalIgnoreCase);
+                Border swatch = new Border
+                {
+                    Width = 26,
+                    Height = 26,
+                    Margin = new Thickness(0, 0, 6, 0),
+                    BorderThickness = new Thickness(isSelected ? 3 : 1),
+                    BorderBrush = isSelected ? Theme.TextPrimary : Theme.Border,
+                    Background = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(hex)),
+                    Cursor = Cursors.Hand,
+                    ToolTip = name,
+                };
+                swatch.MouseLeftButtonDown += (s, e) => { cfg.OnColorHex = hex; BuildEditPanel(cfg); };
+                colorRow.Children.Add(swatch);
+            }
+            EditHeaderHost.Children.Add(colorRow);
         }
 
         private void BuildViewTemplatePicker(QuickToggleButtonConfig cfg)

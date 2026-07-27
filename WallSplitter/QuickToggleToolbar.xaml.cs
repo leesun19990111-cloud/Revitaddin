@@ -6,10 +6,10 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using Autodesk.Revit.UI;
-// Autodesk.Revit.DB를 통째로 using하면 Line/Point가 System.Windows.Shapes.Line, System.Windows.Point와
-// 충돌한다(둘 다 이 파일에서 필요) - 필요한 두 타입만 별칭으로 가져와 충돌을 피한다.
+// Autodesk.Revit.DB를 통째로 using하면 Point가 System.Windows.Point와 충돌한다(아이콘 도형 그리기는
+// QuickToggleIcons.cs로 옮겼지만, 드래그/위치 계산에 여전히 System.Windows.Point를 쓴다) - 필요한
+// 타입만 별칭으로 가져와 충돌을 피한다.
 using RevitDocument = Autodesk.Revit.DB.Document;
 using RevitView = Autodesk.Revit.DB.View;
 
@@ -132,7 +132,7 @@ namespace WallSplitter
             {
                 QuickToggleButtonState state = QuickToggleService.DetermineState(view, cfg);
 
-                Canvas icon = CreateCategoryIcon(cfg.Category, BrushFor(state));
+                Canvas icon = QuickToggleIcons.Create(cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category), BrushFor(state, cfg));
                 TextBlock label = new TextBlock
                 {
                     Text = cfg.Name,
@@ -170,7 +170,7 @@ namespace WallSplitter
             foreach ((QuickToggleButtonConfig cfg, Button button, Canvas icon, TextBlock label) in _rows)
             {
                 QuickToggleButtonState state = QuickToggleService.DetermineState(view, cfg);
-                SetIconBrush(icon, BrushFor(state));
+                QuickToggleIcons.SetBrush(icon, BrushFor(state, cfg));
                 label.Foreground = state == QuickToggleButtonState.Disabled ? Theme.ToggleDisabled : Theme.TextPrimary;
                 button.IsEnabled = state != QuickToggleButtonState.Disabled;
                 button.ToolTip = ToolTipFor(cfg, state);
@@ -184,12 +184,30 @@ namespace WallSplitter
             _ => cfg.Name + " (이 뷰에서 사용할 수 없거나 대상이 지정되지 않았습니다)",
         };
 
-        private static Brush BrushFor(QuickToggleButtonState state) => state switch
+        // cfg.OnColorHex가 지정돼 있으면(사용자가 버튼마다 직접 고른 색, 2026-07-27 요청으로 추가) On
+        // 상태일 때 그 색을 쓰고, 아니면 예전 그대로 공용 Theme.ToggleOn을 쓴다. Off/Disabled는 항상
+        // 공용 색을 쓴다 - 꺼진 버튼끼리는 서로 구분할 필요가 없기 때문.
+        private static Brush BrushFor(QuickToggleButtonState state, QuickToggleButtonConfig cfg) => state switch
         {
-            QuickToggleButtonState.On => Theme.ToggleOn,
+            QuickToggleButtonState.On => CustomOnBrush(cfg) ?? Theme.ToggleOn,
             QuickToggleButtonState.Off => Theme.TextSecondary,
             _ => Theme.ToggleDisabled,
         };
+
+        private static Brush? CustomOnBrush(QuickToggleButtonConfig cfg)
+        {
+            if (string.IsNullOrEmpty(cfg.OnColorHex)) return null;
+            try
+            {
+                SolidColorBrush brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cfg.OnColorHex));
+                brush.Freeze();
+                return brush;
+            }
+            catch
+            {
+                return null; // 저장된 값이 손상된 경우 공용 색으로 안전하게 대체
+            }
+        }
 
         private void ToggleButton_Click(object sender, RoutedEventArgs e)
         {
@@ -204,78 +222,6 @@ namespace WallSplitter
             App.QuickToggleHandler.PendingButtonId = cfg.Id;
             App.QuickToggleHandler.PendingTurnOn = turnOn;
             App.QuickToggleEvent.Raise();
-        }
-
-        // 카테고리별로 손으로 그린 벡터 아이콘 (SettingsWindow의 CreateTriangle/CreateXMark와 같은 방식 -
-        // 텍스트 글리프는 폰트/테마에 따라 안 보일 수 있어 도형으로 직접 그린다).
-        private static Canvas CreateCategoryIcon(QuickToggleCategory category, Brush brush)
-        {
-            Canvas canvas = new Canvas { Width = 20, Height = 16, HorizontalAlignment = HorizontalAlignment.Center };
-
-            switch (category)
-            {
-                case QuickToggleCategory.ViewTemplate:
-                    // 겹쳐진 3개의 가로 막대 - 레이어(뷰템플릿)를 은유
-                    for (int i = 0; i < 3; i++)
-                    {
-                        canvas.Children.Add(new Rectangle
-                        {
-                            Width = 20 - i * 4,
-                            Height = 3,
-                            Fill = brush,
-                            RadiusX = 1,
-                            RadiusY = 1,
-                        });
-                        Canvas.SetLeft(canvas.Children[i], i * 2);
-                        Canvas.SetTop(canvas.Children[i], i * 5.5);
-                    }
-                    break;
-
-                case QuickToggleCategory.Filter:
-                    // 깔때기(필터) 모양
-                    Polygon funnel = new Polygon
-                    {
-                        Points = new PointCollection
-                        {
-                            new Point(0, 0), new Point(20, 0), new Point(12, 9), new Point(12, 16),
-                            new Point(8, 16), new Point(8, 9),
-                        },
-                        Fill = brush,
-                    };
-                    canvas.Children.Add(funnel);
-                    break;
-
-                case QuickToggleCategory.Workset:
-                default:
-                    // 3줄 리스트 - 작업세트 묶음을 은유
-                    for (int i = 0; i < 3; i++)
-                    {
-                        canvas.Children.Add(new Line
-                        {
-                            X1 = 0, Y1 = i * 6 + 2, X2 = 20, Y2 = i * 6 + 2,
-                            Stroke = brush,
-                            StrokeThickness = 2.5,
-                        });
-                    }
-                    break;
-            }
-
-            return canvas;
-        }
-
-        // UpdateButtonStates가 상태만 바뀌었을 때 아이콘 색을 다시 칠하기 위한 헬퍼 - CreateCategoryIcon이
-        // 만드는 도형 종류(Rectangle/Polygon/Line)에 맞춰 Fill 또는 Stroke를 갱신한다.
-        private static void SetIconBrush(Canvas canvas, Brush brush)
-        {
-            foreach (UIElement child in canvas.Children)
-            {
-                switch (child)
-                {
-                    case Rectangle rect: rect.Fill = brush; break;
-                    case Polygon poly: poly.Fill = brush; break;
-                    case Line line: line.Stroke = brush; break;
-                }
-            }
         }
 
         // 버튼 목록이 바뀔 때만(RebuildButtons 직후) 호출 - 내용에 맞춰 창 너비를 계산한다. 예전에는
@@ -322,6 +268,17 @@ namespace WallSplitter
 
         // Revit 메인 창의 위치를 Win32로 읽어 저장된 오프셋만큼 떨어진 곳에 툴바를 따라다니게 한다.
         // 오프셋 자체는 더 이상 고정 상수가 아니라 사용자가 드래그하면 그 즉시 갱신되는 값이다(위 참고).
+        //
+        // CONFIRMED LIVE BUG (2026-07-27), 수정 — "마우스를 움직이면서 눌러야 겨우 클릭된다": 이 메서드가
+        // 바뀐 값이 있든 없든 매번 Left/Top을 새로 대입했는데, 이 메서드를 부르는 RefreshState()는
+        // Idling에서도 호출되고 Idling은 정확히 "할 일이 없을 때"(=마우스가 멈춰 있을 때) 가장 자주,
+        // 거의 끊임없이 발생한다. Left/Top 대입은 값이 같아도 매번 내부적으로 Win32 SetWindowPos를
+        // 유발하는데, 이게 버튼을 누르고 있는 도중 반복되면 ButtonBase의 마우스 캡처가 끊겨 클릭(MouseUp)이
+        // 완성되지 못했다 - 마우스를 움직이는 동안은 다른 메시지(WM_MOUSEMOVE)가 큐를 채워 Idling이 상대적
+        // 으로 덜 끼어들어서 우연히 클릭이 되곤 했던 것. 고정: 계산된 새 위치가 현재 위치와 실제로 다를
+        // 때만(부동소수점 반올림 오차를 감안해 0.5px 이상 차이) Left/Top을 대입한다.
+        private const double PositionEpsilonDip = 0.5;
+
         private void RepositionToMainWindow()
         {
             IntPtr mainHandle = _uiapp.MainWindowHandle;
@@ -340,8 +297,11 @@ namespace WallSplitter
             Matrix transform = source.CompositionTarget.TransformFromDevice;
             Point topLeftDip = transform.Transform(new Point(rect.Left, rect.Top));
 
-            Left = topLeftDip.X + _cachedSettings.ToolbarOffsetXDip;
-            Top = topLeftDip.Y + _cachedSettings.ToolbarOffsetYDip;
+            double newLeft = topLeftDip.X + _cachedSettings.ToolbarOffsetXDip;
+            double newTop = topLeftDip.Y + _cachedSettings.ToolbarOffsetYDip;
+
+            if (Math.Abs(Left - newLeft) > PositionEpsilonDip) Left = newLeft;
+            if (Math.Abs(Top - newTop) > PositionEpsilonDip) Top = newTop;
         }
 
         private static class NativeMethods

@@ -47,6 +47,12 @@ namespace WallSplitter
         public int? ViewTemplateId { get; set; }
         public List<int> FilterIds { get; set; } = new List<int>();
         public List<int> WorksetIds { get; set; } = new List<int>();
+
+        // 사용자가 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가.
+        // 둘 다 null이면 예전 그대로 카테고리 기본 아이콘(QuickToggleIcons.DefaultFor)과 공용 on 색
+        // (Theme.ToggleOn)을 쓴다 - 기존에 저장된 설정 파일도 그대로 호환된다.
+        public QuickToggleIconShape? IconShape { get; set; }
+        public string? OnColorHex { get; set; }
     }
 
     // 프로젝트 파일 경로별로 저장되는 설정 (이 PC 안에서만 유지 - Q&A로 확정).
