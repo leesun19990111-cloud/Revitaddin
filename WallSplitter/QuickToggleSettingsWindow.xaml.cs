@@ -86,18 +86,23 @@ namespace WallSplitter
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.Child = grid;
 
-                // CONFIRMED LIVE BUG (2026-07-27), 수정: 위/아래 버튼이 "투명하게 보여 뭐가 위/아래인지
+                // CONFIRMED LIVE BUG (2026-07-27), 수정 (1차): 위/아래 버튼이 "투명하게 보여 뭐가 위/아래인지
                 // 안 보인다"는 실측 피드백 - 다크 테마 때는 BaseButtonStyle의 기본 배경이 채워진 색이라
                 // 버튼 자체가 뚜렷했지만, Industry 라이트 테마로 바뀌며 기본 버튼 배경이 투명(테두리만
                 // 있는 "선 그림")이 되어(readme의 .btn-secondary 규칙), 작은 22px 아이콘 버튼에서는 그
-                // 미묘한 하이라인 테두리만으론 존재감이 약했다. 고정: 배경을 명시적으로 Surface로 채우고
-                // (기본 스타일의 투명 배경에 기대지 않음), 삼각형도 더 크고 굵게 키웠다.
-                Button upButton = new Button { Content = CreateTriangle(pointingUp: true), Width = 24, Height = 24, Background = Theme.Surface, Margin = new Thickness(0, 0, 2, 0), IsEnabled = index > 0 };
+                // 미묘한 하이라인 테두리만으론 존재감이 약했다. 배경을 명시적으로 Surface로 채우고
+                // (기본 스타일의 투명 배경에 기대지 않음), 삼각형도 더 크고 굵게 키웠었다.
+                // CONFIRMED LIVE BUG (2026-07-27), 수정 (2차, 진짜 원인): 1차 수정 이후에도 "안 보이고
+                // 이상하다"는 재보고 - Width/Height만 24로 키우고 Padding은 그대로 둔 게 문제였다.
+                // BaseButtonStyle의 기본 Padding("10,5")이 그대로 적용되면 24x24 버튼의 실제 콘텐츠
+                // 영역은 24-10*2=4 x 24-5*2=14로 쪼그라들어, 12x10짜리 삼각형/12x12 X가 대부분 잘려나가
+                // 보였다. 고정: Padding을 작게 명시해서 아이콘이 실제로 버튼 안에 다 들어오게 했다.
+                Button upButton = new Button { Content = CreateTriangle(pointingUp: true), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(0, 0, 2, 0), IsEnabled = index > 0 };
                 upButton.Click += (s, e) => { MoveButton(index, index - 1); };
                 WpfGrid.SetColumn(upButton, 0);
                 grid.Children.Add(upButton);
 
-                Button downButton = new Button { Content = CreateTriangle(pointingUp: false), Width = 24, Height = 24, Background = Theme.Surface, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index < _settings.Buttons.Count - 1 };
+                Button downButton = new Button { Content = CreateTriangle(pointingUp: false), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index < _settings.Buttons.Count - 1 };
                 downButton.Click += (s, e) => { MoveButton(index, index + 1); };
                 WpfGrid.SetColumn(downButton, 1);
                 grid.Children.Add(downButton);
@@ -111,7 +116,7 @@ namespace WallSplitter
                 WpfGrid.SetColumn(nameArea, 2);
                 grid.Children.Add(nameArea);
 
-                Button deleteButton = new Button { Content = CreateXMark(), Width = 24, Height = 24, Background = Theme.Surface, Margin = new Thickness(8, 0, 0, 0) };
+                Button deleteButton = new Button { Content = CreateXMark(), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(8, 0, 0, 0) };
                 deleteButton.Click += (s, e) => { DeleteButton(index); };
                 WpfGrid.SetColumn(deleteButton, 3);
                 grid.Children.Add(deleteButton);
