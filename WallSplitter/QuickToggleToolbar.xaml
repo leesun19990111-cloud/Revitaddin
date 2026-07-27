@@ -10,25 +10,44 @@
         WindowStartupLocation="Manual"
         Topmost="False">
     <!-- Revit 메인 창을 따라다니되 사용자가 마우스로 직접 드래그해 위치를 옮길 수 있는 커스텀 툴바
-         (실제 QAT API는 없어 자체 창으로 구현 - CLAUDE.md 참고). 원래는 고정 위치였으나 "기존 리본 버튼을
-         가린다"는 실측 피드백(2026-07-27)으로 드래그 가능하게 바꿨다 - RootBorder의 빈 영역(버튼이 없는
-         부분)을 누른 채 끌면 DragMove()로 창을 옮기고, 놓는 순간 Revit 메인 창 기준 오프셋으로 저장한다
-         (QuickToggleToolbar.xaml.cs 참고). 다크 테마는 이 창의 Resources에만 로컬로 병합한다 - Application
-         리소스에 병합하면 Revit 리본/다른 애드인 UI까지 우리 스타일이 번져 텍스트가 하얗게 되는 라이브
-         버그가 있었다(NamerWindow.xaml 참고). -->
+         (실제 QAT API는 없어 자체 창으로 구현 - CLAUDE.md 참고).
+         CONFIRMED LIVE BUG (2026-07-27), 두 번째 수정: 처음엔 "빈 배경 아무 곳이나 누르면 드래그"였는데,
+         실측 결과 버튼 사이의 빈 공간이 창을 내용 크기에 딱 맞게 줄이다 보니(SizeToContent) 실질적으로
+         거의 없어져서 "드래그가 아예 안 된다"는 보고, 그리고 그 좁은 틈과 버튼 경계가 애매해서 "버튼 클릭이
+         잘 안 잡힌다"는 보고가 동시에 들어왔다 - 사실상 같은 원인(드래그용 여백과 버튼 클릭 영역이 서로
+         너무 가깝고 좁음)이었다. 고정: 왼쪽에 항상 존재하는 전용 그립(DragGrip, 점 3개, 항상 16px 너비)을
+         따로 두어 드래그는 거기서만 하고, 버튼이 있는 영역(ButtonsPanel)에는 더 이상 드래그 핸들러를 두지
+         않는다 - 버튼 개수·창 너비와 무관하게 "여기를 잡으면 옮길 수 있다"는 위치가 항상 고정으로 보장된다.
+         다크 테마는 이 창의 Resources에만 로컬로 병합한다 - Application 리소스에 병합하면 Revit 리본/다른
+         애드인 UI까지 우리 스타일이 번져 텍스트가 하얗게 되는 라이브 버그가 있었다(NamerWindow.xaml 참고). -->
     <Window.Resources>
         <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
     </Window.Resources>
-    <Border x:Name="RootBorder"
-            Background="{DynamicResource SurfaceBrush}"
+    <Border Background="{DynamicResource SurfaceBrush}"
             BorderBrush="{DynamicResource AppBorderBrush}"
             BorderThickness="1"
-            CornerRadius="4"
-            Cursor="SizeAll"
-            ToolTip="빈 곳을 눌러서 드래그하면 위치를 옮길 수 있습니다."
-            MouseLeftButtonDown="RootBorder_MouseLeftButtonDown">
-        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-            <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Margin="4"/>
-        </ScrollViewer>
+            CornerRadius="0">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 전용 드래그 그립 - 항상 이 너비(16px)만큼은 배경이 보장되므로, 버튼이 몇 개든 창이
+                 아무리 좁든 여기를 누르면 확실히 옮길 수 있다. -->
+            <Border Grid.Column="0" Width="16" Cursor="SizeAll"
+                    ToolTip="눌러서 드래그하면 위치를 옮길 수 있습니다."
+                    MouseLeftButtonDown="DragGrip_MouseLeftButtonDown">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <Rectangle Width="3" Height="3" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,1.5"/>
+                    <Rectangle Width="3" Height="3" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,1.5"/>
+                    <Rectangle Width="3" Height="3" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,1.5"/>
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Margin="4"/>
+            </ScrollViewer>
+        </Grid>
     </Border>
 </Window>

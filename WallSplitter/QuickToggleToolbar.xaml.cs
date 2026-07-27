@@ -142,14 +142,17 @@ namespace WallSplitter
                     Margin = new Thickness(0, 2, 0, 0),
                 };
 
-                StackPanel content = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(6, 2, 6, 2) };
+                // 시각적 여백은 Button 바깥 Margin이 아니라 안쪽 content의 Margin으로만 준다 - 바깥
+                // Margin은 히트테스트 영역이 아니라서, 버튼 사이에 클릭이 씹히는 좁은 사각지대가 생겼었다
+                // ("버튼이 마우스 커서에 잘 안 잡힌다"는 실측 피드백, 2026-07-27). Button 자체는 옆 버튼과
+                // 완전히 맞닿아 틈이 없으므로 그 사각지대가 사라진다.
+                StackPanel content = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(8, 2, 8, 2) };
                 content.Children.Add(icon);
                 content.Children.Add(label);
 
                 Button button = new Button
                 {
                     Content = content,
-                    Margin = new Thickness(2, 0, 2, 0),
                     IsEnabled = state != QuickToggleButtonState.Disabled,
                     ToolTip = ToolTipFor(cfg, state),
                     Tag = cfg,
@@ -278,19 +281,21 @@ namespace WallSplitter
         // 버튼 목록이 바뀔 때만(RebuildButtons 직후) 호출 - 내용에 맞춰 창 너비를 계산한다. 예전에는
         // Revit 메인 창 너비에 맞춰 늘렸지만, 이제 자유롭게 옮길 수 있는 패널이 되면서 그럴 이유가 없어져
         // 내용 기준으로만 크기를 잡고(버튼이 많아 넘치면 XAML의 가로 스크롤이 처리) 최대 너비만 둔다.
+        // GripWidthDip은 XAML의 왼쪽 드래그 그립 열(Width="16")과 반드시 맞춰야 한다.
         private const double MinWidthDip = 160;
         private const double MaxWidthDip = 480;
+        private const double GripWidthDip = 16;
 
         private void ResizeToContent()
         {
             ButtonsPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double contentWidth = ButtonsPanel.DesiredSize.Width + 16;
-            Width = Math.Min(MaxWidthDip, Math.Max(MinWidthDip, contentWidth));
+            Width = GripWidthDip + Math.Min(MaxWidthDip, Math.Max(MinWidthDip, contentWidth));
         }
 
-        // RootBorder의 빈 영역(버튼이 없는 곳)을 누르면 호출된다 - 클릭이 실제로 어떤 Button 위에서
-        // 시작됐다면 ButtonBase가 이 라우팅 이벤트를 이미 Handled로 표시해두므로 여기까지 올라오지 않는다.
-        private void RootBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        // 왼쪽 드래그 그립을 누르면 호출된다 - 버튼 영역과 완전히 분리된 전용 영역이라(위 클래스 주석
+        // 참고) 버튼 클릭과 절대 헷갈리지 않는다.
+        private void DragGrip_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             DragMove();
 
