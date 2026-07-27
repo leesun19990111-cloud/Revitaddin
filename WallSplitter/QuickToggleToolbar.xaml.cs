@@ -51,6 +51,11 @@ namespace WallSplitter
         // 기억해두고(_lastStates), 실제로 상태가 바뀐 버튼만 갱신한다.
         private readonly Dictionary<string, QuickToggleButtonState> _lastStates = new();
 
+        // "뷰 저장" 버튼으로 찍어둔 스냅샷 - 이번 Revit 세션(창 인스턴스) 한정 메모리 값이라 디스크에
+        // 저장하지 않는다. 문서를 닫았다 다시 열면 사라지는 게 자연스럽다(그 문서에 대한 View 참조도
+        // 더 이상 유효하지 않으므로).
+        private ViewStateSnapshot? _savedViewState;
+
         public QuickToggleToolbar(UIApplication uiapp)
         {
             InitializeComponent();
@@ -58,6 +63,9 @@ namespace WallSplitter
             Instance = this;
 
             new WindowInteropHelper(this) { Owner = uiapp.MainWindowHandle };
+
+            SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary) };
+            RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.ToggleDisabled) };
         }
 
         // 문서가 하나도 없을 때(전부 닫힘) 호출 - 떠 있는 툴바를 정리한다.
@@ -276,6 +284,63 @@ namespace WallSplitter
             App.QuickToggleEvent.Raise();
         }
 
+        // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 바로 처리한다. 현재 활성 뷰의 뷰템플릿/필터 표시/
+        // 작업세트 표시 상태만 메모리에 찍어둔다("모델의 변경사항은 그대로 유지"라는 요청사항 - 형상/
+        // 파라미터 등 모델 자체는 전혀 건드리지도, 기록하지도 않는다).
+        private void SaveViewButton_Click(object sender, RoutedEventArgs e)
+        {
+            UIDocument? uidoc = _uiapp.ActiveUIDocument;
+            RevitView? view = uidoc?.Document?.ActiveView;
+            if (view == null) return;
+
+            ViewStateSnapshot snapshot = new ViewStateSnapshot
+            {
+                ViewId = view.Id.ToInt(),
+                ViewTemplateId = view.ViewTemplateId == Autodesk.Revit.DB.ElementId.InvalidElementId
+                    ? (int?)null
+                    : view.ViewTemplateId.ToInt(),
+            };
+
+            try
+            {
+                foreach (Autodesk.Revit.DB.ElementId filterId in view.GetFilters())
+                    snapshot.FilterVisibility[filterId.ToInt()] = view.GetFilterVisibility(filterId);
+            }
+            catch { /* 이 뷰 종류가 필터를 지원하지 않음 - 필터 상태 없이 저장 */ }
+
+            if (uidoc!.Document.IsWorkshared)
+            {
+                try
+                {
+                    foreach (Autodesk.Revit.DB.Workset workset in
+                             new Autodesk.Revit.DB.FilteredWorksetCollector(uidoc.Document).OfKind(Autodesk.Revit.DB.WorksetKind.UserWorkset))
+                    {
+                        snapshot.WorksetVisibility[workset.Id.IntegerValue] =
+                            view.GetWorksetVisibility(workset.Id) == Autodesk.Revit.DB.WorksetVisibility.Visible;
+                    }
+                }
+                catch { /* 이 뷰 종류가 작업세트 표시를 지원하지 않음 */ }
+            }
+
+            _savedViewState = snapshot;
+
+            RevertButton.IsEnabled = true;
+            RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.TextSecondary) };
+            RevertButton.ToolTip = $"'{view.Name}' 뷰의 저장된 상태로 되돌립니다.";
+            SaveViewButton.ToolTip = $"'{view.Name}' 뷰의 현재 상태가 저장되어 있습니다. 다시 누르면 갱신합니다.";
+        }
+
+        // "되돌리기" - Revit API 호출(뷰 전환, 뷰템플릿/필터/작업세트 반영)이 필요하므로 다른 버튼들과
+        // 같은 ExternalEvent 경로를 그대로 재사용한다(QuickToggleExternalEventHandler.ExecuteRevert 참고).
+        private void RevertButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_savedViewState == null) return;
+            if (App.QuickToggleHandler == null || App.QuickToggleEvent == null) return;
+
+            App.QuickToggleHandler.PendingRevertSnapshot = _savedViewState;
+            App.QuickToggleEvent.Raise();
+        }
+
         // 버튼 목록이 바뀔 때만(RebuildButtons 직후) 호출 - 내용에 맞춰 창 너비를 계산한다.
         // 2026-07-27, 사용자 요청으로 최대 너비 제한(가로 스크롤로 처리)을 없앴다 - "등록된 버튼이 많으면
         // 스크롤 대신 툴바 자체가 옆으로 길게 늘어나게 해달라"는 피드백. 이제 버튼이 아무리 많아도 전부
@@ -288,7 +353,10 @@ namespace WallSplitter
         private void ResizeToContent()
         {
             ButtonsPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double contentWidth = ButtonsPanel.DesiredSize.Width + 16;
+            RightControlsPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            // 2026-07-27, "뷰 저장"/"되돌리기" 고정 버튼 추가 - 우측 패널도 함께 측정해야 창 너비가
+            // 그 버튼들을 자르지 않고 전부 담는다.
+            double contentWidth = ButtonsPanel.DesiredSize.Width + RightControlsPanel.DesiredSize.Width + 16;
             Width = GripWidthDip + Math.Max(MinWidthDip, contentWidth);
         }
 

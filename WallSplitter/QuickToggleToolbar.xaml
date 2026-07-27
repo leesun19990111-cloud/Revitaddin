@@ -31,16 +31,22 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <!-- 전용 드래그 그립 - 항상 이 너비만큼은 배경이 보장되므로, 버튼이 몇 개든 창이 아무리
                  좁든 여기를 누르면 확실히 옮길 수 있다. 2026-07-27, "잡을 수 있는 픽셀이 너무 작아서
                  잡기 힘들다"는 피드백으로 16px→28px로 넓혔다(QuickToggleToolbar.xaml.cs의
-                 GripWidthDip과 반드시 맞춰야 함) - 점 3개 자체도 함께 키워서 넓어진 영역과 비례가 맞게 했다. -->
-            <Border Grid.Column="0" Width="28" Cursor="SizeAll"
+                 GripWidthDip과 반드시 맞춰야 함) - 점 3개 자체도 함께 키워서 넓어진 영역과 비례가 맞게 했다.
+                 CONFIRMED LIVE BUG (2026-07-27), 추가 수정 - "점 세개에 정확히 마우스를 가져다 대야만
+                 움직여진다": 이 Border에 Background를 지정하지 않아서(기본값 null) 빈 영역은 히트테스트가
+                 안 됐다 - 실제로 클릭이 되는 곳은 점 3개(Rectangle) 자신의 아주 작은 영역뿐이었다.
+                 Background="Transparent"를 명시하면(투명해도 히트테스트는 됨) 28px 너비 전체, 행 높이
+                 전체가 클릭 가능해진다. -->
+            <Border Grid.Column="0" Width="28" Background="Transparent" Cursor="SizeAll"
                     ToolTip="눌러서 드래그하면 위치를 옮길 수 있습니다."
                     MouseLeftButtonDown="DragGrip_MouseLeftButtonDown">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
                     <Rectangle Width="4" Height="4" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,2.5"/>
                     <Rectangle Width="4" Height="4" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,2.5"/>
                     <Rectangle Width="4" Height="4" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,2.5"/>
@@ -51,6 +57,23 @@
                  반대로 되는 느낌"이라는 피드백. 이제 버튼이 많아지면 ResizeToContent()가 창 자체를
                  그만큼 옆으로 늘린다(더 이상 최대 너비 제한 없음) - QuickToggleToolbar.xaml.cs 참고. -->
             <StackPanel Grid.Column="1" x:Name="ButtonsPanel" Orientation="Horizontal" Margin="4"/>
+
+            <!-- 2026-07-27, 사용자 요청으로 추가 - 등록된 버튼 목록과 무관하게 항상 우측 끝에 고정되는
+                 "뷰 저장"/"되돌리기" 버튼 쌍. 현재 활성 뷰의 뷰템플릿/필터 표시/작업세트 표시 상태를
+                 저장해뒀다가, 그 사이 다른 뷰들을 오가더라도 저장했던 뷰·상태로 그대로 되돌아갈 수 있다
+                 (모델 자체의 변경사항은 건드리지 않음 - QuickToggleToolbar.xaml.cs의 SaveViewButton_Click/
+                 RevertButton_Click 참고). ResizeToContent()가 이 패널도 함께 측정해서 창 너비에 반영한다.
+                 되돌리기는 이번 세션에서 저장을 한 번도 안 했으면 비활성(회색)으로 시작한다. -->
+            <StackPanel Grid.Column="2" x:Name="RightControlsPanel" Orientation="Horizontal" Margin="0,4,4,4">
+                <Border Width="1" Margin="4,2" Background="{DynamicResource AppBorderBrush}"/>
+                <Button x:Name="SaveViewButton" Width="28" Height="28" Padding="4"
+                        ToolTip="현재 뷰의 뷰템플릿/필터/작업세트 표시 상태를 저장합니다."
+                        Click="SaveViewButton_Click"/>
+                <Button x:Name="RevertButton" Width="28" Height="28" Padding="4" Margin="2,0,0,0"
+                        IsEnabled="False"
+                        ToolTip="아직 저장된 뷰 상태가 없습니다."
+                        Click="RevertButton_Click"/>
+            </StackPanel>
         </Grid>
     </Border>
 </Window>

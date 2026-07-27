@@ -207,6 +207,50 @@ namespace WallSplitter
             return canvas;
         }
 
+        // "뷰 저장"/"되돌리기" 고정 버튼(2026-07-27 추가)이 쓰는 아이콘 - 사용자가 고르는 QuickToggleIconShape
+        // 목록에는 넣지 않는다(이 두 버튼은 등록형 버튼이 아니라 항상 고정으로 붙는 전용 기능이라서).
+        public static Canvas CreateBookmarkIcon(Brush brush)
+        {
+            // 책갈피 리본 모양 - 위는 사각형, 아래는 V자로 파인 삼각 노치.
+            Canvas canvas = new Canvas { Width = 20, Height = 16, HorizontalAlignment = HorizontalAlignment.Center };
+            canvas.Children.Add(new Polygon
+            {
+                Points = new PointCollection
+                {
+                    new Point(4, 0), new Point(16, 0), new Point(16, 16), new Point(10, 11), new Point(4, 16),
+                },
+                Fill = brush,
+            });
+            return canvas;
+        }
+
+        public static Canvas CreateUndoIcon(Brush brush)
+        {
+            // 반시계 방향으로 크게 도는 호 + 왼쪽 위를 향하는 화살촉 - 표준적인 "되돌리기" 아이콘 모양.
+            Canvas canvas = new Canvas { Width = 20, Height = 16, HorizontalAlignment = HorizontalAlignment.Center };
+
+            PathFigure arcFigure = new PathFigure { StartPoint = new Point(17, 11), IsClosed = false };
+            arcFigure.Segments.Add(new ArcSegment(new Point(6, 3), new Size(6.5, 6.5), 0, true, SweepDirection.Clockwise, true));
+            PathGeometry arcGeometry = new PathGeometry();
+            arcGeometry.Figures.Add(arcFigure);
+            canvas.Children.Add(new Path
+            {
+                Data = arcGeometry,
+                Stroke = brush,
+                StrokeThickness = 2.2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+
+            canvas.Children.Add(new Polygon
+            {
+                Points = new PointCollection { new Point(2, 0), new Point(10, 2), new Point(3, 8) },
+                Fill = brush,
+            });
+
+            return canvas;
+        }
+
         private static PointCollection StarPoints(double centerX, double centerY, double outerR, double innerR)
         {
             PointCollection points = new PointCollection();
