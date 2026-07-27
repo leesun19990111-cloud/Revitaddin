@@ -1,9 +1,12 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--
-        WallSplitter 전체 WPF 창(설정/NAMER/재료 지정/모델간 변경 반영/레이어별 유형 지정/대상 선택)이 공유하는
-        다크 테마 디자인 시스템. App.EnsureWpfApplication()에서 Application.Resources에 한 번만 병합되므로
-        각 창은 이 딕셔너리를 개별적으로 참조할 필요 없이 암시적(TargetType) 스타일을 그대로 상속받는다.
+        WallSplitter 전체 WPF 창(설정/NAMER/재료 지정/모델간 변경 반영/레이어별 유형 지정/대상 선택/빠른 토글
+        설정·툴바)이 공유하는 디자인 시스템. App.EnsureWpfApplication()이 Application 인스턴스는 보장하지만
+        이 리소스 딕셔너리 자체는 각 창이 자기 Window.Resources에서 로컬로 병합한다(2026-07-27 - 예전에
+        Application.Resources에 전역 병합했다가 Revit 리본/다른 애드인 UI까지 스타일이 번지는 라이브 버그가
+        있었다). 각 창은 이 딕셔너리를 개별적으로 참조할 필요 없이 암시적(TargetType) 스타일을 그대로
+        상속받는다.
 
         모든 컨트롤을 완전히 자체 ControlTemplate으로 재정의한다(시스템 기본 테마 리소스에 의존하지 않음).
         Revit 프로세스는 System.Windows.Application을 직접 만들지 않아 Aero2 등 테마 리소스 딕셔너리가
@@ -12,36 +15,69 @@
         (CLAUDE.md 참고). 여기서는 그 의존성 자체를 없애기 위해 모든 브러시를 이 딕셔너리 안에서 직접 정의하고,
         템플릿은 시스템 리소스를 전혀 참조하지 않는다 - 그 결과 net48/net8.0-windows/net10.0-windows
         5개 빌드 사이에서도 룩앤필이 완전히 동일하게 보장된다.
+
+        2026-07-27: "Industry" 디자인 시스템(Claude Design에서 제작, GitHub 저장소 연동으로 가져와 구현)으로
+        전면 교체 - 기존의 다크 테마(#1E1F24 배경, #5B8DEF 강조색, 둥근 모서리)를 대체하는 라이트 테마
+        블루프린트(설계도면) 스타일이다: 밝은 종이 배경 위 스틸블루 강조색, 사각형(무라운드) 모서리,
+        얇은 실선 테두리. 색상값은 Industry 디자인 시스템의 styles.css 토큰(:root 변수)을 그대로 옮긴 것이고,
+        컨트롤별 시각 규칙은 그 디자인 시스템의 readme.md("Do/Don't")를 따랐다 - 예: 카드/버튼/입력창은 절대
+        둥글리지 않음(기본 버튼은 반투명 테두리만 있는 "선 그림", 주 버튼만 강조색으로 채워진 유일한 "입체"
+        오브젝트), 상태(hover/pressed/disabled)는 브라우저 기본값이 아니라 강조색 램프에서 파생.
+        의도적으로 옮기지 않은 것 두 가지 - (1) 글꼴: 디자인 시스템은 구글 폰트(Barlow/Barlow Condensed)를
+        웹 임베드로 쓰지만, 이 프로젝트는 외부 CDN/웹폰트에 의존하지 않는다는 기존 원칙(Multi-version build
+        절 참고)이 있어 Windows 기본 글꼴(Segoe UI)로 대체했다 - 실제 Barlow 폰트 파일을 리소스로 내장하는
+        방법도 가능은 하지만(SIL OFL 라이선스라 재배포 가능) 이번 작업 범위에는 포함하지 않았다.
+        (2) `.blueprint` 모서리 등록 마크(각 카드/피규어 모서리의 "+" 장식) - 각 창에 이 장식용 요소를 추가로
+        끼워 넣으려면 창마다 XAML 레이아웃을 건드려야 하는데, Claude Design 목업 자체가 "레이아웃/문구는 실제
+        XAML 그대로, 색·타이포·모서리만 새 테마 기준으로 근사"라고 명시했으므로 이번엔 색상 시스템(이 파일)만
+        옮기고 레이아웃 변경은 하지 않았다 - 나중에 원하면 특정 패널에 한해 추가하는 정도로 확장 가능하다.
     -->
 
-    <!-- ===== 색 팔레트 ===== -->
-    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#1E1F24"/>
-    <SolidColorBrush x:Key="AppBorderBrush" Color="#3A3C44"/>
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#2A2C33"/>
-    <SolidColorBrush x:Key="RowHoverBrush" Color="#33363D"/>
-    <SolidColorBrush x:Key="SelectionBrush" Color="#3D5B8DEF"/>
+    <!-- ===== 색 팔레트 (Industry 디자인 시스템의 styles.css 토큰 그대로) ===== -->
+    <!-- 밝은 종이 배경 + 스틸블루 단일 강조색. 반투명 브러시(#AARRGGBB)는 CSS의
+         color-mix(in srgb, #1d1f20 N%, transparent) 패턴을 그대로 옮긴 것 - 무엇 위에 놓이든
+         자연스럽게 섞이도록 알파 채널을 쓴다(밑에 깔린 배경색을 추정해 불투명 색으로 근사하지 않음). -->
+    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F2F2F3"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#E9E9EA"/>
+    <SolidColorBrush x:Key="AppBorderBrush" Color="#291D1F20"/>
+    <!-- 콤보박스 팝업/탭 hover 등에 쓰는 옅은 텍스트색 틴트 - CSS의 color-mix(text 7%, transparent). -->
+    <SolidColorBrush x:Key="RowHoverBrush" Color="#121D1F20"/>
+    <!-- 목록/콤보 선택 항목 배경 - CSS ::selection의 color-mix(accent 30%, transparent)와 동일. -->
+    <SolidColorBrush x:Key="SelectionBrush" Color="#4D5980A6"/>
 
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#ECEDF0"/>
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9498A3"/>
-    <SolidColorBrush x:Key="DisabledTextBrush" Color="#6B6E76"/>
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1D1F20"/>
+    <!-- color-mix(text 55%, transparent) -->
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#8C1D1F20"/>
 
-    <SolidColorBrush x:Key="AccentBrush" Color="#5B8DEF"/>
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#6F9CF2"/>
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="#4A75CC"/>
-    <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#5980A6"/>
+    <!-- 강조색 톤 램프의 600/700 단계(styles.css의 color-accent-600/700 변수) - hover/pressed에 그대로 사용. -->
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#597EA3"/>
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="#416180"/>
+    <!-- 강조색 위에 놓이는 글자/아이콘 색 - "steel as ground, type reversed to paper"(readme) 그대로 배경색을 반전 사용. -->
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#F2F2F3"/>
 
-    <SolidColorBrush x:Key="WarningTextBrush" Color="#E8A33D"/>
-    <SolidColorBrush x:Key="DangerTextBrush" Color="#FF6B6B"/>
-    <!-- 빠른 토글 툴바의 on 상태 표시용 (off는 TextSecondaryBrush 재사용) -->
-    <SolidColorBrush x:Key="ToggleOnBrush" Color="#3DDC84"/>
-    <SolidColorBrush x:Key="DangerBrush" Color="#E5484D"/>
-    <SolidColorBrush x:Key="DangerHoverBrush" Color="#F16268"/>
-    <SolidColorBrush x:Key="DangerPressedBrush" Color="#C93A3F"/>
+    <!-- 경고/위험 색은 Industry 디자인 시스템에 별도 토큰이 없어(의도적으로 "steel 강조색 외 장식색 금지"
+         원칙), 목업이 재료 삭제 버튼에 직접 지정한 값(#A6595D)을 그대로 채택하고 같은 계열로 hover/pressed를
+         파생시켰다. Warning은 같은 명도 계열의 호박색을 새로 골랐다(디자인 시스템에 지정값 없음). -->
+    <SolidColorBrush x:Key="WarningTextBrush" Color="#A67B3D"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="#A6595D"/>
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="#8F4D51"/>
+    <SolidColorBrush x:Key="DangerPressedBrush" Color="#784046"/>
+    <SolidColorBrush x:Key="DangerTextBrush" Color="#A6595D"/>
 
-    <SolidColorBrush x:Key="ButtonSurfaceBrush" Color="#2E3036"/>
-    <SolidColorBrush x:Key="ButtonSurfaceHoverBrush" Color="#3A3D44"/>
-    <SolidColorBrush x:Key="ButtonSurfacePressedBrush" Color="#26282D"/>
-    <SolidColorBrush x:Key="DisabledBrush" Color="#55585F"/>
+    <!-- 기본(보조) 버튼은 채움 없이 테두리만 있는 "선 그림" - readme: 주 버튼만 유일하게 채워진 입체 오브젝트. -->
+    <SolidColorBrush x:Key="ButtonSurfaceBrush" Color="Transparent"/>
+    <!-- color-mix(text 7%/14%, transparent) - CSS .btn-secondary:hover/:active 그대로. -->
+    <SolidColorBrush x:Key="ButtonSurfaceHoverBrush" Color="#121D1F20"/>
+    <SolidColorBrush x:Key="ButtonSurfacePressedBrush" Color="#241D1F20"/>
+
+    <!-- 빠른 토글 툴바의 on 상태 표시용 (off는 TextSecondaryBrush 재사용). -->
+    <SolidColorBrush x:Key="ToggleOnBrush" Color="#3D8F5C"/>
+
+    <!-- GridSplitter/ScrollBar 처럼 "실제로 칠해진 손잡이"가 필요한 곳은 반투명 AppBorderBrush로는 존재감이
+         너무 옅어서, 중립 톤 램프(styles.css의 color-neutral-300/400 변수)에서 불투명 버전을 따로 둔다. -->
+    <SolidColorBrush x:Key="DividerSolidBrush" Color="#D4D4D7"/>
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#B7B7BA"/>
 
     <!-- ===== Window / 기본 텍스트 ===== -->
     <Style TargetType="Window">
@@ -56,6 +92,7 @@
     </Style>
 
     <!-- ===== Button ===== -->
+    <!-- 기본(보조) 버튼: 채움 없이 얇은 테두리만 - readme의 .btn-secondary와 동일한 역할. -->
     <Style x:Key="BaseButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource ButtonSurfaceBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
@@ -70,7 +107,7 @@
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6">
+                            CornerRadius="0">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
                     </Border>
@@ -82,10 +119,10 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource ButtonSurfacePressedBrush}"/>
                         </Trigger>
+                        <!-- readme: "disabled controls drop to 45% opacity" - 색을 따로 바꾸지 않고
+                             전체를 그대로 45% 불투명도로만 낮춘다(디자인 시스템이 명시한 방식 그대로). -->
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource DisabledBrush}"/>
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource DisabledBrush}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -94,7 +131,8 @@
     </Style>
     <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}"/>
 
-    <!-- 저장/최종 적용/확인/선택 완료 등 주요 액션 버튼 -->
+    <!-- 저장/최종 적용/확인/선택 완료 등 주요 액션 버튼 - readme: "주 버튼은 사각 모서리와 마크를 유지한 채
+         강조색으로 채워진, 이 보드 위의 유일한 입체 오브젝트". -->
     <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -106,7 +144,7 @@
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6">
+                            CornerRadius="0">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
                     </Border>
@@ -120,9 +158,7 @@
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentPressedBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource DisabledBrush}"/>
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource DisabledBrush}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -142,7 +178,7 @@
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6">
+                            CornerRadius="0">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
                     </Border>
@@ -156,9 +192,7 @@
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource DangerPressedBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource DisabledBrush}"/>
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource DisabledBrush}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -170,7 +204,7 @@
     <Style TargetType="TextBox">
         <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-        <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="6,4"/>
@@ -181,7 +215,7 @@
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4">
+                            CornerRadius="0">
                         <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
                                       VerticalAlignment="Center"/>
                     </Border>
@@ -193,7 +227,7 @@
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -210,7 +244,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Background="{TemplateBinding Background}">
-                        <Border x:Name="Box" Width="16" Height="16" CornerRadius="3"
+                        <Border x:Name="Box" Width="16" Height="16" CornerRadius="0"
                                 Background="{DynamicResource SurfaceBrush}"
                                 BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
                             <Path x:Name="CheckMark" Data="M 2,7 L 6,11 L 14,3"
@@ -229,12 +263,17 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
 
+    <!-- 라디오는 원형 그대로 유지한다 - readme의 사각형 모서리 금지 규칙은 카드/버튼/입력창 같은 "컨테이너"
+         대상이고, 라디오 점(.radio .dot)은 디자인 시스템 자체에서도 원형(border-radius:50%)으로 남는다. -->
     <Style TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -259,6 +298,9 @@
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Circle" Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -307,7 +349,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4"/>
+                                CornerRadius="0"/>
                         <ContentPresenter Grid.Column="0" Margin="{TemplateBinding Padding}"
                                           VerticalAlignment="Center" HorizontalAlignment="Left"
                                           Content="{TemplateBinding SelectionBoxItem}"
@@ -331,7 +373,7 @@
                                MinWidth="{TemplateBinding ActualWidth}">
                             <Border Background="{DynamicResource SurfaceBrush}"
                                     BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
-                                    CornerRadius="4" Margin="0,2,0,0" MaxHeight="320">
+                                    CornerRadius="0" Margin="0,2,0,0" MaxHeight="320">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <ItemsPresenter/>
                                 </ScrollViewer>
@@ -346,7 +388,7 @@
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}"/>
+                            <Setter Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -438,11 +480,11 @@
 
     <!-- ===== GridSplitter (열 너비 조절용 구분선, NAMER/재료 지정) ===== -->
     <Style TargetType="GridSplitter">
-        <Setter Property="Background" Value="{DynamicResource AppBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource DividerSolidBrush}"/>
     </Style>
 
     <!-- ===== ScrollBar (ScrollViewer 자체는 기본 템플릿을 그대로 쓰고, 내부에서 생성하는
-         ScrollBar만 얇은 다크 트랙/썸으로 교체한다) ===== -->
+         ScrollBar만 얇은 트랙/썸으로 교체한다) ===== -->
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Width" Value="10"/>
@@ -474,7 +516,7 @@
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="{DynamicResource AppBorderBrush}" CornerRadius="4"
+                                            <Border Background="{DynamicResource ScrollThumbBrush}" CornerRadius="0"
                                                     Width="6" HorizontalAlignment="Center"/>
                                         </ControlTemplate>
                                     </Thumb.Template>
