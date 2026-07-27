@@ -33,15 +33,17 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 전용 드래그 그립 - 항상 이 너비(16px)만큼은 배경이 보장되므로, 버튼이 몇 개든 창이
-                 아무리 좁든 여기를 누르면 확실히 옮길 수 있다. -->
-            <Border Grid.Column="0" Width="16" Cursor="SizeAll"
+            <!-- 전용 드래그 그립 - 항상 이 너비만큼은 배경이 보장되므로, 버튼이 몇 개든 창이 아무리
+                 좁든 여기를 누르면 확실히 옮길 수 있다. 2026-07-27, "잡을 수 있는 픽셀이 너무 작아서
+                 잡기 힘들다"는 피드백으로 16px→28px로 넓혔다(QuickToggleToolbar.xaml.cs의
+                 GripWidthDip과 반드시 맞춰야 함) - 점 3개 자체도 함께 키워서 넓어진 영역과 비례가 맞게 했다. -->
+            <Border Grid.Column="0" Width="28" Cursor="SizeAll"
                     ToolTip="눌러서 드래그하면 위치를 옮길 수 있습니다."
                     MouseLeftButtonDown="DragGrip_MouseLeftButtonDown">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <Rectangle Width="3" Height="3" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,1.5"/>
-                    <Rectangle Width="3" Height="3" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,1.5"/>
-                    <Rectangle Width="3" Height="3" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,1.5"/>
+                    <Rectangle Width="4" Height="4" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,2.5"/>
+                    <Rectangle Width="4" Height="4" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,2.5"/>
+                    <Rectangle Width="4" Height="4" Fill="{DynamicResource TextSecondaryBrush}" Margin="0,2.5"/>
                 </StackPanel>
             </Border>
 

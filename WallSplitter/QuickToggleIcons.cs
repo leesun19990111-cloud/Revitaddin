@@ -54,6 +54,18 @@ namespace WallSplitter
             _ => "",
         };
 
+        // 2026-07-27, "버튼 색상을 설정하면 배경 자체가 바뀌고, 아이콘/텍스트는 그 배경에 대비되어 잘
+        // 보이는 색으로 자동 전환"되어야 한다는 요청으로 추가 - QuickToggleToolbar가 On 상태 버튼의
+        // 배경을 사용자 지정(또는 기본) 색으로 채울 때, 그 위에 얹을 아이콘/라벨 색을 이걸로 고른다.
+        // 상대 휘도(perceived luminance) 근사식으로 밝은 배경엔 어두운 글자를, 어두운 배경엔 밝은
+        // 글자를 선택한다 - WCAG 권장 공식만큼 정밀하진 않지만 이 정도 팔레트(8가지 프리셋)에서는
+        // 육안으로 항상 뚜렷하게 갈렸다.
+        public static Brush ContrastingForeground(Color background)
+        {
+            double luminance = 0.299 * background.R + 0.587 * background.G + 0.114 * background.B;
+            return luminance > 150 ? Theme.TextPrimary : Theme.OnAccent;
+        }
+
         public static Canvas Create(QuickToggleIconShape shape, Brush brush)
         {
             Canvas canvas = new Canvas { Width = 20, Height = 16, HorizontalAlignment = HorizontalAlignment.Center };

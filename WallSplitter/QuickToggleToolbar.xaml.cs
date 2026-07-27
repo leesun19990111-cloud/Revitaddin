@@ -155,14 +155,20 @@ namespace WallSplitter
             {
                 QuickToggleButtonState state = QuickToggleService.DetermineState(view, cfg);
                 _lastStates[cfg.Id] = state;
+                (Brush background, Brush borderBrush, Brush foreground) = VisualsFor(state, cfg);
 
-                Canvas icon = QuickToggleIcons.Create(cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category), BrushFor(state, cfg));
+                Canvas icon = QuickToggleIcons.Create(cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category), foreground);
+                // 2026-07-27, "아이콘도 좀 크게 해달라"는 요청 - QuickToggleIcons.Create 자체의 20x16
+                // 좌표계는 그대로 두고(다른 도형 10종의 좌표를 전부 다시 계산할 필요 없이), Viewbox로
+                // 렌더링 크기만 키운다. 아이콘 재색칠(QuickToggleIcons.SetBrush)은 원본 Canvas 참조를
+                // 그대로 쓰므로 이 래핑과 무관하게 계속 동작한다.
+                Viewbox iconBox = new Viewbox { Width = 28, Height = 22, Child = icon };
                 TextBlock label = new TextBlock
                 {
                     Text = cfg.Name,
                     FontSize = 10,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Foreground = state == QuickToggleButtonState.Disabled ? Theme.ToggleDisabled : Theme.TextPrimary,
+                    Foreground = foreground,
                     Margin = new Thickness(0, 2, 0, 0),
                 };
 
@@ -171,12 +177,14 @@ namespace WallSplitter
                 // ("버튼이 마우스 커서에 잘 안 잡힌다"는 실측 피드백, 2026-07-27). Button 자체는 옆 버튼과
                 // 완전히 맞닿아 틈이 없으므로 그 사각지대가 사라진다.
                 StackPanel content = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(8, 2, 8, 2) };
-                content.Children.Add(icon);
+                content.Children.Add(iconBox);
                 content.Children.Add(label);
 
                 Button button = new Button
                 {
                     Content = content,
+                    Background = background,
+                    BorderBrush = borderBrush,
                     IsEnabled = state != QuickToggleButtonState.Disabled,
                     ToolTip = ToolTipFor(cfg, state),
                     Tag = cfg,
@@ -201,8 +209,11 @@ namespace WallSplitter
                     continue;
                 _lastStates[cfg.Id] = state;
 
-                QuickToggleIcons.SetBrush(icon, BrushFor(state, cfg));
-                label.Foreground = state == QuickToggleButtonState.Disabled ? Theme.ToggleDisabled : Theme.TextPrimary;
+                (Brush background, Brush borderBrush, Brush foreground) = VisualsFor(state, cfg);
+                QuickToggleIcons.SetBrush(icon, foreground);
+                label.Foreground = foreground;
+                button.Background = background;
+                button.BorderBrush = borderBrush;
                 button.IsEnabled = state != QuickToggleButtonState.Disabled;
                 button.ToolTip = ToolTipFor(cfg, state);
             }
@@ -215,24 +226,34 @@ namespace WallSplitter
             _ => cfg.Name + " (이 뷰에서 사용할 수 없거나 대상이 지정되지 않았습니다)",
         };
 
-        // cfg.OnColorHex가 지정돼 있으면(사용자가 버튼마다 직접 고른 색, 2026-07-27 요청으로 추가) On
-        // 상태일 때 그 색을 쓰고, 아니면 예전 그대로 공용 Theme.ToggleOn을 쓴다. Off/Disabled는 항상
-        // 공용 색을 쓴다 - 꺼진 버튼끼리는 서로 구분할 필요가 없기 때문.
-        private static Brush BrushFor(QuickToggleButtonState state, QuickToggleButtonConfig cfg) => state switch
+        // 2026-07-27, 사용자 요청으로 확장: "버튼 색상을 설정하면 아이콘만이 아니라 버튼 배경 자체가
+        // 다 바뀌고, 아이콘/텍스트는 그 배경색에 대비되어 잘 보이는 색으로 자동 전환"되어야 한다.
+        // On 상태일 때만 버튼을 그 색(사용자 지정 또는 기본 Theme.ToggleOn)으로 실제로 채우고
+        // (BorderBrush도 맞춰서 하나의 덩어리로 보이게), 아이콘/라벨 전경색은 그 배경의 밝기에 따라
+        // QuickToggleIcons.ContrastingForeground가 밝은 색/어두운 색 중 알아서 고른다. Off/Disabled는
+        // 기존 그대로 "선 그림"(투명 배경 + 하이라인 테두리) 스타일을 유지한다 - 꺼진 버튼끼리는 서로
+        // 다른 색으로 구분할 필요가 없고, 채워진 건 "켜진 것 = 주 버튼"이라는 Industry 테마의 시각
+        // 언어(readme의 "주 버튼만 유일하게 채워진 입체 오브젝트")와도 맞는다.
+        private static (Brush Background, Brush BorderBrush, Brush Foreground) VisualsFor(QuickToggleButtonState state, QuickToggleButtonConfig cfg)
         {
-            QuickToggleButtonState.On => CustomOnBrush(cfg) ?? Theme.ToggleOn,
-            QuickToggleButtonState.Off => Theme.TextSecondary,
-            _ => Theme.ToggleDisabled,
-        };
+            if (state == QuickToggleButtonState.On)
+            {
+                Color color = CustomOnColor(cfg) ?? ((SolidColorBrush)Theme.ToggleOn).Color;
+                SolidColorBrush fill = new SolidColorBrush(color);
+                fill.Freeze();
+                return (fill, fill, QuickToggleIcons.ContrastingForeground(color));
+            }
+            if (state == QuickToggleButtonState.Off)
+                return (Brushes.Transparent, Theme.Border, Theme.TextSecondary);
+            return (Brushes.Transparent, Theme.Border, Theme.ToggleDisabled);
+        }
 
-        private static Brush? CustomOnBrush(QuickToggleButtonConfig cfg)
+        private static Color? CustomOnColor(QuickToggleButtonConfig cfg)
         {
             if (string.IsNullOrEmpty(cfg.OnColorHex)) return null;
             try
             {
-                SolidColorBrush brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cfg.OnColorHex));
-                brush.Freeze();
-                return brush;
+                return (Color)ColorConverter.ConvertFromString(cfg.OnColorHex);
             }
             catch
             {
@@ -259,9 +280,10 @@ namespace WallSplitter
         // 2026-07-27, 사용자 요청으로 최대 너비 제한(가로 스크롤로 처리)을 없앴다 - "등록된 버튼이 많으면
         // 스크롤 대신 툴바 자체가 옆으로 길게 늘어나게 해달라"는 피드백. 이제 버튼이 아무리 많아도 전부
         // 한 줄에 펴서 보여주고, 창 너비는 그만큼 계속 늘어난다(위쪽 XAML의 가로 스크롤 제거와 짝).
-        // GripWidthDip은 XAML의 왼쪽 드래그 그립 열(Width="16")과 반드시 맞춰야 한다.
         private const double MinWidthDip = 160;
-        private const double GripWidthDip = 16;
+        // XAML의 왼쪽 드래그 그립 열(Border Width)과 반드시 맞춰야 한다 - 2026-07-27, "잡을 수 있는
+        // 픽셀이 너무 작아서 잡기 힘들다"는 피드백으로 16→28로 넓혔다.
+        private const double GripWidthDip = 28;
 
         private void ResizeToContent()
         {

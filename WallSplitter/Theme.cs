@@ -21,6 +21,9 @@ namespace WallSplitter
         public static readonly SolidColorBrush ToggleDisabled = Freeze("#98989B");
         // 목록에서 현재 선택된 행의 배경 - Theme.xaml의 SelectionBrush(#4D5980A6)와 맞춰 유지.
         public static readonly SolidColorBrush SelectionHighlight = Freeze("#4D5980A6");
+        // 강조색(채워진 배경) 위에 놓이는 밝은 전경색 - Theme.xaml의 OnAccentBrush와 맞춰 유지.
+        // QuickToggleIcons.ContrastingForeground가 어두운 배경 위 전경색으로 이걸 반환한다.
+        public static readonly SolidColorBrush OnAccent = Freeze("#F2F2F3");
 
         private static SolidColorBrush Freeze(string hex)
         {
