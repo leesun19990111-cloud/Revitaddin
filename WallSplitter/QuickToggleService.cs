@@ -45,6 +45,9 @@ namespace WallSplitter
                             view.GetWorksetVisibility(new WorksetId(id)) == WorksetVisibility.Visible);
                         return allWorksetsOn ? QuickToggleButtonState.On : QuickToggleButtonState.Off;
 
+                    case QuickToggleCategory.Preset:
+                        return DeterminePresetState(view, cfg);
+
                     default:
                         return QuickToggleButtonState.Disabled;
                 }
@@ -55,6 +58,50 @@ namespace WallSplitter
                 // 뷰 타입별 지원 여부를 직접 나열하지 않는다.
                 return QuickToggleButtonState.Disabled;
             }
+        }
+
+        // 프리셋 버튼은 뷰템플릿/필터/작업세트 세 필드를 동시에 가질 수 있고, 그중 비어있는 필드는
+        // "이 프리셋에 포함되지 않음"으로 해석해 판정에서 완전히 제외한다(단일 카테고리 버튼과 달리
+        // "선택 안 함 = 꺼짐"이 아니다) - 하나도 채워지지 않았으면 Disabled, 하나 이상 채워졌으면 채워진
+        // 부분들이 전부 On이어야 전체가 On, 하나라도 Off면 전체 Off. 이 뷰/문서가 지원하지 않는 부분
+        // (필터 없는 뷰 종류, 워크셰어링 안 된 문서 등)은 판정에서 조용히 제외한다.
+        private static QuickToggleButtonState DeterminePresetState(View view, QuickToggleButtonConfig cfg)
+        {
+            bool anyPart = false;
+            bool allOn = true;
+
+            if (cfg.ViewTemplateId.HasValue)
+            {
+                anyPart = true;
+                if (view.ViewTemplateId.ToInt() != cfg.ViewTemplateId.Value) allOn = false;
+            }
+
+            if (cfg.FilterIds.Count > 0)
+            {
+                try
+                {
+                    ICollection<ElementId> appliedFilters = view.GetFilters();
+                    anyPart = true;
+                    bool filtersOn = cfg.FilterIds.All(id =>
+                    {
+                        ElementId eid = new ElementId(id);
+                        return appliedFilters.Contains(eid) && view.GetFilterVisibility(eid);
+                    });
+                    if (!filtersOn) allOn = false;
+                }
+                catch { /* 이 뷰 종류가 필터를 지원하지 않음 - 이 부분만 건너뛰고 나머지로 판정 */ }
+            }
+
+            if (cfg.WorksetIds.Count > 0 && view.Document.IsWorkshared)
+            {
+                anyPart = true;
+                bool worksetsOn = cfg.WorksetIds.All(id =>
+                    view.GetWorksetVisibility(new WorksetId(id)) == WorksetVisibility.Visible);
+                if (!worksetsOn) allOn = false;
+            }
+
+            if (!anyPart) return QuickToggleButtonState.Disabled;
+            return allOn ? QuickToggleButtonState.On : QuickToggleButtonState.Off;
         }
 
         // 호출자가 이미 Transaction을 연 상태에서 호출해야 한다. bool 반환값은 실제로 반영됐는지를
@@ -122,9 +169,85 @@ namespace WallSplitter
                         }
                     }
                     break;
+
+                case QuickToggleCategory.Preset:
+                    return TogglePreset(view, cfg, turnOn);
             }
 
             return true;
+        }
+
+        // 프리셋 버튼 적용 - 위 세 case와 같은 동작을 재사용하되, 비어있는 필드(이 프리셋에 포함되지
+        // 않은 항목)는 아예 건드리지 않는다는 점만 다르다. 특히 뷰템플릿은 단일 카테고리 버튼과 달리
+        // "선택 안 함"일 때 InvalidElementId로 강제 초기화하면 안 된다 - 프리셋에 뷰템플릿이 포함되지
+        // 않았을 뿐인데 클릭할 때마다 현재 뷰템플릿을 지워버리는 것을 막기 위함.
+        private static bool TogglePreset(View view, QuickToggleButtonConfig cfg, bool turnOn)
+        {
+            bool ok = true;
+
+            if (cfg.ViewTemplateId.HasValue)
+            {
+                try
+                {
+                    view.ViewTemplateId = turnOn
+                        ? new ElementId(cfg.ViewTemplateId.Value)
+                        : ElementId.InvalidElementId;
+                }
+                catch
+                {
+                    ok = false;
+                }
+            }
+
+            if (cfg.FilterIds.Count > 0)
+            {
+                try
+                {
+                    ICollection<ElementId> appliedFilters = view.GetFilters();
+                    foreach (int id in cfg.FilterIds)
+                    {
+                        try
+                        {
+                            ElementId eid = new ElementId(id);
+                            if (turnOn)
+                            {
+                                if (!appliedFilters.Contains(eid)) view.AddFilter(eid);
+                                view.SetFilterVisibility(eid, true);
+                            }
+                            else if (appliedFilters.Contains(eid))
+                            {
+                                view.SetFilterVisibility(eid, false);
+                            }
+                        }
+                        catch
+                        {
+                            // 그룹 중 하나가 실패해도(삭제된 필터 등) 나머지는 계속 적용
+                        }
+                    }
+                }
+                catch
+                {
+                    // 이 뷰 종류가 필터를 지원하지 않음
+                }
+            }
+
+            if (cfg.WorksetIds.Count > 0)
+            {
+                foreach (int id in cfg.WorksetIds)
+                {
+                    try
+                    {
+                        view.SetWorksetVisibility(new WorksetId(id),
+                            turnOn ? WorksetVisibility.Visible : WorksetVisibility.Hidden);
+                    }
+                    catch
+                    {
+                        // 워크셰어링 안 된 문서이거나 삭제된 작업세트 등 - 나머지는 계속 적용
+                    }
+                }
+            }
+
+            return ok;
         }
 
         // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 호출 가능하다. 뷰템플릿/필터 표시/작업세트 표시에
@@ -147,7 +270,11 @@ namespace WallSplitter
             try
             {
                 foreach (ElementId filterId in view.GetFilters())
+                {
                     snapshot.FilterVisibility[filterId.ToInt()] = view.GetFilterVisibility(filterId);
+                    try { snapshot.FilterOverrides[filterId.ToInt()] = view.GetFilterOverrides(filterId); }
+                    catch { /* 이 필터에 그래픽 재정의를 지원하지 않는 경우 등 */ }
+                }
             }
             catch { /* 이 뷰 종류가 필터를 지원하지 않음 - 필터 상태 없이 저장 */ }
 
@@ -166,6 +293,16 @@ namespace WallSplitter
             {
                 try { snapshot.CategoryHidden[cat.Id.ToInt()] = view.GetCategoryHidden(cat.Id); }
                 catch { /* 이 뷰에서 숨기기를 지원하지 않는 카테고리(내부 전용 등) - 건너뜀 */ }
+
+                try { snapshot.CategoryOverrides[cat.Id.ToInt()] = view.GetCategoryOverrides(cat.Id); }
+                catch { /* 이 카테고리에 그래픽 재정의를 지원하지 않는 경우 등 */ }
+
+                try
+                {
+                    ElementId schemeId = view.GetColorFillSchemeId(cat.Id);
+                    if (schemeId != ElementId.InvalidElementId) snapshot.ColorFillSchemeId[cat.Id.ToInt()] = schemeId;
+                }
+                catch { /* 이 뷰/카테고리 조합이 색상표를 지원하지 않는 경우(대부분의 카테고리가 여기 해당) */ }
             }
 
             try
@@ -181,6 +318,52 @@ namespace WallSplitter
                 try { snapshot.PlanViewRange = viewPlan.GetViewRange(); }
                 catch { /* 뷰 범위를 지원하지 않는 평면 뷰 하위 종류 등 */ }
             }
+
+            try { snapshot.DetailLevel = view.DetailLevel; }
+            catch { /* 상세수준을 지원하지 않는 뷰 종류 */ }
+
+            try { snapshot.DisplayStyle = view.DisplayStyle; }
+            catch { /* 비주얼스타일을 지원하지 않는 뷰 종류 */ }
+
+            if (view is View3D view3D)
+            {
+                try
+                {
+                    snapshot.SectionBoxActive = view3D.IsSectionBoxActive;
+                    if (view3D.IsSectionBoxActive) snapshot.SectionBox = view3D.GetSectionBox();
+                }
+                catch { /* 단면상자를 지원하지 않는 3D 뷰 종류 등 */ }
+
+                try
+                {
+                    snapshot.IsPerspective = view3D.IsPerspective;
+                    snapshot.Orientation = view3D.GetOrientation();
+                }
+                catch { /* 방향/투영모드를 읽을 수 없는 경우 */ }
+
+                try { snapshot.RenderingSettings = view3D.GetRenderingSettings(); }
+                catch { /* 렌더링설정이 없는 경우(레이트레이스 스타일이 아닌 3D 뷰 등) */ }
+            }
+
+            // 그림자/태양경로/스케치라인 등 - Revit 공개 API에 전용 접근자가 없어 최선 노력으로 캐치올:
+            // PG_GRAPHICS 그룹의 정수형(예/아니오) 파라미터를 이름 기준으로 전부 캡처한다. 이 값들이 실제로
+            // 원하는 항목을 포함하는지는 라이브 테스트로만 확인 가능 - docs/quick-toggle/CLAUDE.md 참고.
+            try
+            {
+                foreach (Parameter p in view.Parameters)
+                {
+                    try
+                    {
+                        if (p.Definition.GetGroupTypeId() == GroupTypeId.Graphics
+                            && p.StorageType == StorageType.Integer && !p.IsReadOnly)
+                        {
+                            snapshot.GraphicsIntegerParams[p.Definition.Name] = p.AsInteger();
+                        }
+                    }
+                    catch { /* 개별 파라미터 실패는 무시하고 나머지는 계속 진행 */ }
+                }
+            }
+            catch { /* 이 뷰 종류의 파라미터 목록을 읽을 수 없는 경우 */ }
 
             return snapshot;
         }
@@ -215,6 +398,17 @@ namespace WallSplitter
                 catch { /* 개별 필터 실패는 무시하고 나머지는 계속 적용 */ }
             }
 
+            foreach (KeyValuePair<int, OverrideGraphicSettings> kvp in snapshot.FilterOverrides)
+            {
+                try
+                {
+                    ElementId filterId = new ElementId(kvp.Key);
+                    if (!currentFilters.Contains(filterId)) continue;
+                    view.SetFilterOverrides(filterId, kvp.Value);
+                }
+                catch { /* 개별 필터 실패는 무시하고 나머지는 계속 적용 */ }
+            }
+
             if (view.Document.IsWorkshared)
             {
                 foreach (KeyValuePair<int, bool> kvp in snapshot.WorksetVisibility)
@@ -234,6 +428,18 @@ namespace WallSplitter
                 catch { /* 뷰템플릿이 제어하거나, 그 사이 삭제된 카테고리 등 */ }
             }
 
+            foreach (KeyValuePair<int, OverrideGraphicSettings> kvp in snapshot.CategoryOverrides)
+            {
+                try { view.SetCategoryOverrides(new ElementId(kvp.Key), kvp.Value); }
+                catch { /* 뷰템플릿이 제어하거나, 그 사이 삭제된 카테고리 등 */ }
+            }
+
+            foreach (KeyValuePair<int, ElementId> kvp in snapshot.ColorFillSchemeId)
+            {
+                try { view.SetColorFillSchemeId(new ElementId(kvp.Key), kvp.Value); }
+                catch { /* 그 사이 삭제된 색상표 등 */ }
+            }
+
             try { view.CropBoxActive = snapshot.CropBoxActive; }
             catch { /* 크롭을 지원하지 않는 뷰 종류 */ }
 
@@ -251,6 +457,73 @@ namespace WallSplitter
                 try { viewPlan.SetViewRange(snapshot.PlanViewRange); }
                 catch { /* 저장 시점 이후 참조 레벨이 삭제된 경우 등 */ }
             }
+
+            if (snapshot.DetailLevel.HasValue)
+            {
+                try { view.DetailLevel = snapshot.DetailLevel.Value; }
+                catch { /* 상세수준을 지원하지 않는 뷰 종류 */ }
+            }
+
+            if (snapshot.DisplayStyle.HasValue)
+            {
+                try { view.DisplayStyle = snapshot.DisplayStyle.Value; }
+                catch { /* 비주얼스타일을 지원하지 않는 뷰 종류 */ }
+            }
+
+            if (view is View3D view3D)
+            {
+                try
+                {
+                    if (snapshot.IsPerspective.HasValue && view3D.IsPerspective != snapshot.IsPerspective.Value)
+                    {
+                        if (snapshot.IsPerspective.Value) view3D.ToggleToPerspective();
+                        else view3D.ToggleToIsometric();
+                    }
+                    if (snapshot.Orientation != null) view3D.SetOrientation(snapshot.Orientation);
+                }
+                catch { /* 투영모드/카메라를 되돌릴 수 없는 경우 */ }
+
+                if (snapshot.SectionBox != null)
+                {
+                    try
+                    {
+                        view3D.IsSectionBoxActive = snapshot.SectionBoxActive ?? true;
+                        view3D.SetSectionBox(snapshot.SectionBox);
+                    }
+                    catch { /* 단면상자를 지원하지 않는 3D 뷰 종류 등 */ }
+                }
+                else if (snapshot.SectionBoxActive.HasValue)
+                {
+                    try { view3D.IsSectionBoxActive = snapshot.SectionBoxActive.Value; }
+                    catch { /* 단면상자를 지원하지 않는 3D 뷰 종류 등 */ }
+                }
+
+                if (snapshot.RenderingSettings != null)
+                {
+                    try { view3D.SetRenderingSettings(snapshot.RenderingSettings); }
+                    catch { /* 렌더링설정을 되돌릴 수 없는 경우 */ }
+                }
+            }
+
+            // 최선 노력 캐치올(그림자/태양경로 등 - 위 CaptureViewState 주석 참고): 지금 이 뷰에 같은
+            // 이름의 정수형 파라미터가 있으면 저장했던 값으로 되돌린다.
+            try
+            {
+                foreach (Parameter p in view.Parameters)
+                {
+                    try
+                    {
+                        if (p.Definition.GetGroupTypeId() == GroupTypeId.Graphics
+                            && p.StorageType == StorageType.Integer && !p.IsReadOnly
+                            && snapshot.GraphicsIntegerParams.TryGetValue(p.Definition.Name, out int value))
+                        {
+                            p.Set(value);
+                        }
+                    }
+                    catch { /* 개별 파라미터 실패는 무시하고 나머지는 계속 적용 */ }
+                }
+            }
+            catch { /* 이 뷰 종류의 파라미터 목록을 읽을 수 없는 경우 */ }
         }
 
         // doc.Settings.Categories(최상위) + 모든 하위 SubCategories를 재귀적으로 순회한다. Revit의

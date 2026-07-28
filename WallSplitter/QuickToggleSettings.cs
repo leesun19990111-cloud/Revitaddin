@@ -16,6 +16,11 @@ namespace WallSplitter
         ViewTemplate,
         Filter,
         Workset,
+        // 2026-07-28, "여러 설정 조합(뷰템플릿+필터+작업세트)을 한 번에 켜고 끄는 버튼을 만들고 싶다"는
+        // 요청으로 추가. 위 세 카테고리와 필드 자체는 공유하지만(ViewTemplateId/FilterIds/WorksetIds를
+        // 동시에 채울 수 있음), 비어있는 필드는 "이 프리셋에 그 항목은 포함되지 않음"으로 해석되어
+        // 건드리지 않는다는 점이 단일 카테고리 버튼과 다르다(QuickToggleService 참고).
+        Preset,
     }
 
     // ElementId.IntegerValue(int)는 2023 API에만 있고, 2024+에서는 Value(long)로 바뀌면서 완전히
@@ -48,6 +53,13 @@ namespace WallSplitter
         public List<int> FilterIds { get; set; } = new List<int>();
         public List<int> WorksetIds { get; set; } = new List<int>();
 
+        // ID와 나란히 이름도 저장한다 - ElementId는 문서마다 다르므로 내보내기/가져오기(다른 모델 간
+        // 설정 이식, 2026-07-28 요청)에서는 이름으로만 대상을 다시 찾을 수 있다. ID를 설정하는 지점
+        // (QuickToggleSettingsWindow의 라디오/체크박스 핸들러)에서 항상 같이 채운다.
+        public string? ViewTemplateName { get; set; }
+        public List<string> FilterNames { get; set; } = new List<string>();
+        public List<string> WorksetNames { get; set; } = new List<string>();
+
         // 사용자가 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가.
         // 둘 다 null이면 예전 그대로 카테고리 기본 아이콘(QuickToggleIcons.DefaultFor)과 공용 on 색
         // (Theme.ToggleOn)을 쓴다 - 기존에 저장된 설정 파일도 그대로 호환된다.
@@ -62,14 +74,6 @@ namespace WallSplitter
         public List<QuickToggleButtonConfig> Buttons { get; set; } = new List<QuickToggleButtonConfig>();
         public bool ToolbarVisible { get; set; } = true;
 
-        // 툴바의 위치 - Revit 메인 창 좌상단으로부터의 오프셋(px)으로 저장한다. 메인 창이 움직이면 이
-        // 오프셋만큼 계속 따라다니되(원래 요청사항), 오프셋 값 자체는 더 이상 고정 상수가 아니라 사용자가
-        // 툴바를 마우스로 직접 드래그하면 그 즉시 갱신·저장된다(QuickToggleToolbar.RootBorder_MouseLeftButtonDown
-        // 참고) - "리본 버튼을 가리는 고정 위치라 불편하다"는 실측 피드백(2026-07-27)으로 순수 고정 배치를
-        // 포기하고 드래그 가능한 패널로 바꿨다. 기본값은 예전 고정 오프셋과 비슷하게 잡아둔 초기값일 뿐이다.
-        public int ToolbarOffsetXDip { get; set; } = 6;
-        public int ToolbarOffsetYDip { get; set; } = 130;
-
         // 디버깅/향후 마이그레이션 참고용으로 원본 경로도 같이 저장한다 (해시만으로는 사람이 못 알아봄).
         public string ProjectPath { get; set; } = "";
 
@@ -79,7 +83,7 @@ namespace WallSplitter
             Converters = { new JsonStringEnumConverter() },
         };
 
-        private static string RootDir => Path.Combine(
+        internal static string RootDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "WallSplitter", "quick-toggle");
 
@@ -133,7 +137,7 @@ namespace WallSplitter
         {
             string? path = PathFor(doc);
             if (path == null)
-                throw new InvalidOperationException("저장되지 않은 문서에는 빠른 토글 설정을 저장할 수 없습니다. 먼저 프로젝트 파일을 저장하세요.");
+                throw new InvalidOperationException("저장되지 않은 문서에는 커스텀 버튼 설정을 저장할 수 없습니다. 먼저 프로젝트 파일을 저장하세요.");
 
             ProjectPath = doc.PathName;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -149,12 +153,50 @@ namespace WallSplitter
                 QuickToggleCategory.ViewTemplate => "뷰템플릿버튼",
                 QuickToggleCategory.Filter => "필터버튼",
                 QuickToggleCategory.Workset => "작업세트버튼",
+                QuickToggleCategory.Preset => "프리셋버튼",
                 _ => "버튼",
             };
             int count = 0;
             foreach (QuickToggleButtonConfig b in Buttons)
                 if (b.Category == category) count++;
             return prefix + (count + 1);
+        }
+    }
+
+    // 툴바 위치 - 2026-07-28까지는 프로젝트별 QuickToggleSettings에 같이 저장했었으나, "어떤 프로젝트를
+    // 열더라도 위치는 그대로 있어야 한다"는 요청으로 프로젝트 경로와 무관한 PC 전역 설정으로 분리했다.
+    public class QuickToggleGlobalSettings
+    {
+        public int ToolbarOffsetXDip { get; set; } = 6;
+        public int ToolbarOffsetYDip { get; set; } = 130;
+
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions { WriteIndented = true };
+
+        private static string PathFile => Path.Combine(QuickToggleSettings.RootDir, "toolbar-position.json");
+
+        public static QuickToggleGlobalSettings Load()
+        {
+            try
+            {
+                if (File.Exists(PathFile))
+                {
+                    string json = File.ReadAllText(PathFile, Encoding.UTF8);
+                    QuickToggleGlobalSettings? loaded = JsonSerializer.Deserialize<QuickToggleGlobalSettings>(json, JsonOptions);
+                    if (loaded != null) return loaded;
+                }
+            }
+            catch
+            {
+                // 설정 파일이 손상된 경우 기본값으로 대체
+            }
+            return new QuickToggleGlobalSettings();
+        }
+
+        public void Save()
+        {
+            Directory.CreateDirectory(QuickToggleSettings.RootDir);
+            string json = JsonSerializer.Serialize(this, JsonOptions);
+            File.WriteAllText(PathFile, json, Encoding.UTF8);
         }
     }
 }

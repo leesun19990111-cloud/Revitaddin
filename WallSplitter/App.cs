@@ -20,7 +20,7 @@ namespace WallSplitter
         private const string NamerPanelName = "NAMER";
         private const string MaterialPanelName = "재료 지정";
         private const string ModelSyncPanelName = "모델간 변경 반영";
-        private const string QuickTogglePanelName = "빠른 토글";
+        private const string QuickTogglePanelName = "커스텀 버튼";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -242,7 +242,7 @@ namespace WallSplitter
         {
             PushButtonData settingsButtonData = new PushButtonData(
                 "WallSplitter_QuickToggleSettings",
-                "빠른 토글\n설정",
+                "커스텀 버튼\n설정",
                 assemblyPath,
                 typeof(QuickToggleSettingsCommand).FullName)
             {
@@ -256,7 +256,7 @@ namespace WallSplitter
                 assemblyPath,
                 typeof(QuickToggleVisibilityToggleCommand).FullName)
             {
-                ToolTip = "빠른 토글 툴바를 현재 프로젝트 파일에서 표시하거나 숨깁니다.",
+                ToolTip = "커스텀 버튼 툴바를 현재 프로젝트 파일에서 표시하거나 숨깁니다.",
                 // 문서가 열리기 전이라 실제 프로젝트별 표시 상태를 아직 몰라 일단 "켜짐" 아이콘으로 시작하고,
                 // ViewActivated에서 UpdateQuickToggleVisibilityLabel이 실제 상태로 바로잡는다(라벨과 동일한 방식).
                 Image = LoadIcon(ToggleIconResource(true)),

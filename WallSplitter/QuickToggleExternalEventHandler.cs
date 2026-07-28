@@ -23,6 +23,31 @@ namespace WallSplitter
         public bool CropBoxVisible { get; set; }
         public BoundingBoxXYZ? CropBox { get; set; }
         public PlanViewRange? PlanViewRange { get; set; } // 평면 뷰가 아니면 null (View Range는 평면 뷰 전용)
+
+        // 2026-07-28, "가시성/그래픽설정, 그래픽 화면표시 옵션, 색상표, 그림자, 태양경로, 뷰템플릿,
+        // 상세수준, 비주얼스타일, 뷰자르기, 단면상자, 렌더링설정, 투영모드, 뷰범위 등등 뷰에 표시되는
+        // 모든 요소" 요청으로 확장. 전부 이 스냅샷이 디스크로 나가지 않고 메모리에만 머무르므로(같은
+        // 문서 내에서만 재사용됨), CropBox/PlanViewRange가 이미 그렇듯 원시 값으로 풀어내지 않고 Revit
+        // API 객체를 가공 없이 그대로 담는다.
+        public Dictionary<int, OverrideGraphicSettings> CategoryOverrides { get; set; } = new(); // "가시성/그래픽설정"(V/G 재정의) - 카테고리별
+        public Dictionary<int, OverrideGraphicSettings> FilterOverrides { get; set; } = new(); // 필터별 그래픽 재정의(표시 여부와 별개)
+        public Dictionary<int, ElementId> ColorFillSchemeId { get; set; } = new(); // "색상표" - 카테고리별
+        public ViewDetailLevel? DetailLevel { get; set; } // "상세수준"
+        public Autodesk.Revit.DB.DisplayStyle? DisplayStyle { get; set; } // "비주얼스타일"
+
+        // View3D 전용 (평면/입면/단면 등은 전부 null로 남는다)
+        public bool? SectionBoxActive { get; set; } // "단면상자"
+        public BoundingBoxXYZ? SectionBox { get; set; }
+        public bool? IsPerspective { get; set; } // "투영모드"
+        public ViewOrientation3D? Orientation { get; set; } // 카메라 위치/방향
+        public RenderingSettings? RenderingSettings { get; set; } // "렌더링설정"
+
+        // 그림자/태양경로/스케치라인 등 "그래픽 화면표시 옵션" 대화상자의 개별 항목은 Revit 공개 API에
+        // 전용 getter/setter가 없는 것으로 알려져 있다 - 최선 노력으로, PG_GRAPHICS 그룹에 속하는 정수형
+        // (예/아니오류) 뷰 파라미터를 이름 기준으로 전부 캡처/복원한다. 설치된 Revit 버전이 실제로 이
+        // 값들을 파라미터로 노출하는지는 라이브 테스트로만 확인 가능 - 안 되는 항목이 있으면
+        // docs/quick-toggle/CLAUDE.md의 이 항목부터 확인할 것.
+        public Dictionary<string, int> GraphicsIntegerParams { get; set; } = new();
     }
 
     // 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라 버튼 클릭이 언제든 일어날 수
@@ -62,7 +87,7 @@ namespace WallSplitter
 
             bool applied;
             TransactionStatus status;
-            using (Transaction tx = new Transaction(doc, "빠른 토글: " + cfg.Name))
+            using (Transaction tx = new Transaction(doc, "커스텀 버튼: " + cfg.Name))
             {
                 tx.Start();
                 applied = QuickToggleService.Toggle(view, cfg, PendingTurnOn);
@@ -75,7 +100,7 @@ namespace WallSplitter
             // 눌러도 반응이 없다"는 증상으로만 남는다), 여기서 직접 알려준다.
             if (!applied || status != TransactionStatus.Committed)
             {
-                TaskDialog.Show("빠른 토글",
+                TaskDialog.Show("커스텀 버튼",
                     $"'{cfg.Name}' 버튼을 반영하지 못했습니다 (예: 대상 뷰템플릿이 이 뷰 종류와 호환되지 않음).");
             }
         }
@@ -91,7 +116,7 @@ namespace WallSplitter
 
             if (doc.GetElement(new ElementId(snapshot.ViewId)) is not View targetView)
             {
-                TaskDialog.Show("빠른 토글", "저장했던 뷰를 찾을 수 없습니다 (그 사이 삭제되었을 수 있습니다).");
+                TaskDialog.Show("커스텀 버튼", "저장했던 뷰를 찾을 수 없습니다 (그 사이 삭제되었을 수 있습니다).");
                 return;
             }
 
@@ -102,12 +127,12 @@ namespace WallSplitter
                 try { uidoc.ActiveView = targetView; }
                 catch
                 {
-                    TaskDialog.Show("빠른 토글", "저장했던 뷰로 전환하지 못했습니다.");
+                    TaskDialog.Show("커스텀 버튼", "저장했던 뷰로 전환하지 못했습니다.");
                     return;
                 }
             }
 
-            using (Transaction tx = new Transaction(doc, "빠른 토글: 뷰 상태 되돌리기"))
+            using (Transaction tx = new Transaction(doc, "커스텀 버튼: 뷰 상태 되돌리기"))
             {
                 tx.Start();
                 QuickToggleService.RestoreViewState(targetView, snapshot);
@@ -117,6 +142,6 @@ namespace WallSplitter
             QuickToggleToolbar.Instance?.RefreshState();
         }
 
-        public string GetName() => "WallSplitter 빠른 토글";
+        public string GetName() => "WallSplitter 커스텀 버튼";
     }
 }
