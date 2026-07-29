@@ -13,16 +13,27 @@ namespace WallSplitter
     // 않는다 - Revit 카테고리는 고정된 분류 체계라 "복사"할 대상이 아니라 이름으로 다시 찾는 것만 가능하다.
     internal static class QuickToggleTransferService
     {
+        // CONFIRMED 코드 결함, 사용자가 "뷰템플릿과 필터가 복사가 안 되는거야?"라고 재차 물어봐서 웹 검색
+        // (Jeremy Tammik/thebuildingcoder, Autodesk 공식 문서, Autodesk Community 포럼)으로 원인을 찾아
+        // 고쳤다(2026-07-30): 뷰템플릿/필터는 자기 자신뿐 아니라 선패턴·채우기 패턴·재료 같은 "타입"
+        // 요소도 함께 참조하는데, 그 타입들이 이름이 같은 채로 대상 문서에 이미 있으면 Revit이 기본적으로
+        // "같은 이름의 타입이 있습니다 - 기존 걸 쓸지, 새로 복제할지" 확인이 필요한 상황으로 판단한다.
+        // `CopyPasteOptions`에 `IDuplicateTypeNamesHandler`를 지정하지 않으면 이 판단을 자동으로 처리할
+        // 방법이 없어(사용자가 지켜보며 Revit이 띄우는 대화상자를 눌러줘야 하는 대화형 시나리오를 전제로
+        // 설계된 API라, 이 창의 코드처럼 자동으로 실행되는 문맥에선 그 대화상자 자체가 뜨지 않거나 예외로
+        // 이어질 수 있다) - `CopyElements` 호출 자체가 조용히 실패하거나 아무것도 복사하지 않은 채 넘어가는
+        // 원인이었을 것으로 보인다. `AutoUseDestinationTypesHandler`를 지정해 "이름이 같은 하위 타입은
+        // 항상 대상 문서에 있는 걸 그대로 쓴다"로 자동 결정하도록 고쳤다.
+        private sealed class AutoUseDestinationTypesHandler : IDuplicateTypeNamesHandler
+        {
+            public DuplicateTypeAction OnDuplicateTypeNamesFound(DuplicateTypeNamesHandlerArgs args) =>
+                DuplicateTypeAction.UseDestinationTypes;
+        }
+
         // 소스 문서의 요소 하나(뷰템플릿 또는 필터)를 대상 문서로 복사한다. overwriteExistingId가 있으면
         // 먼저 그 기존 요소를 지우고 복사한다 - 호출자가 이미 "덮어쓰기"를 사용자에게 확인받은 뒤에만
         // 넘겨야 한다. 대상 문서에 열린 트랜잭션이 있어야 한다(호출자 책임 - 이 프로젝트의 다른 Revit API
         // 로직들과 같은 계약).
-        //
-        // **라이브 테스트 필요**: 뷰템플릿(IsTemplate=true인 View)이 ElementTransformUtils.CopyElements로
-        // 다른 문서에 정상적으로 복사되는지는 이 개발 환경에서 실행 중인 Revit이 없어 검증하지 못했다 -
-        // 필터(ParameterFilterElement)는 이 방식으로 문서 간 복사되는 사례가 흔하지만, 뷰템플릿은 Revit의
-        // "프로젝트 표준 전송" 기능이 내부적으로 같은 API를 쓰는지 확인할 방법이 없었다. 실패하면 null을
-        // 반환하도록 방어했으니 최소한 예외로 창이 죽지는 않지만, 실제 동작 여부는 라이브 확인이 필요하다.
         public static ElementId? CopyNamedElement(Document sourceDoc, ElementId sourceId, Document targetDoc, ElementId? overwriteExistingId)
         {
             if (overwriteExistingId != null)
@@ -34,13 +45,32 @@ namespace WallSplitter
             }
             try
             {
+                CopyPasteOptions options = new CopyPasteOptions();
+                options.SetDuplicateTypeNamesHandler(new AutoUseDestinationTypesHandler());
                 ICollection<ElementId> copied = ElementTransformUtils.CopyElements(
-                    sourceDoc, new List<ElementId> { sourceId }, targetDoc, null, new CopyPasteOptions());
+                    sourceDoc, new List<ElementId> { sourceId }, targetDoc, null, options);
                 return copied.FirstOrDefault();
             }
             catch
             {
                 return null;
+            }
+        }
+
+        // 복사 중 Revit이 던질 수 있는 경고(예: 뷰템플릿/필터가 참조하는 하위 요소 관련 경고)가 대화상자로
+        // 뜨는 것을 막는다 - 대화형 사용을 전제로 한 API를 이 창의 자동 실행 문맥에서 쓰다 보니, 경고
+        // 대화상자가 뜨면 사용자가 못 보고 지나칠 수 있고 최악의 경우 조용히 멈춘 것처럼 보일 수 있다.
+        // 오류(Error)는 그대로 두어 트랜잭션이 정상적으로 실패하게 한다 - 경고만 무시한다.
+        public sealed class SilentWarningsPreprocessor : IFailuresPreprocessor
+        {
+            public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
+            {
+                foreach (FailureMessageAccessor f in failuresAccessor.GetFailureMessages())
+                {
+                    if (f.GetSeverity() == FailureSeverity.Warning)
+                        failuresAccessor.DeleteWarning(f);
+                }
+                return FailureProcessingResult.Continue;
             }
         }
 

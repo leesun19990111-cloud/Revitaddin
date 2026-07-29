@@ -1031,6 +1031,9 @@ namespace WallSplitter
             if (sourceDoc != null)
             {
                 using Transaction tx = new Transaction(targetDoc, "커스텀 버튼: 대상 이식");
+                FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                failureOptions.SetFailuresPreprocessor(new QuickToggleTransferService.SilentWarningsPreprocessor());
+                tx.SetFailureHandlingOptions(failureOptions);
                 tx.Start();
 
                 resolvedViewTemplateId = ResolveNamedTargets(
