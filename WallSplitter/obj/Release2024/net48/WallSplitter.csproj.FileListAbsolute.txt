@@ -43,3 +43,5 @@ C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSpli
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\ColorPickerPopupWindow.g.cs
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\ColorToolPopupWindow.baml
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\ColorToolPopupWindow.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\OpenDocumentPickerWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\OpenDocumentPickerWindow.g.cs

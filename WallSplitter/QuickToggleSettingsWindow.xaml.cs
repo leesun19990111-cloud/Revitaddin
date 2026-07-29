@@ -799,7 +799,7 @@ namespace WallSplitter
             MessageBox.Show("툴바 위치를 기본값으로 되돌렸습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        // ===== 내보내기/가져오기 (다른 모델 간 설정 이식, 2026-07-28 요청) =====
+        // ===== 내보내기/가져오기 (다른 모델 간 설정 이식, 2026-07-28 요청 + 2026-07-30 확장) =====
 
         private static readonly JsonSerializerOptions ExportJsonOptions = new JsonSerializerOptions
         {
@@ -807,7 +807,7 @@ namespace WallSplitter
             Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
         };
 
-        private void ExportButton_Click(object sender, RoutedEventArgs e)
+        private void ExportJsonButton_Click(object sender, RoutedEventArgs e)
         {
             Microsoft.Win32.SaveFileDialog dialog = new Microsoft.Win32.SaveFileDialog
             {
@@ -828,12 +828,7 @@ namespace WallSplitter
             }
         }
 
-        // 가져온 버튼은 ID(ElementId)가 아니라 이름으로 현재 문서에서 다시 찾는다 - 다른 모델에서 만든
-        // 설정이라 ElementId 자체는 이 문서에서 무의미하다. 이름이 일치하지 않는 대상은 "누락 목록"에
-        // 모아 한 번에 경고하고, 사용자가 그래도 가져올지 선택한다. 기존 등록된 버튼은 지우지 않고
-        // 그 위에 추가(overlay)한다 - 이 시점엔 아직 파일로 저장되지 않고, 창의 "저장" 버튼을 눌러야
-        // 최종 반영된다(다른 편집과 동일한 흐름).
-        private void ImportButton_Click(object sender, RoutedEventArgs e)
+        private void ImportJsonButton_Click(object sender, RoutedEventArgs e)
         {
             Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog
             {
@@ -858,40 +853,259 @@ namespace WallSplitter
                 return;
             }
 
-            Dictionary<string, int> viewTemplateByName = _viewTemplates.ToDictionary(v => v.Name, v => v.Id.ToInt());
-            Dictionary<string, int> filterByName = _filters.ToDictionary(f => f.Name, f => f.Id.ToInt());
-            Dictionary<string, int> worksetByName = _worksets.ToDictionary(w => w.Name, w => w.Id.IntegerValue);
+            // JSON 파일엔 이름 문자열만 있고 실제 뷰템플릿/필터 요소(소스 문서)가 없어 복사가 불가능하다 -
+            // sourceDoc: null로 넘겨 이름 매칭만 하는 기존 동작을 그대로 쓴다.
+            if (!TransferButtons(imported, sourceDoc: null, _doc, _settings)) return;
 
-            // 카테고리는 같은 이름이 서로 다른 상위 카테고리 아래 있을 수 있어(부모 이름까지 함께) 키로
-            // 쓴다. 선/채우기 패턴 이름은 여기서 재검색하지 않는다 - QuickToggleService가 프리셋을 적용할
-            // 때마다(Toggle 시점) 그 문서에서 이름으로 다시 찾으므로 이식 시점엔 그대로 문자열만 옮기면
-            // 되고, 대상 문서에 없는 패턴이면 그 속성만 조용히 건너뛴다(ResolveLinePatternId/FillPatternId).
+            RefreshButtonList();
+            SelectButton(imported[0]);
+            MessageBox.Show($"{imported.Count}개 버튼을 가져왔습니다. '저장'을 눌러야 반영됩니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        // 2026-07-30 추가 - "설정해둔 버튼에 해당하는 대상(필터, 작업세트 등)을 함께 내보내고 가져오기가
+        // 되었으면 좋겠다"는 요청은 JSON 파일로는 근본적으로 불가능하다(파일엔 이름만 남고 실제 Revit
+        // 요소는 못 담는다) - 대신 같은 Revit 세션에 열려 있는 다른 프로젝트 문서와는 실제 요소(살아있는
+        // Document 참조)를 주고받을 수 있으므로, 이 "모델로 내보내기/모델에서 가져오기" 경로에서만 실제
+        // 복사가 가능하다.
+        private List<Document> OpenOtherDocuments()
+        {
+            List<Document> result = new List<Document>();
+            foreach (Document d in _doc.Application.Documents)
+            {
+                if (d.IsLinked || d.IsFamilyDocument) continue;
+                if (d.Equals(_doc)) continue;
+                result.Add(d);
+            }
+            return result;
+        }
+
+        private void ExportToModelButton_Click(object sender, RoutedEventArgs e)
+        {
+            List<Document> others = OpenOtherDocuments();
+            OpenDocumentPickerWindow picker = new OpenDocumentPickerWindow(
+                "내보낼 문서 선택",
+                "이 커스텀 버튼 설정을 어느 문서로 내보낼까요? 대상 문서에 없는 뷰템플릿/필터는 이 문서에서 그대로 복사됩니다.",
+                others) { Owner = this };
+            if (picker.ShowDialog() != true || picker.SelectedDocument == null) return;
+
+            Document targetDoc = picker.SelectedDocument;
+            QuickToggleSettings targetSettings = QuickToggleSettings.Load(targetDoc);
+
+            // 내보낼 버튼 자체를 복제해서 넘긴다 - TransferButtons가 ViewTemplateId/FilterIds 등을 대상
+            // 문서 기준으로 덮어써버리므로, 원본(_settings.Buttons, 이 창이 계속 쓰고 있는 목록)이 오염되면
+            // 안 된다.
+            List<QuickToggleButtonConfig> toExport = _settings.Buttons
+                .Select(cfg => JsonSerializer.Deserialize<QuickToggleButtonConfig>(JsonSerializer.Serialize(cfg, ExportJsonOptions), ExportJsonOptions)!)
+                .ToList();
+            if (toExport.Count == 0)
+            {
+                MessageBox.Show("내보낼 버튼이 없습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!TransferButtons(toExport, _doc, targetDoc, targetSettings)) return;
+
+            try
+            {
+                targetSettings.Save(targetDoc);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("대상 문서에 저장하지 못했습니다: " + ex.Message, "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            MessageBox.Show($"{toExport.Count}개 버튼을 '{targetDoc.Title}' 문서로 내보냈습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void ImportFromModelButton_Click(object sender, RoutedEventArgs e)
+        {
+            List<Document> others = OpenOtherDocuments();
+            OpenDocumentPickerWindow picker = new OpenDocumentPickerWindow(
+                "가져올 문서 선택",
+                "어느 문서의 커스텀 버튼 설정을 가져올까요? 이 문서에 없는 뷰템플릿/필터는 그 문서에서 그대로 복사됩니다.",
+                others) { Owner = this };
+            if (picker.ShowDialog() != true || picker.SelectedDocument == null) return;
+
+            Document sourceDoc = picker.SelectedDocument;
+            QuickToggleSettings sourceSettings = QuickToggleSettings.Load(sourceDoc);
+            if (sourceSettings.Buttons.Count == 0)
+            {
+                MessageBox.Show("그 문서에는 등록된 커스텀 버튼이 없습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!TransferButtons(sourceSettings.Buttons, sourceDoc, _doc, _settings)) return;
+
+            RefreshButtonList();
+            SelectButton(sourceSettings.Buttons[0]);
+            MessageBox.Show($"{sourceSettings.Buttons.Count}개 버튼을 '{sourceDoc.Title}' 문서에서 가져왔습니다. '저장'을 눌러야 반영됩니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        // 이식 로직의 핵심 - JSON 가져오기(sourceDoc==null)와 모델 간 내보내기/가져오기(sourceDoc!=null)가
+        // 전부 이 메서드 하나를 공유한다. sourceDoc가 있으면 대상 문서에 없는 뷰템플릿/필터를 실제로
+        // 복사하고(QuickToggleTransferService.CopyNamedElement), 작업세트는 없으면 새로 만든다
+        // (EnsureWorkset) - "설정해둔 버튼에 해당하는 대상을 함께 내보내고 가져오기" 요청. sourceDoc가
+        // null이면(JSON) 파일에 이름만 있고 실제 요소가 없어 복사 자체가 불가능하므로 기존처럼 이름
+        // 매칭만 한다. 카테고리는 어느 경로든 복사 대상이 아니다(고정된 분류 체계라 이름으로만 다시 찾음).
+        // targetDoc에 열린 트랜잭션이 없어야 한다 - 이 메서드가 필요할 때만 직접 연다(복사/작업세트 생성이
+        // 전혀 없으면 트랜잭션도 안 연다).
+        // 반환값 false = 사용자가 확인 대화상자에서 취소함(호출자는 아무것도 하지 않아야 함).
+        private bool TransferButtons(List<QuickToggleButtonConfig> buttons, Document? sourceDoc, Document targetDoc, QuickToggleSettings targetSettings)
+        {
+            List<View> targetViewTemplates = new FilteredElementCollector(targetDoc)
+                .OfClass(typeof(View)).Cast<View>().Where(v => v.IsTemplate).ToList();
+            List<ParameterFilterElement> targetFilters = new FilteredElementCollector(targetDoc)
+                .OfClass(typeof(ParameterFilterElement)).Cast<ParameterFilterElement>().ToList();
+            List<Workset> targetWorksets = targetDoc.IsWorkshared
+                ? new FilteredWorksetCollector(targetDoc).OfKind(WorksetKind.UserWorkset).ToList()
+                : new List<Workset>();
+
+            Dictionary<string, int> viewTemplateByName = targetViewTemplates.ToDictionary(v => v.Name, v => v.Id.ToInt());
+            Dictionary<string, int> filterByName = targetFilters.ToDictionary(f => f.Name, f => f.Id.ToInt());
+            Dictionary<string, int> worksetByName = targetWorksets.ToDictionary(w => w.Name, w => w.Id.IntegerValue);
+
             Dictionary<(string Name, string? Parent), int> categoryByName = new Dictionary<(string, string?), int>();
-            foreach (Category c in QuickToggleService.AllCategoriesForNameMatching(_doc))
+            foreach (Category c in QuickToggleService.AllCategoriesForNameMatching(targetDoc))
             {
                 var key = (c.Name, c.Parent?.Name);
                 if (!categoryByName.ContainsKey(key)) categoryByName[key] = c.Id.ToInt();
             }
 
+            // 소스 문서가 있을 때만(모델 간 이동) 실제 복사가 가능하다 - 이름으로 원본 요소를 찾기 위한 인덱스.
+            Dictionary<string, View>? sourceViewTemplatesByName = null;
+            Dictionary<string, ParameterFilterElement>? sourceFiltersByName = null;
+            if (sourceDoc != null)
+            {
+                sourceViewTemplatesByName = new FilteredElementCollector(sourceDoc).OfClass(typeof(View)).Cast<View>()
+                    .Where(v => v.IsTemplate).GroupBy(v => v.Name).ToDictionary(g => g.Key, g => g.First());
+                sourceFiltersByName = new FilteredElementCollector(sourceDoc).OfClass(typeof(ParameterFilterElement)).Cast<ParameterFilterElement>()
+                    .GroupBy(f => f.Name).ToDictionary(g => g.Key, g => g.First());
+            }
+
+            HashSet<string> neededViewTemplateNames = buttons.Where(b => !string.IsNullOrEmpty(b.ViewTemplateName)).Select(b => b.ViewTemplateName!).ToHashSet();
+            HashSet<string> neededFilterNames = buttons.SelectMany(b => b.FilterNames).ToHashSet();
+            HashSet<string> neededWorksetNames = buttons.SelectMany(b => b.WorksetNames).ToHashSet();
+
+            // 대상에도 있고 소스에도 있는(=진짜로 "덮어쓸지" 물어봐야 하는) 항목만 모은다 - 소스가 없으면
+            // (JSON 가져오기) 애초에 복사 후보가 없으므로 이 목록은 항상 비어있다.
+            List<(string Kind, string Name)> conflicts = new List<(string, string)>();
+            if (sourceDoc != null)
+            {
+                foreach (string name in neededViewTemplateNames)
+                    if (viewTemplateByName.ContainsKey(name) && sourceViewTemplatesByName!.ContainsKey(name))
+                        conflicts.Add(("뷰템플릿", name));
+                foreach (string name in neededFilterNames)
+                    if (filterByName.ContainsKey(name) && sourceFiltersByName!.ContainsKey(name))
+                        conflicts.Add(("필터", name));
+            }
+
+            bool overwrite = false;
+            if (conflicts.Count > 0)
+            {
+                TaskDialog conflictDlg = new TaskDialog("WallSplitter")
+                {
+                    MainInstruction = "같은 이름이 이미 있습니다",
+                    MainContent = "다음 항목이 대상 문서에 이미 있습니다:\n\n" +
+                                   string.Join("\n", conflicts.Select(c => $"{c.Kind} '{c.Name}'")) +
+                                   "\n\n원본 문서의 것으로 덮어쓰시겠습니까? (예=덮어쓰기, 아니오=대상 문서에 있는 것을 그대로 사용)",
+                    CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                    DefaultButton = TaskDialogResult.No,
+                };
+                overwrite = conflictDlg.Show() == TaskDialogResult.Yes;
+            }
+
             List<string> missing = new List<string>();
 
-            // 이름 기반 재검색은 카테고리로 분기하지 않고 항상 세 부분 다 시도한다 - 프리셋 버튼은
-            // 세 필드를 동시에 가질 수 있고, 단일 카테고리 버튼은 어차피 나머지 두 필드가 비어있는
-            // 리스트/null이라 그 부분은 그냥 아무 일도 하지 않는다(2026-07-28, 프리셋 추가로 카테고리별
-            // switch였던 기존 로직을 통합).
-            foreach (QuickToggleButtonConfig cfg in imported)
+            Dictionary<string, ElementId>? sourceViewTemplateIdByName = sourceViewTemplatesByName?
+                .ToDictionary(kv => kv.Key, kv => kv.Value.Id);
+            Dictionary<string, ElementId>? sourceFilterIdByName = sourceFiltersByName?
+                .ToDictionary(kv => kv.Key, kv => kv.Value.Id);
+
+            // 뷰템플릿/필터 복사, 작업세트 생성은 대상 문서를 실제로 바꾸는 작업이라 전부 트랜잭션 하나로
+            // 묶는다(소스가 없는 JSON 가져오기는 아무것도 바꾸지 않으므로 트랜잭션 자체가 필요 없다).
+            Dictionary<string, int> resolvedViewTemplateId;
+            Dictionary<string, int> resolvedFilterId;
+            Dictionary<string, int> resolvedWorksetId = new Dictionary<string, int>();
+
+            if (sourceDoc != null)
+            {
+                using Transaction tx = new Transaction(targetDoc, "커스텀 버튼: 대상 이식");
+                tx.Start();
+
+                resolvedViewTemplateId = ResolveNamedTargets(
+                    neededViewTemplateNames, viewTemplateByName, sourceViewTemplateIdByName, sourceDoc, targetDoc, overwrite, "뷰템플릿", missing);
+                resolvedFilterId = ResolveNamedTargets(
+                    neededFilterNames, filterByName, sourceFilterIdByName, sourceDoc, targetDoc, overwrite, "필터", missing);
+
+                // 작업세트는 "덮어쓰기" 개념이 없다(이름 하나뿐) - 대상에 없으면 새로 만든다.
+                foreach (string name in neededWorksetNames)
+                {
+                    if (worksetByName.TryGetValue(name, out int existingId))
+                    {
+                        resolvedWorksetId[name] = existingId;
+                    }
+                    else
+                    {
+                        int? created = QuickToggleTransferService.EnsureWorkset(targetDoc, name);
+                        if (created.HasValue) resolvedWorksetId[name] = created.Value;
+                        else missing.Add($"작업세트 '{name}' (만들지 못함 - 대상 문서가 작업공유 상태가 아닐 수 있음)");
+                    }
+                }
+
+                tx.Commit();
+            }
+            else
+            {
+                // JSON 가져오기 - 대상 문서를 건드리지 않고 이미 있는 것만 이름으로 찾는다(기존 동작 그대로).
+                resolvedViewTemplateId = ResolveNamedTargets(
+                    neededViewTemplateNames, viewTemplateByName, null, null, targetDoc, false, "뷰템플릿", missing);
+                resolvedFilterId = ResolveNamedTargets(
+                    neededFilterNames, filterByName, null, null, targetDoc, false, "필터", missing);
+                foreach (string name in neededWorksetNames)
+                {
+                    if (worksetByName.TryGetValue(name, out int existingId)) resolvedWorksetId[name] = existingId;
+                    else missing.Add($"작업세트 '{name}'");
+                }
+            }
+
+            // 카테고리(프리셋/색상 버튼)는 어느 경로든 복사 대상이 아니라 이름 매칭만 하므로, 여기서
+            // 미리 대상 문서에 없는 카테고리를 missing에 모아둔다 - 실제 필터링/제거는 아래 최종 루프에서.
+            foreach (QuickToggleButtonConfig cfg in buttons)
+            {
+                foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
+                    if (!categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
+                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
+                foreach (CategoryOverrideConfig co in cfg.ColorButtonCategories)
+                    if (!categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
+                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
+            }
+
+            if (missing.Count > 0)
+            {
+                TaskDialog missingDlg = new TaskDialog("WallSplitter")
+                {
+                    MainInstruction = "대상 문서에 없는 항목이 있습니다",
+                    MainContent = "다음 항목을 대상 문서에서 찾거나 만들지 못했습니다:\n\n" + string.Join("\n", missing) +
+                                   "\n\n그래도 가져오시겠습니까? (없는 항목은 비워진 채로 가져와집니다)",
+                    CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                    DefaultButton = TaskDialogResult.Yes,
+                };
+                if (missingDlg.Show() != TaskDialogResult.Yes) return false;
+            }
+
+            foreach (QuickToggleButtonConfig cfg in buttons)
             {
                 if (string.IsNullOrEmpty(cfg.ViewTemplateName))
                 {
                     cfg.ViewTemplateId = null;
                 }
-                else if (viewTemplateByName.TryGetValue(cfg.ViewTemplateName, out int vtId))
+                else if (resolvedViewTemplateId.TryGetValue(cfg.ViewTemplateName, out int vtId))
                 {
                     cfg.ViewTemplateId = vtId;
                 }
                 else
                 {
-                    missing.Add($"{cfg.Name} - 뷰템플릿 '{cfg.ViewTemplateName}'");
                     cfg.ViewTemplateId = null;
                 }
 
@@ -899,14 +1113,10 @@ namespace WallSplitter
                 List<string> resolvedFilterNames = new List<string>();
                 foreach (string name in cfg.FilterNames)
                 {
-                    if (filterByName.TryGetValue(name, out int filterId))
+                    if (resolvedFilterId.TryGetValue(name, out int filterId))
                     {
                         resolvedFilterIds.Add(filterId);
                         resolvedFilterNames.Add(name);
-                    }
-                    else
-                    {
-                        missing.Add($"{cfg.Name} - 필터 '{name}'");
                     }
                 }
                 cfg.FilterIds = resolvedFilterIds;
@@ -916,74 +1126,69 @@ namespace WallSplitter
                 List<string> resolvedWorksetNames = new List<string>();
                 foreach (string name in cfg.WorksetNames)
                 {
-                    if (worksetByName.TryGetValue(name, out int worksetId))
+                    if (resolvedWorksetId.TryGetValue(name, out int worksetId))
                     {
                         resolvedWorksetIds.Add(worksetId);
                         resolvedWorksetNames.Add(name);
-                    }
-                    else
-                    {
-                        missing.Add($"{cfg.Name} - 작업세트 '{name}'");
                     }
                 }
                 cfg.WorksetIds = resolvedWorksetIds;
                 cfg.WorksetNames = resolvedWorksetNames;
 
-                List<CategoryOverrideConfig> resolvedCategoryOverrides = new List<CategoryOverrideConfig>();
-                foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
-                {
-                    var key = (co.CategoryName, co.ParentCategoryName);
-                    if (categoryByName.TryGetValue(key, out int catId))
-                    {
-                        co.CategoryId = catId;
-                        resolvedCategoryOverrides.Add(co);
-                    }
-                    else
-                    {
-                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
-                    }
-                }
-                cfg.CategoryOverrides = resolvedCategoryOverrides;
+                cfg.CategoryOverrides = cfg.CategoryOverrides
+                    .Where(co => categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
+                    .Select(co => { co.CategoryId = categoryByName[(co.CategoryName, co.ParentCategoryName)]; return co; })
+                    .ToList();
 
-                List<CategoryOverrideConfig> resolvedColorButtonCategories = new List<CategoryOverrideConfig>();
-                foreach (CategoryOverrideConfig co in cfg.ColorButtonCategories)
-                {
-                    var key = (co.CategoryName, co.ParentCategoryName);
-                    if (categoryByName.TryGetValue(key, out int catId))
-                    {
-                        co.CategoryId = catId;
-                        resolvedColorButtonCategories.Add(co);
-                    }
-                    else
-                    {
-                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
-                    }
-                }
-                cfg.ColorButtonCategories = resolvedColorButtonCategories;
-            }
+                cfg.ColorButtonCategories = cfg.ColorButtonCategories
+                    .Where(co => categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
+                    .Select(co => { co.CategoryId = categoryByName[(co.CategoryName, co.ParentCategoryName)]; return co; })
+                    .ToList();
 
-            if (missing.Count > 0)
-            {
-                TaskDialog dlg = new TaskDialog("WallSplitter")
-                {
-                    MainInstruction = "이 문서에 없는 대상이 있습니다",
-                    MainContent = "다음 항목을 이 문서에서 찾을 수 없습니다:\n\n" + string.Join("\n", missing) +
-                                   "\n\n그래도 가져오시겠습니까? (없는 항목은 비워진 채로 가져와집니다)",
-                    CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
-                    DefaultButton = TaskDialogResult.Yes,
-                };
-                if (dlg.Show() != TaskDialogResult.Yes) return;
-            }
-
-            foreach (QuickToggleButtonConfig cfg in imported)
-            {
                 cfg.Id = Guid.NewGuid().ToString();
-                _settings.Buttons.Add(cfg);
+                targetSettings.Buttons.Add(cfg);
             }
 
-            RefreshButtonList();
-            if (imported.Count > 0) SelectButton(imported[0]);
-            MessageBox.Show($"{imported.Count}개 버튼을 가져왔습니다. '저장'을 눌러야 반영됩니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
+            return true;
+        }
+
+        // neededNames 각각을 대상 문서 기준 ElementId(int)로 확정한다:
+        //  - 소스가 있고(모델 간 이동) 대상에 없거나 덮어쓰기가 확정되면 실제로 복사한다.
+        //  - 소스가 없거나(JSON) 이미 대상에 있고 덮어쓰기가 아니면 대상에 있는 것을 그대로 쓴다.
+        //  - 어느 쪽도 안 되면 missing에 추가.
+        // 복사가 실제로 필요할 수 있는 경우(sourceDoc != null) 호출자가 이미 targetDoc에 트랜잭션을 열어둔
+        // 상태여야 한다 - 이 메서드 자체는 트랜잭션을 열지 않는다(TransferButtons가 뷰템플릿/필터/작업세트
+        // 복사·생성을 전부 트랜잭션 하나로 묶어야 하므로).
+        private static Dictionary<string, int> ResolveNamedTargets(
+            HashSet<string> neededNames, Dictionary<string, int> targetByName, Dictionary<string, ElementId>? sourceIdByName,
+            Document? sourceDoc, Document targetDoc, bool overwrite, string kindLabel, List<string> missing)
+        {
+            Dictionary<string, int> resolved = new Dictionary<string, int>();
+
+            foreach (string name in neededNames)
+            {
+                bool existsInTarget = targetByName.TryGetValue(name, out int existingId);
+                bool existsInSource = sourceDoc != null && sourceIdByName != null && sourceIdByName.ContainsKey(name);
+
+                if (existsInTarget && (!existsInSource || !overwrite))
+                {
+                    resolved[name] = existingId;
+                    continue;
+                }
+
+                if (existsInSource)
+                {
+                    ElementId? copied = QuickToggleTransferService.CopyNamedElement(
+                        sourceDoc!, sourceIdByName![name], targetDoc, existsInTarget ? new ElementId(existingId) : null);
+                    if (copied != null) resolved[name] = copied.ToInt();
+                    else missing.Add($"{kindLabel} '{name}' (복사 실패)");
+                    continue;
+                }
+
+                missing.Add($"{kindLabel} '{name}'");
+            }
+
+            return resolved;
         }
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)

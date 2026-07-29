@@ -66,12 +66,16 @@
             </Border>
         </Grid>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,14,0,0">
-            <TextBlock Text="커스텀 버튼 툴바는 빈 곳을 눌러 드래그하면 원하는 위치로 옮길 수 있습니다."
-                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
-            <Button x:Name="ResetPositionButton" Content="위치 초기화" Padding="10,4" Margin="10,0,0,0" Click="ResetPositionButton_Click"/>
-            <Button x:Name="ExportButton" Content="내보내기" Padding="10,4" Margin="16,0,0,0" Click="ExportButton_Click"/>
-            <Button x:Name="ImportButton" Content="가져오기" Padding="10,4" Margin="6,0,0,0" Click="ImportButton_Click"/>
+        <StackPanel Grid.Row="2" Margin="0,14,0,0">
+            <TextBlock Text="커스텀 버튼 툴바는 빈 곳을 눌러 드래그하면 원하는 위치로 옮길 수 있습니다. '모델로'는 같은 Revit 세션에 열려 있는 다른 프로젝트와 직접 주고받으며, 대상 문서에 없는 뷰템플릿/필터를 실제로 복사해 옵니다(JSON은 이름만 다시 찾습니다)."
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <WrapPanel>
+                <Button x:Name="ResetPositionButton" Content="위치 초기화" Padding="10,4" Margin="0,0,6,6" Click="ResetPositionButton_Click"/>
+                <Button x:Name="ExportJsonButton" Content="JSON으로 내보내기" Padding="10,4" Margin="10,0,6,6" Click="ExportJsonButton_Click"/>
+                <Button x:Name="ImportJsonButton" Content="JSON에서 가져오기" Padding="10,4" Margin="0,0,6,6" Click="ImportJsonButton_Click"/>
+                <Button x:Name="ExportToModelButton" Content="모델로 내보내기" Padding="10,4" Margin="10,0,6,6" Click="ExportToModelButton_Click"/>
+                <Button x:Name="ImportFromModelButton" Content="모델에서 가져오기" Padding="10,4" Margin="0,0,6,6" Click="ImportFromModelButton_Click"/>
+            </WrapPanel>
         </StackPanel>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">

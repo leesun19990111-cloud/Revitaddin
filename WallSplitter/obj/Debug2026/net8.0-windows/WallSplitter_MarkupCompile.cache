@@ -10,11 +10,11 @@ none
 false
 TRACE;REVIT2024_OR_GREATER;DEBUG2026;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NETCOREAPP1_0_OR_GREATER;NETCOREAPP1_1_OR_GREATER;NETCOREAPP2_0_OR_GREATER;NETCOREAPP2_1_OR_GREATER;NETCOREAPP2_2_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER;WINDOWS7_0_OR_GREATER
 
-121750157324
+131075786908
 
-32-1085052535
+34-1198735702
 200-1183097542
-CategoryOverrideEditWindow.xaml;ColorPickerPopupWindow.xaml;ColorToolPopupWindow.xaml;ElementPickerWindow.xaml;LayerTypeAssignmentWindow.xaml;MaterialAssignWindow.xaml;ModelSyncWindow.xaml;NamerWindow.xaml;QuickToggleSettingsWindow.xaml;QuickToggleToolbar.xaml;Resources\Theme.xaml;SettingsWindow.xaml;
+CategoryOverrideEditWindow.xaml;ColorPickerPopupWindow.xaml;ColorToolPopupWindow.xaml;ElementPickerWindow.xaml;LayerTypeAssignmentWindow.xaml;MaterialAssignWindow.xaml;ModelSyncWindow.xaml;NamerWindow.xaml;OpenDocumentPickerWindow.xaml;QuickToggleSettingsWindow.xaml;QuickToggleToolbar.xaml;Resources\Theme.xaml;SettingsWindow.xaml;
 
 False
 
