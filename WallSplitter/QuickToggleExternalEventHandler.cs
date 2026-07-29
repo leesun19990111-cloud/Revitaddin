@@ -59,6 +59,9 @@ namespace WallSplitter
         public List<int> CategoryIds { get; set; } = new();
         public int? Color { get; set; } // 0xRRGGBB, null이면 이번 요청은 색상을 건드리지 않음
         public int? Transparency { get; set; } // 0~100, null이면 이번 요청은 투명도를 건드리지 않음
+        // true면 Color/Transparency는 무시하고 대상 카테고리의 그래픽 재정의 자체를 완전히 비운다
+        // ("재지정 지우기" 버튼, 2026-07-29 추가).
+        public bool Clear { get; set; }
     }
 
     // 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라 버튼 클릭이 언제든 일어날 수
@@ -174,10 +177,13 @@ namespace WallSplitter
             View? view = doc?.ActiveView;
             if (doc == null || view == null) return;
 
-            using (Transaction tx = new Transaction(doc, "커스텀 버튼: 색상/투명도 지정"))
+            using (Transaction tx = new Transaction(doc, request.Clear ? "커스텀 버튼: 재지정 지우기" : "커스텀 버튼: 색상/투명도 지정"))
             {
                 tx.Start();
-                QuickToggleService.ApplyColorTool(view, request.CategoryIds, request.Color, request.Transparency);
+                if (request.Clear)
+                    QuickToggleService.ClearColorTool(view, request.CategoryIds);
+                else
+                    QuickToggleService.ApplyColorTool(view, request.CategoryIds, request.Color, request.Transparency);
                 tx.Commit();
             }
         }

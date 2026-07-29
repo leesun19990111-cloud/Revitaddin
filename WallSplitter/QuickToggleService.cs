@@ -323,6 +323,20 @@ namespace WallSplitter
             }
         }
 
+        // "재지정 지우기" 버튼 (2026-07-29 추가, "색상버튼에서 선택한 카테고리 요소에 입혀진 색상이
+        // 아무것도 없게 만들어주는 버튼" 요청) - ApplyColorTool처럼 기존 재정의를 읽어 일부만 바꾸는 게
+        // 아니라, 빈 OverrideGraphicSettings로 통째로 교체해 색상/패턴/투명도/하프톤 등 이 카테고리에
+        // 걸린 모든 그래픽 재정의를 완전히 비운다 - 프리셋 카테고리 탭을 끌 때(ApplyCategoryOverrides,
+        // turnOn=false)와 같은 방식.
+        public static void ClearColorTool(View view, List<int> categoryIds)
+        {
+            foreach (int categoryId in categoryIds)
+            {
+                try { view.SetCategoryOverrides(new ElementId(categoryId), new OverrideGraphicSettings()); }
+                catch { /* 삭제된 카테고리이거나 재정의를 지원하지 않는 경우 등 - 나머지 카테고리는 계속 적용 */ }
+            }
+        }
+
         // 색상 버튼 팝업을 열 때 초기 표시값으로 쓴다 - 그 카테고리에 이미 적용된 재정의를 그대로 읽어와
         // 팔레트/슬라이더가 "이번에 새로 고르는 것"이 아니라 "지금 적용된 값"에서 시작하도록 한다.
         // 색상은 OverrideGraphicSettings.SurfaceForegroundPatternColor가 유효한 값일 때만(Color.IsValid)
