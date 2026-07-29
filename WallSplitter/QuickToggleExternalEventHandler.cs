@@ -50,6 +50,17 @@ namespace WallSplitter
         public Dictionary<string, int> GraphicsIntegerParams { get; set; } = new();
     }
 
+    // "색상 버튼" 팝업(ColorToolPopupWindow)이 색상 팔레트/투명도 슬라이더를 조작할 때마다 보내는 요청 -
+    // 2026-07-29 추가. Document/View를 담지 않고 카테고리 Id 목록 + 이번에 바뀐 값만 담는다 - 어느
+    // 문서/뷰에 적용할지는 Execute 시점에 항상 "그때의 활성 뷰"를 다시 조회한다(팝업을 연 뒤 사용자가
+    // 다른 뷰로 전환했을 수도 있으므로, 팝업을 열 때 캡처해둔 뷰가 아니라 실행 시점 기준으로 적용).
+    internal class ColorToolApplyRequest
+    {
+        public List<int> CategoryIds { get; set; } = new();
+        public int? Color { get; set; } // 0xRRGGBB, null이면 이번 요청은 색상을 건드리지 않음
+        public int? Transparency { get; set; } // 0~100, null이면 이번 요청은 투명도를 건드리지 않음
+    }
+
     // 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라 버튼 클릭이 언제든 일어날 수
     // 있고, 그 시점엔 유효한 Revit API 컨텍스트(트랜잭션 등)가 열려있지 않다. ExternalEvent.Raise()로
     // 요청을 넣어두면 Revit이 다음 기회에 Execute를 유효한 컨텍스트에서 실행해준다.
@@ -64,6 +75,10 @@ namespace WallSplitter
         // (2026-07-27 추가) - 같은 ExternalEvent를 재사용해 별도 배선 없이 처리한다.
         internal ViewStateSnapshot? PendingRevertSnapshot { get; set; }
 
+        // "색상 버튼" 팝업의 실시간 조작 요청 (2026-07-29 추가) - PendingRevertSnapshot과 같은 방식으로
+        // 같은 ExternalEvent를 재사용한다.
+        internal ColorToolApplyRequest? PendingColorApply { get; set; }
+
         public void Execute(UIApplication app)
         {
             if (PendingRevertSnapshot != null)
@@ -71,6 +86,14 @@ namespace WallSplitter
                 ViewStateSnapshot snapshot = PendingRevertSnapshot;
                 PendingRevertSnapshot = null;
                 ExecuteRevert(app, snapshot);
+                return;
+            }
+
+            if (PendingColorApply != null)
+            {
+                ColorToolApplyRequest request = PendingColorApply;
+                PendingColorApply = null;
+                ExecuteColorApply(app, request);
                 return;
             }
 
@@ -140,6 +163,23 @@ namespace WallSplitter
             }
 
             QuickToggleToolbar.Instance?.RefreshState();
+        }
+
+        // "색상 버튼" 실행 - 항상 그 순간의 활성 뷰를 다시 조회한다(팝업을 열어둔 채 사용자가 다른 뷰로
+        // 전환했을 수 있으므로, 팝업이 열릴 때 캡처해둔 뷰가 아니라 지금 활성 뷰 기준으로 적용).
+        private static void ExecuteColorApply(UIApplication app, ColorToolApplyRequest request)
+        {
+            UIDocument? uidoc = app.ActiveUIDocument;
+            Document? doc = uidoc?.Document;
+            View? view = doc?.ActiveView;
+            if (doc == null || view == null) return;
+
+            using (Transaction tx = new Transaction(doc, "커스텀 버튼: 색상/투명도 지정"))
+            {
+                tx.Start();
+                QuickToggleService.ApplyColorTool(view, request.CategoryIds, request.Color, request.Transparency);
+                tx.Commit();
+            }
         }
 
         public string GetName() => "WallSplitter 커스텀 버튼";

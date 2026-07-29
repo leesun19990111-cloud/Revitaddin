@@ -89,6 +89,11 @@ namespace WallSplitter
         private int? _lastSaveButtonViewId;
         private bool? _lastSaveButtonHasSnapshot;
 
+        // "색상 버튼" 클릭으로 열린 실시간 조절 패널 - 한 번에 하나만 열어둔다(다른 색상 버튼을 누르면
+        // 이전 패널은 닫고 새로 연다). 2026-07-29 추가.
+        private ColorToolPopupWindow? _openColorPopup;
+        private string? _openColorPopupButtonId;
+
         public QuickToggleToolbar(UIApplication uiapp)
         {
             InitializeComponent();
@@ -109,6 +114,7 @@ namespace WallSplitter
         {
             _cachedDoc = null;
             CurrentToolbarVisible = null;
+            _openColorPopup?.Close();
             Hide();
         }
 
@@ -156,6 +162,7 @@ namespace WallSplitter
             RevitView? view = doc.ActiveView;
             if (view == null)
             {
+                _openColorPopup?.Close();
                 Hide();
                 return;
             }
@@ -187,6 +194,7 @@ namespace WallSplitter
             }
             else
             {
+                _openColorPopup?.Close();
                 Hide();
             }
         }
@@ -310,6 +318,15 @@ namespace WallSplitter
         private void ToggleButton_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button button || button.Tag is not QuickToggleButtonConfig cfg) return;
+
+            // 색상 버튼은 on/off 토글이 아니라 실시간 조절 패널을 열고 닫는 것이라 ExternalEvent 경로를
+            // 타지 않는다(그 패널 안의 팔레트/슬라이더가 조작될 때마다 따로 ExternalEvent를 쓴다).
+            if (cfg.Category == QuickToggleCategory.ColorTool)
+            {
+                ShowColorToolPopup(cfg, button);
+                return;
+            }
+
             if (App.QuickToggleHandler == null || App.QuickToggleEvent == null) return;
 
             UIDocument? uidoc = _uiapp.ActiveUIDocument;
@@ -320,6 +337,54 @@ namespace WallSplitter
             App.QuickToggleHandler.PendingButtonId = cfg.Id;
             App.QuickToggleHandler.PendingTurnOn = turnOn;
             App.QuickToggleEvent.Raise();
+        }
+
+        // 2026-07-29 추가 - 색상 버튼을 누르면 그 버튼 바로 아래(또는 화면 하단에 가까우면 위쪽)에
+        // 색상/투명도 조절 패널을 띄운다. 같은 버튼을 다시 누르면 닫고(토글), 다른 색상 버튼을 누르면
+        // 기존 패널을 닫고 새로 연다 - 패널이 여러 개 동시에 떠 있으면 어느 게 어느 버튼 건지 헷갈리므로
+        // 한 번에 하나만 허용한다.
+        private void ShowColorToolPopup(QuickToggleButtonConfig cfg, Button button)
+        {
+            if (_openColorPopup != null)
+            {
+                bool wasSameButton = _openColorPopupButtonId == cfg.Id;
+                _openColorPopup.Close();
+                if (wasSameButton) return;
+            }
+
+            UIDocument? uidoc = _uiapp.ActiveUIDocument;
+            RevitDocument? doc = uidoc?.Document;
+            RevitView? view = doc?.ActiveView;
+            if (doc == null || view == null) return;
+
+            Point buttonTopLeft = button.PointToScreen(new Point(0, 0));
+            double buttonBottom = buttonTopLeft.Y + button.ActualHeight;
+            // "창의 위치에 따라 상단/하단으로 펼쳐지게" 요청 - 화면 아래쪽 여유가 부족하면(버튼이 화면
+            // 하단에 가까우면) 위로 펼치고, 그렇지 않으면 아래로 펼친다. 패널 높이는 SizeToContent라
+            // Show() 전엔 정확히 모르므로 넉넉하게 어림잡아 판단한다(실제 높이는 대략 이 범위 안).
+            const double popupHeightEstimate = 260;
+            bool expandUpward = buttonBottom + popupHeightEstimate > SystemParameters.WorkArea.Bottom;
+
+            ColorToolPopupWindow popup = new ColorToolPopupWindow(view, cfg) { Owner = this, Left = buttonTopLeft.X };
+            popup.Closed += (s, e) =>
+            {
+                if (ReferenceEquals(_openColorPopup, popup)) { _openColorPopup = null; _openColorPopupButtonId = null; }
+            };
+
+            if (expandUpward)
+            {
+                // 펼쳐진 높이(ActualHeight)는 레이아웃이 끝나야 알 수 있으므로 Loaded에서 한 번만 보정한다.
+                popup.Top = buttonTopLeft.Y - popupHeightEstimate;
+                popup.Loaded += (s, e) => { popup.Top = buttonTopLeft.Y - popup.ActualHeight; };
+            }
+            else
+            {
+                popup.Top = buttonBottom;
+            }
+
+            _openColorPopup = popup;
+            _openColorPopupButtonId = cfg.Id;
+            popup.Show();
         }
 
         // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 바로 처리한다. 캡처 로직 자체는

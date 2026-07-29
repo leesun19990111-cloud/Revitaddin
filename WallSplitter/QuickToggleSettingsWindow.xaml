@@ -44,7 +44,8 @@
                     <Button x:Name="AddViewTemplateButton" Content="+ 뷰템플릿 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddViewTemplateButton_Click"/>
                     <Button x:Name="AddFilterButton" Content="+ 필터 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddFilterButton_Click"/>
                     <Button x:Name="AddWorksetButton" Content="+ 작업세트 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddWorksetButton_Click"/>
-                    <Button x:Name="AddPresetButton" Content="+ 프리셋 버튼 추가" Padding="6,4" Click="AddPresetButton_Click"/>
+                    <Button x:Name="AddPresetButton" Content="+ 프리셋 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddPresetButton_Click"/>
+                    <Button x:Name="AddColorToolButton" Content="+ 색상 버튼 추가" Padding="6,4" Click="AddColorToolButton_Click"/>
                 </StackPanel>
             </Grid>
 

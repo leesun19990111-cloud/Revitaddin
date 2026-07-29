@@ -48,6 +48,12 @@ namespace WallSplitter
                     case QuickToggleCategory.Preset:
                         return DeterminePresetState(view, cfg);
 
+                    // 색상 버튼은 켜짐/꺼짐 개념이 없다 - 클릭하면 색상/투명도 조절 패널이 열릴 뿐이라
+                    // 항상 클릭 가능한 상태(Off)로 고정한다. Disabled를 반환하면 툴바가 버튼 자체를
+                    // IsEnabled=false로 그려 클릭이 막힌다(QuickToggleToolbar.RebuildButtons 참고).
+                    case QuickToggleCategory.ColorTool:
+                        return QuickToggleButtonState.Off;
+
                     default:
                         return QuickToggleButtonState.Disabled;
                 }
@@ -273,6 +279,69 @@ namespace WallSplitter
             if (cfg.CategoryOverrides.Count > 0) ApplyCategoryOverrides(view, cfg, turnOn);
 
             return ok;
+        }
+
+        // "색상 버튼" 팝업이 색상 팔레트/투명도 슬라이더를 조작할 때마다 즉시 호출한다(2026-07-29 추가).
+        // 프리셋 카테고리 재정의(ApplyCategoryOverrides)와 달리 이건 "켜짐/꺼짐" 두 상태가 없는 실시간
+        // 조절 도구라, 매번 새 OverrideGraphicSettings로 덮어쓰지 않고 뷰에 이미 적용된 재정의를 먼저
+        // 읽어(view.GetCategoryOverrides) 그 위에 이번에 바뀐 속성만 얹는다 - 그래야 색상만 바꿨을 때
+        // 기존에 슬라이더로 조절해둔 투명도가 지워지지 않고, 반대의 경우도 마찬가지다. color/transparency
+        // 중 null인 쪽은 이번 호출에서 그 속성을 건드리지 않는다는 뜻(둘 다 채워서 호출할 수도 있음).
+        public static void ApplyColorTool(View view, List<int> categoryIds, int? color, int? transparency)
+        {
+            Document doc = view.Document;
+            foreach (int categoryId in categoryIds)
+            {
+                try
+                {
+                    ElementId catId = new ElementId(categoryId);
+                    OverrideGraphicSettings ogs;
+                    try { ogs = view.GetCategoryOverrides(catId); }
+                    catch { ogs = new OverrideGraphicSettings(); }
+
+                    if (color.HasValue)
+                    {
+                        Autodesk.Revit.DB.Color c = IntToColor(color.Value);
+                        // 실채우기로 지정해야 카테고리 전체 면이 그 색으로 칠해진 것처럼 보인다(패턴만
+                        // 바꾸고 색을 안 주면 흰 바탕에 무늬만 남는다) - Revit에서 "카테고리를 이 색으로
+                        // 칠한다"고 할 때 실제로 쓰는 방식과 동일. 투영면/절단면 둘 다 적용해 단면도에서도
+                        // 같은 색으로 보이게 한다.
+                        ElementId? solidFill = ResolveFillPatternId(doc, SolidFillPatternName);
+                        ogs.SetSurfaceForegroundPatternVisible(true);
+                        if (solidFill != null) ogs.SetSurfaceForegroundPatternId(solidFill);
+                        ogs.SetSurfaceForegroundPatternColor(c);
+                        ogs.SetCutForegroundPatternVisible(true);
+                        if (solidFill != null) ogs.SetCutForegroundPatternId(solidFill);
+                        ogs.SetCutForegroundPatternColor(c);
+                    }
+
+                    if (transparency.HasValue) ogs.SetSurfaceTransparency(transparency.Value);
+
+                    view.SetCategoryOverrides(catId, ogs);
+                }
+                catch { /* 삭제된 카테고리이거나 재정의를 지원하지 않는 경우 등 - 나머지 카테고리는 계속 적용 */ }
+            }
+        }
+
+        // 색상 버튼 팝업을 열 때 초기 표시값으로 쓴다 - 그 카테고리에 이미 적용된 재정의를 그대로 읽어와
+        // 팔레트/슬라이더가 "이번에 새로 고르는 것"이 아니라 "지금 적용된 값"에서 시작하도록 한다.
+        // 색상은 OverrideGraphicSettings.SurfaceForegroundPatternColor가 유효한 값일 때만(Color.IsValid)
+        // 반환하고, 아니면 null(아직 색을 지정한 적 없음)로 취급한다. 투명도는 Revit이 "재정의된 적
+        // 있는지" 여부를 별도로 노출하지 않아 재정의 안 한 카테고리도 항상 0으로 읽힌다 - Revit V/G
+        // 대화상자 자체도 같은 방식으로 보여주므로 그대로 따랐다.
+        public static (int? Color, int Transparency) ReadCurrentColorAndTransparency(View view, int categoryId)
+        {
+            try
+            {
+                OverrideGraphicSettings ogs = view.GetCategoryOverrides(new ElementId(categoryId));
+                Autodesk.Revit.DB.Color c = ogs.SurfaceForegroundPatternColor;
+                int? color = c.IsValid ? ((c.Red << 16) | (c.Green << 8) | c.Blue) : (int?)null;
+                return (color, ogs.Transparency);
+            }
+            catch
+            {
+                return (null, 0);
+            }
         }
 
         // 프리셋의 카테고리(V/G) 탭 적용 - 켜질 때는 저장된 표시 여부 + 그래픽 재정의(선/패턴/투명도/

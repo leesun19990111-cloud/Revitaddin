@@ -21,6 +21,13 @@ namespace WallSplitter
         // 동시에 채울 수 있음), 비어있는 필드는 "이 프리셋에 그 항목은 포함되지 않음"으로 해석되어
         // 건드리지 않는다는 점이 단일 카테고리 버튼과 다르다(QuickToggleService 참고).
         Preset,
+        // 2026-07-29, "모델을 선택해서 색상과 투명도를 설정해줄 수 있는 버튼" 요청으로 추가. 다른
+        // 카테고리들과 근본적으로 다르다 - on/off를 켜고 끄는 토글이 아니라, 클릭하면 색상 팔레트 +
+        // 투명도 슬라이더가 담긴 작은 패널이 펼쳐지고(QuickToggleToolbar.ShowColorToolPopup), 그 안에서
+        // 조작할 때마다 활성 뷰에 즉시 반영된다. 설정 창에서는 "어떤 모델 카테고리에 적용할지"만 미리
+        // 고르고(ColorButtonCategories), 실제 색상/투명도 값은 저장하지 않는다 - 매번 클릭했을 때 그
+        // 카테고리의 현재 값을 읽어와 보여준다(QuickToggleService.ReadCurrentColorAndTransparency).
+        ColorTool,
     }
 
     // ElementId.IntegerValue(int)는 2023 API에만 있고, 2024+에서는 Value(long)로 바뀌면서 완전히
@@ -72,6 +79,12 @@ namespace WallSplitter
         // 건드리지 않음 - Preset의 다른 필드들과 같은 "비어있으면 안 건드림" 규칙), 켜질 때 설정을 적용하고
         // 꺼질 때는 표시로 되돌리고 재정의를 지운다(QuickToggleService.ApplyCategoryOverrides 참고).
         public List<CategoryOverrideConfig> CategoryOverrides { get; set; } = new List<CategoryOverrideConfig>();
+
+        // 2026-07-29, "색상 버튼" 전용 필드 - 이 버튼이 색상/투명도를 적용할 모델 카테고리 목록. 항목당
+        // CategoryId/CategoryName/ParentCategoryName만 쓰고 CategoryOverrideConfig의 나머지 재정의
+        // 필드(선/패턴 등)는 이 용도에서 전혀 쓰지 않는다 - 카테고리 이름 기반 매칭 로직(내보내기/가져오기)을
+        // 그대로 재사용하기 위해 새 타입을 만드는 대신 기존 타입을 재사용했다.
+        public List<CategoryOverrideConfig> ColorButtonCategories { get; set; } = new List<CategoryOverrideConfig>();
     }
 
     // 프리셋의 카테고리(V/G) 탭 한 줄 - Revit V/G 대화상자에서 카테고리별로 재정의할 수 있는 항목을 그대로
@@ -234,6 +247,7 @@ namespace WallSplitter
                 QuickToggleCategory.Filter => "필터버튼",
                 QuickToggleCategory.Workset => "작업세트버튼",
                 QuickToggleCategory.Preset => "프리셋버튼",
+                QuickToggleCategory.ColorTool => "색상버튼",
                 _ => "버튼",
             };
             int count = 0;

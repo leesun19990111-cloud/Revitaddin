@@ -152,6 +152,7 @@ namespace WallSplitter
             QuickToggleCategory.Filter => "필터",
             QuickToggleCategory.Workset => "작업세트",
             QuickToggleCategory.Preset => "프리셋",
+            QuickToggleCategory.ColorTool => "색상",
             _ => "",
         };
 
@@ -178,6 +179,7 @@ namespace WallSplitter
         private void AddFilterButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Filter);
         private void AddWorksetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Workset);
         private void AddPresetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Preset);
+        private void AddColorToolButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.ColorTool);
 
         private void AddButtonOfCategory(QuickToggleCategory category)
         {
@@ -238,6 +240,22 @@ namespace WallSplitter
                 // 단일 카테고리 버튼과 달리 여러 대상을 동시에 담을 수 있고, 비워둔/포함 안 시킨 항목은
                 // 이 프리셋에서 아예 제외된다(QuickToggleService.TogglePreset/DeterminePresetState 참고).
                 BuildPresetTabs(cfg);
+                return;
+            }
+
+            if (cfg.Category == QuickToggleCategory.ColorTool)
+            {
+                // 2026-07-29, "모델을 선택해서 색상과 투명도를 설정해줄 수 있는 버튼" 요청으로 추가 - 여기서는
+                // "어떤 모델 카테고리에 적용할지"만 고른다(체크박스만, 재정의 값 편집 없음). 실제 색상/투명도는
+                // 툴바에서 이 버튼을 클릭했을 때 뜨는 팝업(ColorToolPopupWindow)에서 실시간으로 고른다.
+                EditPanelHost.Children.Add(new TextBlock
+                {
+                    Text = "이 색상 버튼이 적용할 모델 카테고리를 선택하세요 (여러 개 선택 가능). 실제 색상/투명도 값은 " +
+                           "저장하지 않고, 커스텀 버튼 툴바에서 이 버튼을 클릭했을 때 뜨는 패널에서 그때그때 고릅니다.",
+                    Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
+                });
+                foreach (Category top in QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Model))
+                    EditPanelHost.Children.Add(BuildColorToolCategoryRow(cfg, top, depth: 0));
                 return;
             }
 
@@ -437,6 +455,71 @@ namespace WallSplitter
             if (co.SurfaceForegroundPatternName != null || co.SurfaceBackgroundPatternName != null) parts.Add("표면패턴 재정의");
             if (co.CutForegroundPatternName != null || co.CutBackgroundPatternName != null) parts.Add("절단패턴 재정의");
             return parts.Count == 0 ? "" : "  —  " + string.Join(", ", parts);
+        }
+
+        // 색상 버튼 설정 - BuildCategoryRow와 거의 같은 모양이지만 훨씬 단순하다(체크박스만, "편집" 버튼도
+        // 재정의 요약도 없음 - 실제 색상/투명도 값은 여기서 정하지 않고 툴바 팝업에서 그때그때 고르므로).
+        // 별도 메서드로 둔 이유는 이 코드베이스의 "작은 UI는 공유 대신 복제" 관례와, 프리셋의 카테고리
+        // 트리(BuildCategoryRow)를 이 단순한 용도 때문에 매개변수로 복잡하게 만들고 싶지 않아서다.
+        private UIElement BuildColorToolCategoryRow(QuickToggleButtonConfig cfg, Category category, int depth)
+        {
+            StackPanel container = new StackPanel();
+            int catId = category.Id.ToInt();
+            List<Category> subs = QuickToggleService.SubCategoriesOf(category);
+            bool hasChildren = subs.Count > 0;
+            bool expanded = _expandedCategoryIds.Contains(catId);
+
+            WpfGrid row = new WpfGrid { Margin = new Thickness(depth * 18, 1, 0, 1) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            if (hasChildren)
+            {
+                Button expandButton = new Button
+                {
+                    Content = CreateExpandGlyph(expanded),
+                    Width = 18, Height = 18, Padding = new Thickness(3),
+                    Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                };
+                expandButton.Click += (s, e) =>
+                {
+                    if (expanded) _expandedCategoryIds.Remove(catId); else _expandedCategoryIds.Add(catId);
+                    BuildEditPanel(cfg);
+                };
+                WpfGrid.SetColumn(expandButton, 0);
+                row.Children.Add(expandButton);
+            }
+
+            CheckBox includeBox = new CheckBox
+            {
+                Content = category.Name,
+                IsChecked = cfg.ColorButtonCategories.Any(c => c.CategoryId == catId),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(2, 0, 4, 0),
+            };
+            WpfGrid.SetColumn(includeBox, 1);
+            row.Children.Add(includeBox);
+
+            includeBox.Checked += (s, e) =>
+            {
+                if (cfg.ColorButtonCategories.Any(c => c.CategoryId == catId)) return;
+                cfg.ColorButtonCategories.Add(new CategoryOverrideConfig
+                {
+                    CategoryId = catId,
+                    CategoryName = category.Name,
+                    ParentCategoryName = category.Parent?.Name,
+                });
+            };
+            includeBox.Unchecked += (s, e) => { cfg.ColorButtonCategories.RemoveAll(c => c.CategoryId == catId); };
+
+            container.Children.Add(row);
+
+            if (hasChildren && expanded)
+                foreach (Category sub in subs)
+                    container.Children.Add(BuildColorToolCategoryRow(cfg, sub, depth + 1));
+
+            return container;
         }
 
         private static Polygon CreateExpandGlyph(bool expanded)
@@ -768,6 +851,22 @@ namespace WallSplitter
                     }
                 }
                 cfg.CategoryOverrides = resolvedCategoryOverrides;
+
+                List<CategoryOverrideConfig> resolvedColorButtonCategories = new List<CategoryOverrideConfig>();
+                foreach (CategoryOverrideConfig co in cfg.ColorButtonCategories)
+                {
+                    var key = (co.CategoryName, co.ParentCategoryName);
+                    if (categoryByName.TryGetValue(key, out int catId))
+                    {
+                        co.CategoryId = catId;
+                        resolvedColorButtonCategories.Add(co);
+                    }
+                    else
+                    {
+                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
+                    }
+                }
+                cfg.ColorButtonCategories = resolvedColorButtonCategories;
             }
 
             if (missing.Count > 0)
