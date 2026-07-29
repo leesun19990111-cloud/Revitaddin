@@ -212,27 +212,59 @@ namespace WallSplitter
                 (Brush background, Brush borderBrush, Brush foreground) = VisualsFor(state, cfg);
 
                 Canvas icon = QuickToggleIcons.Create(cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category), foreground);
-                // 2026-07-27, "아이콘도 좀 크게 해달라"는 요청 - QuickToggleIcons.Create 자체의 20x16
-                // 좌표계는 그대로 두고(다른 도형 10종의 좌표를 전부 다시 계산할 필요 없이), Viewbox로
-                // 렌더링 크기만 키운다. 아이콘 재색칠(QuickToggleIcons.SetBrush)은 원본 Canvas 참조를
-                // 그대로 쓰므로 이 래핑과 무관하게 계속 동작한다.
-                Viewbox iconBox = new Viewbox { Width = 28, Height = 22, Child = icon };
-                TextBlock label = new TextBlock
-                {
-                    Text = cfg.Name,
-                    FontSize = 10,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Foreground = foreground,
-                    Margin = new Thickness(0, 2, 0, 0),
-                };
+                TextBlock label;
+                UIElement content;
 
-                // 시각적 여백은 Button 바깥 Margin이 아니라 안쪽 content의 Margin으로만 준다 - 바깥
-                // Margin은 히트테스트 영역이 아니라서, 버튼 사이에 클릭이 씹히는 좁은 사각지대가 생겼었다
-                // ("버튼이 마우스 커서에 잘 안 잡힌다"는 실측 피드백, 2026-07-27). Button 자체는 옆 버튼과
-                // 완전히 맞닿아 틈이 없으므로 그 사각지대가 사라진다.
-                StackPanel content = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(8, 2, 8, 2) };
-                content.Children.Add(iconBox);
-                content.Children.Add(label);
+                if (cfg.Category == QuickToggleCategory.ColorTool)
+                {
+                    // 2026-07-29, "색상버튼은 다른 버튼과는 모양이 좀 달랐으면 좋겠어. on/off가 의미
+                    // 없으니까, 작은 리본버튼으로 두줄로 들어가게 만들어줘" - Revit 리본의 "작은" 버튼
+                    // 스타일(작은 아이콘이 왼쪽, 텍스트가 오른쪽에 최대 두 줄까지 줄바꿈되는 가로 배치)을
+                    // 그대로 옮겼다. 다른 버튼들의 "큰 아이콘 위 + 라벨 아래" 세로 배치와 뚜렷이 구분되어,
+                    // on/off 토글이 아니라는 걸 형태로도 알 수 있다.
+                    Viewbox smallIconBox = new Viewbox { Width = 16, Height = 13, VerticalAlignment = VerticalAlignment.Center };
+                    smallIconBox.Child = icon;
+                    label = new TextBlock
+                    {
+                        Text = cfg.Name,
+                        FontSize = 10,
+                        TextWrapping = TextWrapping.Wrap,
+                        TextAlignment = TextAlignment.Left,
+                        Width = 46,
+                        Foreground = foreground,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(4, 0, 0, 0),
+                    };
+                    StackPanel horizontal = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 2, 6, 2), VerticalAlignment = VerticalAlignment.Center };
+                    horizontal.Children.Add(smallIconBox);
+                    horizontal.Children.Add(label);
+                    content = horizontal;
+                }
+                else
+                {
+                    // 2026-07-27, "아이콘도 좀 크게 해달라"는 요청 - QuickToggleIcons.Create 자체의 20x16
+                    // 좌표계는 그대로 두고(다른 도형 10종의 좌표를 전부 다시 계산할 필요 없이), Viewbox로
+                    // 렌더링 크기만 키운다. 아이콘 재색칠(QuickToggleIcons.SetBrush)은 원본 Canvas 참조를
+                    // 그대로 쓰므로 이 래핑과 무관하게 계속 동작한다.
+                    Viewbox iconBox = new Viewbox { Width = 28, Height = 22, Child = icon };
+                    label = new TextBlock
+                    {
+                        Text = cfg.Name,
+                        FontSize = 10,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Foreground = foreground,
+                        Margin = new Thickness(0, 2, 0, 0),
+                    };
+
+                    // 시각적 여백은 Button 바깥 Margin이 아니라 안쪽 content의 Margin으로만 준다 - 바깥
+                    // Margin은 히트테스트 영역이 아니라서, 버튼 사이에 클릭이 씹히는 좁은 사각지대가 생겼었다
+                    // ("버튼이 마우스 커서에 잘 안 잡힌다"는 실측 피드백, 2026-07-27). Button 자체는 옆 버튼과
+                    // 완전히 맞닿아 틈이 없으므로 그 사각지대가 사라진다.
+                    StackPanel vertical = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(8, 2, 8, 2) };
+                    vertical.Children.Add(iconBox);
+                    vertical.Children.Add(label);
+                    content = vertical;
+                }
 
                 Button button = new Button
                 {
@@ -273,12 +305,20 @@ namespace WallSplitter
             }
         }
 
-        private static string ToolTipFor(QuickToggleButtonConfig cfg, QuickToggleButtonState state) => state switch
+        private static string ToolTipFor(QuickToggleButtonConfig cfg, QuickToggleButtonState state)
         {
-            QuickToggleButtonState.On => cfg.Name + " - 클릭하면 끕니다",
-            QuickToggleButtonState.Off => cfg.Name + " - 클릭하면 켭니다",
-            _ => cfg.Name + " (이 뷰에서 사용할 수 없거나 대상이 지정되지 않았습니다)",
-        };
+            // 색상 버튼은 켜짐/꺼짐이 없어 "클릭하면 켭니다" 같은 문구가 맞지 않는다 - 실제 동작(패널
+            // 열기)에 맞는 문구를 따로 쓴다.
+            if (cfg.Category == QuickToggleCategory.ColorTool)
+                return cfg.Name + " - 클릭하면 색상/투명도 조절 패널을 엽니다";
+
+            return state switch
+            {
+                QuickToggleButtonState.On => cfg.Name + " - 클릭하면 끕니다",
+                QuickToggleButtonState.Off => cfg.Name + " - 클릭하면 켭니다",
+                _ => cfg.Name + " (이 뷰에서 사용할 수 없거나 대상이 지정되지 않았습니다)",
+            };
+        }
 
         // 2026-07-27, 사용자 요청으로 확장: "버튼 색상을 설정하면 아이콘만이 아니라 버튼 배경 자체가
         // 다 바뀌고, 아이콘/텍스트는 그 배경색에 대비되어 잘 보이는 색으로 자동 전환"되어야 한다.

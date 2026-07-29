@@ -254,8 +254,12 @@ namespace WallSplitter
                            "저장하지 않고, 커스텀 버튼 툴바에서 이 버튼을 클릭했을 때 뜨는 패널에서 그때그때 고릅니다.",
                     Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
                 });
-                foreach (Category top in QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Model))
-                    EditPanelHost.Children.Add(BuildColorToolCategoryRow(cfg, top, depth: 0));
+                List<Category> colorToolTopCategories = QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Model);
+                StackPanel colorToolResults = new StackPanel();
+                EditPanelHost.Children.Add(BuildSearchRow(out TextBox colorToolSearchBox));
+                EditPanelHost.Children.Add(colorToolResults);
+                colorToolSearchBox.TextChanged += (s, e) => RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, colorToolSearchBox.Text, isColorTool: true);
+                RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, "", isColorTool: true);
                 return;
             }
 
@@ -345,11 +349,66 @@ namespace WallSplitter
                 return panel;
             }
 
-            foreach (Category top in topCategories)
-                panel.Children.Add(BuildCategoryRow(cfg, top, depth: 0));
+            StackPanel resultsPanel = new StackPanel();
+            panel.Children.Add(BuildSearchRow(out TextBox searchBox));
+            panel.Children.Add(resultsPanel);
+            searchBox.TextChanged += (s, e) => RenderCategoryList(cfg, resultsPanel, topCategories, searchBox.Text, isColorTool: false);
+            RenderCategoryList(cfg, resultsPanel, topCategories, "", isColorTool: false);
 
             return panel;
         }
+
+        // 2026-07-30, "대상을 선택할 때 검색할 수 있는 입력칸" 요청으로 추가 - 검색어가 비어있으면 기존
+        // 트리(펼침/접힘) 그대로 보여주고, 검색어가 있으면 깊이와 무관하게 이름이 일치하는 카테고리를
+        // 평평하게 나열한다(하위 카테고리를 찾으려고 매번 상위를 펼쳐야 하는 불편을 없애기 위함). 프리셋의
+        // 카테고리(V/G) 탭과 색상 버튼의 카테고리 선택이 이 메서드 하나를 공유한다 - 목록을 그리는 로직
+        // 자체(BuildCategoryRow/BuildColorToolCategoryRow)는 그대로 두고 어떤 카테고리 집합을 넘길지만 다르다.
+        private void RenderCategoryList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, List<Category> topCategories, string filter, bool isColorTool)
+        {
+            resultsPanel.Children.Clear();
+
+            if (string.IsNullOrEmpty(filter))
+            {
+                foreach (Category top in topCategories)
+                    resultsPanel.Children.Add(isColorTool ? BuildColorToolCategoryRow(cfg, top, 0) : BuildCategoryRow(cfg, top, 0));
+                return;
+            }
+
+            List<Category> flatMatches = new List<Category>();
+            void Collect(Category c)
+            {
+                if (MatchesSearch(c.Name, filter)) flatMatches.Add(c);
+                foreach (Category sub in QuickToggleService.SubCategoriesOf(c)) Collect(sub);
+            }
+            foreach (Category top in topCategories) Collect(top);
+
+            if (flatMatches.Count == 0)
+            {
+                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
+                return;
+            }
+
+            foreach (Category cat in flatMatches.OrderBy(c => c.Name))
+                resultsPanel.Children.Add(isColorTool ? BuildColorToolCategoryRow(cfg, cat, 0) : BuildCategoryRow(cfg, cat, 0));
+        }
+
+        // 검색 입력칸 한 줄 - 뷰템플릿/필터/작업세트 목록, 카테고리 트리(프리셋/색상 버튼)가 전부 이 UI를
+        // 공유한다("대상을 선택할 때 검색할 수 있는 입력칸을 작게 하나 만들어줘" 요청, 2026-07-30). 목록을
+        // 필터링할 때는 이 검색 입력칸을 포함한 전체를 다시 그리지 않고 결과 패널만 다시 그려야 한다 -
+        // 안 그러면 한 글자 입력할 때마다 입력칸 자체가 새로 만들어져 포커스가 끊긴다(이 창의 다른 곳,
+        // QuickToggleToolbar의 "매 틱 재대입" 버그와 근본적으로 같은 종류의 함정).
+        private static StackPanel BuildSearchRow(out TextBox searchBox)
+        {
+            StackPanel row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            row.Children.Add(new TextBlock { Text = "검색", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.TextSecondary, Margin = new Thickness(0, 0, 6, 0) });
+            TextBox box = new TextBox { Width = 140 };
+            row.Children.Add(box);
+            searchBox = box;
+            return row;
+        }
+
+        private static bool MatchesSearch(string name, string filter) =>
+            string.IsNullOrEmpty(filter) || name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
 
         private UIElement BuildCategoryRow(QuickToggleButtonConfig cfg, Category category, int depth)
         {
@@ -602,77 +661,111 @@ namespace WallSplitter
 
         private void BuildViewTemplatePicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
-            StackPanel list = new StackPanel();
+            StackPanel resultsPanel = new StackPanel();
+            target.Children.Add(BuildSearchRow(out TextBox searchBox));
+            target.Children.Add(resultsPanel);
+            searchBox.TextChanged += (s, e) => RenderViewTemplateList(cfg, resultsPanel, searchBox.Text);
+            RenderViewTemplateList(cfg, resultsPanel, "");
+        }
 
+        private void RenderViewTemplateList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        {
+            resultsPanel.Children.Clear();
+
+            // <없음>은 검색어와 무관하게 항상 보여준다 - 이름으로 검색할 대상이 아니라 "선택 해제"라는
+            // 별도 기능이라서.
             RadioButton noneRadio = new RadioButton { Content = "<없음>", GroupName = "vt_" + cfg.Id, IsChecked = cfg.ViewTemplateId == null, Margin = new Thickness(0, 2, 0, 2) };
             noneRadio.Checked += (s, e) => { cfg.ViewTemplateId = null; cfg.ViewTemplateName = null; };
-            list.Children.Add(noneRadio);
+            resultsPanel.Children.Add(noneRadio);
 
-            foreach (View vt in _viewTemplates)
+            bool any = false;
+            foreach (View vt in _viewTemplates.Where(v => MatchesSearch(v.Name, filter)))
             {
+                any = true;
                 int id = vt.Id.ToInt();
                 string name = vt.Name;
                 RadioButton r = new RadioButton { Content = vt.Name, GroupName = "vt_" + cfg.Id, IsChecked = cfg.ViewTemplateId == id, Margin = new Thickness(0, 2, 0, 2) };
                 r.Checked += (s, e) => { cfg.ViewTemplateId = id; cfg.ViewTemplateName = name; };
-                list.Children.Add(r);
+                resultsPanel.Children.Add(r);
             }
 
             if (_viewTemplates.Count == 0)
-                list.Children.Add(new TextBlock { Text = "이 문서에 뷰템플릿이 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0) });
-
-            target.Children.Add(list);
+                resultsPanel.Children.Add(new TextBlock { Text = "이 문서에 뷰템플릿이 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0) });
+            else if (!any && !string.IsNullOrEmpty(filter))
+                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0) });
         }
 
         private void BuildFilterPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
-            StackPanel list = new StackPanel();
+            StackPanel resultsPanel = new StackPanel();
+            target.Children.Add(BuildSearchRow(out TextBox searchBox));
+            target.Children.Add(resultsPanel);
+            searchBox.TextChanged += (s, e) => RenderFilterList(cfg, resultsPanel, searchBox.Text);
+            RenderFilterList(cfg, resultsPanel, "");
+        }
 
-            foreach (ParameterFilterElement f in _filters)
+        private void RenderFilterList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        {
+            resultsPanel.Children.Clear();
+
+            bool any = false;
+            foreach (ParameterFilterElement f in _filters.Where(f => MatchesSearch(f.Name, filter)))
             {
+                any = true;
                 int id = f.Id.ToInt();
                 string name = f.Name;
                 CheckBox cb = new CheckBox { Content = f.Name, IsChecked = cfg.FilterIds.Contains(id), Margin = new Thickness(0, 2, 0, 2) };
                 cb.Checked += (s, e) => { if (!cfg.FilterIds.Contains(id)) cfg.FilterIds.Add(id); if (!cfg.FilterNames.Contains(name)) cfg.FilterNames.Add(name); };
                 cb.Unchecked += (s, e) => { cfg.FilterIds.Remove(id); cfg.FilterNames.Remove(name); };
-                list.Children.Add(cb);
+                resultsPanel.Children.Add(cb);
             }
 
             if (_filters.Count == 0)
-                list.Children.Add(new TextBlock { Text = "이 문서에 필터가 없습니다.", Foreground = Theme.TextSecondary });
-
-            target.Children.Add(list);
+                resultsPanel.Children.Add(new TextBlock { Text = "이 문서에 필터가 없습니다.", Foreground = Theme.TextSecondary });
+            else if (!any && !string.IsNullOrEmpty(filter))
+                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
         }
 
         private void BuildWorksetPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
-            StackPanel list = new StackPanel();
-
             if (!_isWorkshared)
             {
-                list.Children.Add(new TextBlock
+                target.Children.Add(new TextBlock
                 {
                     Text = "이 문서는 작업공유(워크셰어링)가 설정되어 있지 않습니다.",
                     Foreground = Theme.WarningText,
                     TextWrapping = TextWrapping.Wrap,
                 });
-                target.Children.Add(list);
                 return;
             }
 
-            foreach (Workset w in _worksets)
+            StackPanel resultsPanel = new StackPanel();
+            target.Children.Add(BuildSearchRow(out TextBox searchBox));
+            target.Children.Add(resultsPanel);
+            searchBox.TextChanged += (s, e) => RenderWorksetList(cfg, resultsPanel, searchBox.Text);
+            RenderWorksetList(cfg, resultsPanel, "");
+        }
+
+        private void RenderWorksetList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        {
+            resultsPanel.Children.Clear();
+
+            bool any = false;
+            foreach (Workset w in _worksets.Where(w => MatchesSearch(w.Name, filter)))
             {
+                any = true;
                 int id = w.Id.IntegerValue;
                 string name = w.Name;
                 CheckBox cb = new CheckBox { Content = w.Name, IsChecked = cfg.WorksetIds.Contains(id), Margin = new Thickness(0, 2, 0, 2) };
                 cb.Checked += (s, e) => { if (!cfg.WorksetIds.Contains(id)) cfg.WorksetIds.Add(id); if (!cfg.WorksetNames.Contains(name)) cfg.WorksetNames.Add(name); };
                 cb.Unchecked += (s, e) => { cfg.WorksetIds.Remove(id); cfg.WorksetNames.Remove(name); };
-                list.Children.Add(cb);
+                resultsPanel.Children.Add(cb);
             }
 
             if (_worksets.Count == 0)
-                list.Children.Add(new TextBlock { Text = "이 문서에 사용자 작업세트가 없습니다.", Foreground = Theme.TextSecondary });
-
-            target.Children.Add(list);
+                resultsPanel.Children.Add(new TextBlock { Text = "이 문서에 사용자 작업세트가 없습니다.", Foreground = Theme.TextSecondary });
+            else if (!any && !string.IsNullOrEmpty(filter))
+                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
         }
 
         // 위/아래 이동·삭제 버튼 아이콘 - SettingsWindow의 CreateTriangle/CreateXMark와 동일한 방식
