@@ -199,11 +199,19 @@ namespace WallSplitter
             }
         }
 
+        // 색상 버튼(2줄 높이의 작은 리본 버튼)을 몇 개 등록하든 한 줄로 계속 옆으로 늘어나지 않고, 이
+        // 높이(2줄 분량)에 맞춰 위아래로 채우다 꽉 차면 다음 칸으로 넘어가는 묶음으로 모아둔다 - Revit
+        // 리본의 "작은" 버튼들이 패널 안에서 2~3단으로 쌓이는 것과 같은 방식(2026-07-30 요청, "색상버튼이
+        // 작게 한줄로 들어가 있어, 버튼들이 두줄로 나열되게 만들어줘").
+        private const double ColorToolGroupHeightDip = 64;
+
         private void RebuildButtons(RevitView view)
         {
             ButtonsPanel.Children.Clear();
             _rows.Clear();
             _lastStates.Clear();
+
+            WrapPanel? colorToolGroup = null;
 
             foreach (QuickToggleButtonConfig cfg in _cachedSettings.Buttons)
             {
@@ -276,7 +284,26 @@ namespace WallSplitter
                     Tag = cfg,
                 };
                 button.Click += ToggleButton_Click;
-                ButtonsPanel.Children.Add(button);
+
+                if (cfg.Category == QuickToggleCategory.ColorTool)
+                {
+                    if (colorToolGroup == null)
+                    {
+                        // 이 그룹 앞에 이미 다른 버튼이 있으면 구분선을 하나 넣어 "여기부터는 다른 종류의
+                        // 버튼"이라는 걸 시각적으로도 표시한다(RightControlsPanel 앞의 구분선과 같은 패턴).
+                        if (ButtonsPanel.Children.Count > 0)
+                            ButtonsPanel.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 2, 4, 2), Background = Theme.Border });
+
+                        colorToolGroup = new WrapPanel { Orientation = Orientation.Vertical, Height = ColorToolGroupHeightDip };
+                        ButtonsPanel.Children.Add(colorToolGroup);
+                    }
+                    colorToolGroup.Children.Add(button);
+                }
+                else
+                {
+                    ButtonsPanel.Children.Add(button);
+                }
+
                 _rows.Add((cfg, button, icon, label));
             }
         }
