@@ -34,6 +34,10 @@ namespace WallSplitter
         private readonly List<Workset> _worksets;
         private readonly bool _isWorkshared;
 
+        // 프리셋 편집의 카테고리(V/G) 탭 - 각 최상위 카테고리를 펼쳤는지 여부(카테고리 Id 기준). 이 창을
+        // 새로 열면 초기화되는 세션 한정 UI 상태라 QuickToggleButtonConfig에는 저장하지 않는다.
+        private readonly HashSet<int> _expandedCategoryIds = new HashSet<int>();
+
         public QuickToggleSettingsWindow(Document doc)
         {
             InitializeComponent();
@@ -228,32 +232,12 @@ namespace WallSplitter
 
             if (cfg.Category == QuickToggleCategory.Preset)
             {
-                // 프리셋은 단일 카테고리 버튼과 달리 세 대상을 동시에 담을 수 있고, 비워둔 항목은 이
-                // 프리셋에서 아예 제외된다(QuickToggleService.TogglePreset/DeterminePresetState 참고) -
-                // 그래서 섹션마다 "비워두면 건드리지 않음"을 명시한다.
-                EditPanelHost.Children.Add(new TextBlock
-                {
-                    Text = "뷰템플릿 (하나만 선택 가능 - <없음>을 선택하면 이 프리셋은 뷰템플릿을 건드리지 않습니다)",
-                    FontWeight = FontWeights.Bold,
-                    Margin = new Thickness(0, 0, 0, 3),
-                });
-                BuildViewTemplatePicker(cfg);
-
-                EditPanelHost.Children.Add(new TextBlock
-                {
-                    Text = "필터 (여러 개 선택 가능 - 비워두면 이 프리셋은 필터를 건드리지 않습니다)",
-                    FontWeight = FontWeights.Bold,
-                    Margin = new Thickness(0, 12, 0, 3),
-                });
-                BuildFilterPicker(cfg);
-
-                EditPanelHost.Children.Add(new TextBlock
-                {
-                    Text = "작업세트 (여러 개 선택 가능 - 비워두면 이 프리셋은 작업세트를 건드리지 않습니다)",
-                    FontWeight = FontWeights.Bold,
-                    Margin = new Thickness(0, 12, 0, 3),
-                });
-                BuildWorksetPicker(cfg);
+                // 2026-07-29, "스크롤로 하나씩 찾는 대신 카테고리 탭 형식으로 클릭해서 들어가게 해달라"는
+                // 요청으로, 기존에 세 섹션을 한 화면에 이어붙이던 방식을 Revit V/G 대화상자와 같은 탭
+                // 구조로 바꿨다(Theme.xaml에 이미 TabControl/TabItem 스타일이 있어 그대로 재사용). 프리셋은
+                // 단일 카테고리 버튼과 달리 여러 대상을 동시에 담을 수 있고, 비워둔/포함 안 시킨 항목은
+                // 이 프리셋에서 아예 제외된다(QuickToggleService.TogglePreset/DeterminePresetState 참고).
+                BuildPresetTabs(cfg);
                 return;
             }
 
@@ -267,15 +251,201 @@ namespace WallSplitter
             switch (cfg.Category)
             {
                 case QuickToggleCategory.ViewTemplate:
-                    BuildViewTemplatePicker(cfg);
+                    BuildViewTemplatePicker(cfg, EditPanelHost);
                     break;
                 case QuickToggleCategory.Filter:
-                    BuildFilterPicker(cfg);
+                    BuildFilterPicker(cfg, EditPanelHost);
                     break;
                 case QuickToggleCategory.Workset:
-                    BuildWorksetPicker(cfg);
+                    BuildWorksetPicker(cfg, EditPanelHost);
                     break;
             }
+        }
+
+        // ===== 프리셋 편집 - 탭 구조 (2026-07-29) =====
+
+        private void BuildPresetTabs(QuickToggleButtonConfig cfg)
+        {
+            TabControl tabs = new TabControl();
+
+            StackPanel vtPanel = new StackPanel { Margin = new Thickness(8) };
+            vtPanel.Children.Add(new TextBlock
+            {
+                Text = "하나만 선택 가능 - <없음>을 선택하면 이 프리셋은 뷰템플릿을 건드리지 않습니다.",
+                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
+            });
+            BuildViewTemplatePicker(cfg, vtPanel);
+            tabs.Items.Add(new TabItem { Header = "뷰템플릿", Content = vtPanel });
+
+            StackPanel filterPanel = new StackPanel { Margin = new Thickness(8) };
+            filterPanel.Children.Add(new TextBlock
+            {
+                Text = "여러 개 선택 가능 - 비워두면 이 프리셋은 필터를 건드리지 않습니다.",
+                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
+            });
+            BuildFilterPicker(cfg, filterPanel);
+            tabs.Items.Add(new TabItem { Header = "필터", Content = filterPanel });
+
+            StackPanel worksetPanel = new StackPanel { Margin = new Thickness(8) };
+            worksetPanel.Children.Add(new TextBlock
+            {
+                Text = "여러 개 선택 가능 - 비워두면 이 프리셋은 작업세트를 건드리지 않습니다.",
+                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
+            });
+            BuildWorksetPicker(cfg, worksetPanel);
+            tabs.Items.Add(new TabItem { Header = "작업세트", Content = worksetPanel });
+
+            tabs.Items.Add(new TabItem { Header = "모델 카테고리", Content = BuildPresetCategoryTab(cfg, "모델 카테고리", QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Model)) });
+            tabs.Items.Add(new TabItem { Header = "주석 카테고리", Content = BuildPresetCategoryTab(cfg, "주석 카테고리", QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Annotation)) });
+            tabs.Items.Add(new TabItem { Header = "해석 모델 카테고리", Content = BuildPresetCategoryTab(cfg, "해석 모델 카테고리", QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.AnalyticalModel)) });
+            tabs.Items.Add(new TabItem { Header = "가져온 카테고리", Content = BuildPresetCategoryTab(cfg, "가져온 카테고리", QuickToggleService.ImportedCategories(_doc)) });
+
+            if (_lastPresetTabIndex >= 0 && _lastPresetTabIndex < tabs.Items.Count) tabs.SelectedIndex = _lastPresetTabIndex;
+            tabs.SelectionChanged += (s, e) => { if (tabs.SelectedIndex >= 0) _lastPresetTabIndex = tabs.SelectedIndex; };
+
+            EditPanelHost.Children.Add(tabs);
+        }
+
+        // 마지막으로 보던 프리셋 탭 - 편집(체크박스/재정의 창) 후 BuildEditPanel이 통째로 다시 그려지므로,
+        // 이 값이 없으면 매번 첫 탭("뷰템플릿")으로 튕겨서 "카테고리 탭에서 체크했더니 다른 탭으로 이동한다"는
+        // 혼란을 준다. 이 창을 새로 열면 초기화되는 세션 한정 UI 상태.
+        private int _lastPresetTabIndex = 0;
+
+        private UIElement BuildPresetCategoryTab(QuickToggleButtonConfig cfg, string groupLabel, List<Category> topCategories)
+        {
+            StackPanel panel = new StackPanel { Margin = new Thickness(8) };
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"{groupLabel} - 포함시키면 프리셋이 켜질 때 표시/숨김과 아래에서 편집한 그래픽 재정의를 적용하고, " +
+                       "꺼지면 표시 상태로 되돌리며 재정의를 지웁니다.",
+                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
+            });
+
+            if (topCategories.Count == 0)
+            {
+                panel.Children.Add(new TextBlock { Text = "이 그룹에 카테고리가 없습니다.", Foreground = Theme.TextSecondary });
+                return panel;
+            }
+
+            foreach (Category top in topCategories)
+                panel.Children.Add(BuildCategoryRow(cfg, top, depth: 0));
+
+            return panel;
+        }
+
+        private UIElement BuildCategoryRow(QuickToggleButtonConfig cfg, Category category, int depth)
+        {
+            StackPanel container = new StackPanel();
+            int catId = category.Id.ToInt();
+            List<Category> subs = QuickToggleService.SubCategoriesOf(category);
+            bool hasChildren = subs.Count > 0;
+            bool expanded = _expandedCategoryIds.Contains(catId);
+
+            WpfGrid row = new WpfGrid { Margin = new Thickness(depth * 18, 1, 0, 1) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            if (hasChildren)
+            {
+                Button expandButton = new Button
+                {
+                    Content = CreateExpandGlyph(expanded),
+                    Width = 18, Height = 18, Padding = new Thickness(3),
+                    Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                };
+                expandButton.Click += (s, e) =>
+                {
+                    if (expanded) _expandedCategoryIds.Remove(catId); else _expandedCategoryIds.Add(catId);
+                    BuildEditPanel(cfg);
+                };
+                WpfGrid.SetColumn(expandButton, 0);
+                row.Children.Add(expandButton);
+            }
+
+            CategoryOverrideConfig? existing = cfg.CategoryOverrides.FirstOrDefault(c => c.CategoryId == catId);
+            CheckBox includeBox = new CheckBox { IsChecked = existing != null, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 4, 0) };
+            WpfGrid.SetColumn(includeBox, 1);
+            row.Children.Add(includeBox);
+
+            TextBlock label = new TextBlock
+            {
+                Text = existing == null ? category.Name : category.Name + SummarizeOverride(existing),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            WpfGrid.SetColumn(label, 2);
+            row.Children.Add(label);
+
+            Button editButton = new Button { Content = "편집", Padding = new Thickness(8, 2, 8, 2), IsEnabled = existing != null };
+            editButton.Click += (s, e) =>
+            {
+                CategoryOverrideConfig current = cfg.CategoryOverrides.First(c => c.CategoryId == catId);
+                CategoryOverrideEditWindow dlg = new CategoryOverrideEditWindow(_doc, category, current.Clone()) { Owner = this };
+                if (dlg.ShowDialog() == true && dlg.Result != null)
+                {
+                    int idx = cfg.CategoryOverrides.FindIndex(c => c.CategoryId == catId);
+                    cfg.CategoryOverrides[idx] = dlg.Result;
+                    BuildEditPanel(cfg);
+                }
+            };
+            WpfGrid.SetColumn(editButton, 3);
+            row.Children.Add(editButton);
+
+            includeBox.Checked += (s, e) =>
+            {
+                if (cfg.CategoryOverrides.Any(c => c.CategoryId == catId)) return;
+                // 기본값: 표시=false(숨김) - 프리셋에 카테고리를 포함시키는 가장 흔한 목적이 "이 프리셋이
+                // 켜지면 이 카테고리를 숨긴다"이므로, 체크만 해도 바로 의미 있는 동작을 하도록 했다. 더
+                // 세밀한 재정의(선/패턴/투명도 등)는 "편집" 버튼에서 추가로 설정한다.
+                cfg.CategoryOverrides.Add(new CategoryOverrideConfig
+                {
+                    CategoryId = catId,
+                    CategoryName = category.Name,
+                    ParentCategoryName = category.Parent?.Name,
+                    Visible = false,
+                });
+                BuildEditPanel(cfg);
+            };
+            includeBox.Unchecked += (s, e) =>
+            {
+                cfg.CategoryOverrides.RemoveAll(c => c.CategoryId == catId);
+                BuildEditPanel(cfg);
+            };
+
+            container.Children.Add(row);
+
+            if (hasChildren && expanded)
+                foreach (Category sub in subs)
+                    container.Children.Add(BuildCategoryRow(cfg, sub, depth + 1));
+
+            return container;
+        }
+
+        // 접었다 펼치지 않고도 목록에서 바로 뭐가 설정됐는지 알 수 있도록 짧은 요약을 붙인다 - 카테고리가
+        // 많을 때 하나하나 "편집"을 눌러보지 않아도 되게 하기 위함.
+        private static string SummarizeOverride(CategoryOverrideConfig co)
+        {
+            List<string> parts = new List<string>();
+            if (co.Visible == false) parts.Add("숨김");
+            else if (co.Visible == true) parts.Add("표시");
+            if (co.Halftone == true) parts.Add("하프톤");
+            if (co.Transparency.HasValue) parts.Add($"투명도 {co.Transparency}%");
+            if (co.ProjectionLineColor.HasValue || co.ProjectionLineWeight.HasValue || co.ProjectionLinePatternName != null) parts.Add("투영선 재정의");
+            if (co.CutLineColor.HasValue || co.CutLineWeight.HasValue || co.CutLinePatternName != null) parts.Add("절단선 재정의");
+            if (co.SurfaceForegroundPatternName != null || co.SurfaceBackgroundPatternName != null) parts.Add("표면패턴 재정의");
+            if (co.CutForegroundPatternName != null || co.CutBackgroundPatternName != null) parts.Add("절단패턴 재정의");
+            return parts.Count == 0 ? "" : "  —  " + string.Join(", ", parts);
+        }
+
+        private static Polygon CreateExpandGlyph(bool expanded)
+        {
+            // 접힘: ▶(오른쪽 방향), 펼침: ▼(아래 방향).
+            PointCollection points = expanded
+                ? new PointCollection { new System.Windows.Point(0, 0), new System.Windows.Point(10, 0), new System.Windows.Point(5, 8) }
+                : new PointCollection { new System.Windows.Point(0, 0), new System.Windows.Point(8, 5), new System.Windows.Point(0, 10) };
+            return new Polygon { Points = points, Fill = Theme.TextSecondary, Width = 10, Height = 10 };
         }
 
         // 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가 -
@@ -347,7 +517,7 @@ namespace WallSplitter
             EditHeaderHost.Children.Add(colorRow);
         }
 
-        private void BuildViewTemplatePicker(QuickToggleButtonConfig cfg)
+        private void BuildViewTemplatePicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
             StackPanel list = new StackPanel();
 
@@ -367,10 +537,10 @@ namespace WallSplitter
             if (_viewTemplates.Count == 0)
                 list.Children.Add(new TextBlock { Text = "이 문서에 뷰템플릿이 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0) });
 
-            EditPanelHost.Children.Add(list);
+            target.Children.Add(list);
         }
 
-        private void BuildFilterPicker(QuickToggleButtonConfig cfg)
+        private void BuildFilterPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
             StackPanel list = new StackPanel();
 
@@ -387,10 +557,10 @@ namespace WallSplitter
             if (_filters.Count == 0)
                 list.Children.Add(new TextBlock { Text = "이 문서에 필터가 없습니다.", Foreground = Theme.TextSecondary });
 
-            EditPanelHost.Children.Add(list);
+            target.Children.Add(list);
         }
 
-        private void BuildWorksetPicker(QuickToggleButtonConfig cfg)
+        private void BuildWorksetPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
             StackPanel list = new StackPanel();
 
@@ -402,7 +572,7 @@ namespace WallSplitter
                     Foreground = Theme.WarningText,
                     TextWrapping = TextWrapping.Wrap,
                 });
-                EditPanelHost.Children.Add(list);
+                target.Children.Add(list);
                 return;
             }
 
@@ -419,7 +589,7 @@ namespace WallSplitter
             if (_worksets.Count == 0)
                 list.Children.Add(new TextBlock { Text = "이 문서에 사용자 작업세트가 없습니다.", Foreground = Theme.TextSecondary });
 
-            EditPanelHost.Children.Add(list);
+            target.Children.Add(list);
         }
 
         // 위/아래 이동·삭제 버튼 아이콘 - SettingsWindow의 CreateTriangle/CreateXMark와 동일한 방식
@@ -516,6 +686,17 @@ namespace WallSplitter
             Dictionary<string, int> filterByName = _filters.ToDictionary(f => f.Name, f => f.Id.ToInt());
             Dictionary<string, int> worksetByName = _worksets.ToDictionary(w => w.Name, w => w.Id.IntegerValue);
 
+            // 카테고리는 같은 이름이 서로 다른 상위 카테고리 아래 있을 수 있어(부모 이름까지 함께) 키로
+            // 쓴다. 선/채우기 패턴 이름은 여기서 재검색하지 않는다 - QuickToggleService가 프리셋을 적용할
+            // 때마다(Toggle 시점) 그 문서에서 이름으로 다시 찾으므로 이식 시점엔 그대로 문자열만 옮기면
+            // 되고, 대상 문서에 없는 패턴이면 그 속성만 조용히 건너뛴다(ResolveLinePatternId/FillPatternId).
+            Dictionary<(string Name, string? Parent), int> categoryByName = new Dictionary<(string, string?), int>();
+            foreach (Category c in QuickToggleService.AllCategoriesForNameMatching(_doc))
+            {
+                var key = (c.Name, c.Parent?.Name);
+                if (!categoryByName.ContainsKey(key)) categoryByName[key] = c.Id.ToInt();
+            }
+
             List<string> missing = new List<string>();
 
             // 이름 기반 재검색은 카테고리로 분기하지 않고 항상 세 부분 다 시도한다 - 프리셋 버튼은
@@ -571,6 +752,22 @@ namespace WallSplitter
                 }
                 cfg.WorksetIds = resolvedWorksetIds;
                 cfg.WorksetNames = resolvedWorksetNames;
+
+                List<CategoryOverrideConfig> resolvedCategoryOverrides = new List<CategoryOverrideConfig>();
+                foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
+                {
+                    var key = (co.CategoryName, co.ParentCategoryName);
+                    if (categoryByName.TryGetValue(key, out int catId))
+                    {
+                        co.CategoryId = catId;
+                        resolvedCategoryOverrides.Add(co);
+                    }
+                    else
+                    {
+                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
+                    }
+                }
+                cfg.CategoryOverrides = resolvedCategoryOverrides;
             }
 
             if (missing.Count > 0)

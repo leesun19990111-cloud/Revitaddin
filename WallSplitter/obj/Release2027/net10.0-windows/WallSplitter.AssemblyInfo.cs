@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WallSplitter")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release2027")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+66fa442e1d08fa78e114c29fd7ba5e64f6e46f41")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b3fb3a2366065a82cfceb496f5ddbfea84d0cd2d")]
 [assembly: System.Reflection.AssemblyProductAttribute("WallSplitter")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WallSplitter")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

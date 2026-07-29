@@ -100,6 +100,29 @@ namespace WallSplitter
                 if (!worksetsOn) allOn = false;
             }
 
+            // 카테고리(V/G) 재정의가 하나라도 포함되어 있으면 anyPart는 true - CONFIRMED 코드 결함으로
+            // 발견(2026-07-29 리뷰): 이 블록을 처음 짤 때 anyPart를 Visible이 있는 카테고리에서만 켰는데,
+            // 그러면 "표시 여부는 안 건드리고 색상/패턴만 재정의하는" 프리셋은 anyPart가 끝까지 false로
+            // 남아 DeterminePresetState가 Disabled를 반환 - 툴바가 Disabled 버튼을 IsEnabled=false로
+            // 그려서(QuickToggleToolbar.UpdateButtonStates) 그런 프리셋은 클릭 자체가 막혀버렸다. on/off
+            // 판정(allOn)은 여전히 표시 여부를 지정한 카테고리에 한해서만 반영한다 - 선/패턴/투명도 등은
+            // OverrideGraphicSettings에 동등성 비교가 없어 정확히 비교할 방법이 마땅치 않기 때문이다.
+            if (cfg.CategoryOverrides.Count > 0)
+            {
+                anyPart = true;
+                foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
+                {
+                    if (!co.Visible.HasValue) continue;
+                    try
+                    {
+                        bool hidden = view.GetCategoryHidden(new ElementId(co.CategoryId));
+                        bool expectedHidden = !co.Visible.Value;
+                        if (hidden != expectedHidden) allOn = false;
+                    }
+                    catch { /* 그 사이 삭제된 카테고리이거나 이 뷰에서 숨기기를 지원하지 않는 경우 */ }
+                }
+            }
+
             if (!anyPart) return QuickToggleButtonState.Disabled;
             return allOn ? QuickToggleButtonState.On : QuickToggleButtonState.Off;
         }
@@ -247,7 +270,163 @@ namespace WallSplitter
                 }
             }
 
+            if (cfg.CategoryOverrides.Count > 0) ApplyCategoryOverrides(view, cfg, turnOn);
+
             return ok;
+        }
+
+        // 프리셋의 카테고리(V/G) 탭 적용 - 켜질 때는 저장된 표시 여부 + 그래픽 재정의(선/패턴/투명도/
+        // 하프톤/상세수준)를 그대로 적용하고, 꺼질 때는 표시로 되돌리고 재정의를 완전히 지운다(빈
+        // OverrideGraphicSettings로 교체) - "되돌리기" 스냅샷과 달리 프리셋은 켜짐/꺼짐 두 상태를 직접
+        // 정의하는 방식이라(필터/작업세트와 동일한 사고방식), 끄기 = "그 사이 원래 어떤 상태였는지"가
+        // 아니라 "표시 + 재정의 없음"이라는 고정된 기본 상태로 정의했다.
+        private static void ApplyCategoryOverrides(View view, QuickToggleButtonConfig cfg, bool turnOn)
+        {
+            Document doc = view.Document;
+            foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
+            {
+                ElementId catId = new ElementId(co.CategoryId);
+                if (turnOn)
+                {
+                    if (co.Visible.HasValue)
+                    {
+                        try { view.SetCategoryHidden(catId, !co.Visible.Value); }
+                        catch { /* 그 사이 삭제된 카테고리이거나 뷰템플릿이 제어하는 경우 등 */ }
+                    }
+                    try { view.SetCategoryOverrides(catId, BuildOverrideGraphicSettings(doc, co)); }
+                    catch { /* 이 카테고리가 그래픽 재정의를 지원하지 않거나 삭제된 경우 등 */ }
+                }
+                else
+                {
+                    try { view.SetCategoryHidden(catId, false); }
+                    catch { /* 위와 동일 */ }
+                    try { view.SetCategoryOverrides(catId, new OverrideGraphicSettings()); }
+                    catch { /* 위와 동일 */ }
+                }
+            }
+        }
+
+        private static OverrideGraphicSettings BuildOverrideGraphicSettings(Document doc, CategoryOverrideConfig co)
+        {
+            OverrideGraphicSettings ogs = new OverrideGraphicSettings();
+
+            if (co.Halftone.HasValue) ogs.SetHalftone(co.Halftone.Value);
+            if (co.Transparency.HasValue) ogs.SetSurfaceTransparency(co.Transparency.Value);
+            if (co.DetailLevel != null && Enum.TryParse(co.DetailLevel, out ViewDetailLevel detailLevel))
+            {
+                try { ogs.SetDetailLevel(detailLevel); } catch { /* 이 카테고리/뷰 조합이 상세수준 재정의를 지원하지 않는 경우 */ }
+            }
+
+            if (co.ProjectionLineWeight.HasValue) ogs.SetProjectionLineWeight(co.ProjectionLineWeight.Value);
+            if (co.ProjectionLineColor.HasValue) ogs.SetProjectionLineColor(IntToColor(co.ProjectionLineColor.Value));
+            ElementId? projLinePattern = ResolveLinePatternId(doc, co.ProjectionLinePatternName);
+            if (projLinePattern != null) ogs.SetProjectionLinePatternId(projLinePattern);
+
+            if (co.CutLineWeight.HasValue) ogs.SetCutLineWeight(co.CutLineWeight.Value);
+            if (co.CutLineColor.HasValue) ogs.SetCutLineColor(IntToColor(co.CutLineColor.Value));
+            ElementId? cutLinePattern = ResolveLinePatternId(doc, co.CutLinePatternName);
+            if (cutLinePattern != null) ogs.SetCutLinePatternId(cutLinePattern);
+
+            if (co.SurfaceForegroundVisible.HasValue) ogs.SetSurfaceForegroundPatternVisible(co.SurfaceForegroundVisible.Value);
+            ElementId? surfFgPattern = ResolveFillPatternId(doc, co.SurfaceForegroundPatternName);
+            if (surfFgPattern != null) ogs.SetSurfaceForegroundPatternId(surfFgPattern);
+            if (co.SurfaceForegroundColor.HasValue) ogs.SetSurfaceForegroundPatternColor(IntToColor(co.SurfaceForegroundColor.Value));
+
+            if (co.SurfaceBackgroundVisible.HasValue) ogs.SetSurfaceBackgroundPatternVisible(co.SurfaceBackgroundVisible.Value);
+            ElementId? surfBgPattern = ResolveFillPatternId(doc, co.SurfaceBackgroundPatternName);
+            if (surfBgPattern != null) ogs.SetSurfaceBackgroundPatternId(surfBgPattern);
+            if (co.SurfaceBackgroundColor.HasValue) ogs.SetSurfaceBackgroundPatternColor(IntToColor(co.SurfaceBackgroundColor.Value));
+
+            if (co.CutForegroundVisible.HasValue) ogs.SetCutForegroundPatternVisible(co.CutForegroundVisible.Value);
+            ElementId? cutFgPattern = ResolveFillPatternId(doc, co.CutForegroundPatternName);
+            if (cutFgPattern != null) ogs.SetCutForegroundPatternId(cutFgPattern);
+            if (co.CutForegroundColor.HasValue) ogs.SetCutForegroundPatternColor(IntToColor(co.CutForegroundColor.Value));
+
+            if (co.CutBackgroundVisible.HasValue) ogs.SetCutBackgroundPatternVisible(co.CutBackgroundVisible.Value);
+            ElementId? cutBgPattern = ResolveFillPatternId(doc, co.CutBackgroundPatternName);
+            if (cutBgPattern != null) ogs.SetCutBackgroundPatternId(cutBgPattern);
+            if (co.CutBackgroundColor.HasValue) ogs.SetCutBackgroundPatternColor(IntToColor(co.CutBackgroundColor.Value));
+
+            return ogs;
+        }
+
+        private static Autodesk.Revit.DB.Color IntToColor(int rgb) =>
+            new Autodesk.Revit.DB.Color((byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF));
+
+        // 카테고리 편집창의 "실선"/"실채우기" 항목은 실제 LinePatternElement/FillPatternElement가 아니라
+        // Revit이 내부적으로 특수 취급하는 값이라 이름으로 검색할 수 없다 - 그래서 이 두 문자열을 예약된
+        // 센티널로 쓰고, 그 외에는 이름으로 문서에서 검색한다(내보내기/가져오기에서도 동일하게 사용).
+        internal const string SolidLinePatternName = "<실선>";
+        internal const string SolidFillPatternName = "<실채우기>";
+
+        private static ElementId? ResolveLinePatternId(Document doc, string? name)
+        {
+            if (name == null) return null;
+            if (name == SolidLinePatternName) return LinePatternElement.GetSolidPatternId();
+            return new FilteredElementCollector(doc).OfClass(typeof(LinePatternElement)).Cast<LinePatternElement>()
+                .FirstOrDefault(p => p.Name == name)?.Id;
+        }
+
+        private static ElementId? ResolveFillPatternId(Document doc, string? name)
+        {
+            if (name == null) return null;
+            List<FillPatternElement> all = new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>().ToList();
+            if (name == SolidFillPatternName) return all.FirstOrDefault(p => p.GetFillPattern().IsSolidFill)?.Id;
+            return all.FirstOrDefault(p => p.Name == name)?.Id;
+        }
+
+        // 문서에 있는 선 패턴/채우기 패턴 목록 - 설정 창의 카테고리 재정의 편집 드롭다운에서 사용.
+        // "실선"/"실채우기"는 목록 맨 앞에 별도로 추가한다(위 센티널 참고, 실제 컬렉션에는 없음).
+        public static List<string> AllLinePatternNames(Document doc)
+        {
+            List<string> names = new List<string> { SolidLinePatternName };
+            names.AddRange(new FilteredElementCollector(doc).OfClass(typeof(LinePatternElement)).Cast<LinePatternElement>()
+                .Select(p => p.Name).OrderBy(n => n));
+            return names;
+        }
+
+        public static List<string> AllFillPatternNames(Document doc)
+        {
+            List<string> names = new List<string> { SolidFillPatternName };
+            names.AddRange(new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>()
+                .Where(p => !p.GetFillPattern().IsSolidFill)
+                .Select(p => p.Name).OrderBy(n => n));
+            return names;
+        }
+
+        // 프리셋 "카테고리(V/G)" 탭에서 쓰는 카테고리 목록 - Revit V/G 대화상자와 같은 4개 그룹으로
+        // 나눠 보여주기 위한 헬퍼. 모델/주석/해석모델은 doc.Settings.Categories(최상위 트리)를
+        // CategoryType으로 걸러서 쓰고, 가져온 카테고리는 그 트리에 없어(CAD 가져오기별로 동적 생성됨)
+        // 전용 루트 카테고리(OST_ImportObjectStyles)의 하위 카테고리에서 따로 모은다.
+        public static List<Category> TopLevelCategoriesOfType(Document doc, CategoryType type)
+        {
+            List<Category> result = new List<Category>();
+            foreach (Category c in doc.Settings.Categories)
+                if (c.CategoryType == type) result.Add(c);
+            return result.OrderBy(c => c.Name).ToList();
+        }
+
+        // 가져온 카테고리(Imported Categories) - CAD 가져오기의 레이어가 여기 하위 카테고리로 나타난다.
+        // 이 루트 카테고리 자체가 없는 문서(가져온 CAD가 아예 없는 경우 등)도 있어 방어적으로 처리한다.
+        public static List<Category> ImportedCategories(Document doc)
+        {
+            try
+            {
+                Category? root = Category.GetCategory(doc, BuiltInCategory.OST_ImportObjectStyles);
+                if (root?.SubCategories == null) return new List<Category>();
+                return root.SubCategories.Cast<Category>().OrderBy(c => c.Name).ToList();
+            }
+            catch
+            {
+                return new List<Category>();
+            }
+        }
+
+        public static List<Category> SubCategoriesOf(Category parent)
+        {
+            List<Category> result = new List<Category>();
+            foreach (Category c in parent.SubCategories) result.Add(c);
+            return result.OrderBy(c => c.Name).ToList();
         }
 
         // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 호출 가능하다. 뷰템플릿/필터 표시/작업세트 표시에
@@ -547,6 +726,18 @@ namespace WallSplitter
                 yield return sub;
                 foreach (Category grandchild in AllSubCategories(sub))
                     yield return grandchild;
+            }
+        }
+
+        // 프리셋 가져오기(다른 모델 간 이식)에서 이름으로 카테고리를 다시 찾을 때 쓰는 전체 목록 -
+        // AllCategories(모델/주석/해석모델)에 더해 가져온 카테고리(Imported Categories)까지 포함한다.
+        public static IEnumerable<Category> AllCategoriesForNameMatching(Document doc)
+        {
+            foreach (Category c in AllCategories(doc)) yield return c;
+            foreach (Category imported in ImportedCategories(doc))
+            {
+                yield return imported;
+                foreach (Category sub in AllSubCategories(imported)) yield return sub;
             }
         }
     }

@@ -37,3 +37,7 @@ C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSpli
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\QuickToggleToolbar.baml
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\QuickToggleSettingsWindow.g.cs
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\QuickToggleToolbar.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\CategoryOverrideEditWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\ColorPickerPopupWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\CategoryOverrideEditWindow.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\ColorPickerPopupWindow.g.cs

@@ -37,3 +37,7 @@ C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSpli
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2024\net48\WallSpli.73662DD6.Up2Date
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2024\net48\WallSplitter.dll
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2024\net48\WallSplitter.pdb
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2024\net48\CategoryOverrideEditWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2024\net48\ColorPickerPopupWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2024\net48\CategoryOverrideEditWindow.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2024\net48\ColorPickerPopupWindow.g.cs

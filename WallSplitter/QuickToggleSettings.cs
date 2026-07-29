@@ -65,6 +65,86 @@ namespace WallSplitter
         // (Theme.ToggleOn)을 쓴다 - 기존에 저장된 설정 파일도 그대로 호환된다.
         public QuickToggleIconShape? IconShape { get; set; }
         public string? OnColorHex { get; set; }
+
+        // 2026-07-29, "V/G 편집창에 있는 것들을 그대로 옮겨서 프리셋에 담고 싶다"는 요청으로 추가 - 프리셋에
+        // 포함된 카테고리별 표시 여부 + 그래픽 재정의(선/패턴/투명도/하프톤/상세수준)를 담는다. 카테고리가
+        // 이 리스트에 있다는 것 자체가 "이 프리셋에 포함됨"을 뜻하고(리스트에 없으면 그 카테고리는 아예
+        // 건드리지 않음 - Preset의 다른 필드들과 같은 "비어있으면 안 건드림" 규칙), 켜질 때 설정을 적용하고
+        // 꺼질 때는 표시로 되돌리고 재정의를 지운다(QuickToggleService.ApplyCategoryOverrides 참고).
+        public List<CategoryOverrideConfig> CategoryOverrides { get; set; } = new List<CategoryOverrideConfig>();
+    }
+
+    // 프리셋의 카테고리(V/G) 탭 한 줄 - Revit V/G 대화상자에서 카테고리별로 재정의할 수 있는 항목을 그대로
+    // 옮겼다. 색상은 int(0xRRGGBB)로, 선/채우기 패턴은 이름으로 저장한다 - ElementId는 문서마다 달라
+    // 이식(내보내기/가져오기)이 안 되기 때문에 ViewTemplateId/Name과 같은 이유로 이름을 같이 둔다.
+    // 모든 항목이 nullable인 이유: "이 속성은 재정의하지 않음"(null)과 "재정의해서 특정 값으로 설정함"을
+    // 구분해야 하기 때문 - null이면 Toggle 시 그 속성을 아예 건드리지 않는다.
+    public class CategoryOverrideConfig
+    {
+        public int CategoryId { get; set; }
+        public string CategoryName { get; set; } = "";
+        // 최상위 카테고리면 null. 같은 이름의 하위 카테고리가 서로 다른 상위 카테고리에 있을 수 있어
+        // (예: 여러 카테고리가 공유하는 서브카테고리 이름) 가져오기 시 이름만으로는 매칭이 모호할 수
+        // 있으므로 부모 이름까지 같이 저장해 매칭 정확도를 높인다.
+        public string? ParentCategoryName { get; set; }
+
+        // true = 표시, false = 숨김, null = 이 프리셋에서 표시 여부는 건드리지 않음(재정의 값만 적용).
+        public bool? Visible { get; set; }
+        public bool? Halftone { get; set; }
+        // ViewDetailLevel enum 이름 문자열(Coarse/Medium/Fine), null = 재정의 안 함.
+        public string? DetailLevel { get; set; }
+        public int? Transparency { get; set; } // 0~100
+
+        public int? ProjectionLineWeight { get; set; }
+        public int? ProjectionLineColor { get; set; }
+        public string? ProjectionLinePatternName { get; set; }
+
+        public int? CutLineWeight { get; set; }
+        public int? CutLineColor { get; set; }
+        public string? CutLinePatternName { get; set; }
+
+        public bool? SurfaceForegroundVisible { get; set; }
+        public string? SurfaceForegroundPatternName { get; set; }
+        public int? SurfaceForegroundColor { get; set; }
+        public bool? SurfaceBackgroundVisible { get; set; }
+        public string? SurfaceBackgroundPatternName { get; set; }
+        public int? SurfaceBackgroundColor { get; set; }
+
+        public bool? CutForegroundVisible { get; set; }
+        public string? CutForegroundPatternName { get; set; }
+        public int? CutForegroundColor { get; set; }
+        public bool? CutBackgroundVisible { get; set; }
+        public string? CutBackgroundPatternName { get; set; }
+        public int? CutBackgroundColor { get; set; }
+
+        public CategoryOverrideConfig Clone() => new CategoryOverrideConfig
+        {
+            CategoryId = CategoryId,
+            CategoryName = CategoryName,
+            ParentCategoryName = ParentCategoryName,
+            Visible = Visible,
+            Halftone = Halftone,
+            DetailLevel = DetailLevel,
+            Transparency = Transparency,
+            ProjectionLineWeight = ProjectionLineWeight,
+            ProjectionLineColor = ProjectionLineColor,
+            ProjectionLinePatternName = ProjectionLinePatternName,
+            CutLineWeight = CutLineWeight,
+            CutLineColor = CutLineColor,
+            CutLinePatternName = CutLinePatternName,
+            SurfaceForegroundVisible = SurfaceForegroundVisible,
+            SurfaceForegroundPatternName = SurfaceForegroundPatternName,
+            SurfaceForegroundColor = SurfaceForegroundColor,
+            SurfaceBackgroundVisible = SurfaceBackgroundVisible,
+            SurfaceBackgroundPatternName = SurfaceBackgroundPatternName,
+            SurfaceBackgroundColor = SurfaceBackgroundColor,
+            CutForegroundVisible = CutForegroundVisible,
+            CutForegroundPatternName = CutForegroundPatternName,
+            CutForegroundColor = CutForegroundColor,
+            CutBackgroundVisible = CutBackgroundVisible,
+            CutBackgroundPatternName = CutBackgroundPatternName,
+            CutBackgroundColor = CutBackgroundColor,
+        };
     }
 
     // 프로젝트 파일 경로별로 저장되는 설정 (이 PC 안에서만 유지 - Q&A로 확정).
