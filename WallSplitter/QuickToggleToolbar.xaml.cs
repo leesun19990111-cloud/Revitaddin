@@ -339,6 +339,14 @@ namespace WallSplitter
             if (cfg.Category == QuickToggleCategory.ColorTool)
                 return cfg.Name + " - 클릭하면 색상/투명도 조절 패널을 엽니다";
 
+            // 기능 버튼도 켜짐/꺼짐이 없다 - 지정된 명령을 실행한다는 실제 동작에 맞는 문구를 쓴다.
+            if (cfg.Category == QuickToggleCategory.CommandLauncher)
+            {
+                return string.IsNullOrEmpty(cfg.CommandLabel)
+                    ? cfg.Name + " (아직 실행할 기능이 지정되지 않았습니다)"
+                    : cfg.Name + " - 클릭하면 '" + cfg.CommandLabel + "' 실행";
+            }
+
             return state switch
             {
                 QuickToggleButtonState.On => cfg.Name + " - 클릭하면 끕니다",
@@ -391,6 +399,16 @@ namespace WallSplitter
             if (cfg.Category == QuickToggleCategory.ColorTool)
             {
                 ShowColorToolPopup(cfg, button);
+                return;
+            }
+
+            // 기능 버튼도 on/off 토글이 아니라 즉시 1회 실행이라 DetermineState/PendingTurnOn 경로를
+            // 타지 않는다 - 클릭 즉시 ExternalEvent로 QuickToggleService.RunCommand를 요청한다.
+            if (cfg.Category == QuickToggleCategory.CommandLauncher)
+            {
+                if (App.QuickToggleHandler == null || App.QuickToggleEvent == null) return;
+                App.QuickToggleHandler.PendingCommandLaunch = cfg;
+                App.QuickToggleEvent.Raise();
                 return;
             }
 

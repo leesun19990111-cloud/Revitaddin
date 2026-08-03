@@ -12,7 +12,7 @@ TRACE;REVIT2024_OR_GREATER;RELEASE2027;NET;NET10_0;NETCOREAPP;WINDOWS;WINDOWS7_0
 
 131075786908
 
-341155458109
+351182483431
 208-2100979313
 CategoryOverrideEditWindow.xaml;ColorPickerPopupWindow.xaml;ColorToolPopupWindow.xaml;ElementPickerWindow.xaml;LayerTypeAssignmentWindow.xaml;MaterialAssignWindow.xaml;ModelSyncWindow.xaml;NamerWindow.xaml;OpenDocumentPickerWindow.xaml;QuickToggleSettingsWindow.xaml;QuickToggleToolbar.xaml;Resources\Theme.xaml;SettingsWindow.xaml;
 

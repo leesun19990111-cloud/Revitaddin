@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
 
 namespace WallSplitter
 {
@@ -52,6 +54,11 @@ namespace WallSplitter
                     // 항상 클릭 가능한 상태(Off)로 고정한다. Disabled를 반환하면 툴바가 버튼 자체를
                     // IsEnabled=false로 그려 클릭이 막힌다(QuickToggleToolbar.RebuildButtons 참고).
                     case QuickToggleCategory.ColorTool:
+                        return QuickToggleButtonState.Off;
+
+                    // 기능 버튼도 색상 버튼과 같은 이유로 항상 Off(클릭 가능) 고정 - on/off 개념이 없고
+                    // 클릭할 때마다 지정된 명령을 한 번 실행할 뿐이다(RunCommand).
+                    case QuickToggleCategory.CommandLauncher:
                         return QuickToggleButtonState.Off;
 
                     default:
@@ -279,6 +286,36 @@ namespace WallSplitter
             if (cfg.CategoryOverrides.Count > 0) ApplyCategoryOverrides(view, cfg, turnOn);
 
             return ok;
+        }
+
+        // "기능 버튼" 클릭 - 지정된 Revit 명령을 한 번 실행한다(2026-08-03 추가). 트랜잭션을 열지 않는다 -
+        // 이 명령 자체(재료 지정 창을 연다, 동기화한다 등)가 필요하면 각자 알아서 트랜잭션을 연다. Sunny
+        // Tools 자체 명령(SunnyTool)은 App.cs가 리본 버튼을 등록할 때와 같은 RevitCommandId.
+        // LookupCommandId(전체 클래스 이름)로, Revit 기본 명령(NativeRevit)은 LookupPostableCommandId로
+        // 조회한다 - 둘 다 조회에 성공하고 CanPostCommand가 참일 때만 PostCommand로 실행 요청을 넣는다
+        // (PostCommand는 즉시 실행이 아니라 "다음 기회에 실행해달라"는 요청이라 이 메서드 반환 시점에는
+        // 아직 실행되지 않았을 수 있다 - Revit 자체 리본 버튼을 누르는 것과 동일한 메커니즘).
+        public static bool RunCommand(UIApplication uiapp, QuickToggleButtonConfig cfg)
+        {
+            if (cfg.CommandKind == null || string.IsNullOrEmpty(cfg.CommandId)) return false;
+
+            try
+            {
+                RevitCommandId? id = cfg.CommandKind == QuickToggleCommandKind.NativeRevit
+                    ? (Enum.TryParse(cfg.CommandId, out PostableCommand postable) ? RevitCommandId.LookupPostableCommandId(postable) : null)
+                    : RevitCommandId.LookupCommandId(cfg.CommandId);
+
+                if (id == null || !uiapp.CanPostCommand(id)) return false;
+
+                uiapp.PostCommand(id);
+                return true;
+            }
+            catch
+            {
+                // 이 시점(문서 없음, 다른 명령 진행 중 등)에 이 명령을 실행할 수 없는 경우 - 호출자가
+                // 실패로 보고한다.
+                return false;
+            }
         }
 
         // "색상 버튼" 팝업이 색상 팔레트/투명도 슬라이더를 조작할 때마다 즉시 호출한다(2026-07-29 추가).

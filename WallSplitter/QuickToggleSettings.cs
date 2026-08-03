@@ -28,6 +28,20 @@ namespace WallSplitter
         // 고르고(ColorButtonCategories), 실제 색상/투명도 값은 저장하지 않는다 - 매번 클릭했을 때 그
         // 카테고리의 현재 값을 읽어와 보여준다(QuickToggleService.ReadCurrentColorAndTransparency).
         ColorTool,
+        // 2026-08-03, "커스텀 버튼 설정에 다른 툴들의 버튼도 추가할 수 있으면 좋겠다 - 재료지정, 네이머,
+        // 공동작업탭의 동기화 버튼 등을 찾아서 버튼으로 추가하고 싶다"는 요청으로 추가. ColorTool처럼
+        // on/off 개념이 없고, 클릭하면 지정된 Revit 명령(Sunny Tools 자체 명령 또는 Revit 기본 명령)을
+        // 즉시 한 번 실행할 뿐이다(QuickToggleService.RunCommand, RevitCommandId+PostCommand 사용).
+        CommandLauncher,
+    }
+
+    // CommandLauncher 버튼이 가리키는 명령의 종류 - RevitCommandId를 조회하는 API가 서로 다르다
+    // (SunnyTool은 RevitCommandId.LookupCommandId(전체 클래스 이름), NativeRevit은
+    // RevitCommandId.LookupPostableCommandId(PostableCommand)).
+    public enum QuickToggleCommandKind
+    {
+        SunnyTool,
+        NativeRevit,
     }
 
     // ElementId.IntegerValue(int)는 2023 API에만 있고, 2024+에서는 Value(long)로 바뀌면서 완전히
@@ -85,6 +99,19 @@ namespace WallSplitter
         // 필드(선/패턴 등)는 이 용도에서 전혀 쓰지 않는다 - 카테고리 이름 기반 매칭 로직(내보내기/가져오기)을
         // 그대로 재사용하기 위해 새 타입을 만드는 대신 기존 타입을 재사용했다.
         public List<CategoryOverrideConfig> ColorButtonCategories { get; set; } = new List<CategoryOverrideConfig>();
+
+        // 2026-08-03, "기능 버튼"(CommandLauncher) 전용 - 클릭하면 실행할 명령 하나. CommandId는
+        // CommandKind에 따라 다른 의미다: SunnyTool이면 IExternalCommand 구현 클래스의 전체 이름
+        // (SunnyToolsCommands.All의 값, RevitCommandId.LookupCommandId로 조회), NativeRevit이면
+        // PostableCommand enum 멤버 이름(RevitCommandId.LookupPostableCommand로 조회). 둘 다 문서가
+        // 아니라 Revit/이 애드인 자체에 속한 식별자라 ElementId와 달리 문서마다 다르지 않으므로 -
+        // ViewTemplateId/FilterIds처럼 이름을 따로 저장해 내보내기/가져오기 때 재검색할 필요가 없다
+        // (그대로 복사해도 어느 문서에서나 똑같이 유효함). CommandLabel은 설정 창에 표시할 사람이 읽는
+        // 이름을 저장해둔다(PostableCommand는 raw enum 이름이라 검색 목록을 매번 다시 만들지 않고도
+        // 툴팁/버튼 목록에 바로 쓸 수 있게).
+        public QuickToggleCommandKind? CommandKind { get; set; }
+        public string? CommandId { get; set; }
+        public string? CommandLabel { get; set; }
     }
 
     // 프리셋의 카테고리(V/G) 탭 한 줄 - Revit V/G 대화상자에서 카테고리별로 재정의할 수 있는 항목을 그대로
@@ -248,6 +275,7 @@ namespace WallSplitter
                 QuickToggleCategory.Workset => "작업세트버튼",
                 QuickToggleCategory.Preset => "프리셋버튼",
                 QuickToggleCategory.ColorTool => "색상버튼",
+                QuickToggleCategory.CommandLauncher => "기능버튼",
                 _ => "버튼",
             };
             int count = 0;

@@ -12,7 +12,7 @@ TRACE;REVIT2024_OR_GREATER;DEBUG2026;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NE
 
 131075786908
 
-34-1198735702
+35-1171710380
 200-1183097542
 CategoryOverrideEditWindow.xaml;ColorPickerPopupWindow.xaml;ColorToolPopupWindow.xaml;ElementPickerWindow.xaml;LayerTypeAssignmentWindow.xaml;MaterialAssignWindow.xaml;ModelSyncWindow.xaml;NamerWindow.xaml;OpenDocumentPickerWindow.xaml;QuickToggleSettingsWindow.xaml;QuickToggleToolbar.xaml;Resources\Theme.xaml;SettingsWindow.xaml;
 

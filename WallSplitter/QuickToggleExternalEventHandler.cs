@@ -82,6 +82,10 @@ namespace WallSplitter
         // 같은 ExternalEvent를 재사용한다.
         internal ColorToolApplyRequest? PendingColorApply { get; set; }
 
+        // "기능 버튼" 클릭 요청 (2026-08-03 추가) - 위 둘과 같은 방식으로 같은 ExternalEvent를 재사용한다.
+        // 버튼 설정 자체(어느 명령을 실행할지)만 있으면 되므로 cfg 참조를 그대로 담는다.
+        internal QuickToggleButtonConfig? PendingCommandLaunch { get; set; }
+
         public void Execute(UIApplication app)
         {
             if (PendingRevertSnapshot != null)
@@ -97,6 +101,18 @@ namespace WallSplitter
                 ColorToolApplyRequest request = PendingColorApply;
                 PendingColorApply = null;
                 ExecuteColorApply(app, request);
+                return;
+            }
+
+            if (PendingCommandLaunch != null)
+            {
+                QuickToggleButtonConfig launchCfg = PendingCommandLaunch;
+                PendingCommandLaunch = null;
+                if (!QuickToggleService.RunCommand(app, launchCfg))
+                {
+                    TaskDialog.Show("커스텀 버튼",
+                        $"'{launchCfg.Name}' 기능을 실행하지 못했습니다 (지금 상황에서 사용할 수 없는 기능일 수 있습니다).");
+                }
                 return;
             }
 

@@ -153,6 +153,7 @@ namespace WallSplitter
             QuickToggleCategory.Workset => "작업세트",
             QuickToggleCategory.Preset => "프리셋",
             QuickToggleCategory.ColorTool => "색상",
+            QuickToggleCategory.CommandLauncher => "기능",
             _ => "",
         };
 
@@ -180,6 +181,7 @@ namespace WallSplitter
         private void AddWorksetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Workset);
         private void AddPresetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Preset);
         private void AddColorToolButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.ColorTool);
+        private void AddCommandLauncherButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.CommandLauncher);
 
         private void AddButtonOfCategory(QuickToggleCategory category)
         {
@@ -260,6 +262,16 @@ namespace WallSplitter
                 EditPanelHost.Children.Add(colorToolResults);
                 colorToolSearchBox.TextChanged += (s, e) => RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, colorToolSearchBox.Text, isColorTool: true);
                 RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, "", isColorTool: true);
+                return;
+            }
+
+            if (cfg.Category == QuickToggleCategory.CommandLauncher)
+            {
+                // 2026-08-03, "커스텀 버튼 설정에 다른 툴들의 버튼도 추가하고 싶다 - 재료지정/네이머/동기화
+                // 등을 찾아서 버튼으로 추가" 요청으로 추가. 색상 버튼과 마찬가지로 대상 목록 헤더를
+                // EditHeaderHost가 아니라 EditPanelHost 안에 직접 둔다(단일/여러 개 선택 안내 문구 형식이
+                // 이 카테고리엔 안 맞아서).
+                BuildCommandPicker(cfg, EditPanelHost);
                 return;
             }
 
@@ -766,6 +778,95 @@ namespace WallSplitter
                 resultsPanel.Children.Add(new TextBlock { Text = "이 문서에 사용자 작업세트가 없습니다.", Foreground = Theme.TextSecondary });
             else if (!any && !string.IsNullOrEmpty(filter))
                 resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
+        }
+
+        // ===== "기능 버튼" 편집 (2026-08-03 추가) =====
+
+        // Sunny Tools 자체 명령은 개수가 적어(SunnyToolsCommands.All) 검색어 없이 항상 보여주고, Revit
+        // 기본 명령(PostableCommand)은 수백 개라 검색어를 입력해야만 나타난다(SunnyToolsCommands.
+        // SearchNativeCommands) - 필터 없이 전부 그리면 창이 느려지고 오히려 원하는 걸 찾기 어렵다.
+        private void BuildCommandPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
+        {
+            target.Children.Add(new TextBlock
+            {
+                Text = "클릭하면 즉시 실행할 기능을 하나 선택하세요. Sunny Tools 자체 기능은 아래 목록에 항상 나타나고, " +
+                       "Revit 기본 기능(동기화, 저장, 인쇄 등)은 검색어를 입력하면 나타납니다.",
+                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
+            });
+
+            TextBlock currentLabel = new TextBlock { Foreground = Theme.TextSecondary, Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap };
+            UpdateCurrentCommandLabel(currentLabel, cfg);
+            target.Children.Add(currentLabel);
+
+            StackPanel resultsPanel = new StackPanel();
+            target.Children.Add(BuildSearchRow(out TextBox searchBox));
+            target.Children.Add(resultsPanel);
+            searchBox.TextChanged += (s, e) => RenderCommandList(cfg, resultsPanel, searchBox.Text, currentLabel);
+            RenderCommandList(cfg, resultsPanel, "", currentLabel);
+        }
+
+        private static void UpdateCurrentCommandLabel(TextBlock label, QuickToggleButtonConfig cfg) =>
+            label.Text = "현재 선택: " + (string.IsNullOrEmpty(cfg.CommandLabel) ? "(아직 없음)" : cfg.CommandLabel);
+
+        private void RenderCommandList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter, TextBlock currentLabel)
+        {
+            resultsPanel.Children.Clear();
+
+            resultsPanel.Children.Add(new TextBlock { Text = "Sunny Tools", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
+            List<(string Label, string ClassName)> sunnyMatches = SunnyToolsCommands.All.Where(c => MatchesSearch(c.Label, filter)).ToList();
+            if (sunnyMatches.Count == 0)
+            {
+                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 0, 0, 6) });
+            }
+            else
+            {
+                foreach ((string label, string className) in sunnyMatches)
+                    AddCommandRadio(cfg, resultsPanel, QuickToggleCommandKind.SunnyTool, className, label, currentLabel);
+            }
+
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                resultsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Revit 기본 기능 - 개수가 매우 많아 검색어를 입력해야 표시됩니다 (예: 동기화, 저장, 인쇄...).",
+                    Foreground = Theme.TextSecondary, Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap,
+                });
+                return;
+            }
+
+            const int maxNativeResults = 60;
+            resultsPanel.Children.Add(new TextBlock { Text = "Revit 기본 기능", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 10, 0, 2) });
+            List<(string Label, string Name)> nativeMatches = SunnyToolsCommands.SearchNativeCommands(filter, maxNativeResults);
+            if (nativeMatches.Count == 0)
+            {
+                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
+                return;
+            }
+
+            foreach ((string label, string name) in nativeMatches)
+                AddCommandRadio(cfg, resultsPanel, QuickToggleCommandKind.NativeRevit, name, label, currentLabel);
+
+            if (nativeMatches.Count >= maxNativeResults)
+                resultsPanel.Children.Add(new TextBlock
+                {
+                    Text = "결과가 많아 상위 " + maxNativeResults + "개만 표시합니다 - 검색어를 더 구체적으로 입력해 보세요.",
+                    Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
+                });
+        }
+
+        private void AddCommandRadio(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel,
+            QuickToggleCommandKind kind, string id, string label, TextBlock currentLabel)
+        {
+            bool isChecked = cfg.CommandKind == kind && cfg.CommandId == id;
+            RadioButton r = new RadioButton { Content = label, GroupName = "cmd_" + cfg.Id, IsChecked = isChecked, Margin = new Thickness(0, 2, 0, 2) };
+            r.Checked += (s, e) =>
+            {
+                cfg.CommandKind = kind;
+                cfg.CommandId = id;
+                cfg.CommandLabel = label;
+                UpdateCurrentCommandLabel(currentLabel, cfg);
+            };
+            resultsPanel.Children.Add(r);
         }
 
         // 위/아래 이동·삭제 버튼 아이콘 - SettingsWindow의 CreateTriangle/CreateXMark와 동일한 방식
