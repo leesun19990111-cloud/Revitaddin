@@ -4,39 +4,18 @@
         Title="재료 지정 - 유형 재료 일괄 지정 / 재료 삭제"
         Height="660" Width="780"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResizeWithGrip"
-        Background="White">
-    <!-- 다른 창들과 동일한 이유(Revit 전역 테마 유입 방지)로 색을 명시적으로 고정한다. -->
+        ResizeMode="CanResizeWithGrip">
+    <!-- 다크 테마는 이 창의 Resources에만 로컬로 병합한다 - Application 리소스에 병합하면 Revit 리본/다른
+         애드인 UI까지 우리 스타일이 번져 텍스트가 하얗게 되는 라이브 버그가 있었다(NamerWindow.xaml 참고). -->
     <Window.Resources>
-        <Style TargetType="Button">
-            <Setter Property="Background" Value="#F0F0F0"/>
-            <Setter Property="Foreground" Value="Black"/>
-            <Setter Property="Padding" Value="8,4"/>
-        </Style>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="TabItem">
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
+        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
     </Window.Resources>
     <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="MainTabControl" Grid.Row="0" Background="White">
+        <TabControl x:Name="MainTabControl" Grid.Row="0">
             <TabItem Header="재료 지정">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
@@ -48,8 +27,8 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8"
-                               Text="벽/바닥/지붕/천장처럼 레이어 구조를 가진 유형은 레이어가 하나뿐일 때만(예: 벽체 분리·바닥 분리로 만든 단일 재질 유형) 대상이 됩니다. 그 외 유형은 '재료' 파라미터가 있는 경우에만 대상이 됩니다."/>
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"
+                               Text="벽/바닥/지붕/천장처럼 레이어 구조를 가진 유형은 두께가 있는 레이어마다, 그 외 유형(문/창 등)은 재료 파라미터마다 각각 하나의 행이 됩니다. 유형이 재료를 여러 개 동시에 쓰면(레이어가 여러 개, 파라미터가 여러 개) 같은 유형 이름이 슬롯 수만큼 여러 행으로 나뉘어 보이며, 이름 뒤에 '· 레이어 2'처럼 어느 슬롯인지 표시됩니다."/>
 
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="필터 대상:" VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -69,19 +48,20 @@
                         </ComboBox>
                         <Button x:Name="SelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="SelectAllButton_Click"/>
                         <Button x:Name="SelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="SelectNoneButton_Click"/>
-                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="Gray" Margin="14,0,0,0"/>
+                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0"/>
                     </StackPanel>
 
-                    <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10" Margin="0,0,0,8">
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6"
+                            Background="{DynamicResource SurfaceBrush}" Padding="10" Margin="0,0,0,8">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="지정할 재료:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="Bold"/>
                             <TextBox x:Name="MaterialFilterBox" Width="160" VerticalContentAlignment="Center" TextChanged="MaterialFilterBox_TextChanged"/>
                             <ComboBox x:Name="MaterialCombo" Width="240" Margin="8,0,0,0" DisplayMemberPath="DisplayName" SelectionChanged="MaterialCombo_SelectionChanged"/>
-                            <TextBlock x:Name="SelectedMaterialText" VerticalAlignment="Center" Margin="14,0,0,0" Foreground="Gray"/>
+                            <TextBlock x:Name="SelectedMaterialText" VerticalAlignment="Center" Margin="14,0,0,0" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </StackPanel>
                     </Border>
 
-                    <Border Grid.Row="3" BorderBrush="#CCCCCC" BorderThickness="1">
+                    <Border Grid.Row="3" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -99,13 +79,13 @@
                                     <ColumnDefinition Width="20"/>
                                     <ColumnDefinition x:Name="NewMaterialColumn" Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="패밀리/유형" FontWeight="Bold" Foreground="Gray"/>
+                                <TextBlock Grid.Column="0" Text="패밀리/유형" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <GridSplitter x:Name="TypeNameSplitter" Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="ColumnSplitter_DragDelta"/>
-                                <TextBlock Grid.Column="2" Text="현재 재료" FontWeight="Bold" Foreground="Gray"/>
+                                              Background="{DynamicResource AppBorderBrush}" ResizeBehavior="PreviousAndNext" DragDelta="ColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="2" Text="현재 재료" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <GridSplitter x:Name="CurrentMaterialSplitter" Grid.Column="3" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch"
-                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="ColumnSplitter_DragDelta"/>
-                                <TextBlock Grid.Column="4" Text="새 재료" FontWeight="Bold" Foreground="Gray"/>
+                                              Background="{DynamicResource AppBorderBrush}" ResizeBehavior="PreviousAndNext" DragDelta="ColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="4" Text="새 재료" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
 
                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -118,14 +98,14 @@
                     </Border>
 
                     <StackPanel Grid.Row="4" Margin="0,6,0,0">
-                        <TextBlock x:Name="CountText" Foreground="Gray"/>
-                        <TextBlock x:Name="PendingChangesText" Foreground="#B36B00" FontWeight="SemiBold" Margin="0,2,0,0"/>
+                        <TextBlock x:Name="CountText" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock x:Name="PendingChangesText" Foreground="{DynamicResource WarningTextBrush}" FontWeight="SemiBold" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                         <Button Content="취소" Padding="18,5" Margin="0,0,8,0" Click="CancelButton_Click" IsCancel="True"/>
                         <Button Content="적용 (창 안에서만)" Padding="18,5" Margin="0,0,16,0" Click="ApplyButton_Click"/>
-                        <Button Content="최종 적용 (모델에 반영)" Padding="18,5" Click="FinalApplyButton_Click" FontWeight="Bold"/>
+                        <Button Content="최종 적용 (모델에 반영)" Padding="18,5" Click="FinalApplyButton_Click" FontWeight="Bold" Style="{StaticResource PrimaryButtonStyle}"/>
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -140,7 +120,7 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8"
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"
                                Text="문서의 재료 중 여러 개를 검색해서 한 번에 선택하고 삭제합니다. 다른 유형/부재가 사용 중이던 재료라도 삭제는 진행되며, 그 유형/부재의 재료 지정은 해제된 상태로 남습니다."/>
 
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
@@ -156,10 +136,10 @@
                         </ComboBox>
                         <Button x:Name="DelSelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="DelSelectAllButton_Click"/>
                         <Button x:Name="DelSelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="DelSelectNoneButton_Click"/>
-                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="Gray" Margin="14,0,0,0"/>
+                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0"/>
                     </StackPanel>
 
-                    <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1">
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="DelItemsPanel" Margin="4"
                                         MouseMove="DelItemsPanel_MouseMove"
@@ -169,12 +149,12 @@
                     </Border>
 
                     <StackPanel Grid.Row="3" Margin="0,6,0,0">
-                        <TextBlock x:Name="DelCountText" Foreground="Gray"/>
+                        <TextBlock x:Name="DelCountText" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                         <Button Content="취소" Padding="18,5" Margin="0,0,16,0" Click="CancelButton_Click" IsCancel="True"/>
-                        <Button Content="선택한 재료 삭제 (모델에 반영)" Padding="18,5" Click="DeleteButton_Click" FontWeight="Bold"/>
+                        <Button Content="선택한 재료 삭제 (모델에 반영)" Padding="18,5" Click="DeleteButton_Click" FontWeight="Bold" Style="{StaticResource DangerButtonStyle}"/>
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -190,7 +170,7 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8"
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"
                                Text="문서의 재료를 이름으로 검색해서 여러 개를 한 번에 선택하고, 아이덴티티 데이터의 '클래스' 또는 '설명'을 일괄로 바꿉니다."/>
 
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
@@ -206,10 +186,11 @@
                         </ComboBox>
                         <Button x:Name="IdSelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="IdSelectAllButton_Click"/>
                         <Button x:Name="IdSelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="IdSelectNoneButton_Click"/>
-                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="Gray" Margin="14,0,0,0"/>
+                        <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0"/>
                     </StackPanel>
 
-                    <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10" Margin="0,0,0,8">
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6"
+                            Background="{DynamicResource SurfaceBrush}" Padding="10" Margin="0,0,0,8">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="변경할 항목:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="Bold"/>
                             <ComboBox x:Name="IdTargetFieldCombo" Width="90" SelectedIndex="0" SelectionChanged="IdTargetFieldCombo_SelectionChanged">
@@ -221,7 +202,7 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Grid.Row="3" BorderBrush="#CCCCCC" BorderThickness="1">
+                    <Border Grid.Row="3" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -238,13 +219,13 @@
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition x:Name="IdDescriptionColumn" Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="재료 이름" FontWeight="Bold" Foreground="Gray"/>
+                                <TextBlock Grid.Column="0" Text="재료 이름" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <GridSplitter x:Name="IdNameSplitter" Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="IdColumnSplitter_DragDelta"/>
-                                <TextBlock Grid.Column="2" Text="클래스" FontWeight="Bold" Foreground="Gray"/>
+                                              Background="{DynamicResource AppBorderBrush}" ResizeBehavior="PreviousAndNext" DragDelta="IdColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="2" Text="클래스" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <GridSplitter x:Name="IdClassSplitter" Grid.Column="3" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch"
-                                              Background="#CCCCCC" ResizeBehavior="PreviousAndNext" DragDelta="IdColumnSplitter_DragDelta"/>
-                                <TextBlock Grid.Column="4" Text="설명" FontWeight="Bold" Foreground="Gray"/>
+                                              Background="{DynamicResource AppBorderBrush}" ResizeBehavior="PreviousAndNext" DragDelta="IdColumnSplitter_DragDelta"/>
+                                <TextBlock Grid.Column="4" Text="설명" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
 
                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -257,14 +238,14 @@
                     </Border>
 
                     <StackPanel Grid.Row="4" Margin="0,6,0,0">
-                        <TextBlock x:Name="IdCountText" Foreground="Gray"/>
-                        <TextBlock x:Name="IdPendingChangesText" Foreground="#B36B00" FontWeight="SemiBold" Margin="0,2,0,0"/>
+                        <TextBlock x:Name="IdCountText" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock x:Name="IdPendingChangesText" Foreground="{DynamicResource WarningTextBrush}" FontWeight="SemiBold" Margin="0,2,0,0"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                         <Button Content="취소" Padding="18,5" Margin="0,0,8,0" Click="CancelButton_Click" IsCancel="True"/>
                         <Button Content="적용 (창 안에서만)" Padding="18,5" Margin="0,0,16,0" Click="IdApplyButton_Click"/>
-                        <Button Content="최종 적용 (모델에 반영)" Padding="18,5" Click="IdFinalApplyButton_Click" FontWeight="Bold"/>
+                        <Button Content="최종 적용 (모델에 반영)" Padding="18,5" Click="IdFinalApplyButton_Click" FontWeight="Bold" Style="{StaticResource PrimaryButtonStyle}"/>
                     </StackPanel>
                 </Grid>
             </TabItem>

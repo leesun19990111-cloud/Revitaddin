@@ -40,11 +40,32 @@
     <DefineConstants Condition="'$(RevitVersion)'=='2024' or '$(RevitVersion)'=='2025' or '$(RevitVersion)'=='2026' or '$(RevitVersion)'=='2027'">$(DefineConstants);REVIT2024_OR_GREATER</DefineConstants>
   </PropertyGroup>
 
+  <!-- CONFIRMED LIVE BUG (2026-07-27): 아래의 예전 방식(연도 전체를 "$(RevitVersion).*-*"로 열어두어
+       NuGet이 그 연도의 "가장 최신" 패치를 고르게 하는 방식)은 Nice3point 패키지가 새 핫픽스를 내놓는
+       순간, 이 PC에 실제로 설치된 Revit의 RevitAPI.dll/RevitAPIUI.dll 파일 버전보다 앞서가 버릴 수 있다.
+       실제로 2026.4.10 패키지가 restore되어 있었는데(캐시 확인) 이 PC의 실제 Revit 2026 설치본은
+       RevitAPI.dll FileVersion 26.4.0.32였다 - 이 버전 불일치 자체는 API 호출에서는 안 터지다가,
+       WPF 창의 InitializeComponent()(BAML 로드) 시점에만 "Assembly version conflict" 경고와 함께
+       XamlParseException으로 터졌다(NAMER/재료 지정/모델간 변경 반영/빠른 토글 설정 - 즉 창을 여는
+       커맨드 전부, Revit 저널의 스택트레이스로 실측 확인). 벽체 분리(기본 템플릿 모드)는 창을 안 열어서
+       증상이 없었을 뿐, 근본 원인은 같았다. 그래서 각 연도를 그 연도에 실제로 설치된 Revit의 API 버전과
+       정확히 맞는 패키지 버전으로 고정한다(설치 여부를 확인할 수 있는 연도만) - 와일드카드로 열어두지
+       않는다. 이 PC에 실제 설치된 2023/2026은 파일 버전으로 직접 확인해 고정했고(PowerShell
+       Get-Item(...).VersionInfo.FileVersion), 이 PC에 없는 2024/2025/2027은 검증할 방법이 없어 기존
+       와일드카드를 그대로 둔다 - 그 연도에서 같은 증상(NAMER 등 창을 여는 커맨드만 "외부 명령을 완료할
+       수 없습니다" 실패, 벽체 분리는 정상)이 보고되면 그 Revit 설치본의 RevitAPI.dll FileVersion을 위와
+       같은 방법으로 확인해 여기에 정확히 맞는 버전으로 고정할 것. -->
+  <PropertyGroup>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)'=='2023'">2023.1.90</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)'=='2026'">2026.4.0</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitApiPackageVersion)'==''">$(RevitVersion).*-*</RevitApiPackageVersion>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Revit 설치 여부와 무관하게 빌드 가능하도록 NuGet 참조 어셈블리 패키지 사용.
          ref/ 폴더 전용 패키지라 컴파일 전용이며 출력 폴더로 복사되지 않는다(Autodesk DLL 재배포 방지). -->
-    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).*-*" />
-    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*-*" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitApiPackageVersion)" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitApiPackageVersion)" />
     <!-- net48에는 System.Text.Json이 기본 내장되어 있지 않아 설정 파일(JSON) 저장/로드를 위해 명시적으로 참조 -->
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
@@ -74,6 +95,12 @@
     <EmbeddedResource Include="Resources\icon_toggle32.png">
       <LogicalName>WallSplitter.Resources.icon_toggle32.png</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_toggle_off16.png">
+      <LogicalName>WallSplitter.Resources.icon_toggle_off16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_toggle_on16.png">
+      <LogicalName>WallSplitter.Resources.icon_toggle_on16.png</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\icon_floor16.png">
       <LogicalName>WallSplitter.Resources.icon_floor16.png</LogicalName>
     </EmbeddedResource>
@@ -85,6 +112,18 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\icon_material32.png">
       <LogicalName>WallSplitter.Resources.icon_material32.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_sync16.png">
+      <LogicalName>WallSplitter.Resources.icon_sync16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_sync32.png">
+      <LogicalName>WallSplitter.Resources.icon_sync32.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_quicktoggle16.png">
+      <LogicalName>WallSplitter.Resources.icon_quicktoggle16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\icon_quicktoggle32.png">
+      <LogicalName>WallSplitter.Resources.icon_quicktoggle32.png</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

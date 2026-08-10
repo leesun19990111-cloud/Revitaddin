@@ -27,3 +27,13 @@ C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSpli
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\LayerTypeAssignmentWindow.g.cs
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\MaterialAssignWindow.baml
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\MaterialAssignWindow.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\WallSplitter.sourcelink.json
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\ElementPickerWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\ModelSyncWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\ElementPickerWindow.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\ModelSyncWindow.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\Resources\Theme.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\QuickToggleSettingsWindow.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\QuickToggleToolbar.baml
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\QuickToggleSettingsWindow.g.cs
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2023\net48\QuickToggleToolbar.g.cs

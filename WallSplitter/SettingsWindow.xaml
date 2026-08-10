@@ -4,29 +4,11 @@
         Title="WallSplitter 이름 설정"
         Height="640" Width="580"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResizeWithGrip"
-        Background="White">
-    <!-- Revit이 다크 테마일 때 전역 스타일이 이 창까지 새어 들어와 글자가 배경색과 같아져
-         버튼 안 화살표/텍스트가 안 보이는 문제가 있었다. 색을 명시적으로 고정해 테마와 무관하게 항상 보이도록 한다. -->
+        ResizeMode="CanResizeWithGrip">
+    <!-- 다크 테마는 이 창의 Resources에만 로컬로 병합한다 - Application 리소스에 병합하면 Revit 리본/다른
+         애드인 UI까지 우리 스타일이 번져 텍스트가 하얗게 되는 라이브 버그가 있었다(NamerWindow.xaml 참고). -->
     <Window.Resources>
-        <Style TargetType="Button">
-            <Setter Property="Background" Value="#F0F0F0"/>
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="TabItem">
-            <Setter Property="Foreground" Value="Black"/>
-        </Style>
+        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
     </Window.Resources>
     <Grid Margin="14">
         <Grid.RowDefinitions>
@@ -34,7 +16,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="ModeTabControl" Grid.Row="0" Background="White">
+        <TabControl x:Name="ModeTabControl" Grid.Row="0">
             <TabItem Header="이름 형식으로 생성">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
@@ -47,7 +29,7 @@
                     <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,10"
                                Text="벽체/바닥 분리 시 생성되는 단일 유형의 이름을 구성하는 매개변수입니다. 순서를 바꾸거나 추가/삭제할 수 있고, 각 매개변수 뒤에 붙는 구분자를 지정할 수 있습니다. &#10;재료명/두께는 분리 대상 복합 벽/바닥에서 자동으로 읽어오므로 값을 직접 입력할 수 없습니다."/>
 
-                    <Border Grid.Row="1" BorderBrush="#CCCCCC" BorderThickness="1">
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6" Background="{DynamicResource SurfaceBrush}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="TokenListPanel" Margin="4"/>
                         </ScrollViewer>
@@ -62,7 +44,7 @@
 
                     <StackPanel Grid.Row="3" Margin="0,14,0,0">
                         <TextBlock Text="미리보기 (재질명=샘플재질, 두께=50mm 가정)" FontWeight="Bold"/>
-                        <Border BorderBrush="#CCCCCC" BorderThickness="1" Margin="0,6,0,0" Padding="8">
+                        <Border BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6" Background="{DynamicResource SurfaceBrush}" Margin="0,6,0,0" Padding="8">
                             <TextBlock x:Name="PreviewText" FontFamily="Consolas" FontSize="14"/>
                         </Border>
                     </StackPanel>
@@ -77,7 +59,7 @@
                                Text="벽체/바닥 분리를 실행하면 레이어마다 이미 문서에 있는 유형을 검색해서 직접 선택하는 창이 뜨고, 그 유형이 새 단일 벽/바닥에 그대로 적용됩니다."/>
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
                                Text="지정한 유형을 다음 벽/바닥에도 이어서 적용할지는 리본의 '벽체 분리' 패널, '설정' 버튼 아래에 있는 '단일/복수' 버튼으로 전환합니다 (벽체 분리와 바닥 분리가 이 설정을 함께 씁니다)."/>
-                    <TextBlock TextWrapping="Wrap" Foreground="Gray" FontStyle="Italic"
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontStyle="Italic"
                                Text="'복수' 상태에서는 레이어 개수·재료·두께가 직전 지정과 완전히 같은 벽/바닥에만 자동으로 재적용되고, 다르면 사유와 함께 다시 지정 창이 뜹니다."/>
                 </StackPanel>
             </TabItem>
@@ -85,7 +67,7 @@
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="취소" Padding="18,5" Margin="0,0,8,0" Click="CancelButton_Click" IsCancel="True"/>
-            <Button Content="저장" Padding="18,5" Click="SaveButton_Click" IsDefault="True"/>
+            <Button Content="저장" Padding="18,5" Click="SaveButton_Click" IsDefault="True" Style="{StaticResource PrimaryButtonStyle}"/>
         </StackPanel>
     </Grid>
 </Window>

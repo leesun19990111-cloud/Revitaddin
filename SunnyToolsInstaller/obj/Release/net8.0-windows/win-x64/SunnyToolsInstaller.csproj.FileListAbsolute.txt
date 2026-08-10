@@ -218,3 +218,4 @@ C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToo
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\obj\Release\net8.0-windows\win-x64\SunnyTools_Install.pdb
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\obj\Release\net8.0-windows\win-x64\SunnyToolsInstaller.genruntimeconfig.cache
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\obj\Release\net8.0-windows\win-x64\ref\SunnyTools_Install.dll
+C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\obj\Release\net8.0-windows\win-x64\SunnyToolsInstaller.sourcelink.json

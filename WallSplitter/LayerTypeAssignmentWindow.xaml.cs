@@ -60,7 +60,7 @@ namespace WallSplitter
         {
             Border row = new Border
             {
-                BorderBrush = Brushes.LightGray,
+                BorderBrush = Theme.Border,
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 Padding = new Thickness(4, 8, 4, 8),
             };
