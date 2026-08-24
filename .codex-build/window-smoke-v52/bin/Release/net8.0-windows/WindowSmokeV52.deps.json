@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "WindowSmokeV52/1.0.0": {
+        "runtime": {
+          "WindowSmokeV52.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "WindowSmokeV52/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

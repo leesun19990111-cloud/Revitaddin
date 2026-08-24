@@ -1,0 +1,15 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.AssemblyInfo.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.sourcelink.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\bin\Release\net8.0-windows\WindowSmokeV52.exe
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\bin\Release\net8.0-windows\WindowSmokeV52.deps.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\bin\Release\net8.0-windows\WindowSmokeV52.runtimeconfig.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\bin\Release\net8.0-windows\WindowSmokeV52.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\bin\Release\net8.0-windows\WindowSmokeV52.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\refint\WindowSmokeV52.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\WindowSmokeV52.genruntimeconfig.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\window-smoke-v52\obj\Release\net8.0-windows\ref\WindowSmokeV52.dll

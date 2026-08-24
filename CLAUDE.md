@@ -25,6 +25,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | NAMER (이름 일괄 변경) | `NamerWindow.*`, `NamerCommand.cs` | `docs/namer/CLAUDE.md` |
 | 재료 지정/삭제/클래스·설명 변경 | `MaterialAssignWindow.*`, `MaterialAssignCommand.cs`, `MaterialSlotFinder.cs` | `docs/material-assign/CLAUDE.md` |
 | 모델간 변경 반영 | `ModelSyncWindow.*`, `ModelSyncCommand.cs`, `ChangeLog.cs`, `ChangeReplayEngine.cs` | `docs/model-sync/CLAUDE.md` |
+| 패턴 스튜디오 (Revit/PAT 채우기 패턴 편집) | `Pattern*.cs`, `PatternStudioWindow.*`, `PatFileService.cs` | `docs/pattern-studio/CLAUDE.md` |
 | 커스텀 버튼 (구 "빠른 토글" — 뷰템플릿/필터/작업세트, 뷰 저장·되돌리기) | `QuickToggle*.cs`, `QuickToggleToolbar.*`, `QuickToggleSettingsWindow.*` | `docs/quick-toggle/CLAUDE.md` |
 | 화면 디자인 (Industry 테마, 아이콘) | `Resources/Theme.xaml`, `Theme.cs` | `docs/design-system/CLAUDE.md` |
 | 멀티 버전 빌드 (2023–2027 Configuration/TFM 매핑) | `WallSplitter.csproj` | `docs/build-system/CLAUDE.md` |

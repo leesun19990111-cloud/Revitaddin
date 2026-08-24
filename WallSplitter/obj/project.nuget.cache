@@ -1,25 +1,16 @@
 {
   "version": 2,
-  "dgSpecHash": "rL+MA4FtbnA=",
+  "dgSpecHash": "EnIEjuzsOFo=",
   "success": true,
-  "projectFilePath": "C:\\Users\\P95-LTY\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+  "projectFilePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\P95-LTY\\.nuget\\packages\\nice3point.revit.api.revitapi\\2027.2.0\\nice3point.revit.api.revitapi.2027.2.0.nupkg.sha512",
-    "C:\\Users\\P95-LTY\\.nuget\\packages\\nice3point.revit.api.revitapiui\\2027.2.0\\nice3point.revit.api.revitapiui.2027.2.0.nupkg.sha512",
-    "C:\\Users\\P95-LTY\\.nuget\\packages\\system.text.json\\8.0.5\\system.text.json.8.0.5.nupkg.sha512"
+    "C:\\Users\\User\\.nuget\\packages\\clipper2\\2.0.0\\clipper2.2.0.0.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\nice3point.revit.api.revitapi\\2025.4.60\\nice3point.revit.api.revitapi.2025.4.60.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\nice3point.revit.api.revitapiui\\2025.4.60\\nice3point.revit.api.revitapiui.2025.4.60.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.text.json\\8.0.5\\system.text.json.8.0.5.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.30\\microsoft.netcore.app.ref.8.0.30.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.30\\microsoft.windowsdesktop.app.ref.8.0.30.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.30\\microsoft.aspnetcore.app.ref.8.0.30.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1510",
-      "level": "Warning",
-      "message": "System.Text.Json PackageReferenc는 정리할 수 없습니다. 이 패키지는 자동으로 사용할 수 있으며 명시적으로 참조할 필요가 없습니다. PackageReference 항목을 제거합니다.",
-      "projectPath": "C:\\Users\\P95-LTY\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
-      "warningLevel": 1,
-      "filePath": "C:\\Users\\P95-LTY\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
-      "libraryId": "System.Text.Json",
-      "targetGraphs": [
-        "net10.0-windows7.0"
-      ]
-    }
-  ]
+  "logs": []
 }

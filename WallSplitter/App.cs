@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
@@ -20,6 +21,7 @@ namespace WallSplitter
         private const string NamerPanelName = "NAMER";
         private const string MaterialPanelName = "재료 지정";
         private const string ModelSyncPanelName = "모델간 변경 반영";
+        private const string PatternPanelName = "패턴";
         private const string QuickTogglePanelName = "커스텀 버튼";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
@@ -137,6 +139,51 @@ namespace WallSplitter
                 modelSyncButton.LargeImage = LoadIcon("WallSplitter.Resources.icon_sync32.png");
                 modelSyncButton.Image = LoadIcon("WallSplitter.Resources.icon_sync16.png");
             }
+
+            RibbonPanel patternPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == PatternPanelName)
+                ?? application.CreateRibbonPanel(TabName, PatternPanelName);
+
+            PushButtonData patternButtonData = new PushButtonData(
+                "WallSplitter_PatternStudio",
+                "패턴\n스튜디오",
+                assemblyPath,
+                typeof(PatternStudioCommand).FullName);
+
+            if (patternPanel.AddItem(patternButtonData) is PushButton patternButton)
+            {
+                patternButton.ToolTip = "기존 Revit 채우기 패턴이나 PAT 파일을 불러와 전체/선군별 회전, 스케일, 폭·높이, 간격을 자유롭게 조절하고 새 패턴으로 저장합니다.";
+                patternButton.LargeImage = CreatePatternIcon(32);
+                patternButton.Image = CreatePatternIcon(16);
+            }
+
+            PushButtonData captureButtonData = new PushButtonData(
+                "WallSplitter_ModelLinePatternCapture",
+                "모델선 캡처",
+                assemblyPath,
+                typeof(ModelLinePatternCaptureCommand).FullName)
+            {
+                ToolTip = "현재 평면·입면·단면에서 모델선 또는 상세선으로 그린 한 단위를 패턴으로 가져옵니다. 첫 모서리→첫 변 끝→둘째 변 끝을 ㄱ자 순서로 지정해 직사각형 범위를 만들며 Revit 기본 스냅 표식을 그대로 사용합니다.",
+                Image = CreatePatternIcon(16),
+            };
+            PushButtonData punchButtonData = new PushButtonData(
+                "WallSplitter_PatternPunch",
+                "패턴 타공",
+                assemblyPath,
+                typeof(PatternPunchCommand).FullName)
+            {
+                ToolTip = "패턴이 표시된 벽·바닥·천장·커튼패널 면을 고르고, 패턴의 폐영역 하나를 선택해 같은 영역을 전체 반복 타공합니다. 경계에 걸린 타공은 호스트 경계에 맞춰 잘립니다.",
+                Image = CreatePatternIcon(16),
+            };
+            PushButtonData restorePunchButtonData = new PushButtonData(
+                "WallSplitter_PatternPunchRestore",
+                "타공 복원",
+                assemblyPath,
+                typeof(PatternPunchRestoreCommand).FullName)
+            {
+                ToolTip = "선택한 호스트에서 Sunny Tools로 실행한 가장 최근 패턴 타공 1회를 안전하게 복원합니다. 타공 뒤 프로파일이 달라졌으면 자동 덮어쓰기를 중단합니다.",
+                Image = LoadIcon(ToggleIconResource(false)),
+            };
+            patternPanel.AddStackedItems(captureButtonData, punchButtonData, restorePunchButtonData);
 
             RibbonPanel quickTogglePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == QuickTogglePanelName)
                 ?? application.CreateRibbonPanel(TabName, QuickTogglePanelName);
@@ -338,6 +385,40 @@ namespace WallSplitter
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.StreamSource = stream;
             bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // 패턴 스튜디오 아이콘은 별도 바이너리 리소스 없이 크기에 맞춰 선명하게 그린다.
+        // 리본의 16/32px 양쪽에서 반복 해치와 회전을 직관적으로 보여 주는 도면형 아이콘이다.
+        private static BitmapSource CreatePatternIcon(int size)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
+                var border = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                var accentPen = new Pen(accent, Math.Max(1.1, size / 13.0));
+                var borderPen = new Pen(border, Math.Max(0.8, size / 28.0));
+                accent.Freeze();
+                border.Freeze();
+                accentPen.Freeze();
+                borderPen.Freeze();
+
+                double margin = Math.Max(1.5, size * 0.09);
+                var bounds = new Rect(margin, margin, size - margin * 2.0, size - margin * 2.0);
+                drawing.PushClip(new RectangleGeometry(bounds));
+                double interval = Math.Max(4.0, size / 4.7);
+                for (double offset = -size; offset <= size * 2.0; offset += interval)
+                    drawing.DrawLine(accentPen, new System.Windows.Point(offset, size), new System.Windows.Point(offset + size, 0));
+                for (double offset = -size; offset <= size * 2.0; offset += interval * 1.65)
+                    drawing.DrawLine(borderPen, new System.Windows.Point(offset, 0), new System.Windows.Point(offset + size, size));
+                drawing.Pop();
+                drawing.DrawRectangle(null, borderPen, bounds);
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
             bitmap.Freeze();
             return bitmap;
         }

@@ -1,0 +1,260 @@
+<Window x:Class="WallSplitter.PatternStudioWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sunny Tools · 패턴 스튜디오"
+        Width="1260" Height="790" MinWidth="1080" MinHeight="680"
+        WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Theme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="SectionBorderStyle" TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="12"/>
+            </Style>
+            <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Margin" Value="0,0,0,10"/>
+            </Style>
+            <Style x:Key="ValueBoxStyle" TargetType="TextBox">
+                <Setter Property="Width" Value="82"/>
+                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+            </Style>
+            <!-- Revit 프로세스에는 Windows 기본 WPF 테마가 없을 수 있으므로 Slider도 시스템 템플릿에
+                 기대지 않고 이 창 안에서 완전히 그린다. 가로 슬라이더만 사용하는 패턴 스튜디오 전용. -->
+            <Style TargetType="Slider">
+                <Setter Property="Height" Value="22"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Slider">
+                            <Grid Background="Transparent">
+                                <Border Height="3" Background="{DynamicResource DividerSolidBrush}" VerticalAlignment="Center"/>
+                                <Track x:Name="PART_Track" VerticalAlignment="Center" IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Height="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Background="Transparent"/>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Width="11" Height="18">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border Background="{DynamicResource AccentBrush}"
+                                                            BorderBrush="{DynamicResource AccentPressedBrush}" BorderThickness="1"/>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource SectionBorderStyle}" Padding="14,11">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="360"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="편집할 패턴" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold"/>
+                <ComboBox x:Name="SourceComboBox" Grid.Column="1" Height="31" SelectionChanged="SourceComboBox_SelectionChanged"/>
+                <Button Grid.Column="3" Content="PAT 불러오기" Padding="13,5" Click="OpenPatButton_Click" ToolTip=".PAT 파일 안의 패턴을 목록에 추가합니다."/>
+                <Button Grid.Column="5" Content="편집값 초기화" Padding="13,5" Click="ResetAllButton_Click"/>
+                <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="PatternTypeText" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock x:Name="SourceUnitText" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="225" MinWidth="190"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*" MinWidth="400"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="320" MinWidth="290"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource SectionBorderStyle}" Padding="0">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="12,12,12,8">
+                        <TextBlock Text="선군" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,3"/>
+                        <TextBlock Text="선군마다 회전·크기·간격 값이 따로 저장됩니다." TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"/>
+                    </StackPanel>
+                    <ListBox x:Name="GridList" Margin="4" SelectionChanged="GridList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="2">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Summary}" FontSize="11" Margin="0,3,0,0" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns"/>
+
+            <Border Grid.Column="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" Background="#FAFAFA">
+                <Grid>
+                    <Canvas x:Name="PreviewCanvas" ClipToBounds="True" Background="#FAFAFA"
+                            SizeChanged="PreviewCanvas_SizeChanged"/>
+                    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10" Padding="8,5"
+                            Background="#E6F2F2F3" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal">
+                            <CheckBox x:Name="ShowOriginalCheckBox" Content="원본 겹쳐보기" Checked="PreviewOption_Changed" Unchecked="PreviewOption_Changed"/>
+                            <TextBlock Text="  ·  선을 클릭하면 선군 선택" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="EmptyPreviewText" Text="Revit 패턴을 선택하거나 PAT 파일을 불러오세요."
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10" Padding="7,4"
+                            Background="#E6F2F2F3" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+                        <TextBlock Text="무한 반복 미리보기 · 회전 모서리 자동 채움" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns"/>
+
+            <Border Grid.Column="4" Style="{StaticResource SectionBorderStyle}" Padding="0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="전체 패턴" Style="{StaticResource SectionTitleStyle}"/>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="회전 각도" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="OverallAngleBox" Tag="OverallAngle" Style="{StaticResource ValueBoxStyle}" LostKeyboardFocus="NumericBox_LostKeyboardFocus" KeyDown="NumericBox_KeyDown"/><TextBlock Text="°" Width="17" VerticalAlignment="Center" Margin="4,0,0,0"/></StackPanel>
+                            <Slider x:Name="OverallAngleSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="-180" Maximum="180" Margin="0,6,17,0" ValueChanged="OverallAngleSlider_ValueChanged"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="전체 스케일" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="UniformScaleBox" Tag="UniformScale" Style="{StaticResource ValueBoxStyle}" LostKeyboardFocus="NumericBox_LostKeyboardFocus" KeyDown="NumericBox_KeyDown"/><TextBlock Text="%" Width="17" VerticalAlignment="Center" Margin="4,0,0,0"/></StackPanel>
+                            <Slider x:Name="UniformScaleSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="10" Maximum="400" Margin="0,6,17,0" ValueChanged="UniformScaleSlider_ValueChanged"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="폭" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="WidthBox" Tag="Width" Style="{StaticResource ValueBoxStyle}" LostKeyboardFocus="NumericBox_LostKeyboardFocus" KeyDown="NumericBox_KeyDown"/><TextBlock Text="%" Width="17" VerticalAlignment="Center" Margin="4,0,0,0"/></StackPanel>
+                            <Slider x:Name="WidthSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="10" Maximum="400" Margin="0,6,17,0" ValueChanged="WidthSlider_ValueChanged"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,4">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="높이" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="HeightBox" Tag="Height" Style="{StaticResource ValueBoxStyle}" LostKeyboardFocus="NumericBox_LostKeyboardFocus" KeyDown="NumericBox_KeyDown"/><TextBlock Text="%" Width="17" VerticalAlignment="Center" Margin="4,0,0,0"/></StackPanel>
+                            <Slider x:Name="HeightSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="10" Maximum="400" Margin="0,6,17,0" ValueChanged="HeightSlider_ValueChanged"/>
+                        </Grid>
+                        <CheckBox x:Name="LockAxesCheckBox" Content="폭과 높이를 같은 값으로 조절" Margin="0,3,0,0"/>
+                        <TextBlock x:Name="ReferenceAxisText" Margin="0,7,0,0" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+
+                        <Border BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,1,0,0" Margin="0,15,0,13"/>
+                        <TextBlock Text="선택한 선군" Style="{StaticResource SectionTitleStyle}"/>
+                        <TextBlock x:Name="SelectedGridText" Margin="0,0,0,10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="선군 회전" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="GroupAngleBox" Tag="GroupAngle" Style="{StaticResource ValueBoxStyle}" LostKeyboardFocus="NumericBox_LostKeyboardFocus" KeyDown="NumericBox_KeyDown"/><TextBlock Text="°" Width="17" VerticalAlignment="Center" Margin="4,0,0,0"/></StackPanel>
+                            <Slider x:Name="GroupAngleSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="-180" Maximum="180" Margin="0,6,17,0" ValueChanged="GroupAngleSlider_ValueChanged"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="선군 크기" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="GroupSizeBox" Tag="GroupSize" Style="{StaticResource ValueBoxStyle}" LostKeyboardFocus="NumericBox_LostKeyboardFocus" KeyDown="NumericBox_KeyDown"/><TextBlock Text="%" Width="17" VerticalAlignment="Center" Margin="4,0,0,0"/></StackPanel>
+                            <Slider x:Name="GroupSizeSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="10" Maximum="400" Margin="0,6,17,0" ValueChanged="GroupSizeSlider_ValueChanged"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="선군 간격" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox x:Name="GroupSpacingBox" Tag="GroupSpacing" Style="{StaticResource ValueBoxStyle}" LostKeyboardFocus="NumericBox_LostKeyboardFocus" KeyDown="NumericBox_KeyDown"/><TextBlock Text="%" Width="17" VerticalAlignment="Center" Margin="4,0,0,0"/></StackPanel>
+                            <Slider x:Name="GroupSpacingSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="10" Maximum="400" Margin="0,6,17,0" ValueChanged="GroupSpacingSlider_ValueChanged"/>
+                        </Grid>
+                        <Button Content="선택 선군만 초기화" HorizontalAlignment="Left" Padding="12,5" Click="ResetSelectedGridButton_Click"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="4" Style="{StaticResource SectionBorderStyle}" Padding="12,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="280"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="저장 이름" VerticalAlignment="Center" Margin="0,0,9,0" FontWeight="SemiBold"/>
+                <TextBox x:Name="SaveNameBox" Grid.Column="1" Height="31" VerticalContentAlignment="Center"/>
+                <CheckBox x:Name="OverwriteCheckBox" Grid.Column="3" Content="원본 패턴 덮어쓰기" VerticalAlignment="Center" Checked="OverwriteCheckBox_Changed" Unchecked="OverwriteCheckBox_Changed" ToolTip="이 패턴을 사용하는 모든 재료와 영역에 변경이 반영됩니다."/>
+                <TextBlock x:Name="StatusText" Grid.Column="4" Margin="12,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Button Grid.Column="5" Content="PAT로 내보내기" Padding="14,6" Click="ExportPatButton_Click"/>
+                <Button Grid.Column="7" Content="취소" Padding="18,6" Click="CancelButton_Click" IsCancel="True"/>
+                <Button x:Name="SaveToRevitButton" Grid.Column="9" Content="Revit에 저장" Padding="18,6" Click="SaveToRevitButton_Click" Style="{StaticResource PrimaryButtonStyle}" FontWeight="SemiBold"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
