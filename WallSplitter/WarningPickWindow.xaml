@@ -1,0 +1,61 @@
+<Window x:Class="WallSplitter.WarningPickWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="경고Pick"
+        Height="620" Width="820"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+    <!-- 다크 테마는 이 창의 Resources에만 로컬로 병합한다(NamerWindow.xaml 참고 - Application 리소스에
+         병합하면 Revit 리본/다른 애드인 UI까지 스타일이 번지는 라이브 버그가 있었다). -->
+    <Window.Resources>
+        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+    </Window.Resources>
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Text="현재 문서의 경고를 종류 → 발생 건 → 관련 요소 3단으로 묶어 보여줍니다(발생 건이나 요소가 몇 개든 전부 표시됩니다). '▸'를 누르면 발생 건의 요소 목록이 펼쳐지고, 요소 행을 클릭/드래그하거나 쉬프트+클릭으로 범위를 지정해 여러 요소를 한 번에 체크할 수 있습니다. '선택'을 누르면 바로 그 요소가 선택되고, 체크박스로 고른 요소는 아래 버튼으로 한 번에 선택·단면상자·격리할 수 있습니다. 창을 열어 둔 채로 모델을 계속 조작할 수 있습니다."/>
+
+        <TextBlock x:Name="DocumentText" Grid.Row="1" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Text="필터:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+            <TextBox x:Name="FilterBox" Width="220" VerticalContentAlignment="Center" TextChanged="FilterBox_TextChanged"/>
+            <Button x:Name="RefreshButton" Content="새로고침" Margin="10,0,0,0" Padding="10,4" Click="RefreshButton_Click"/>
+            <TextBlock x:Name="CountText" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0"/>
+        </StackPanel>
+
+        <WrapPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button x:Name="SelectAllButton" Content="전체 선택" Margin="0,0,6,6" Padding="10,4" Click="SelectAllButton_Click"/>
+            <Button x:Name="SelectNoneButton" Content="전체 해제" Margin="0,0,14,6" Padding="10,4" Click="SelectNoneButton_Click"/>
+            <Button x:Name="SelectCheckedButton" Content="체크한 요소 선택" Margin="0,0,6,6" Padding="10,4" Style="{StaticResource PrimaryButtonStyle}" Click="SelectCheckedButton_Click"/>
+            <Button x:Name="SectionBoxButton" Content="체크한 요소 단면상자로 보기" Margin="0,0,6,6" Padding="10,4" Click="SectionBoxButton_Click"/>
+            <Button x:Name="IsolateButton" Content="체크한 요소만 표시" Margin="0,0,6,6" Padding="10,4" Click="IsolateButton_Click"/>
+            <Button x:Name="ResetIsolateButton" Content="격리 해제" Margin="0,0,0,6" Padding="10,4" Click="ResetIsolateButton_Click"/>
+        </WrapPanel>
+
+        <Border Grid.Row="4" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6" Background="{DynamicResource SurfaceBrush}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="GroupsPanel" Margin="6" Background="Transparent"
+                            MouseMove="GroupsPanel_MouseMove"
+                            MouseLeftButtonUp="GroupsPanel_MouseLeftButtonUp"
+                            LostMouseCapture="GroupsPanel_LostMouseCapture"/>
+            </ScrollViewer>
+        </Border>
+
+        <TextBlock x:Name="StatusText" Grid.Row="5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,8,0,0"/>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="닫기" Padding="18,5" Click="CloseButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

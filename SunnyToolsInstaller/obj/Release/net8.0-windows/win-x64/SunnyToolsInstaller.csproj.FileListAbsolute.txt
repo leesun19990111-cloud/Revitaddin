@@ -440,3 +440,8 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsI
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\obj\Release\net8.0-windows\win-x64\SunnyTools_Install.pdb
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\obj\Release\net8.0-windows\win-x64\SunnyToolsInstaller.genruntimeconfig.cache
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\obj\Release\net8.0-windows\win-x64\ref\SunnyTools_Install.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\bin\Release\net8.0-windows\win-x64\Payload\2023\Clipper2Lib.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\bin\Release\net8.0-windows\win-x64\Payload\2024\Clipper2Lib.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\bin\Release\net8.0-windows\win-x64\Payload\2025\Clipper2Lib.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\bin\Release\net8.0-windows\win-x64\Payload\2026\Clipper2Lib.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyToolsInstaller\bin\Release\net8.0-windows\win-x64\Payload\2027\Clipper2Lib.dll

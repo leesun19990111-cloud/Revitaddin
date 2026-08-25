@@ -23,6 +23,7 @@ namespace WallSplitter
         private const string ModelSyncPanelName = "모델간 변경 반영";
         private const string PatternPanelName = "패턴";
         private const string QuickTogglePanelName = "커스텀 버튼";
+        private const string WarningPickPanelName = "경고Pick";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -188,6 +189,22 @@ namespace WallSplitter
             RibbonPanel quickTogglePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == QuickTogglePanelName)
                 ?? application.CreateRibbonPanel(TabName, QuickTogglePanelName);
             AddQuickToggleStack(quickTogglePanel, assemblyPath);
+
+            RibbonPanel warningPickPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == WarningPickPanelName)
+                ?? application.CreateRibbonPanel(TabName, WarningPickPanelName);
+
+            PushButtonData warningPickButtonData = new PushButtonData(
+                "WallSplitter_WarningPick",
+                "경고\nPick",
+                assemblyPath,
+                typeof(WarningPickCommand).FullName);
+
+            if (warningPickPanel.AddItem(warningPickButtonData) is PushButton warningPickButton)
+            {
+                warningPickButton.ToolTip = "현재 문서의 경고에 걸린 요소를 모아 보여주고, 고르면 그 요소가 있는 뷰로 이동하면서 바로 선택됩니다.\nRevit 기본 경고창의 '표시'와 달리 요소를 직접 찾아 클릭할 필요가 없습니다. 창을 열어 둔 채로 모델을 계속 조작할 수 있습니다.";
+                warningPickButton.LargeImage = CreateWarningIcon(32);
+                warningPickButton.Image = CreateWarningIcon(16);
+            }
 
             // 빠른 토글 커스텀 툴바: 실제 Revit 신속접근 도구모음(QAT)에는 API로 버튼을 추가할 수 없어
             // Revit 메인 창 상단에 고정되는 자체 플로팅 창으로 대체 구현했다 (CLAUDE.md 참고).
@@ -415,6 +432,47 @@ namespace WallSplitter
                     drawing.DrawLine(borderPen, new System.Windows.Point(offset, 0), new System.Windows.Point(offset + size, size));
                 drawing.Pop();
                 drawing.DrawRectangle(null, borderPen, bounds);
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // "경고Pick" 아이콘도 패턴 스튜디오와 같은 이유로 별도 PNG 없이 그린다 - 익숙한 느낌표 삼각형 표지판.
+        private static BitmapSource CreateWarningIcon(int size)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var fill = new SolidColorBrush(Color.FromRgb(0xE0, 0xA5, 0x3D));
+                var mark = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                fill.Freeze();
+                mark.Freeze();
+                var borderPen = new Pen(mark, Math.Max(1.0, size / 16.0));
+                borderPen.Freeze();
+
+                double margin = Math.Max(1.5, size * 0.08);
+                var top = new System.Windows.Point(size / 2.0, margin);
+                var right = new System.Windows.Point(size - margin, size - margin);
+                var left = new System.Windows.Point(margin, size - margin);
+
+                var triangle = new StreamGeometry();
+                using (StreamGeometryContext ctx = triangle.Open())
+                {
+                    ctx.BeginFigure(top, true, true);
+                    ctx.LineTo(right, true, true);
+                    ctx.LineTo(left, true, true);
+                }
+                triangle.Freeze();
+                drawing.DrawGeometry(fill, borderPen, triangle);
+
+                double barWidth = Math.Max(1.2, size / 10.0);
+                var barPen = new Pen(mark, barWidth) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+                barPen.Freeze();
+                drawing.DrawLine(barPen, new System.Windows.Point(size / 2.0, size * 0.42), new System.Windows.Point(size / 2.0, size * 0.66));
+                drawing.DrawEllipse(mark, null, new System.Windows.Point(size / 2.0, size * 0.78), barWidth / 2.0, barWidth / 2.0);
             }
 
             var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);

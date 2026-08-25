@@ -8,6 +8,8 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 
 ## 절대 규칙
 
+- **(2026-08-25 사용자 지시) 기능 변경 후 설치 프로그램 재배포·`git commit`·`git push`는 승인을 묻지 않고 자동으로 수행한다.** "묻지말고 항상 재배포해줘 COMMIT PUSH도 자동"이라는 명시적 지시. 원격은 `origin`(`https://github.com/leesun19990111-cloud/Revitaddin.git`), 현재 브랜치는 `develop`이며 `origin/develop`을 추적한다. 이 저장소는 `bin/`/`obj/`/설치 산출물(`SunnyToolsInstaller_out_v*`, `SunnyTools_Installer*.zip`, `Old_Versions/`)까지 전부 git으로 추적하는 특이한 구조라(`.gitignore`엔 `.vs/`만 있음), 배포 후 커밋은 이런 대용량 바이너리 변경도 그대로 포함해 커밋·푸시한다. force-push나 브랜치 변경처럼 더 파괴적인 git 작업까지 승인 없이 하라는 뜻은 아니다 — 일반 커밋·현재 브랜치로의 일반 푸시만 해당.
+
 - **작업 전 필독**: 아래 "작업 영역별 문서" 표에서 건드리려는 파일/기능을 찾아, 그 문서를 먼저 읽고 나서 작업할 것. 각 문서에는 그 기능의 라이브 버그 이력, 근본 원인, "재테스트 없이 되돌리지 말 것" 경고가 들어있다 — 이 루트 파일에는 없다.
 - **배포는 반드시 설치 프로그램으로만** (`docs/installer/CLAUDE.md`): `SunnyToolsInstaller`를 퍼블리시해서 배포한다. Debug/Release DLL을 사용자의 실제 Revit Addins 폴더(`%APPDATA%\Autodesk\Revit\Addins\<year>\`)에 직접 복사하지 않는다.
 - **UI 문자열/코드 주석은 한국어**로 유지 — 기존 파일과 일관성.
@@ -27,6 +29,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 모델간 변경 반영 | `ModelSyncWindow.*`, `ModelSyncCommand.cs`, `ChangeLog.cs`, `ChangeReplayEngine.cs` | `docs/model-sync/CLAUDE.md` |
 | 패턴 스튜디오 (Revit/PAT 채우기 패턴 편집) | `Pattern*.cs`, `PatternStudioWindow.*`, `PatFileService.cs` | `docs/pattern-studio/CLAUDE.md` |
 | 커스텀 버튼 (구 "빠른 토글" — 뷰템플릿/필터/작업세트, 뷰 저장·되돌리기) | `QuickToggle*.cs`, `QuickToggleToolbar.*`, `QuickToggleSettingsWindow.*` | `docs/quick-toggle/CLAUDE.md` |
+| 경고Pick (경고에 걸린 요소를 골라 뷰 이동+선택) | `WarningPick*.cs` | `docs/warning-pick/CLAUDE.md` |
 | 화면 디자인 (Industry 테마, 아이콘) | `Resources/Theme.xaml`, `Theme.cs` | `docs/design-system/CLAUDE.md` |
 | 멀티 버전 빌드 (2023–2027 Configuration/TFM 매핑) | `WallSplitter.csproj` | `docs/build-system/CLAUDE.md` |
 | 설치 프로그램 (배포) | `SunnyToolsInstaller/` | `docs/installer/CLAUDE.md` |
