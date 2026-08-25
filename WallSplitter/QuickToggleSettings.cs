@@ -16,6 +16,32 @@ namespace WallSplitter
         ViewTemplate,
         Filter,
         Workset,
+        // 2026-07-28, "여러 설정 조합(뷰템플릿+필터+작업세트)을 한 번에 켜고 끄는 버튼을 만들고 싶다"는
+        // 요청으로 추가. 위 세 카테고리와 필드 자체는 공유하지만(ViewTemplateId/FilterIds/WorksetIds를
+        // 동시에 채울 수 있음), 비어있는 필드는 "이 프리셋에 그 항목은 포함되지 않음"으로 해석되어
+        // 건드리지 않는다는 점이 단일 카테고리 버튼과 다르다(QuickToggleService 참고).
+        Preset,
+        // 2026-07-29, "모델을 선택해서 색상과 투명도를 설정해줄 수 있는 버튼" 요청으로 추가. 다른
+        // 카테고리들과 근본적으로 다르다 - on/off를 켜고 끄는 토글이 아니라, 클릭하면 색상 팔레트 +
+        // 투명도 슬라이더가 담긴 작은 패널이 펼쳐지고(QuickToggleToolbar.ShowColorToolPopup), 그 안에서
+        // 조작할 때마다 활성 뷰에 즉시 반영된다. 설정 창에서는 "어떤 모델 카테고리에 적용할지"만 미리
+        // 고르고(ColorButtonCategories), 실제 색상/투명도 값은 저장하지 않는다 - 매번 클릭했을 때 그
+        // 카테고리의 현재 값을 읽어와 보여준다(QuickToggleService.ReadCurrentColorAndTransparency).
+        ColorTool,
+        // 2026-08-03, "커스텀 버튼 설정에 다른 툴들의 버튼도 추가할 수 있으면 좋겠다 - 재료지정, 네이머,
+        // 공동작업탭의 동기화 버튼 등을 찾아서 버튼으로 추가하고 싶다"는 요청으로 추가. ColorTool처럼
+        // on/off 개념이 없고, 클릭하면 지정된 Revit 명령(Sunny Tools 자체 명령 또는 Revit 기본 명령)을
+        // 즉시 한 번 실행할 뿐이다(QuickToggleService.RunCommand, RevitCommandId+PostCommand 사용).
+        CommandLauncher,
+    }
+
+    // CommandLauncher 버튼이 가리키는 명령의 종류 - RevitCommandId를 조회하는 API가 서로 다르다
+    // (SunnyTool은 RevitCommandId.LookupCommandId(전체 클래스 이름), NativeRevit은
+    // RevitCommandId.LookupPostableCommandId(PostableCommand)).
+    public enum QuickToggleCommandKind
+    {
+        SunnyTool,
+        NativeRevit,
     }
 
     // ElementId.IntegerValue(int)는 2023 API에만 있고, 2024+에서는 Value(long)로 바뀌면서 완전히
@@ -48,11 +74,117 @@ namespace WallSplitter
         public List<int> FilterIds { get; set; } = new List<int>();
         public List<int> WorksetIds { get; set; } = new List<int>();
 
+        // ID와 나란히 이름도 저장한다 - ElementId는 문서마다 다르므로 내보내기/가져오기(다른 모델 간
+        // 설정 이식, 2026-07-28 요청)에서는 이름으로만 대상을 다시 찾을 수 있다. ID를 설정하는 지점
+        // (QuickToggleSettingsWindow의 라디오/체크박스 핸들러)에서 항상 같이 채운다.
+        public string? ViewTemplateName { get; set; }
+        public List<string> FilterNames { get; set; } = new List<string>();
+        public List<string> WorksetNames { get; set; } = new List<string>();
+
         // 사용자가 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가.
         // 둘 다 null이면 예전 그대로 카테고리 기본 아이콘(QuickToggleIcons.DefaultFor)과 공용 on 색
         // (Theme.ToggleOn)을 쓴다 - 기존에 저장된 설정 파일도 그대로 호환된다.
         public QuickToggleIconShape? IconShape { get; set; }
         public string? OnColorHex { get; set; }
+
+        // 2026-07-29, "V/G 편집창에 있는 것들을 그대로 옮겨서 프리셋에 담고 싶다"는 요청으로 추가 - 프리셋에
+        // 포함된 카테고리별 표시 여부 + 그래픽 재정의(선/패턴/투명도/하프톤/상세수준)를 담는다. 카테고리가
+        // 이 리스트에 있다는 것 자체가 "이 프리셋에 포함됨"을 뜻하고(리스트에 없으면 그 카테고리는 아예
+        // 건드리지 않음 - Preset의 다른 필드들과 같은 "비어있으면 안 건드림" 규칙), 켜질 때 설정을 적용하고
+        // 꺼질 때는 표시로 되돌리고 재정의를 지운다(QuickToggleService.ApplyCategoryOverrides 참고).
+        public List<CategoryOverrideConfig> CategoryOverrides { get; set; } = new List<CategoryOverrideConfig>();
+
+        // 2026-07-29, "색상 버튼" 전용 필드 - 이 버튼이 색상/투명도를 적용할 모델 카테고리 목록. 항목당
+        // CategoryId/CategoryName/ParentCategoryName만 쓰고 CategoryOverrideConfig의 나머지 재정의
+        // 필드(선/패턴 등)는 이 용도에서 전혀 쓰지 않는다 - 카테고리 이름 기반 매칭 로직(내보내기/가져오기)을
+        // 그대로 재사용하기 위해 새 타입을 만드는 대신 기존 타입을 재사용했다.
+        public List<CategoryOverrideConfig> ColorButtonCategories { get; set; } = new List<CategoryOverrideConfig>();
+
+        // 2026-08-03, "기능 버튼"(CommandLauncher) 전용 - 클릭하면 실행할 명령 하나. CommandId는
+        // CommandKind에 따라 다른 의미다: SunnyTool이면 IExternalCommand 구현 클래스의 전체 이름
+        // (SunnyToolsCommands.All의 값, RevitCommandId.LookupCommandId로 조회), NativeRevit이면
+        // PostableCommand enum 멤버 이름(RevitCommandId.LookupPostableCommand로 조회). 둘 다 문서가
+        // 아니라 Revit/이 애드인 자체에 속한 식별자라 ElementId와 달리 문서마다 다르지 않으므로 -
+        // ViewTemplateId/FilterIds처럼 이름을 따로 저장해 내보내기/가져오기 때 재검색할 필요가 없다
+        // (그대로 복사해도 어느 문서에서나 똑같이 유효함). CommandLabel은 설정 창에 표시할 사람이 읽는
+        // 이름을 저장해둔다(PostableCommand는 raw enum 이름이라 검색 목록을 매번 다시 만들지 않고도
+        // 툴팁/버튼 목록에 바로 쓸 수 있게).
+        public QuickToggleCommandKind? CommandKind { get; set; }
+        public string? CommandId { get; set; }
+        public string? CommandLabel { get; set; }
+    }
+
+    // 프리셋의 카테고리(V/G) 탭 한 줄 - Revit V/G 대화상자에서 카테고리별로 재정의할 수 있는 항목을 그대로
+    // 옮겼다. 색상은 int(0xRRGGBB)로, 선/채우기 패턴은 이름으로 저장한다 - ElementId는 문서마다 달라
+    // 이식(내보내기/가져오기)이 안 되기 때문에 ViewTemplateId/Name과 같은 이유로 이름을 같이 둔다.
+    // 모든 항목이 nullable인 이유: "이 속성은 재정의하지 않음"(null)과 "재정의해서 특정 값으로 설정함"을
+    // 구분해야 하기 때문 - null이면 Toggle 시 그 속성을 아예 건드리지 않는다.
+    public class CategoryOverrideConfig
+    {
+        public int CategoryId { get; set; }
+        public string CategoryName { get; set; } = "";
+        // 최상위 카테고리면 null. 같은 이름의 하위 카테고리가 서로 다른 상위 카테고리에 있을 수 있어
+        // (예: 여러 카테고리가 공유하는 서브카테고리 이름) 가져오기 시 이름만으로는 매칭이 모호할 수
+        // 있으므로 부모 이름까지 같이 저장해 매칭 정확도를 높인다.
+        public string? ParentCategoryName { get; set; }
+
+        // true = 표시, false = 숨김, null = 이 프리셋에서 표시 여부는 건드리지 않음(재정의 값만 적용).
+        public bool? Visible { get; set; }
+        public bool? Halftone { get; set; }
+        // ViewDetailLevel enum 이름 문자열(Coarse/Medium/Fine), null = 재정의 안 함.
+        public string? DetailLevel { get; set; }
+        public int? Transparency { get; set; } // 0~100
+
+        public int? ProjectionLineWeight { get; set; }
+        public int? ProjectionLineColor { get; set; }
+        public string? ProjectionLinePatternName { get; set; }
+
+        public int? CutLineWeight { get; set; }
+        public int? CutLineColor { get; set; }
+        public string? CutLinePatternName { get; set; }
+
+        public bool? SurfaceForegroundVisible { get; set; }
+        public string? SurfaceForegroundPatternName { get; set; }
+        public int? SurfaceForegroundColor { get; set; }
+        public bool? SurfaceBackgroundVisible { get; set; }
+        public string? SurfaceBackgroundPatternName { get; set; }
+        public int? SurfaceBackgroundColor { get; set; }
+
+        public bool? CutForegroundVisible { get; set; }
+        public string? CutForegroundPatternName { get; set; }
+        public int? CutForegroundColor { get; set; }
+        public bool? CutBackgroundVisible { get; set; }
+        public string? CutBackgroundPatternName { get; set; }
+        public int? CutBackgroundColor { get; set; }
+
+        public CategoryOverrideConfig Clone() => new CategoryOverrideConfig
+        {
+            CategoryId = CategoryId,
+            CategoryName = CategoryName,
+            ParentCategoryName = ParentCategoryName,
+            Visible = Visible,
+            Halftone = Halftone,
+            DetailLevel = DetailLevel,
+            Transparency = Transparency,
+            ProjectionLineWeight = ProjectionLineWeight,
+            ProjectionLineColor = ProjectionLineColor,
+            ProjectionLinePatternName = ProjectionLinePatternName,
+            CutLineWeight = CutLineWeight,
+            CutLineColor = CutLineColor,
+            CutLinePatternName = CutLinePatternName,
+            SurfaceForegroundVisible = SurfaceForegroundVisible,
+            SurfaceForegroundPatternName = SurfaceForegroundPatternName,
+            SurfaceForegroundColor = SurfaceForegroundColor,
+            SurfaceBackgroundVisible = SurfaceBackgroundVisible,
+            SurfaceBackgroundPatternName = SurfaceBackgroundPatternName,
+            SurfaceBackgroundColor = SurfaceBackgroundColor,
+            CutForegroundVisible = CutForegroundVisible,
+            CutForegroundPatternName = CutForegroundPatternName,
+            CutForegroundColor = CutForegroundColor,
+            CutBackgroundVisible = CutBackgroundVisible,
+            CutBackgroundPatternName = CutBackgroundPatternName,
+            CutBackgroundColor = CutBackgroundColor,
+        };
     }
 
     // 프로젝트 파일 경로별로 저장되는 설정 (이 PC 안에서만 유지 - Q&A로 확정).
@@ -61,14 +193,6 @@ namespace WallSplitter
         // 목록의 순서가 곧 툴바에 표시되는 버튼 순서.
         public List<QuickToggleButtonConfig> Buttons { get; set; } = new List<QuickToggleButtonConfig>();
         public bool ToolbarVisible { get; set; } = true;
-
-        // 툴바의 위치 - Revit 메인 창 좌상단으로부터의 오프셋(px)으로 저장한다. 메인 창이 움직이면 이
-        // 오프셋만큼 계속 따라다니되(원래 요청사항), 오프셋 값 자체는 더 이상 고정 상수가 아니라 사용자가
-        // 툴바를 마우스로 직접 드래그하면 그 즉시 갱신·저장된다(QuickToggleToolbar.RootBorder_MouseLeftButtonDown
-        // 참고) - "리본 버튼을 가리는 고정 위치라 불편하다"는 실측 피드백(2026-07-27)으로 순수 고정 배치를
-        // 포기하고 드래그 가능한 패널로 바꿨다. 기본값은 예전 고정 오프셋과 비슷하게 잡아둔 초기값일 뿐이다.
-        public int ToolbarOffsetXDip { get; set; } = 6;
-        public int ToolbarOffsetYDip { get; set; } = 130;
 
         // 디버깅/향후 마이그레이션 참고용으로 원본 경로도 같이 저장한다 (해시만으로는 사람이 못 알아봄).
         public string ProjectPath { get; set; } = "";
@@ -79,7 +203,7 @@ namespace WallSplitter
             Converters = { new JsonStringEnumConverter() },
         };
 
-        private static string RootDir => Path.Combine(
+        internal static string RootDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "WallSplitter", "quick-toggle");
 
@@ -133,7 +257,7 @@ namespace WallSplitter
         {
             string? path = PathFor(doc);
             if (path == null)
-                throw new InvalidOperationException("저장되지 않은 문서에는 빠른 토글 설정을 저장할 수 없습니다. 먼저 프로젝트 파일을 저장하세요.");
+                throw new InvalidOperationException("저장되지 않은 문서에는 커스텀 버튼 설정을 저장할 수 없습니다. 먼저 프로젝트 파일을 저장하세요.");
 
             ProjectPath = doc.PathName;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -149,12 +273,52 @@ namespace WallSplitter
                 QuickToggleCategory.ViewTemplate => "뷰템플릿버튼",
                 QuickToggleCategory.Filter => "필터버튼",
                 QuickToggleCategory.Workset => "작업세트버튼",
+                QuickToggleCategory.Preset => "프리셋버튼",
+                QuickToggleCategory.ColorTool => "색상버튼",
+                QuickToggleCategory.CommandLauncher => "기능버튼",
                 _ => "버튼",
             };
             int count = 0;
             foreach (QuickToggleButtonConfig b in Buttons)
                 if (b.Category == category) count++;
             return prefix + (count + 1);
+        }
+    }
+
+    // 툴바 위치 - 2026-07-28까지는 프로젝트별 QuickToggleSettings에 같이 저장했었으나, "어떤 프로젝트를
+    // 열더라도 위치는 그대로 있어야 한다"는 요청으로 프로젝트 경로와 무관한 PC 전역 설정으로 분리했다.
+    public class QuickToggleGlobalSettings
+    {
+        public int ToolbarOffsetXDip { get; set; } = 6;
+        public int ToolbarOffsetYDip { get; set; } = 130;
+
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions { WriteIndented = true };
+
+        private static string PathFile => Path.Combine(QuickToggleSettings.RootDir, "toolbar-position.json");
+
+        public static QuickToggleGlobalSettings Load()
+        {
+            try
+            {
+                if (File.Exists(PathFile))
+                {
+                    string json = File.ReadAllText(PathFile, Encoding.UTF8);
+                    QuickToggleGlobalSettings? loaded = JsonSerializer.Deserialize<QuickToggleGlobalSettings>(json, JsonOptions);
+                    if (loaded != null) return loaded;
+                }
+            }
+            catch
+            {
+                // 설정 파일이 손상된 경우 기본값으로 대체
+            }
+            return new QuickToggleGlobalSettings();
+        }
+
+        public void Save()
+        {
+            Directory.CreateDirectory(QuickToggleSettings.RootDir);
+            string json = JsonSerializer.Serialize(this, JsonOptions);
+            File.WriteAllText(PathFile, json, Encoding.UTF8);
         }
     }
 }

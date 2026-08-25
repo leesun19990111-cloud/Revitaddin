@@ -23,6 +23,45 @@ namespace WallSplitter
         public bool CropBoxVisible { get; set; }
         public BoundingBoxXYZ? CropBox { get; set; }
         public PlanViewRange? PlanViewRange { get; set; } // 평면 뷰가 아니면 null (View Range는 평면 뷰 전용)
+
+        // 2026-07-28, "가시성/그래픽설정, 그래픽 화면표시 옵션, 색상표, 그림자, 태양경로, 뷰템플릿,
+        // 상세수준, 비주얼스타일, 뷰자르기, 단면상자, 렌더링설정, 투영모드, 뷰범위 등등 뷰에 표시되는
+        // 모든 요소" 요청으로 확장. 전부 이 스냅샷이 디스크로 나가지 않고 메모리에만 머무르므로(같은
+        // 문서 내에서만 재사용됨), CropBox/PlanViewRange가 이미 그렇듯 원시 값으로 풀어내지 않고 Revit
+        // API 객체를 가공 없이 그대로 담는다.
+        public Dictionary<int, OverrideGraphicSettings> CategoryOverrides { get; set; } = new(); // "가시성/그래픽설정"(V/G 재정의) - 카테고리별
+        public Dictionary<int, OverrideGraphicSettings> FilterOverrides { get; set; } = new(); // 필터별 그래픽 재정의(표시 여부와 별개)
+        public Dictionary<int, ElementId> ColorFillSchemeId { get; set; } = new(); // "색상표" - 카테고리별
+        public ViewDetailLevel? DetailLevel { get; set; } // "상세수준"
+        public Autodesk.Revit.DB.DisplayStyle? DisplayStyle { get; set; } // "비주얼스타일"
+
+        // View3D 전용 (평면/입면/단면 등은 전부 null로 남는다)
+        public bool? SectionBoxActive { get; set; } // "단면상자"
+        public BoundingBoxXYZ? SectionBox { get; set; }
+        public bool? IsPerspective { get; set; } // "투영모드"
+        public ViewOrientation3D? Orientation { get; set; } // 카메라 위치/방향
+        public RenderingSettings? RenderingSettings { get; set; } // "렌더링설정"
+
+        // 그림자/태양경로/스케치라인 등 "그래픽 화면표시 옵션" 대화상자의 개별 항목은 Revit 공개 API에
+        // 전용 getter/setter가 없는 것으로 알려져 있다 - 최선 노력으로, PG_GRAPHICS 그룹에 속하는 정수형
+        // (예/아니오류) 뷰 파라미터를 이름 기준으로 전부 캡처/복원한다. 설치된 Revit 버전이 실제로 이
+        // 값들을 파라미터로 노출하는지는 라이브 테스트로만 확인 가능 - 안 되는 항목이 있으면
+        // docs/quick-toggle/CLAUDE.md의 이 항목부터 확인할 것.
+        public Dictionary<string, int> GraphicsIntegerParams { get; set; } = new();
+    }
+
+    // "색상 버튼" 팝업(ColorToolPopupWindow)이 색상 팔레트/투명도 슬라이더를 조작할 때마다 보내는 요청 -
+    // 2026-07-29 추가. Document/View를 담지 않고 카테고리 Id 목록 + 이번에 바뀐 값만 담는다 - 어느
+    // 문서/뷰에 적용할지는 Execute 시점에 항상 "그때의 활성 뷰"를 다시 조회한다(팝업을 연 뒤 사용자가
+    // 다른 뷰로 전환했을 수도 있으므로, 팝업을 열 때 캡처해둔 뷰가 아니라 실행 시점 기준으로 적용).
+    internal class ColorToolApplyRequest
+    {
+        public List<int> CategoryIds { get; set; } = new();
+        public int? Color { get; set; } // 0xRRGGBB, null이면 이번 요청은 색상을 건드리지 않음
+        public int? Transparency { get; set; } // 0~100, null이면 이번 요청은 투명도를 건드리지 않음
+        // true면 Color/Transparency는 무시하고 대상 카테고리의 그래픽 재정의 자체를 완전히 비운다
+        // ("재지정 지우기" 버튼, 2026-07-29 추가).
+        public bool Clear { get; set; }
     }
 
     // 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라 버튼 클릭이 언제든 일어날 수
@@ -39,6 +78,14 @@ namespace WallSplitter
         // (2026-07-27 추가) - 같은 ExternalEvent를 재사용해 별도 배선 없이 처리한다.
         internal ViewStateSnapshot? PendingRevertSnapshot { get; set; }
 
+        // "색상 버튼" 팝업의 실시간 조작 요청 (2026-07-29 추가) - PendingRevertSnapshot과 같은 방식으로
+        // 같은 ExternalEvent를 재사용한다.
+        internal ColorToolApplyRequest? PendingColorApply { get; set; }
+
+        // "기능 버튼" 클릭 요청 (2026-08-03 추가) - 위 둘과 같은 방식으로 같은 ExternalEvent를 재사용한다.
+        // 버튼 설정 자체(어느 명령을 실행할지)만 있으면 되므로 cfg 참조를 그대로 담는다.
+        internal QuickToggleButtonConfig? PendingCommandLaunch { get; set; }
+
         public void Execute(UIApplication app)
         {
             if (PendingRevertSnapshot != null)
@@ -46,6 +93,26 @@ namespace WallSplitter
                 ViewStateSnapshot snapshot = PendingRevertSnapshot;
                 PendingRevertSnapshot = null;
                 ExecuteRevert(app, snapshot);
+                return;
+            }
+
+            if (PendingColorApply != null)
+            {
+                ColorToolApplyRequest request = PendingColorApply;
+                PendingColorApply = null;
+                ExecuteColorApply(app, request);
+                return;
+            }
+
+            if (PendingCommandLaunch != null)
+            {
+                QuickToggleButtonConfig launchCfg = PendingCommandLaunch;
+                PendingCommandLaunch = null;
+                if (!QuickToggleService.RunCommand(app, launchCfg))
+                {
+                    TaskDialog.Show("커스텀 버튼",
+                        $"'{launchCfg.Name}' 기능을 실행하지 못했습니다 (지금 상황에서 사용할 수 없는 기능일 수 있습니다).");
+                }
                 return;
             }
 
@@ -62,7 +129,7 @@ namespace WallSplitter
 
             bool applied;
             TransactionStatus status;
-            using (Transaction tx = new Transaction(doc, "빠른 토글: " + cfg.Name))
+            using (Transaction tx = new Transaction(doc, "커스텀 버튼: " + cfg.Name))
             {
                 tx.Start();
                 applied = QuickToggleService.Toggle(view, cfg, PendingTurnOn);
@@ -75,7 +142,7 @@ namespace WallSplitter
             // 눌러도 반응이 없다"는 증상으로만 남는다), 여기서 직접 알려준다.
             if (!applied || status != TransactionStatus.Committed)
             {
-                TaskDialog.Show("빠른 토글",
+                TaskDialog.Show("커스텀 버튼",
                     $"'{cfg.Name}' 버튼을 반영하지 못했습니다 (예: 대상 뷰템플릿이 이 뷰 종류와 호환되지 않음).");
             }
         }
@@ -91,7 +158,7 @@ namespace WallSplitter
 
             if (doc.GetElement(new ElementId(snapshot.ViewId)) is not View targetView)
             {
-                TaskDialog.Show("빠른 토글", "저장했던 뷰를 찾을 수 없습니다 (그 사이 삭제되었을 수 있습니다).");
+                TaskDialog.Show("커스텀 버튼", "저장했던 뷰를 찾을 수 없습니다 (그 사이 삭제되었을 수 있습니다).");
                 return;
             }
 
@@ -102,12 +169,12 @@ namespace WallSplitter
                 try { uidoc.ActiveView = targetView; }
                 catch
                 {
-                    TaskDialog.Show("빠른 토글", "저장했던 뷰로 전환하지 못했습니다.");
+                    TaskDialog.Show("커스텀 버튼", "저장했던 뷰로 전환하지 못했습니다.");
                     return;
                 }
             }
 
-            using (Transaction tx = new Transaction(doc, "빠른 토글: 뷰 상태 되돌리기"))
+            using (Transaction tx = new Transaction(doc, "커스텀 버튼: 뷰 상태 되돌리기"))
             {
                 tx.Start();
                 QuickToggleService.RestoreViewState(targetView, snapshot);
@@ -117,6 +184,26 @@ namespace WallSplitter
             QuickToggleToolbar.Instance?.RefreshState();
         }
 
-        public string GetName() => "WallSplitter 빠른 토글";
+        // "색상 버튼" 실행 - 항상 그 순간의 활성 뷰를 다시 조회한다(팝업을 열어둔 채 사용자가 다른 뷰로
+        // 전환했을 수 있으므로, 팝업이 열릴 때 캡처해둔 뷰가 아니라 지금 활성 뷰 기준으로 적용).
+        private static void ExecuteColorApply(UIApplication app, ColorToolApplyRequest request)
+        {
+            UIDocument? uidoc = app.ActiveUIDocument;
+            Document? doc = uidoc?.Document;
+            View? view = doc?.ActiveView;
+            if (doc == null || view == null) return;
+
+            using (Transaction tx = new Transaction(doc, request.Clear ? "커스텀 버튼: 재지정 지우기" : "커스텀 버튼: 색상/투명도 지정"))
+            {
+                tx.Start();
+                if (request.Clear)
+                    QuickToggleService.ClearColorTool(view, request.CategoryIds);
+                else
+                    QuickToggleService.ApplyColorTool(view, request.CategoryIds, request.Color, request.Transparency);
+                tx.Commit();
+            }
+        }
+
+        public string GetName() => "WallSplitter 커스텀 버튼";
     }
 }

@@ -1,0 +1,87 @@
+{
+  "version": 2,
+  "dgSpecHash": "NTMm+sb0u3A=",
+  "success": false,
+  "projectFilePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\User\\.nuget\\packages\\clipper2\\2.0.0\\clipper2.2.0.0.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\8.0.0\\microsoft.bcl.asyncinterfaces.8.0.0.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.buffers\\4.5.1\\system.buffers.4.5.1.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.numerics.vectors\\4.5.0\\system.numerics.vectors.4.5.0.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.text.encodings.web\\8.0.0\\system.text.encodings.web.8.0.0.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.text.json\\8.0.5\\system.text.json.8.0.5.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.threading.tasks.extensions\\4.5.4\\system.threading.tasks.extensions.4.5.4.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\system.valuetuple\\4.5.0\\system.valuetuple.4.5.0.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1801",
+      "level": "Warning",
+      "message": "https://api.nuget.org/v3/index.json 원본에 대한 서비스 인덱스를 로드할 수 없습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "targetGraphs": []
+    },
+    {
+      "code": "NU1801",
+      "level": "Warning",
+      "message": "https://api.nuget.org/v3/index.json 원본에 대한 서비스 인덱스를 로드할 수 없습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "targetGraphs": []
+    },
+    {
+      "code": "NU1801",
+      "level": "Warning",
+      "message": "https://api.nuget.org/v3/index.json 원본에 대한 서비스 인덱스를 로드할 수 없습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "targetGraphs": []
+    },
+    {
+      "code": "NU1801",
+      "level": "Warning",
+      "message": "https://api.nuget.org/v3/index.json 원본에 대한 서비스 인덱스를 로드할 수 없습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "targetGraphs": []
+    },
+    {
+      "code": "NU1101",
+      "level": "Error",
+      "message": "Nice3point.Revit.Api.RevitAPI 패키지를 찾을 수 없습니다. 원본에 ID가 Microsoft Visual Studio Offline Packages, nuget.org인 패키지가 없습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "libraryId": "Nice3point.Revit.Api.RevitAPI",
+      "targetGraphs": [
+        "net48"
+      ]
+    },
+    {
+      "code": "NU1101",
+      "level": "Error",
+      "message": "Nice3point.Revit.Api.RevitAPIUI 패키지를 찾을 수 없습니다. 원본에 ID가 Microsoft Visual Studio Offline Packages, nuget.org인 패키지가 없습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "libraryId": "Nice3point.Revit.Api.RevitAPIUI",
+      "targetGraphs": [
+        "net48"
+      ]
+    },
+    {
+      "code": "NU1900",
+      "level": "Warning",
+      "message": "패키지 취약성 데이터를 가져오는 동안 오류가 발생했습니다. https://api.nuget.org/v3/index.json 원본에 대한 서비스 인덱스를 로드할 수 없습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "targetGraphs": []
+    }
+  ]
+}

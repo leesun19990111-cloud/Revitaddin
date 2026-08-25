@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
@@ -20,7 +21,9 @@ namespace WallSplitter
         private const string NamerPanelName = "NAMER";
         private const string MaterialPanelName = "재료 지정";
         private const string ModelSyncPanelName = "모델간 변경 반영";
-        private const string QuickTogglePanelName = "빠른 토글";
+        private const string PatternPanelName = "패턴";
+        private const string QuickTogglePanelName = "커스텀 버튼";
+        private const string WarningPickPanelName = "경고Pick";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -138,9 +141,70 @@ namespace WallSplitter
                 modelSyncButton.Image = LoadIcon("WallSplitter.Resources.icon_sync16.png");
             }
 
+            RibbonPanel patternPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == PatternPanelName)
+                ?? application.CreateRibbonPanel(TabName, PatternPanelName);
+
+            PushButtonData patternButtonData = new PushButtonData(
+                "WallSplitter_PatternStudio",
+                "패턴\n스튜디오",
+                assemblyPath,
+                typeof(PatternStudioCommand).FullName);
+
+            if (patternPanel.AddItem(patternButtonData) is PushButton patternButton)
+            {
+                patternButton.ToolTip = "기존 Revit 채우기 패턴이나 PAT 파일을 불러와 전체/선군별 회전, 스케일, 폭·높이, 간격을 자유롭게 조절하고 새 패턴으로 저장합니다.";
+                patternButton.LargeImage = CreatePatternIcon(32);
+                patternButton.Image = CreatePatternIcon(16);
+            }
+
+            PushButtonData captureButtonData = new PushButtonData(
+                "WallSplitter_ModelLinePatternCapture",
+                "모델선 캡처",
+                assemblyPath,
+                typeof(ModelLinePatternCaptureCommand).FullName)
+            {
+                ToolTip = "현재 평면·입면·단면에서 모델선 또는 상세선으로 그린 한 단위를 패턴으로 가져옵니다. 첫 모서리→첫 변 끝→둘째 변 끝을 ㄱ자 순서로 지정해 직사각형 범위를 만들며 Revit 기본 스냅 표식을 그대로 사용합니다.",
+                Image = CreatePatternIcon(16),
+            };
+            PushButtonData punchButtonData = new PushButtonData(
+                "WallSplitter_PatternPunch",
+                "패턴 타공",
+                assemblyPath,
+                typeof(PatternPunchCommand).FullName)
+            {
+                ToolTip = "패턴이 표시된 벽·바닥·천장·커튼패널 면을 고르고, 패턴의 폐영역 하나를 선택해 같은 영역을 전체 반복 타공합니다. 경계에 걸린 타공은 호스트 경계에 맞춰 잘립니다.",
+                Image = CreatePatternIcon(16),
+            };
+            PushButtonData restorePunchButtonData = new PushButtonData(
+                "WallSplitter_PatternPunchRestore",
+                "타공 복원",
+                assemblyPath,
+                typeof(PatternPunchRestoreCommand).FullName)
+            {
+                ToolTip = "선택한 호스트에서 Sunny Tools로 실행한 가장 최근 패턴 타공 1회를 안전하게 복원합니다. 타공 뒤 프로파일이 달라졌으면 자동 덮어쓰기를 중단합니다.",
+                Image = LoadIcon(ToggleIconResource(false)),
+            };
+            patternPanel.AddStackedItems(captureButtonData, punchButtonData, restorePunchButtonData);
+
             RibbonPanel quickTogglePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == QuickTogglePanelName)
                 ?? application.CreateRibbonPanel(TabName, QuickTogglePanelName);
             AddQuickToggleStack(quickTogglePanel, assemblyPath);
+
+            RibbonPanel warningPickPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == WarningPickPanelName)
+                ?? application.CreateRibbonPanel(TabName, WarningPickPanelName);
+
+            PushButtonData warningPickButtonData = new PushButtonData(
+                "WallSplitter_WarningPick",
+                "경고\nPick",
+                assemblyPath,
+                typeof(WarningPickCommand).FullName);
+
+            if (warningPickPanel.AddItem(warningPickButtonData) is PushButton warningPickButton)
+            {
+                warningPickButton.ToolTip = "현재 문서의 경고에 걸린 요소를 모아 보여주고, 고르면 그 요소가 있는 뷰로 이동하면서 바로 선택됩니다.\nRevit 기본 경고창의 '표시'와 달리 요소를 직접 찾아 클릭할 필요가 없습니다. 창을 열어 둔 채로 모델을 계속 조작할 수 있습니다.";
+                warningPickButton.LargeImage = CreateWarningIcon(32);
+                warningPickButton.Image = CreateWarningIcon(16);
+            }
 
             // 빠른 토글 커스텀 툴바: 실제 Revit 신속접근 도구모음(QAT)에는 API로 버튼을 추가할 수 없어
             // Revit 메인 창 상단에 고정되는 자체 플로팅 창으로 대체 구현했다 (CLAUDE.md 참고).
@@ -242,7 +306,7 @@ namespace WallSplitter
         {
             PushButtonData settingsButtonData = new PushButtonData(
                 "WallSplitter_QuickToggleSettings",
-                "빠른 토글\n설정",
+                "커스텀 버튼\n설정",
                 assemblyPath,
                 typeof(QuickToggleSettingsCommand).FullName)
             {
@@ -256,7 +320,7 @@ namespace WallSplitter
                 assemblyPath,
                 typeof(QuickToggleVisibilityToggleCommand).FullName)
             {
-                ToolTip = "빠른 토글 툴바를 현재 프로젝트 파일에서 표시하거나 숨깁니다.",
+                ToolTip = "커스텀 버튼 툴바를 현재 프로젝트 파일에서 표시하거나 숨깁니다.",
                 // 문서가 열리기 전이라 실제 프로젝트별 표시 상태를 아직 몰라 일단 "켜짐" 아이콘으로 시작하고,
                 // ViewActivated에서 UpdateQuickToggleVisibilityLabel이 실제 상태로 바로잡는다(라벨과 동일한 방식).
                 Image = LoadIcon(ToggleIconResource(true)),
@@ -338,6 +402,81 @@ namespace WallSplitter
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.StreamSource = stream;
             bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // 패턴 스튜디오 아이콘은 별도 바이너리 리소스 없이 크기에 맞춰 선명하게 그린다.
+        // 리본의 16/32px 양쪽에서 반복 해치와 회전을 직관적으로 보여 주는 도면형 아이콘이다.
+        private static BitmapSource CreatePatternIcon(int size)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
+                var border = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                var accentPen = new Pen(accent, Math.Max(1.1, size / 13.0));
+                var borderPen = new Pen(border, Math.Max(0.8, size / 28.0));
+                accent.Freeze();
+                border.Freeze();
+                accentPen.Freeze();
+                borderPen.Freeze();
+
+                double margin = Math.Max(1.5, size * 0.09);
+                var bounds = new Rect(margin, margin, size - margin * 2.0, size - margin * 2.0);
+                drawing.PushClip(new RectangleGeometry(bounds));
+                double interval = Math.Max(4.0, size / 4.7);
+                for (double offset = -size; offset <= size * 2.0; offset += interval)
+                    drawing.DrawLine(accentPen, new System.Windows.Point(offset, size), new System.Windows.Point(offset + size, 0));
+                for (double offset = -size; offset <= size * 2.0; offset += interval * 1.65)
+                    drawing.DrawLine(borderPen, new System.Windows.Point(offset, 0), new System.Windows.Point(offset + size, size));
+                drawing.Pop();
+                drawing.DrawRectangle(null, borderPen, bounds);
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // "경고Pick" 아이콘도 패턴 스튜디오와 같은 이유로 별도 PNG 없이 그린다 - 익숙한 느낌표 삼각형 표지판.
+        private static BitmapSource CreateWarningIcon(int size)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var fill = new SolidColorBrush(Color.FromRgb(0xE0, 0xA5, 0x3D));
+                var mark = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                fill.Freeze();
+                mark.Freeze();
+                var borderPen = new Pen(mark, Math.Max(1.0, size / 16.0));
+                borderPen.Freeze();
+
+                double margin = Math.Max(1.5, size * 0.08);
+                var top = new System.Windows.Point(size / 2.0, margin);
+                var right = new System.Windows.Point(size - margin, size - margin);
+                var left = new System.Windows.Point(margin, size - margin);
+
+                var triangle = new StreamGeometry();
+                using (StreamGeometryContext ctx = triangle.Open())
+                {
+                    ctx.BeginFigure(top, true, true);
+                    ctx.LineTo(right, true, true);
+                    ctx.LineTo(left, true, true);
+                }
+                triangle.Freeze();
+                drawing.DrawGeometry(fill, borderPen, triangle);
+
+                double barWidth = Math.Max(1.2, size / 10.0);
+                var barPen = new Pen(mark, barWidth) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+                barPen.Freeze();
+                drawing.DrawLine(barPen, new System.Windows.Point(size / 2.0, size * 0.42), new System.Windows.Point(size / 2.0, size * 0.66));
+                drawing.DrawEllipse(mark, null, new System.Windows.Point(size / 2.0, size * 0.78), barWidth / 2.0, barWidth / 2.0);
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
             bitmap.Freeze();
             return bitmap;
         }

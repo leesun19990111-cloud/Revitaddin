@@ -240,6 +240,10 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Padding" Value="6,0,0,0"/>
+        <!-- BaseButtonStyle과 같은 이유로 기본 포커스 사각형을 꺼둔다 - 이걸 빼먹으면 내용(Content)이 없는
+             체크박스(경고Pick처럼 라벨 없이 체크박스만 쓰는 경우)에서 WPF 기본 포커스 표시가 체크박스
+             옆 빈 공간까지 번져 이상한 흰 막대처럼 보이는 라이브 버그가 있었다(2026-08-25 확인). -->
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -278,6 +282,7 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Padding" Value="6,0,0,0"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">

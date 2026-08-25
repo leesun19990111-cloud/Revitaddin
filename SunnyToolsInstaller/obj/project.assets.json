@@ -2,7 +2,7 @@
   "version": 4,
   "targets": {
     "net8.0-windows": {
-      "Microsoft.NET.ILLink.Tasks/8.0.28": {
+      "Microsoft.NET.ILLink.Tasks/8.0.30": {
         "type": "package",
         "build": {
           "build/Microsoft.NET.ILLink.Tasks.props": {}
@@ -10,7 +10,7 @@
       }
     },
     "net8.0-windows/win-x64": {
-      "Microsoft.NET.ILLink.Tasks/8.0.28": {
+      "Microsoft.NET.ILLink.Tasks/8.0.30": {
         "type": "package",
         "build": {
           "build/Microsoft.NET.ILLink.Tasks.props": {}
@@ -19,10 +19,10 @@
     }
   },
   "libraries": {
-    "Microsoft.NET.ILLink.Tasks/8.0.28": {
-      "sha512": "XMqgVjlLxLqWmEh3c49haXLQwsMNtvo6YscUaqfvEGfg1iA8hnYgkUVq3i9Zu9gKeNKMWiiZKVwZExc/qyEAsQ==",
+    "Microsoft.NET.ILLink.Tasks/8.0.30": {
+      "sha512": "SfmwuZjUPBTEoBMAsXZ/hWkaEK9oL+Y/UtAx7N6RyWHfcMt9J0ExrNPuOgTyPbCXIyiTBFsxFNrPLEZNPmJcvA==",
       "type": "package",
-      "path": "microsoft.net.illink.tasks/8.0.28",
+      "path": "microsoft.net.illink.tasks/8.0.30",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
@@ -36,7 +36,7 @@
         "build/Microsoft.NET.ILLink.Analyzers.props",
         "build/Microsoft.NET.ILLink.Tasks.props",
         "build/Microsoft.NET.ILLink.targets",
-        "microsoft.net.illink.tasks.8.0.28.nupkg.sha512",
+        "microsoft.net.illink.tasks.8.0.30.nupkg.sha512",
         "microsoft.net.illink.tasks.nuspec",
         "tools/net472/ILLink.Tasks.dll",
         "tools/net472/ILLink.Tasks.dll.config",
@@ -73,27 +73,27 @@
   },
   "projectFileDependencyGroups": {
     "net8.0-windows": [
-      "Microsoft.NET.ILLink.Tasks >= 8.0.28"
+      "Microsoft.NET.ILLink.Tasks >= 8.0.30"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\P95-LTY\\.nuget\\packages\\": {},
+    "C:\\Users\\User\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\P95-LTY\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyToolsInstaller\\SunnyToolsInstaller.csproj",
+      "projectUniqueName": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyToolsInstaller\\SunnyToolsInstaller.csproj",
       "projectName": "SunnyTools_Install",
-      "projectPath": "C:\\Users\\P95-LTY\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyToolsInstaller\\SunnyToolsInstaller.csproj",
-      "packagesPath": "C:\\Users\\P95-LTY\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\P95-LTY\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyToolsInstaller\\obj\\",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyToolsInstaller\\SunnyToolsInstaller.csproj",
+      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyToolsInstaller\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\P95-LTY\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -131,7 +131,7 @@
           "Microsoft.NET.ILLink.Tasks": {
             "suppressParent": "All",
             "target": "Package",
-            "version": "[8.0.28, )",
+            "version": "[8.0.30, )",
             "autoReferenced": true
           }
         },
@@ -149,31 +149,31 @@
         "downloadDependencies": [
           {
             "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.30, 8.0.30]"
           },
           {
             "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.30, 8.0.30]"
           },
           {
             "name": "Microsoft.NETCore.App.Host.win-x64",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.30, 8.0.30]"
           },
           {
             "name": "Microsoft.NETCore.App.Ref",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.30, 8.0.30]"
           },
           {
             "name": "Microsoft.NETCore.App.Runtime.win-x64",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.30, 8.0.30]"
           },
           {
             "name": "Microsoft.WindowsDesktop.App.Ref",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.30, 8.0.30]"
           },
           {
             "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-            "version": "[8.0.28, 8.0.28]"
+            "version": "[8.0.30, 8.0.30]"
           }
         ],
         "frameworkReferences": {
@@ -181,7 +181,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400-preview.0.26322.102/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400/PortableRuntimeIdentifierGraph.json"
       }
     },
     "runtimes": {

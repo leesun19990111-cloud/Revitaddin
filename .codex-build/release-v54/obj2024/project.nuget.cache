@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "dgSpecHash": "BqtB+AzcH70=",
+  "success": false,
+  "projectFilePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+  "expectedPackageFiles": [],
+  "logs": [
+    {
+      "code": "NU1301",
+      "level": "Error",
+      "message": "https://api.nuget.org/v3/index.json 원본에 대한 서비스 인덱스를 로드할 수 없습니다.\r\n  액세스 권한에 의해 숨겨진 소켓에 액세스를 시도했습니다. (api.nuget.org:443)\r\n  액세스 권한에 의해 숨겨진 소켓에 액세스를 시도했습니다.",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "filePath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\WallSplitter\\WallSplitter.csproj",
+      "targetGraphs": []
+    }
+  ]
+}
