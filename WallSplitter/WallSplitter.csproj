@@ -94,6 +94,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources\RevitCommandLabels.2027.tsv">
+      <LogicalName>WallSplitter.Resources.RevitCommandLabels.2027.tsv</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\icon16.png">
       <LogicalName>WallSplitter.Resources.icon16.png</LogicalName>
     </EmbeddedResource>

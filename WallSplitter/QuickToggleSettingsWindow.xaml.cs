@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.DB;
 // Autodesk.Revit.UI에도 TextBox가 있어(리본용) System.Windows.Controls.TextBox와 충돌한다 - 이 파일은
 // TaskDialog 하나만 필요하므로 네임스페이스 전체를 끌어오지 않고 그 타입만 별칭으로 가져온다.
@@ -26,6 +27,7 @@ namespace WallSplitter
     public partial class QuickToggleSettingsWindow : Window
     {
         private readonly Document _doc;
+        private readonly LanguageType _revitLanguage;
         private readonly QuickToggleSettings _settings;
         private QuickToggleButtonConfig? _selected;
 
@@ -42,6 +44,7 @@ namespace WallSplitter
         {
             InitializeComponent();
             _doc = doc;
+            _revitLanguage = doc.Application.Language;
             _settings = QuickToggleSettings.Load(doc);
 
             _viewTemplates = new FilteredElementCollector(doc)
@@ -790,7 +793,7 @@ namespace WallSplitter
             target.Children.Add(new TextBlock
             {
                 Text = "클릭하면 즉시 실행할 기능을 하나 선택하세요. Sunny Tools 자체 기능은 아래 목록에 항상 나타나고, " +
-                       "Revit 기본 기능(동기화, 저장, 인쇄 등)은 검색어를 입력하면 나타납니다.",
+                       "Revit 기본 기능은 한글과 영문 중 어느 쪽으로 검색해도 찾을 수 있습니다. 결과 이름은 현재 Revit 언어로 표시됩니다.",
                 Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
             });
 
@@ -805,8 +808,12 @@ namespace WallSplitter
             RenderCommandList(cfg, resultsPanel, "", currentLabel);
         }
 
-        private static void UpdateCurrentCommandLabel(TextBlock label, QuickToggleButtonConfig cfg) =>
-            label.Text = "현재 선택: " + (string.IsNullOrEmpty(cfg.CommandLabel) ? "(아직 없음)" : cfg.CommandLabel);
+        private void UpdateCurrentCommandLabel(TextBlock label, QuickToggleButtonConfig cfg)
+        {
+            string displayLabel = SunnyToolsCommands.DisplayLabelFor(
+                cfg.CommandKind, cfg.CommandId, _revitLanguage, cfg.CommandLabel);
+            label.Text = "현재 선택: " + (string.IsNullOrEmpty(displayLabel) ? "(아직 없음)" : displayLabel);
+        }
 
         private void RenderCommandList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter, TextBlock currentLabel)
         {
@@ -828,7 +835,7 @@ namespace WallSplitter
             {
                 resultsPanel.Children.Add(new TextBlock
                 {
-                    Text = "Revit 기본 기능 - 개수가 매우 많아 검색어를 입력해야 표시됩니다 (예: 동기화, 저장, 인쇄...).",
+                    Text = "Revit 기본 기능 - 개수가 매우 많아 검색어를 입력해야 표시됩니다 (한글·영문 모두 검색 가능).",
                     Foreground = Theme.TextSecondary, Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap,
                 });
                 return;
@@ -836,7 +843,8 @@ namespace WallSplitter
 
             const int maxNativeResults = 60;
             resultsPanel.Children.Add(new TextBlock { Text = "Revit 기본 기능", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 10, 0, 2) });
-            List<(string Label, string Name)> nativeMatches = SunnyToolsCommands.SearchNativeCommands(filter, maxNativeResults);
+            List<(string Label, string Name)> nativeMatches = SunnyToolsCommands.SearchNativeCommands(
+                filter, maxNativeResults, _revitLanguage);
             if (nativeMatches.Count == 0)
             {
                 resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });

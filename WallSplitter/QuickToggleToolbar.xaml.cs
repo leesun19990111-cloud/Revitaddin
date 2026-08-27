@@ -332,7 +332,7 @@ namespace WallSplitter
             }
         }
 
-        private static string ToolTipFor(QuickToggleButtonConfig cfg, QuickToggleButtonState state)
+        private string ToolTipFor(QuickToggleButtonConfig cfg, QuickToggleButtonState state)
         {
             // 색상 버튼은 켜짐/꺼짐이 없어 "클릭하면 켭니다" 같은 문구가 맞지 않는다 - 실제 동작(패널
             // 열기)에 맞는 문구를 따로 쓴다.
@@ -342,9 +342,11 @@ namespace WallSplitter
             // 기능 버튼도 켜짐/꺼짐이 없다 - 지정된 명령을 실행한다는 실제 동작에 맞는 문구를 쓴다.
             if (cfg.Category == QuickToggleCategory.CommandLauncher)
             {
-                return string.IsNullOrEmpty(cfg.CommandLabel)
+                string commandLabel = SunnyToolsCommands.DisplayLabelFor(
+                    cfg.CommandKind, cfg.CommandId, _uiapp.Application.Language, cfg.CommandLabel);
+                return string.IsNullOrEmpty(commandLabel)
                     ? cfg.Name + " (아직 실행할 기능이 지정되지 않았습니다)"
-                    : cfg.Name + " - 클릭하면 '" + cfg.CommandLabel + "' 실행";
+                    : cfg.Name + " - 클릭하면 '" + commandLabel + "' 실행";
             }
 
             return state switch
