@@ -19,7 +19,7 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,10"
-                   Text="현재 뷰에서 원클릭으로 켜고 끌 뷰템플릿/필터/작업세트 버튼을 등록합니다. 같은 종류라도 이름을 다르게 지정해 여러 버튼을 추가할 수 있습니다.&#10;'프리셋' 버튼은 뷰템플릿+필터+작업세트를 원하는 조합으로 한 버튼에 담아 한 번에 켜고 끕니다.&#10;'기능' 버튼은 Sunny Tools 자체 기능(재료 지정, NAMER 등)이나 Revit 기본 기능(동기화 등)을 검색해서 찾아 클릭 한 번으로 실행합니다.&#10;이 설정은 이 PC의 이 프로젝트 파일에만 저장되며, 다른 프로젝트 파일에는 영향을 주지 않습니다."/>
+                   Text="현재 뷰에서 원클릭으로 켜고 끌 뷰템플릿/필터/작업세트 버튼을 등록합니다. 같은 종류라도 이름을 다르게 지정해 여러 버튼을 추가할 수 있습니다.&#10;'프리셋' 버튼은 뷰템플릿+필터+작업세트를 원하는 조합으로 한 버튼에 담아 한 번에 켜고 끕니다.&#10;'그래픽 화면표시 검색' 버튼은 현재 뷰의 모델·주석 카테고리를 검색해 가시성과 그래픽 재정의를 바로 조절합니다.&#10;'기능' 버튼은 Sunny Tools 자체 기능(재료 지정, NAMER 등)이나 Revit 기본 기능(동기화 등)을 검색해서 찾아 클릭 한 번으로 실행합니다.&#10;이 설정은 이 PC의 이 프로젝트 파일에만 저장되며, 다른 프로젝트 파일에는 영향을 주지 않습니다."/>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
@@ -46,6 +46,7 @@
                     <Button x:Name="AddWorksetButton" Content="+ 작업세트 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddWorksetButton_Click"/>
                     <Button x:Name="AddPresetButton" Content="+ 프리셋 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddPresetButton_Click"/>
                     <Button x:Name="AddColorToolButton" Content="+ 색상 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddColorToolButton_Click"/>
+                    <Button x:Name="AddGraphicsDisplaySearchButton" Content="+ 그래픽 화면표시 검색 버튼 추가" Padding="6,4" Margin="0,0,0,4" Click="AddGraphicsDisplaySearchButton_Click"/>
                     <Button x:Name="AddCommandLauncherButton" Content="+ 기능 버튼 추가" Padding="6,4" Click="AddCommandLauncherButton_Click"/>
                 </StackPanel>
             </Grid>

@@ -28,6 +28,11 @@ namespace WallSplitter
         // 고르고(ColorButtonCategories), 실제 색상/투명도 값은 저장하지 않는다 - 매번 클릭했을 때 그
         // 카테고리의 현재 값을 읽어와 보여준다(QuickToggleService.ReadCurrentColorAndTransparency).
         ColorTool,
+        // 2026-08-27, 커스텀 버튼바에서 현재 뷰의 V/G(가시성/그래픽) 모델·주석 카테고리를 검색해
+        // 표시/투영선/표면 패턴/투명도/절단선·패턴/하프톤/상세수준을 바로 조절하려는 요청으로 추가.
+        // ColorTool처럼 on/off 상태를 저장하는 버튼이 아니라 검색 패널을 여는 도구 버튼이며, 실제 변경은
+        // 모델리스 WPF 창에서 직접 하지 않고 QuickToggleExternalEventHandler를 통해 활성 뷰에 적용한다.
+        GraphicsDisplaySearch,
         // 2026-08-03, "커스텀 버튼 설정에 다른 툴들의 버튼도 추가할 수 있으면 좋겠다 - 재료지정, 네이머,
         // 공동작업탭의 동기화 버튼 등을 찾아서 버튼으로 추가하고 싶다"는 요청으로 추가. ColorTool처럼
         // on/off 개념이 없고, 클릭하면 지정된 Revit 명령(Sunny Tools 자체 명령 또는 Revit 기본 명령)을
@@ -275,6 +280,7 @@ namespace WallSplitter
                 QuickToggleCategory.Workset => "작업세트버튼",
                 QuickToggleCategory.Preset => "프리셋버튼",
                 QuickToggleCategory.ColorTool => "색상버튼",
+                QuickToggleCategory.GraphicsDisplaySearch => "그래픽화면표시검색버튼",
                 QuickToggleCategory.CommandLauncher => "기능버튼",
                 _ => "버튼",
             };

@@ -38,6 +38,7 @@ namespace WallSplitter
             QuickToggleCategory.Workset => QuickToggleIconShape.Lines,
             QuickToggleCategory.Preset => QuickToggleIconShape.Star,
             QuickToggleCategory.ColorTool => QuickToggleIconShape.Dot,
+            QuickToggleCategory.GraphicsDisplaySearch => QuickToggleIconShape.Eye,
             QuickToggleCategory.CommandLauncher => QuickToggleIconShape.Bolt,
             _ => QuickToggleIconShape.Dot,
         };

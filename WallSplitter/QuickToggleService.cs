@@ -56,6 +56,11 @@ namespace WallSplitter
                     case QuickToggleCategory.ColorTool:
                         return QuickToggleButtonState.Off;
 
+                    // 그래픽 화면표시 검색 버튼도 상태를 켜고 끄는 버튼이 아니라 검색 패널을 여는 도구다.
+                    // 항상 Off로 두어 현재 뷰에서 클릭 가능한 상태를 유지한다.
+                    case QuickToggleCategory.GraphicsDisplaySearch:
+                        return QuickToggleButtonState.Off;
+
                     // 기능 버튼도 색상 버튼과 같은 이유로 항상 Off(클릭 가능) 고정 - on/off 개념이 없고
                     // 클릭할 때마다 지정된 명령을 한 번 실행할 뿐이다(RunCommand).
                     case QuickToggleCategory.CommandLauncher:
@@ -395,6 +400,82 @@ namespace WallSplitter
             }
         }
 
+        // 검색 패널에 노출할 수 있는 카테고리인지 읽기 전용으로 확인한다. 뷰 종류마다 V/G 지원 범위가
+        // 다르므로 종류를 하드코딩하지 않고, 해당 뷰에서 카테고리 재정의를 읽을 수 있는지를 기준으로 삼는다.
+        public static bool CanEditCategoryGraphics(View view, ElementId categoryId)
+        {
+            try
+            {
+                view.GetCategoryOverrides(categoryId);
+                return true;
+            }
+            catch
+            {
+                try
+                {
+                    view.GetCategoryHidden(categoryId);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        // "그래픽 화면표시 검색"에서 선택한 카테고리에 이번 편집에서 지정한 값만 적용한다. 프리셋의
+        // BuildOverrideGraphicSettings는 빈 OGS에서 시작하지만, 여기서는 현재 뷰의 OGS를 먼저 읽고 그
+        // 위에 값이 있는 필드만 덧씌운다. 따라서 투명도만 바꿔도 기존 선/패턴/색상 재정의가 지워지지 않는다.
+        public static bool ApplyGraphicsDisplayOverride(View view, CategoryOverrideConfig co)
+        {
+            ElementId categoryId = new ElementId(co.CategoryId);
+            bool visibilityRequested = co.Visible.HasValue;
+            bool graphicsRequested = HasGraphicOverrideValues(co);
+            bool visibilityApplied = !visibilityRequested;
+            bool graphicsApplied = !graphicsRequested;
+
+            if (visibilityRequested)
+            {
+                try
+                {
+                    view.SetCategoryHidden(categoryId, !co.Visible.GetValueOrDefault());
+                    visibilityApplied = true;
+                }
+                catch
+                {
+                    // 뷰 템플릿이 가시성을 제어하거나 이 카테고리를 숨길 수 없으면 그래픽 항목 적용은 계속 시도한다.
+                }
+            }
+
+            if (graphicsRequested)
+            {
+                try
+                {
+                    OverrideGraphicSettings existing = view.GetCategoryOverrides(categoryId);
+                    ApplyOverrideGraphicSettings(view.Document, existing, co);
+                    view.SetCategoryOverrides(categoryId, existing);
+                    graphicsApplied = true;
+                }
+                catch
+                {
+                    // 호출자가 false를 보고 트랜잭션을 되돌리고 사용자에게 원인을 안내한다.
+                }
+            }
+
+            // 두 그룹을 함께 요청했다면 둘 다 성공해야 커밋한다. 한쪽만 실패했는데 다른 쪽만 남는
+            // 부분 적용은 사용자가 결과를 오해하기 쉬우므로 호출자가 전체 트랜잭션을 되돌리게 한다.
+            return (visibilityRequested || graphicsRequested) && visibilityApplied && graphicsApplied;
+        }
+
+        private static bool HasGraphicOverrideValues(CategoryOverrideConfig co) =>
+            co.Halftone.HasValue || co.DetailLevel != null || co.Transparency.HasValue ||
+            co.ProjectionLineWeight.HasValue || co.ProjectionLineColor.HasValue || co.ProjectionLinePatternName != null ||
+            co.CutLineWeight.HasValue || co.CutLineColor.HasValue || co.CutLinePatternName != null ||
+            co.SurfaceForegroundVisible.HasValue || co.SurfaceForegroundPatternName != null || co.SurfaceForegroundColor.HasValue ||
+            co.SurfaceBackgroundVisible.HasValue || co.SurfaceBackgroundPatternName != null || co.SurfaceBackgroundColor.HasValue ||
+            co.CutForegroundVisible.HasValue || co.CutForegroundPatternName != null || co.CutForegroundColor.HasValue ||
+            co.CutBackgroundVisible.HasValue || co.CutBackgroundPatternName != null || co.CutBackgroundColor.HasValue;
+
         // 프리셋의 카테고리(V/G) 탭 적용 - 켜질 때는 저장된 표시 여부 + 그래픽 재정의(선/패턴/투명도/
         // 하프톤/상세수준)를 그대로 적용하고, 꺼질 때는 표시로 되돌리고 재정의를 완전히 지운다(빈
         // OverrideGraphicSettings로 교체) - "되돌리기" 스냅샷과 달리 프리셋은 켜짐/꺼짐 두 상태를 직접
@@ -429,6 +510,13 @@ namespace WallSplitter
         private static OverrideGraphicSettings BuildOverrideGraphicSettings(Document doc, CategoryOverrideConfig co)
         {
             OverrideGraphicSettings ogs = new OverrideGraphicSettings();
+
+            ApplyOverrideGraphicSettings(doc, ogs, co);
+            return ogs;
+        }
+
+        private static void ApplyOverrideGraphicSettings(Document doc, OverrideGraphicSettings ogs, CategoryOverrideConfig co)
+        {
 
             if (co.Halftone.HasValue) ogs.SetHalftone(co.Halftone.Value);
             if (co.Transparency.HasValue) ogs.SetSurfaceTransparency(co.Transparency.Value);
@@ -467,7 +555,6 @@ namespace WallSplitter
             if (cutBgPattern != null) ogs.SetCutBackgroundPatternId(cutBgPattern);
             if (co.CutBackgroundColor.HasValue) ogs.SetCutBackgroundPatternColor(IntToColor(co.CutBackgroundColor.Value));
 
-            return ogs;
         }
 
         private static Autodesk.Revit.DB.Color IntToColor(int rgb) =>

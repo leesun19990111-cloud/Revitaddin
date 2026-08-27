@@ -156,6 +156,7 @@ namespace WallSplitter
             QuickToggleCategory.Workset => "작업세트",
             QuickToggleCategory.Preset => "프리셋",
             QuickToggleCategory.ColorTool => "색상",
+            QuickToggleCategory.GraphicsDisplaySearch => "그래픽 화면표시 검색",
             QuickToggleCategory.CommandLauncher => "기능",
             _ => "",
         };
@@ -184,6 +185,7 @@ namespace WallSplitter
         private void AddWorksetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Workset);
         private void AddPresetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Preset);
         private void AddColorToolButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.ColorTool);
+        private void AddGraphicsDisplaySearchButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.GraphicsDisplaySearch);
         private void AddCommandLauncherButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.CommandLauncher);
 
         private void AddButtonOfCategory(QuickToggleCategory category)
@@ -265,6 +267,26 @@ namespace WallSplitter
                 EditPanelHost.Children.Add(colorToolResults);
                 colorToolSearchBox.TextChanged += (s, e) => RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, colorToolSearchBox.Text, isColorTool: true);
                 RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, "", isColorTool: true);
+                return;
+            }
+
+            if (cfg.Category == QuickToggleCategory.GraphicsDisplaySearch)
+            {
+                EditPanelHost.Children.Add(new TextBlock
+                {
+                    Text = "이 버튼은 별도의 대상을 미리 저장하지 않습니다. 커스텀 버튼바에서 클릭하면 현재 활성 뷰의 " +
+                           "모델·주석 카테고리를 이름으로 검색하고, 선택한 카테고리의 가시성·투영선·표면 패턴·투명도·" +
+                           "절단선과 패턴·하프톤·상세수준을 바로 조절할 수 있습니다.",
+                    Foreground = Theme.TextSecondary,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8),
+                });
+                EditPanelHost.Children.Add(new TextBlock
+                {
+                    Text = "변경 내용은 검색 패널을 연 뒤 선택한 카테고리별로 현재 활성 뷰에 적용됩니다.",
+                    FontWeight = FontWeights.Bold,
+                    TextWrapping = TextWrapping.Wrap,
+                });
                 return;
             }
 

@@ -25,6 +25,7 @@ namespace WallSplitter
         private readonly CategoryOverrideConfig _editable;
         private readonly List<string> _linePatternNames;
         private readonly List<string> _fillPatternNames;
+        private readonly bool _immediateMode;
 
         private static readonly (string Label, string? Value)[] DetailLevelOptions =
         {
@@ -34,13 +35,15 @@ namespace WallSplitter
             ("정밀", "Fine"),
         };
 
-        public CategoryOverrideEditWindow(Document doc, Category category, CategoryOverrideConfig editable)
+        public CategoryOverrideEditWindow(Document doc, Category category, CategoryOverrideConfig editable, bool immediateMode = false)
         {
             InitializeComponent();
             _category = category;
             _editable = editable;
+            _immediateMode = immediateMode;
             _linePatternNames = QuickToggleService.AllLinePatternNames(doc);
             _fillPatternNames = QuickToggleService.AllFillPatternNames(doc);
+            if (_immediateMode) Title = "그래픽 화면표시 편집";
             BuildContent();
         }
 
@@ -57,16 +60,21 @@ namespace WallSplitter
             });
             RootPanel.Children.Add(new TextBlock
             {
-                Text = "항목마다 '재정의 안 함'을 고르면 이 프리셋은 그 속성을 건드리지 않습니다. 이 편집 내용은 " +
-                       "프리셋이 켜질 때 적용되고, 꺼지면 표시로 되돌아가며 모든 재정의가 지워집니다.",
+                Text = _immediateMode
+                    ? "바꿀 항목만 지정하세요. '변경 안 함'으로 둔 항목은 현재 설정을 그대로 유지하며, 확인을 누르면 현재 활성 뷰에 즉시 적용됩니다."
+                    : "항목마다 '재정의 안 함'을 고르면 이 프리셋은 그 속성을 건드리지 않습니다. 이 편집 내용은 " +
+                      "프리셋이 켜질 때 적용되고, 꺼지면 표시로 되돌아가며 모든 재정의가 지워집니다.",
                 Foreground = Theme.TextSecondary,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 10),
             });
 
-            RootPanel.Children.Add(BuildTriStateCheck("표시 (클릭할 때마다 재정의 안 함 → 표시 → 숨김 순으로 순환)",
+            RootPanel.Children.Add(BuildTriStateCheck(_immediateMode
+                    ? "가시성 (클릭할 때마다 변경 안 함 → 표시 → 숨김 순으로 순환)"
+                    : "표시 (클릭할 때마다 재정의 안 함 → 표시 → 숨김 순으로 순환)",
                 _editable.Visible, v => _editable.Visible = v));
-            RootPanel.Children.Add(BuildTriStateCheck("하프톤", _editable.Halftone, v => _editable.Halftone = v));
+            RootPanel.Children.Add(BuildTriStateCheck(_immediateMode ? "중간색 (하프톤)" : "하프톤",
+                _editable.Halftone, v => _editable.Halftone = v));
 
             StackPanel detailRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 4) };
             detailRow.Children.Add(new TextBlock { Text = "상세수준", Width = 90, VerticalAlignment = VerticalAlignment.Center });
