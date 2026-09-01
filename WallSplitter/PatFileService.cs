@@ -31,6 +31,9 @@ namespace WallSplitter
             PatUnit unit = PatUnit.Millimeter;
             bool unitWasDeclared = false;
             PatternDefinition? current = null;
+            // ;%TYPE= 은 헤더(*이름) 뒤에 오는 게 보통이지만, 파일 첫머리에 한 번만 선언하는 PAT도 있다.
+            // 그 경우 이후 모든 패턴의 기본 종류로 쓴다(예전에는 그냥 버려서 모델 패턴이 제도로 들어왔다).
+            FillPatternTarget? fileTarget = null;
 
             for (int index = 0; index < lines.Length; index++)
             {
@@ -74,12 +77,15 @@ namespace WallSplitter
                         continue;
                     }
 
+                    FillPatternTarget headerTarget = fileTarget ?? FillPatternTarget.Drafting;
                     current = new PatternDefinition
                     {
                         Name = name,
                         Description = description,
-                        Target = FillPatternTarget.Drafting,
-                        HostOrientation = FillPatternHostOrientation.ToView,
+                        Target = headerTarget,
+                        HostOrientation = headerTarget == FillPatternTarget.Model
+                            ? FillPatternHostOrientation.ToHost
+                            : FillPatternHostOrientation.ToView,
                         SourceLabel = Path.GetFileName(path),
                         SourceUnitLabel = unit == PatUnit.Inch ? "inch" : "mm",
                     };
@@ -89,16 +95,24 @@ namespace WallSplitter
 
                 if (TryReadDirective(line, "%TYPE", out string typeValue))
                 {
-                    if (current == null) continue;
+                    // 헤더 뒤의 선언은 그 패턴에만 적용한다. 헤더보다 앞의 선언만 파일 기본값으로 삼는다.
                     if (typeValue.Equals("MODEL", StringComparison.OrdinalIgnoreCase))
                     {
-                        current.Target = FillPatternTarget.Model;
-                        current.HostOrientation = FillPatternHostOrientation.ToHost;
+                        if (current == null) fileTarget = FillPatternTarget.Model;
+                        else
+                        {
+                            current.Target = FillPatternTarget.Model;
+                            current.HostOrientation = FillPatternHostOrientation.ToHost;
+                        }
                     }
                     else if (typeValue.Equals("DRAFTING", StringComparison.OrdinalIgnoreCase))
                     {
-                        current.Target = FillPatternTarget.Drafting;
-                        current.HostOrientation = FillPatternHostOrientation.ToView;
+                        if (current == null) fileTarget = FillPatternTarget.Drafting;
+                        else
+                        {
+                            current.Target = FillPatternTarget.Drafting;
+                            current.HostOrientation = FillPatternHostOrientation.ToView;
+                        }
                     }
                     else
                     {

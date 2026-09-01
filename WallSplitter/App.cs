@@ -234,19 +234,30 @@ namespace WallSplitter
         // 커스텀 툴바는 여기서 처음 얻는 살아있는 UIApplication으로 지연 생성한다 (위 OnStartup 주석 참고).
         private static void OnQuickToggleViewActivated(object? sender, ViewActivatedEventArgs e)
         {
-            if (QuickToggleToolbar.Instance == null && sender is UIApplication uiapp)
-                _ = new QuickToggleToolbar(uiapp); // 생성자가 자기 자신을 QuickToggleToolbar.Instance에 등록한다
+            // Revit 이벤트 콜백에서 예외가 밖으로 새어나가면 Revit이 오류 대화상자를 띄우거나
+            // 이벤트 구독 자체를 끊어버린다. 특히 Idling은 초당 여러 번 발생해 한 번의 예외가
+            // 대화상자 폭주로 이어진다. 여기서는 상태 표시만 하므로 조용히 삼키고 다음 틱에 다시 시도한다.
+            try
+            {
+                if (QuickToggleToolbar.Instance == null && sender is UIApplication uiapp)
+                    _ = new QuickToggleToolbar(uiapp); // 생성자가 자기 자신을 QuickToggleToolbar.Instance에 등록한다
 
-            QuickToggleToolbar.Instance?.RefreshState();
-            if (QuickToggleToolbar.Instance?.CurrentToolbarVisible is bool visible)
-                UpdateQuickToggleVisibilityLabel(visible);
+                QuickToggleToolbar.Instance?.RefreshState();
+                if (QuickToggleToolbar.Instance?.CurrentToolbarVisible is bool visible)
+                    UpdateQuickToggleVisibilityLabel(visible);
+            }
+            catch
+            {
+                // 무시 - 다음 뷰 전환/유휴 틱에 다시 갱신된다.
+            }
         }
 
         // 문서가 닫히는 중에는 일단 숨겨둔다 - 다른 문서가 곧이어 활성화되면 뒤따르는 ViewActivated에서
         // 다시 올바른 상태로 보이게 된다.
         private static void OnQuickToggleDocumentClosing(object? sender, DocumentClosingEventArgs e)
         {
-            QuickToggleToolbar.Instance?.HideForNoDocument();
+            try { QuickToggleToolbar.Instance?.HideForNoDocument(); }
+            catch { /* 문서를 닫는 중이라 실패해도 사용자에게 알릴 것이 없다. */ }
         }
 
         // Idling은 유휴 상태마다 매우 자주 발생한다 - 여기서는 디스크 재로드 없이(RefreshState/
@@ -254,10 +265,18 @@ namespace WallSplitter
         // 리사이즈 대응)만 가볍게 수행한다.
         private static void OnQuickToggleIdling(object? sender, IdlingEventArgs e)
         {
-            if (QuickToggleToolbar.Instance == null && sender is UIApplication uiapp)
-                _ = new QuickToggleToolbar(uiapp);
+            // 예외를 밖으로 내보내면 안 된다 - 위 OnQuickToggleViewActivated 주석 참고.
+            try
+            {
+                if (QuickToggleToolbar.Instance == null && sender is UIApplication uiapp)
+                    _ = new QuickToggleToolbar(uiapp);
 
-            QuickToggleToolbar.Instance?.RefreshState();
+                QuickToggleToolbar.Instance?.RefreshState();
+            }
+            catch
+            {
+                // 무시 - 다음 유휴 틱에 다시 갱신된다.
+            }
         }
 
         // "설정" 버튼 바로 밑에 작은 "단일/복수" 토글 버튼을 쌓아서(stacked) 붙인다.

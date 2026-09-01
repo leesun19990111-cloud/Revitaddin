@@ -21,3 +21,10 @@
 - **First use of year-conditional compilation** (`WallSplitter.csproj`'s `DefineConstants`, added 2026-07-13 for the floor feature): `Floor.SlabShapeEditor` is a property in the 2023 API, a `GetSlabShapeEditor()` method from 2024 on (2024/2025 expose both, deprecated property removed by 2026) — confirmed by reflecting all 5 years' `Nice3point.Revit.Api.RevitAPI` packages via `MetadataLoadContext` (scratchpad `ApiProbe`), not guessed. Gated with `#if REVIT2023 / #else` in `SplitFloorCommand.cs`, using a `REVIT2023`/`REVIT2024_OR_GREATER` constant pair defined per `$(RevitVersion)` in the csproj (Nice3point SDK's `_OR_GREATER` naming convention, hand-rolled since we don't use their SDK — see `docs/build-system/CLAUDE.md`). This is the first time this pattern was needed since the project's start; add more such constants the same way if another API is found to differ by year.
 
 **Known limitations** (QA-reviewed 2026-07-09, accepted for now): doors/windows hosted on an original wall are deleted with it (not re-hosted onto the new layer walls); `TrimToIntersection` only handles Line-based wall pairs (Arc corners still rely on bare `AllowWallJoinAtEnd`, untested); only end-joins between *selected* walls are restored — T-joins/`JoinGeometryUtils` geometry joins are not; thickness display rounds to whole mm so 12.3mm vs 12.4mm layers merge into one type name; new walls are always non-structural and default room-bounding; stacked/vertically-compound wall types are skipped or untested; net48 payload's `System.Text.Json` can theoretically version-conflict with other net48 add-ins in Revit 2023/2024.
+
+- **널 가드 추가 (2026-09-01, 전체 점검에서 선제 보강 — 재현된 버그는 아님)**: `SplitWallCommand`에서 원인을
+  알기 어려운 `NullReferenceException`으로 끝날 수 있던 세 곳에 사유를 알려주는 예외를 넣었다. (1) `DirectType`
+  모드에서 `doc.GetElement(prep.DirectTypeIds[layerIndex]) as WallType`이 null인 경우(유형을 고른 뒤 삭제/교체됨),
+  (2) `GetOrCreateSingleLayerWallType`의 `sourceType.Duplicate(name) as WallType`과 `created.GetCompoundStructure()`가
+  null인 경우, (3) 프로파일 복사 단계에서 `doc.GetElement(task.SketchId) as Sketch`가 null인 경우.
+  전부 기존 try/catch 안이라 동작 흐름은 그대로이고, 사용자가 보는 메시지만 원인을 알 수 있게 바뀐다.

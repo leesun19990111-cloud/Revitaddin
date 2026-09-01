@@ -36,7 +36,22 @@ namespace WallSplitter
         // true면 이번 Raise()는 "선택"이 아니라 경고 목록 새로고침 요청이다 - 같은 ExternalEvent를 재사용한다.
         internal bool PendingRefresh { get; set; }
 
+        // ExternalEvent 콜백에서 예외가 나면 Revit은 사용자에게 아무 것도 보여주지 않는다 - "버튼을 눌러도
+        // 반응이 없다"는 증상으로만 남는다(커스텀 버튼에서 실제로 겪은 문제, docs/quick-toggle 참고).
+        // 그래서 여기서 직접 잡아 알려준다.
         public void Execute(UIApplication app)
+        {
+            try
+            {
+                ExecuteCore(app);
+            }
+            catch (System.Exception ex)
+            {
+                TaskDialog.Show("경고Pick", "요청을 실행하지 못했습니다.\n\n" + ex.GetBaseException().Message);
+            }
+        }
+
+        private void ExecuteCore(UIApplication app)
         {
             if (PendingSelectIds != null)
             {

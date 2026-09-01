@@ -95,3 +95,17 @@ GetName()` 등 실제 화면에 보이는 문자열만 바꿨다. 클래스/파�
   - 결과 카테고리를 누르면 기존 `CategoryOverrideEditWindow`를 `immediateMode:true`로 재사용한다. 편집 객체는 카테고리 식별 정보 외에는 전부 null에서 시작하고, 즉시 편집 모드의 null은 "현재 재정의를 지움"이 아니라 **"이번 적용에서는 변경 안 함"**이다. 따라서 사용자는 가시성/투영선/표면 전경·배경 패턴/투명도/절단선·패턴/중간색(하프톤)/상세수준 중 바꿀 항목만 지정한다. `QuickToggleService.ApplyGraphicsDisplayOverride`는 `view.GetCategoryOverrides`로 기존 OGS를 먼저 읽고 `ApplyOverrideGraphicSettings`로 값이 있는 필드만 덧씌운 뒤 다시 저장하므로, 투명도만 바꿨을 때 기존 선·패턴 재정의가 지워지지 않는다. 가시성과 그래픽 항목을 함께 요청했다면 둘 다 성공해야 트랜잭션을 커밋하고, 한쪽이라도 실패하면 부분 적용을 남기지 않고 전체 롤백한다.
   - 검색창은 모델리스이므로 실제 Revit 변경은 `GraphicsDisplayApplyRequest`/`PendingGraphicsDisplayApply`를 통해 기존 `ExternalEvent` 처리기로 넘긴다. 요청에는 팝업을 연 문서 경로를 포함해 다른 프로젝트로 전환한 뒤 같은 정수 CategoryId에 잘못 적용되는 것을 막는다. 뷰가 바뀌면 뷰 종류별 지원 카테고리 목록도 달라질 수 있으므로 툴바의 `RefreshState`가 검색 팝업을 자동으로 닫으며, 문서 변경/툴바 숨김/설정 재로드 때도 색상 팝업과 함께 닫는다. 검색 버튼은 ColorTool과 같은 작은 도구형 버튼으로 2단 그룹에 들어가고 `DetermineState`는 항상 `Off`를 반환한다. **라이브 Revit 동작은 아직 미검증** — 2023~2027 컴파일 후 실제 뷰 템플릿 제어 항목과 카테고리별 지원 차이는 Revit에서 확인해야 한다.
 - **알려진 제약**: Revit이 뷰를 별도 창으로 분리했을 때 툴바는 메인 창에만 붙고 분리된 창은 따라가지 않음; 저장 안 된 새 문서(경로 없음)는 프로젝트별 설정을 저장할 곳이 없어 툴바가 비활성 상태로 남음(최초 저장 후 정상 동작); 필터/뷰템플릿/작업세트/카테고리 대상이 삭제되면 그 항목만 조용히 무시됨; "뷰 저장" 스냅샷은 디스크에 저장되지 않으므로 Revit을 껐다 켜거나 문서를 닫았다 열면 사라짐(그 세션에서 다시 저장해야 함, 단 문서를 닫지 않고 뷰만 닫는 것은 유지됨); 저장 안 된 새 문서를 여러 개 동시에 열어두면 그 뷰 저장 스냅샷들이 전부 같은 `"__unsaved__"` 키로 뭉뚱그려짐(극히 드문 경우로 남겨둠); 그림자/태양경로/스케치라인 등 "그래픽 화면표시 옵션"의 세부 항목은 Revit API에 전용 접근자가 없어 `GraphicsIntegerParams` 캐치올로 최선 노력만 하며 실제 복원 여부는 **라이브 테스트 미검증**; 색상 버튼의 펼침 방향 판정은 주 모니터 기준이라 **멀티 모니터 환경 미검증**; 기능 버튼의 Revit 기본 명령 실행 가능 여부(`CanPostCommand`)와 실제 실행 결과는 **라이브 테스트 미검증**.
+- **Revit 콜백 예외 차단 (2026-09-01, 전체 점검에서 선제 보강 — 재현된 버그는 아님)**: `App.OnQuickToggleIdling`/
+  `OnQuickToggleViewActivated`/`OnQuickToggleDocumentClosing`은 `RefreshState()`를 예외 처리 없이 호출하고 있었다.
+  Revit 이벤트 콜백에서 예외가 밖으로 나가면 Revit이 오류 대화상자를 띄우거나 구독 자체를 끊는데, `Idling`은
+  초당 여러 번 발생하므로 한 번의 예외가 대화상자 폭주로 이어질 수 있다. 세 콜백을 `try/catch`로 감싸 조용히
+  삼키고 다음 틱에 다시 갱신하게 했다(상태 표시만 하는 코드라 사용자에게 알릴 것이 없다).
+  `QuickToggleExternalEventHandler.Execute`도 본문을 `ExecuteCore`로 옮기고 최상위에서 예외를 잡아 `TaskDialog`로
+  알린다 — 이 파일이 이미 기록해 둔 "ExternalEvent 콜백은 실패해도 Revit이 아무 것도 보여주지 않아 '버튼을
+  눌러도 반응 없음'으로만 남는다"는 문제를 예상 못 한 예외에도 똑같이 적용한 것이다.
+  `QuickToggleSettingsWindow.ResetPositionButton_Click`의 `QuickToggleGlobalSettings.Save()`도 감쌌다(WPF 이벤트
+  핸들러에서 예외가 새면 Revit 프로세스가 그대로 죽는다 — `SettingsWindow`의 저장 버튼과 같은 방침).
+- **기능 버튼 목록에 경고Pick 누락, 수정 (2026-09-01)**: `SunnyToolsCommands.All`에 `WarningPickCommand`가 빠져
+  있어(2026-08-25 경고Pick 추가 때 이 목록에 넣지 않았다) 커스텀 "기능 버튼"으로 경고Pick을 등록할 수 없었다.
+  리본에 등록하는 모든 `IExternalCommand`가 이 목록에도 있어야 한다 — 새 명령을 추가하면 `App.cs`와 이 목록
+  양쪽을 같이 갱신할 것.

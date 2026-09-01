@@ -148,6 +148,8 @@ namespace WallSplitter
         public string AfterProfileHash { get; set; } = "";
         public List<long> CreatedElementIds { get; set; } = new List<long>();
         public long OriginalPanelTypeId { get; set; } = -1;
+        // 안전 복원 기록을 이미 저장한 실행 경로가 표시한다. 상위 경로가 같은 기록을 한 번 더 붙이지 않게 한다.
+        public bool RecordAppended { get; set; }
     }
 
     internal static class PatternPunchExecutor
@@ -184,7 +186,10 @@ namespace WallSplitter
                     sketchId = sketch.Id;
                     transaction.Commit();
                 }
-                PunchExecutionResult result = ExecuteSketchDifference(document, wall, sketchId, plan, target, punchPaths, false, group);
+                // probe 플래그를 그대로 넘긴다. 여기서 false로 고정하면 사전 검증 중에도
+                // 개구부 fallback(ExecuteNativeOpenings)이 실제 적용으로 동작해 기록을 두 번 남긴다.
+                // 그룹의 Assimilate/RollBack 판단은 existingGroup을 넘긴 이 메서드가 계속 맡는다.
+                PunchExecutionResult result = ExecuteSketchDifference(document, wall, sketchId, plan, target, punchPaths, probe, group);
                 if (!result.Succeeded)
                 {
                     group.RollBack();
@@ -196,7 +201,7 @@ namespace WallSplitter
                 }
                 else
                 {
-                    AppendRecordWithinGroup(document, wall, plan, target, punchPaths, result);
+                    if (!result.RecordAppended) AppendRecordWithinGroup(document, wall, plan, target, punchPaths, result);
                     group.Assimilate();
                 }
                 return result;
@@ -277,6 +282,7 @@ namespace WallSplitter
                     else
                     {
                         AppendRecordWithinGroup(document, host, plan, target, punchPaths, result);
+                        result.RecordAppended = true;
                         localGroup.Assimilate();
                     }
                 }
@@ -317,6 +323,7 @@ namespace WallSplitter
                 else
                 {
                     PatternPunchRecordStore.AppendEntity(host, plan, target, punchPaths, result);
+                    result.RecordAppended = true;
                     if (transaction.Commit() != TransactionStatus.Committed)
                         throw new InvalidOperationException("개구부 트랜잭션을 완료하지 못했습니다.");
                 }

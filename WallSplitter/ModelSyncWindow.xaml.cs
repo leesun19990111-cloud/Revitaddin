@@ -51,6 +51,18 @@ namespace WallSplitter
             RenderRows();
         }
 
+        // Revit API는 같은 열린 문서에 대해 호출마다 다른 Document 래퍼를 돌려줄 수 있고 Document는
+        // Equals를 값 비교로 재정의하지 않는다(경고Pick에서 CONFIRMED LIVE BUG로 확인). 참조 비교만
+        // 믿으면 "현재 문서"가 표시/기본 체크되지 않으므로 경로(저장 안 된 문서는 제목)로도 비교한다.
+        private static bool IsSameDocument(Document a, Document b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return false;
+            if (!string.IsNullOrEmpty(a.PathName) || !string.IsNullOrEmpty(b.PathName))
+                return string.Equals(a.PathName, b.PathName, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(a.Title, b.Title, StringComparison.Ordinal);
+        }
+
         private void BuildTargetDocumentRows()
         {
             TargetDocsPanel.Children.Clear();
@@ -58,7 +70,7 @@ namespace WallSplitter
 
             foreach (Document doc in _allOpenDocs)
             {
-                bool isActive = ReferenceEquals(doc, _activeDoc);
+                bool isActive = IsSameDocument(doc, _activeDoc);
                 var checkBox = new CheckBox
                 {
                     Content = isActive ? $"{doc.Title} (현재 문서)" : doc.Title,
@@ -253,7 +265,13 @@ namespace WallSplitter
             // 기록에는 없는) 항목이 섞여 있어도 RemoveAll은 존재하지 않는 id에 대해 그냥 아무 일도 안 하므로 안전하다.
             ChangeLog log = ChangeLog.Load();
             log.Entries.RemoveAll(e => idsToRemove.Contains(e.Id));
-            log.Save();
+            // WPF 이벤트 핸들러에서 예외가 새어나가면 Revit 프로세스가 그대로 죽는다.
+            try { log.Save(); }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"로컬 기록 파일을 갱신하지 못했습니다: {ex.Message}\n\n목록에서는 삭제되었지만 다음에 창을 열면 다시 나타날 수 있습니다.",
+                    "모델간 변경 반영", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
 
             RenderRows();
         }

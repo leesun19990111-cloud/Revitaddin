@@ -98,7 +98,22 @@ namespace WallSplitter
         // 버튼 설정 자체(어느 명령을 실행할지)만 있으면 되므로 cfg 참조를 그대로 담는다.
         internal QuickToggleButtonConfig? PendingCommandLaunch { get; set; }
 
+        // ExternalEvent 콜백에서 예외가 밖으로 나가면 Revit은 사용자에게 아무 것도 보여주지 않고
+        // "버튼을 눌러도 반응이 없다"는 증상으로만 남는다(이 파일의 아래 주석과 같은 이유).
+        // 이미 개별 실패는 TaskDialog로 알리고 있으므로, 예상 못 한 예외도 여기서 같은 방식으로 알린다.
         public void Execute(UIApplication app)
+        {
+            try
+            {
+                ExecuteCore(app);
+            }
+            catch (System.Exception ex)
+            {
+                TaskDialog.Show("커스텀 버튼", "요청을 실행하지 못했습니다.\n\n" + ex.GetBaseException().Message);
+            }
+        }
+
+        private void ExecuteCore(UIApplication app)
         {
             if (PendingRevertSnapshot != null)
             {

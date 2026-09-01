@@ -101,3 +101,8 @@ Added 2026-08-25 on request: Revit 기본 경고 대화상자는 경고를 클�
   이 설계안을 사용자에게 설명한 뒤(위험성·불확실성 포함), **사용자가 지금은 넣지 말자고 결정했다** — 요청
   없이 먼저 구현하지 말 것. 나중에 다시 요청이 오면 이 설계안부터 재검토.
 - 아이콘은 별도 PNG 없이 `App.CreateWarningIcon`이 실행 시점에 그린다(패턴 스튜디오 아이콘과 같은 방식).
+- **ExternalEvent 예외 차단 (2026-09-01, 선제 보강)**: `WarningPickExternalEventHandler.Execute`의 본문을
+  `ExecuteCore`로 옮기고 최상위에서 예외를 잡아 `TaskDialog`로 알린다. `IExternalEventHandler.Execute`에서
+  예외가 밖으로 나가면 Revit은 사용자에게 아무 것도 보여주지 않아 "버튼을 눌러도 반응이 없다"는 증상으로만
+  남는다(`docs/quick-toggle/CLAUDE.md`에 기록된 것과 같은 문제). 문서 불일치·요소 삭제 같은 예상 가능한 경우는
+  기존처럼 각 `Execute*` 메서드가 직접 안내하고, 이 최상위 catch는 예상 못 한 예외 전용이다.

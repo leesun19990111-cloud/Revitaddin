@@ -925,7 +925,13 @@ namespace WallSplitter
         // 여기서 바로 리셋·저장하고 열려 있는 툴바에도 즉시 반영한다.
         private void ResetPositionButton_Click(object sender, RoutedEventArgs e)
         {
-            new QuickToggleGlobalSettings().Save();
+            // WPF 이벤트 핸들러에서 예외가 새어나가면 Revit 프로세스가 그대로 죽는다 (SettingsWindow와 같은 방침).
+            try { new QuickToggleGlobalSettings().Save(); }
+            catch (Exception ex)
+            {
+                MessageBox.Show("툴바 위치 설정을 저장하지 못했습니다: " + ex.Message, "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
             QuickToggleToolbar.Instance?.ReloadGlobalSettings();
             MessageBox.Show("툴바 위치를 기본값으로 되돌렸습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
         }

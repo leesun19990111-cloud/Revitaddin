@@ -171,7 +171,10 @@ namespace WallSplitter
             Document? active = _uiapp.ActiveUIDocument?.Document;
             if (active == null || !_sourceDocument.IsValidObject) return false;
             if (ReferenceEquals(active, _sourceDocument) || active.Equals(_sourceDocument)) return true;
-            return !string.IsNullOrEmpty(active.PathName) && active.PathName == _sourceDocument.PathName;
+            if (!string.IsNullOrEmpty(active.PathName) || !string.IsNullOrEmpty(_sourceDocument.PathName))
+                return string.Equals(active.PathName, _sourceDocument.PathName, StringComparison.OrdinalIgnoreCase);
+            // 아직 저장하지 않은 문서는 PathName이 둘 다 비어 있어 경로 비교로는 구분되지 않는다.
+            return string.Equals(active.Title, _sourceDocument.Title, StringComparison.Ordinal);
         }
 
         private static bool HasAnyChange(CategoryOverrideConfig value) =>

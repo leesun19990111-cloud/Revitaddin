@@ -13,6 +13,7 @@ namespace WallSplitter
     public sealed class ModelLinePatternCaptureCommand : IExternalCommand
     {
         private const int MaximumSlopeDenominator = 48;
+        private const int MaximumSlopeNumerator = MaximumSlopeDenominator * 8;
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -350,16 +351,25 @@ namespace WallSplitter
 
         private static (int p, int q) RationalDirection(PatternPoint delta, double width, double height)
         {
-            if (Math.Abs(delta.X) < 1e-12) return (0, delta.Y >= 0.0 ? 1 : -1);
+            (int p, int q) vertical = (0, delta.Y >= 0.0 ? 1 : -1);
+            if (Math.Abs(delta.X) < 1e-12 || delta.Length <= 1e-12) return vertical;
             double normalizedSlope = delta.Y * width / (delta.X * height);
+            // 거의 수직인 선은 기울기가 int 범위를 넘는다. 그대로 (int)Math.Round로 캐스팅하면 값이
+            // int.MinValue가 되고 바로 아래 Math.Abs(q)가 OverflowException을 던져 캡처가 통째로 실패한다.
+            // 이런 선은 애초에 유리수 근사 대상이 아니므로 세로 선군으로 바로 처리한다.
+            if (double.IsNaN(normalizedSlope) || double.IsInfinity(normalizedSlope) ||
+                Math.Abs(normalizedSlope) > MaximumSlopeNumerator) return vertical;
+
             int bestP = 1;
             int bestQ = (int)Math.Round(normalizedSlope);
             double bestError = double.MaxValue;
             PatternPoint original = delta / delta.Length;
             for (int p = 1; p <= MaximumSlopeDenominator; p++)
             {
-                int q = (int)Math.Round(normalizedSlope * p);
-                if (Math.Abs(q) > MaximumSlopeDenominator * 8) continue;
+                double rawQ = normalizedSlope * p;
+                if (Math.Abs(rawQ) > MaximumSlopeNumerator) continue;
+                int q = (int)Math.Round(rawQ);
+                if (Math.Abs(q) > MaximumSlopeNumerator) continue;
                 int gcd = GreatestCommonDivisor(Math.Abs(p), Math.Abs(q));
                 int rp = p / Math.Max(1, gcd);
                 int rq = q / Math.Max(1, gcd);
@@ -469,7 +479,8 @@ namespace WallSplitter
                 }
                 if (transaction.Commit() != TransactionStatus.Committed)
                     throw new InvalidOperationException("Revit 패턴 저장 트랜잭션이 완료되지 않았습니다.");
-                TaskDialog.Show("모델선 패턴 캡처", $"새 패턴을 만들었습니다.\n\n이름: {request.Name}\n유형: {PatternStudioCommand.TargetLabel(request.Pattern.Target)}\n선군: {request.Pattern.Grids.Count}개");
+                string action = request.OverwriteSource ? "원본 패턴을 수정했습니다." : "새 패턴을 만들었습니다.";
+                TaskDialog.Show("모델선 패턴 캡처", $"{action}\n\n이름: {request.Name}\n유형: {PatternStudioCommand.TargetLabel(request.Pattern.Target)}\n선군: {request.Pattern.Grids.Count}개");
                 return Result.Succeeded;
             }
             catch (Exception ex)

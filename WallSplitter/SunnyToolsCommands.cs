@@ -33,6 +33,7 @@ namespace WallSplitter
             ("모델선 패턴 캡처", typeof(ModelLinePatternCaptureCommand).FullName!),
             ("패턴 타공", typeof(PatternPunchCommand).FullName!),
             ("패턴 타공 복원", typeof(PatternPunchRestoreCommand).FullName!),
+            ("경고Pick", typeof(WarningPickCommand).FullName!),
             ("커스텀 버튼 설정", typeof(QuickToggleSettingsCommand).FullName!),
             ("커스텀 버튼 표시/숨김 전환", typeof(QuickToggleVisibilityToggleCommand).FullName!),
         };

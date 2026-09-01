@@ -251,6 +251,10 @@ namespace WallSplitter
                                 // [유형 단계 - 직접 지정] 위에서 이미 확정해 둔, 문서에 있는 기존 유형을 그대로 쓴다
                                 // (자동 생성 없음).
                                 targetWallType = doc.GetElement(prep.DirectTypeIds[layerIndex]) as WallType;
+                                // 유형을 고른 뒤 삭제/교체됐으면 여기서 null이 되어 원인 모를 NullReference로 끝난다.
+                                if (targetWallType == null)
+                                    throw new InvalidOperationException(
+                                        $"직접 지정한 벽 유형(레이어 {layerIndex + 1})을 문서에서 찾을 수 없습니다. 유형이 삭제되었을 수 있으니 다시 실행해 유형을 선택해 주세요.");
                                 newTypeName = targetWallType.Name;
                             }
                             else
@@ -462,10 +466,12 @@ namespace WallSplitter
 
                 if (existing == null)
                 {
-                    WallType created = sourceType.Duplicate(name) as WallType;
+                    WallType created = sourceType.Duplicate(name) as WallType
+                        ?? throw new InvalidOperationException($"단일 벽 유형 '{name}'을 복제하지 못했습니다.");
 
                     CompoundStructureLayer newLayer = new CompoundStructureLayer(layerWidth, function, materialId);
-                    CompoundStructure newStructure = created.GetCompoundStructure();
+                    CompoundStructure newStructure = created.GetCompoundStructure()
+                        ?? throw new InvalidOperationException($"'{sourceType.Name}' 벽 유형에는 편집할 수 있는 구조(레이어)가 없습니다.");
                     newStructure.SetLayers(new List<CompoundStructureLayer> { newLayer });
                     created.SetCompoundStructure(newStructure);
                     return created;
@@ -696,7 +702,8 @@ namespace WallSplitter
                 {
                     tx.Start();
 
-                    Sketch sketch = doc.GetElement(task.SketchId) as Sketch;
+                    Sketch sketch = doc.GetElement(task.SketchId) as Sketch
+                        ?? throw new InvalidOperationException("새로 만든 벽의 프로파일 스케치를 찾을 수 없습니다.");
                     SketchPlane sketchPlane = sketch.SketchPlane;
 
                     // 기본 사각형 프로파일 곡선 제거

@@ -135,6 +135,9 @@ namespace WallSplitter
             SelectedGridText.Text = edit?.DisplayName ?? "선군을 선택하세요.";
             if (edit == null) return;
 
+            // LoadSource/ResetAllButton_Click은 이미 _suppressUi=true 상태에서 이 메서드를 부른다.
+            // 무조건 false로 되돌리면 바깥 블록의 억제가 중간에 풀려 남은 컨트롤 갱신이 편집으로 오인된다.
+            bool previousSuppress = _suppressUi;
             _suppressUi = true;
             try
             {
@@ -144,7 +147,7 @@ namespace WallSplitter
             }
             finally
             {
-                _suppressUi = false;
+                _suppressUi = previousSuppress;
             }
         }
 
@@ -433,22 +436,31 @@ namespace WallSplitter
             };
             double minProjection = corners.Min(corner => Dot(corner, normal));
             double maxProjection = corners.Max(corner => Dot(corner, normal));
+            var geometry = new StreamGeometry();
+            // Offset이 0이면 아래 나눗셈이 ±무한대가 되고, 클램프한 start/end의 int 뺄셈이 오버플로해
+            // 반복 한도 검사를 통과해 버린다(수십억 회 루프 = Revit 정지). 반복 격자가 없는 선군은 그린다는
+            // 의미 자체가 없으므로 여기서 바로 빈 도형을 돌려준다. 저장 검증도 Offset 0을 이미 막는다.
+            if (Math.Abs(grid.Offset) < 1e-12)
+            {
+                geometry.Freeze();
+                return geometry;
+            }
             double first = (minProjection - originProjection) / grid.Offset;
             double last = (maxProjection - originProjection) / grid.Offset;
-            int start = SafeFloor(Math.Min(first, last)) - 2;
-            int end = SafeCeiling(Math.Max(first, last)) + 2;
+            // 클램프된 두 int의 차는 int로 계산하면 오버플로할 수 있으므로 long으로 비교한다.
+            long start = (long)SafeFloor(Math.Min(first, last)) - 2;
+            long end = (long)SafeCeiling(Math.Max(first, last)) + 2;
             const int maximumLines = 1200;
             if (end - start > maximumLines)
             {
-                int center = SafeFloor((first + last) / 2.0);
+                long center = SafeFloor((first + last) / 2.0);
                 start = center - maximumLines / 2;
                 end = center + maximumLines / 2;
             }
 
-            var geometry = new StreamGeometry();
             using (StreamGeometryContext context = geometry.Open())
             {
-                for (int k = start; k <= end; k++)
+                for (long k = start; k <= end; k++)
                 {
                     Vector anchor = origin + k * (direction * grid.Shift + normal * grid.Offset);
                     if (!TryClipLine(anchor, direction, minX, maxX, minY, maxY, out double t0, out double t1)) continue;

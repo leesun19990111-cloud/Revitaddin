@@ -53,14 +53,16 @@ namespace WallSplitter
 
         internal static IReadOnlyList<PatternPunchRecord> Read(Element host)
         {
-            Schema? schema = Schema.Lookup(SchemaGuid);
-            if (schema == null) return Array.Empty<PatternPunchRecord>();
-            Entity entity = host.GetEntity(schema);
-            if (!entity.IsValid()) return Array.Empty<PatternPunchRecord>();
-            string? json = entity.Get<string>(schema.GetField(FieldName));
-            if (string.IsNullOrWhiteSpace(json)) return Array.Empty<PatternPunchRecord>();
+            // 다른 버전/다른 애드인이 같은 GUID로 만든 스키마라 필드 구성이 다를 수 있다. 조회·역직렬화
+            // 어느 단계에서 실패하든 "기록 없음"으로 다루고, 복원 버튼이 그 사실을 사용자에게 안내한다.
             try
             {
+                Schema? schema = Schema.Lookup(SchemaGuid);
+                if (schema == null) return Array.Empty<PatternPunchRecord>();
+                Entity entity = host.GetEntity(schema);
+                if (!entity.IsValid()) return Array.Empty<PatternPunchRecord>();
+                string? json = entity.Get<string>(schema.GetField(FieldName));
+                if (string.IsNullOrWhiteSpace(json)) return Array.Empty<PatternPunchRecord>();
                 return JsonSerializer.Deserialize<List<PatternPunchRecord>>(json) ?? new List<PatternPunchRecord>();
             }
             catch
