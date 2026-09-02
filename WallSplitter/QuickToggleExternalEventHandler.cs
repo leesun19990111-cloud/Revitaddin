@@ -64,15 +64,6 @@ namespace WallSplitter
         public bool Clear { get; set; }
     }
 
-    // "그래픽 화면표시 검색" 패널에서 카테고리 하나의 편집을 확정했을 때 보내는 요청. 팝업을 연 문서
-    // 경로를 같이 담아, 사용자가 패널을 열어둔 채 다른 프로젝트로 전환한 경우 잘못된 문서의 같은 정수
-    // CategoryId에 적용되는 사고를 막는다. 실제 대상 뷰는 색상 도구와 마찬가지로 실행 순간의 활성 뷰다.
-    internal class GraphicsDisplayApplyRequest
-    {
-        public string SourceDocumentPath { get; set; } = "";
-        public CategoryOverrideConfig Override { get; set; } = new CategoryOverrideConfig();
-    }
-
     // 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라 버튼 클릭이 언제든 일어날 수
     // 있고, 그 시점엔 유효한 Revit API 컨텍스트(트랜잭션 등)가 열려있지 않다. ExternalEvent.Raise()로
     // 요청을 넣어두면 Revit이 다음 기회에 Execute를 유효한 컨텍스트에서 실행해준다.
@@ -90,9 +81,6 @@ namespace WallSplitter
         // "색상 버튼" 팝업의 실시간 조작 요청 (2026-07-29 추가) - PendingRevertSnapshot과 같은 방식으로
         // 같은 ExternalEvent를 재사용한다.
         internal ColorToolApplyRequest? PendingColorApply { get; set; }
-
-        // "그래픽 화면표시 검색" 패널에서 보낸 현재 뷰 카테고리 재정의 요청 (2026-08-27 추가).
-        internal GraphicsDisplayApplyRequest? PendingGraphicsDisplayApply { get; set; }
 
         // "기능 버튼" 클릭 요청 (2026-08-03 추가) - 위 둘과 같은 방식으로 같은 ExternalEvent를 재사용한다.
         // 버튼 설정 자체(어느 명령을 실행할지)만 있으면 되므로 cfg 참조를 그대로 담는다.
@@ -128,14 +116,6 @@ namespace WallSplitter
                 ColorToolApplyRequest request = PendingColorApply;
                 PendingColorApply = null;
                 ExecuteColorApply(app, request);
-                return;
-            }
-
-            if (PendingGraphicsDisplayApply != null)
-            {
-                GraphicsDisplayApplyRequest request = PendingGraphicsDisplayApply;
-                PendingGraphicsDisplayApply = null;
-                ExecuteGraphicsDisplayApply(app, request);
                 return;
             }
 
@@ -178,7 +158,8 @@ namespace WallSplitter
             if (!applied || status != TransactionStatus.Committed)
             {
                 TaskDialog.Show("커스텀 버튼",
-                    $"'{cfg.Name}' 버튼을 반영하지 못했습니다 (예: 대상 뷰템플릿이 이 뷰 종류와 호환되지 않음).");
+                    $"'{cfg.Name}' 버튼을 반영하지 못했습니다 (예: 대상 뷰템플릿이 이 뷰 종류와 호환되지 않거나, " +
+                    "뷰 템플릿이 이 뷰의 가시성/그래픽 설정을 제어하고 있음).");
             }
         }
 
@@ -236,38 +217,6 @@ namespace WallSplitter
                 else
                     QuickToggleService.ApplyColorTool(view, request.CategoryIds, request.Color, request.Transparency);
                 tx.Commit();
-            }
-        }
-
-        private static void ExecuteGraphicsDisplayApply(UIApplication app, GraphicsDisplayApplyRequest request)
-        {
-            UIDocument? uidoc = app.ActiveUIDocument;
-            Document? doc = uidoc?.Document;
-            View? view = doc?.ActiveView;
-            if (doc == null || view == null) return;
-
-            if (!string.Equals(doc.PathName ?? "", request.SourceDocumentPath ?? "", System.StringComparison.OrdinalIgnoreCase))
-            {
-                TaskDialog.Show("그래픽 화면표시 검색",
-                    "검색 패널을 연 문서와 현재 활성 문서가 다릅니다. 현재 문서에서 검색 패널을 다시 열어 주세요.");
-                return;
-            }
-
-            bool applied;
-            TransactionStatus status;
-            using (Transaction tx = new Transaction(doc, "커스텀 버튼: 그래픽 화면표시 변경"))
-            {
-                tx.Start();
-                applied = QuickToggleService.ApplyGraphicsDisplayOverride(view, request.Override);
-                status = applied ? tx.Commit() : tx.RollBack();
-            }
-
-            QuickToggleToolbar.Instance?.RefreshState();
-            if (!applied || status != TransactionStatus.Committed)
-            {
-                TaskDialog.Show("그래픽 화면표시 검색",
-                    $"'{request.Override.CategoryName}' 카테고리의 설정을 현재 뷰에 적용하지 못했습니다. " +
-                    "뷰 템플릿이 해당 항목을 제어하고 있거나, 이 뷰에서 지원하지 않는 카테고리일 수 있습니다.");
             }
         }
 

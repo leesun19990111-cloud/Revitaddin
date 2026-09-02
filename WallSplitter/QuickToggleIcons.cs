@@ -22,6 +22,10 @@ namespace WallSplitter
         Flower,
         Heart,
         Bolt,
+        // 2026-09-02, 링크된 도면/링크된 모델 버튼(QuickToggleCategory.LinkedCad/LinkedModel)의 기본
+        // 아이콘으로 추가 - 기존 도형만으로는 "도면"과 "모델"을 형태로 구분할 수가 없었다.
+        Sheet,
+        Cube,
     }
 
     // QuickToggleToolbar(실제 툴바 렌더링)와 QuickToggleSettingsWindow(설정 창의 아이콘 선택 미리보기)가
@@ -36,10 +40,10 @@ namespace WallSplitter
             QuickToggleCategory.ViewTemplate => QuickToggleIconShape.Layers,
             QuickToggleCategory.Filter => QuickToggleIconShape.Funnel,
             QuickToggleCategory.Workset => QuickToggleIconShape.Lines,
-            QuickToggleCategory.Preset => QuickToggleIconShape.Star,
             QuickToggleCategory.ColorTool => QuickToggleIconShape.Dot,
-            QuickToggleCategory.GraphicsDisplaySearch => QuickToggleIconShape.Eye,
             QuickToggleCategory.CommandLauncher => QuickToggleIconShape.Bolt,
+            QuickToggleCategory.LinkedCad => QuickToggleIconShape.Sheet,
+            QuickToggleCategory.LinkedModel => QuickToggleIconShape.Cube,
             _ => QuickToggleIconShape.Dot,
         };
 
@@ -55,6 +59,8 @@ namespace WallSplitter
             QuickToggleIconShape.Flower => "꽃",
             QuickToggleIconShape.Heart => "하트",
             QuickToggleIconShape.Bolt => "번개",
+            QuickToggleIconShape.Sheet => "도면",
+            QuickToggleIconShape.Cube => "상자",
             _ => "",
         };
 
@@ -204,6 +210,40 @@ namespace WallSplitter
                     });
                     break;
 
+                case QuickToggleIconShape.Sheet:
+                {
+                    // 도면 한 장 - 바깥 테두리 + 오른쪽 아래 표제란. 채우지 않고 선으로만 그린다
+                    // (채우면 안쪽 표제란 선이 같은 색에 묻혀 안 보인다).
+                    Rectangle frame = new Rectangle { Width = 14, Height = 16, Stroke = brush, StrokeThickness = 1.8 };
+                    Canvas.SetLeft(frame, 3);
+                    Canvas.SetTop(frame, 0);
+                    canvas.Children.Add(frame);
+                    canvas.Children.Add(new Line { X1 = 3, Y1 = 11, X2 = 17, Y2 = 11, Stroke = brush, StrokeThickness = 1.6 });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 11, X2 = 10, Y2 = 16, Stroke = brush, StrokeThickness = 1.6 });
+                    break;
+                }
+
+                case QuickToggleIconShape.Cube:
+                {
+                    // 아이소메트릭 정육면체(6각형 윤곽 + 가운데에서 세 방향으로 뻗는 모서리) - 링크된
+                    // "모델"을 은유. 도면 아이콘과 마찬가지로 선으로만 그린다.
+                    canvas.Children.Add(new Polygon
+                    {
+                        Points = new PointCollection
+                        {
+                            new Point(10, 0.6), new Point(18.4, 4.8), new Point(18.4, 11.2),
+                            new Point(10, 15.4), new Point(1.6, 11.2), new Point(1.6, 4.8),
+                        },
+                        Stroke = brush,
+                        StrokeThickness = 1.8,
+                        StrokeLineJoin = PenLineJoin.Round,
+                    });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 1.6, Y2 = 4.8, Stroke = brush, StrokeThickness = 1.6 });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 18.4, Y2 = 4.8, Stroke = brush, StrokeThickness = 1.6 });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 10, Y2 = 15.4, Stroke = brush, StrokeThickness = 1.6 });
+                    break;
+                }
+
                 default:
                     goto case QuickToggleIconShape.Dot;
             }
@@ -269,18 +309,16 @@ namespace WallSplitter
 
         // UpdateButtonStates가 상태만 바뀌었을 때 아이콘 색을 다시 칠하기 위한 헬퍼 - Create가 만드는
         // 도형 종류(Rectangle/Polygon/Line/Ellipse/Path)에 맞춰 Fill 또는 Stroke를 갱신한다.
+        // 2026-09-02: 도면/상자 아이콘처럼 채우지 않고 선으로만 그리는 도형이 생겨서, 원래 칠해져 있던
+        // 쪽(Fill 또는 Stroke)만 갱신하도록 바꿨다 - 무조건 Fill을 대입하면 선 그림 아이콘이 통째로
+        // 칠해진 덩어리가 되어 버린다.
         public static void SetBrush(Canvas canvas, Brush brush)
         {
             foreach (UIElement child in canvas.Children)
             {
-                switch (child)
-                {
-                    case Rectangle rect: rect.Fill = brush; break;
-                    case Polygon poly: poly.Fill = brush; break;
-                    case Line line: line.Stroke = brush; break;
-                    case Ellipse ellipse: ellipse.Fill = brush; break;
-                    case Path path: path.Fill = brush; break;
-                }
+                if (child is not Shape shape) continue;
+                if (shape.Fill != null) shape.Fill = brush;
+                if (shape.Stroke != null) shape.Stroke = brush;
             }
         }
     }

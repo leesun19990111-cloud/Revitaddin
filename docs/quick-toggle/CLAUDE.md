@@ -10,6 +10,11 @@ GetName()` 등 실제 화면에 보이는 문자열만 바꿨다. 클래스/파�
 
 `QuickToggleSettings.cs`/`QuickToggleService.cs`/`QuickToggleIcons.cs`/`QuickToggleExternalEventHandler.cs`/`QuickToggleToolbar.xaml(.cs)`/`QuickToggleSettingsWindow.xaml(.cs)`를 건드리기 전에 이 문서를 읽을 것. 이 프로젝트에서 유일하게 모드리스 창·`ExternalEvent`·Win32 P/Invoke를 쓰는 영역이라 다른 창들과 아키텍처가 다르다.
 
+**먼저 확인 (2026-09-02)**: "프리셋 버튼"과 "그래픽 화면표시 검색 버튼"은 **삭제됐다**. 아래 본문에 나오는 그
+두 기능 관련 서술(프리셋 탭 구조, 카테고리 V/G 재정의 편집창, 검색 패널 등)은 전부 **과거 이력**이며 지금
+코드에는 없다 — 문서 맨 아래 "프리셋·그래픽 화면표시 검색 버튼 삭제 + 링크 끄기/켜기 버튼 추가" 항목을 먼저
+읽을 것(특히 열거 멤버 `Preset`/`GraphicsDisplaySearch`를 지우면 안 되는 이유).
+
 2026-07-24 추가, 사용자 요청("현재 뷰의 뷰템플릿/필터/작업세트를 딸깍 한 번으로 on/off"). **Revit API는 신속접근 도구모음(QAT)에 버튼을 프로그램적으로 추가하는 기능을 지원하지 않는다** — 사용자에게 이 제약을 먼저 확인했고, 대신 Revit 메인 창 상단에 고정되는 자체 커스텀 플로팅 창(`QuickToggleToolbar`)으로 대체 구현했다. 이 기능은 이 프로젝트에서 처음으로 **모드리스(비모달)로 세션 내내 떠 있는 창**을 도입했고, 그로 인해 이 프로젝트 최초로 `ExternalEvent`/`IExternalEventHandler`, `UIControlledApplication.ViewActivated`/`Idling`/`ControlledApplication.DocumentClosing` 이벤트 구독, Win32 P/Invoke(`GetWindowRect`), 프로젝트 파일 경로별 설정 저장이 필요해졌다 — 기존 창은 전부 커맨드 `Execute` 안에서 여는 모달 `ShowDialog()`라 이런 게 하나도 필요 없었다.
 
 - **`QuickToggleSettings.cs`**: `QuickToggleButtonConfig{ Id(Guid), Name, Category(ViewTemplate/Filter/Workset/Preset), ViewTemplateId(단일), FilterIds/WorksetIds(리스트), IconShape(nullable), OnColorHex(nullable) }`의 목록. `IconShape`/`OnColorHex`는 사용자가 버튼마다 아이콘 모양·on 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가 — 둘 다 null이면 예전 그대로 카테고리 기본 아이콘/공용 on 색을 쓰므로 기존 저장 파일과도 호환된다. 카테고리당 버튼 1개가 아니라 "뷰템플릿버튼1", "뷰템플릿버튼2"처럼 이름 붙인 버튼을 몇 개든 추가할 수 있다(사용자 요청). `%APPDATA%\WallSplitter\quick-toggle\<sha256(프로젝트경로)>.json`에 **프로젝트 파일 경로별로** 저장 — 기존 `NamingSettings`(PC 전체 전역)와 달리 프로젝트마다 독립적이고, 이 PC를 벗어나면 따라가지 않는다(명시적 요청사항). `ElementIdCompat.ToInt()` 확장 메서드로 `ElementId`를 int로 저장하는데, `IntegerValue`는 2023 API에만 있고 2024+에서는 **완전히 제거**돼 컴파일 자체가 깨진다(2026 빌드로 실측 확인 — obsolete 경고만 있을 거라는 최초 가정은 틀렸음) — `#if REVIT2023`로 `IntegerValue`/`(int)Value`를 분기한다.
@@ -109,3 +114,56 @@ GetName()` 등 실제 화면에 보이는 문자열만 바꿨다. 클래스/파�
   있어(2026-08-25 경고Pick 추가 때 이 목록에 넣지 않았다) 커스텀 "기능 버튼"으로 경고Pick을 등록할 수 없었다.
   리본에 등록하는 모든 `IExternalCommand`가 이 목록에도 있어야 한다 — 새 명령을 추가하면 `App.cs`와 이 목록
   양쪽을 같이 갱신할 것.
+
+## 프리셋·그래픽 화면표시 검색 버튼 삭제 + 링크 끄기/켜기 버튼 추가 (2026-09-02)
+
+사용자 요청: *"커스텀 버튼 기능이 모르는 사람들이 쓰기에 너무 어려울 수도 있겠다 — 프리셋 버튼은 삭제하고
+대신 링크된 도면 껏다 키기 기능을 넣어줘. 활성화되어있는 뷰를 감지해서 해당 뷰에 링크되어 있는 도면이 있으면
+활성화가 되어서 클릭하면 끌 수 있는 버튼. 링크된 모델 껏다 키기도. 그래픽 화면표시 검색 버튼은 그냥 없애는 게
+낫겠다 — 만든 나도 쓰기가 너무 어렵다."* 즉 **기능 축소가 목적**이므로, 삭제한 두 기능을 "숨기기"만 한 게 아니라
+구현 코드·전용 창까지 전부 지웠다. 되살릴 일이 생기면 이 커밋 직전 이력에서 꺼내 쓸 것.
+
+**지운 것** — `QuickToggleCategory.Preset`/`GraphicsDisplaySearch`의 구현 전체:
+`QuickToggleService`의 `DeterminePresetState`/`TogglePreset`/`ApplyCategoryOverrides`/`BuildOverrideGraphicSettings`/
+`ApplyOverrideGraphicSettings`/`ApplyGraphicsDisplayOverride`/`HasGraphicOverrideValues`/`CanEditCategoryGraphics`/
+`AllLinePatternNames`/`AllFillPatternNames`/`ResolveLinePatternId`/`SolidLinePatternName`,
+`QuickToggleSettingsWindow`의 프리셋 탭 UI(`BuildPresetTabs`/`BuildPresetCategoryTab`/`BuildCategoryRow`/
+`SummarizeOverride`)와 추가 버튼 2개, `QuickToggleExternalEventHandler`의 `GraphicsDisplayApplyRequest`/
+`PendingGraphicsDisplayApply`/`ExecuteGraphicsDisplayApply`, 창 파일 `GraphicsDisplaySearchPopupWindow.xaml(.cs)`/
+`CategoryOverrideEditWindow.xaml(.cs)`/`ColorPickerPopupWindow.xaml(.cs)`(뒤의 둘은 프리셋·검색 패널에서만
+쓰던 편집창이라 함께 죽은 코드가 됐다). `QuickToggleButtonConfig.CategoryOverrides` 필드도 삭제하고,
+`CategoryOverrideConfig`(20여 개 V/G 재정의 필드 + `Clone()`)는 남은 유일한 사용처인 색상 버튼에 맞춰
+`ColorToolCategoryConfig`(카테고리 Id/이름/부모 이름 3개 필드)로 줄였다.
+
+- **열거 멤버 `Preset`/`GraphicsDisplaySearch`는 일부러 남겼다 (지우지 말 것)**: `QuickToggleSettings`는
+  `JsonStringEnumConverter`로 카테고리를 문자열로 저장하는데, 이 컨버터는 **모르는 문자열을 만나면 예외를
+  던진다**. 그리고 `QuickToggleSettings.Load`는 그 예외를 "설정 파일 손상"으로 보고 **빈 설정으로 통째로
+  대체**한다 — 즉 열거 멤버를 지우면 프리셋 버튼 하나가 남아 있는 프로젝트에서 등록해 둔 다른 버튼까지 전부
+  사라진다. 멤버는 남겨 역직렬화만 통과시키고, 실제 버튼은 `Load`에서 `IsRemovedCategory`로 걸러 버린다.
+  같은 이유로 JSON 가져오기(`ImportJsonButton_Click`)에서도 역직렬화 직후 같은 필터를 태운다(모델 간
+  가져오기는 `QuickToggleSettings.Load`를 거치므로 자동으로 걸러진다).
+
+**새로 넣은 것** — `QuickToggleCategory.LinkedCad`(링크된 도면) / `LinkedModel`(링크된 모델):
+뷰템플릿/필터/작업세트처럼 on/off 토글이지만 **설정 창에서 고를 대상이 없다**(대상은 "그때 활성 뷰에 걸려 있는
+링크"라서 클릭할 때마다 새로 찾는다). 켜짐 = 링크가 보이는 상태, 링크가 하나도 없으면 `Disabled`(회색).
+
+- **왜 `View.HideElements`가 아니라 카테고리 숨기기인가**: 링크 인스턴스를 `HideElements`로 숨기면 V/G
+  대화상자에는 아무 표시도 남지 않아("숨겨진 요소 표시"를 켜야만 보인다) 이 버튼으로 끈 것을 사용자가 다른
+  경로로 되돌리기 어렵다. 그래서 Revit V/G와 같은 방식(`View.SetCategoryHidden`)을 쓴다 — 링크된 CAD 도면은
+  도면 파일마다 "가져온 카테고리"가 하나씩 생기므로 그 카테고리들을, 링크된 Revit 모델은 개별 링크마다
+  카테고리가 생기지 않고 전부 `OST_RvtLinks` 하나에 묶이므로 그 카테고리를 끄고 켠다(그래서 링크된 모델은
+  개별 링크가 아니라 항상 전부 함께 켜지고 꺼진다 — API 제약이자 "딸깍 한 번" 요청과도 맞는 동작).
+- **"링크"만 대상, "가져오기"는 제외**: `ImportInstance.IsLinked`가 false인 CAD(가져오기로 넣은 것)는 목록에서
+  뺀다. 뷰 전용 가져오기(`OwnerViewId`가 유효)는 그 뷰에서만 대상으로 삼고, 모델 공간에 놓인 링크는 어느
+  뷰에서든 대상이다 — 평면 뷰의 뷰 범위 밖이라 실제로는 안 보이는 경우까지 가려내지는 않는다(Revit V/G의
+  "가져온 카테고리" 탭도 뷰와 무관하게 문서의 링크를 전부 나열한다).
+- **문서 훑기는 반드시 캐시해서 쓸 것 (`QuickToggleService.ScanLinks`, 2초)**: `DetermineState`는 툴바의
+  `Idling` 갱신에서 **버튼마다 매 틱** 호출된다 — 여기서 `FilteredElementCollector`로 문서를 통째로 훑으면
+  이 파일이 세 번이나 반복해서 겪은 "Idling 콜백에서 매 틱 비싼 일을 한다" 부류의 문제가 다시 생긴다.
+  문서 경로별로 스캔 결과(CAD 링크의 카테고리 Id + 소유 뷰 Id, Revit 링크 유무)를 2초간 캐시한다 — 링크를
+  새로 걸어도 늦어도 2초 뒤엔 버튼이 활성화된다.
+- **아이콘 2종 추가(`Sheet`/`Cube`)와 `SetBrush` 변경**: 기존 도형만으로는 "도면"과 "모델"을 형태로 구분할 수
+  없어 도면 틀(사각 테두리+표제란)과 아이소메트릭 정육면체를 추가했다. 둘 다 **채우지 않고 선으로만** 그리는
+  첫 아이콘이라, `QuickToggleIcons.SetBrush`가 무조건 `Fill`을 대입하던 것을 "원래 칠해져 있던 쪽(`Fill` 또는
+  `Stroke`)만 갱신"하도록 바꿨다 — 그대로 뒀으면 상태가 바뀔 때마다 선 그림 아이콘이 통째로 칠해진 덩어리로
+  변한다.

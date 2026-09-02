@@ -39,8 +39,6 @@ C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSpli
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\OpenDocumentPickerWindow.baml
 C:\Users\P95-LTY\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\OpenDocumentPickerWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\WallSplitter.csproj.AssemblyReference.cache
-C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\CategoryOverrideEditWindow.baml
-C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ColorPickerPopupWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ColorToolPopupWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ElementPickerWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\LayerTypeAssignmentWindow.baml
@@ -55,8 +53,6 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitte
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\Resources\Theme.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\SettingsWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\WarningPickWindow.baml
-C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\CategoryOverrideEditWindow.g.cs
-C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ColorPickerPopupWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ColorToolPopupWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ElementPickerWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\LayerTypeAssignmentWindow.g.cs

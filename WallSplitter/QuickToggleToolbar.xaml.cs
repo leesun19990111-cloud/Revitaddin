@@ -94,12 +94,6 @@ namespace WallSplitter
         private ColorToolPopupWindow? _openColorPopup;
         private string? _openColorPopupButtonId;
 
-        // "그래픽 화면표시 검색" 버튼의 모델리스 검색 패널. 색상 패널과 동시에 열리지 않게 서로를
-        // 열 때 다른 패널을 닫는다. 문서가 바뀌거나 툴바가 숨겨질 때도 함께 닫아 낡은 Category 참조를
-        // 다른 문서에 적용하지 못하게 한다.
-        private GraphicsDisplaySearchPopupWindow? _openGraphicsDisplayPopup;
-        private string? _openGraphicsDisplayPopupButtonId;
-
         public QuickToggleToolbar(UIApplication uiapp)
         {
             InitializeComponent();
@@ -174,11 +168,6 @@ namespace WallSplitter
                 return;
             }
 
-            // 검색 결과는 팝업을 연 뷰에서 실제로 V/G 재정의를 읽을 수 있는 카테고리만 모은 목록이다.
-            // 다른 뷰 종류로 전환하면 지원 범위가 달라질 수 있으므로 낡은 목록을 그대로 두지 않고 닫는다.
-            if (_openGraphicsDisplayPopup != null && _openGraphicsDisplayPopup.SourceViewId != view.Id.ToInt())
-                _openGraphicsDisplayPopup.Close();
-
             EnsureSettingsLoaded(doc);
 
             // 버튼 "목록"이 실제로 바뀐 경우(설정 저장/문서 전환)에만 구조를 다시 짓는다 - 그 외의 매우
@@ -214,7 +203,6 @@ namespace WallSplitter
         private void CloseToolPopups()
         {
             _openColorPopup?.Close();
-            _openGraphicsDisplayPopup?.Close();
         }
 
         // 색상 버튼(2줄 높이의 작은 리본 버튼)을 몇 개 등록하든 한 줄로 계속 옆으로 늘어나지 않고, 이
@@ -224,7 +212,7 @@ namespace WallSplitter
         private const double SmallToolGroupHeightDip = 64;
 
         private static bool IsSmallToolButton(QuickToggleCategory category) =>
-            category == QuickToggleCategory.ColorTool || category == QuickToggleCategory.GraphicsDisplaySearch;
+            category == QuickToggleCategory.ColorTool;
 
         private void RebuildButtons(RevitView view)
         {
@@ -360,8 +348,18 @@ namespace WallSplitter
             if (cfg.Category == QuickToggleCategory.ColorTool)
                 return cfg.Name + " - 클릭하면 색상/투명도 조절 패널을 엽니다";
 
-            if (cfg.Category == QuickToggleCategory.GraphicsDisplaySearch)
-                return cfg.Name + " - 현재 뷰의 모델·주석 카테고리를 검색해 그래픽 화면표시를 조절합니다";
+            // 링크 버튼은 "대상이 지정되지 않았다"는 안내가 맞지 않는다 - 설정에서 고를 대상 자체가 없고
+            // 비활성이면 이유는 하나뿐이다("이 뷰에 그런 링크가 없다"). 2026-09-02 추가.
+            if (cfg.Category == QuickToggleCategory.LinkedCad || cfg.Category == QuickToggleCategory.LinkedModel)
+            {
+                string linkLabel = cfg.Category == QuickToggleCategory.LinkedCad ? "링크된 도면" : "링크된 모델";
+                return state switch
+                {
+                    QuickToggleButtonState.On => cfg.Name + $" - 클릭하면 이 뷰의 {linkLabel}을 끕니다",
+                    QuickToggleButtonState.Off => cfg.Name + $" - 클릭하면 이 뷰의 {linkLabel}을 다시 켭니다",
+                    _ => cfg.Name + $" (이 뷰에 {linkLabel}이 없습니다)",
+                };
+            }
 
             // 기능 버튼도 켜짐/꺼짐이 없다 - 지정된 명령을 실행한다는 실제 동작에 맞는 문구를 쓴다.
             if (cfg.Category == QuickToggleCategory.CommandLauncher)
@@ -428,12 +426,6 @@ namespace WallSplitter
                 return;
             }
 
-            if (cfg.Category == QuickToggleCategory.GraphicsDisplaySearch)
-            {
-                ShowGraphicsDisplaySearchPopup(cfg, button);
-                return;
-            }
-
             // 기능 버튼도 on/off 토글이 아니라 즉시 1회 실행이라 DetermineState/PendingTurnOn 경로를
             // 타지 않는다 - 클릭 즉시 ExternalEvent로 QuickToggleService.RunCommand를 요청한다.
             if (cfg.Category == QuickToggleCategory.CommandLauncher)
@@ -462,7 +454,6 @@ namespace WallSplitter
         // 한 번에 하나만 허용한다.
         private void ShowColorToolPopup(QuickToggleButtonConfig cfg, Button button)
         {
-            _openGraphicsDisplayPopup?.Close();
             if (_openColorPopup != null)
             {
                 bool wasSameButton = _openColorPopupButtonId == cfg.Id;
@@ -502,49 +493,6 @@ namespace WallSplitter
 
             _openColorPopup = popup;
             _openColorPopupButtonId = cfg.Id;
-            popup.Show();
-        }
-
-        private void ShowGraphicsDisplaySearchPopup(QuickToggleButtonConfig cfg, Button button)
-        {
-            _openColorPopup?.Close();
-            if (_openGraphicsDisplayPopup != null)
-            {
-                bool wasSameButton = _openGraphicsDisplayPopupButtonId == cfg.Id;
-                _openGraphicsDisplayPopup.Close();
-                if (wasSameButton) return;
-            }
-
-            UIDocument? uidoc = _uiapp.ActiveUIDocument;
-            RevitDocument? doc = uidoc?.Document;
-            RevitView? view = doc?.ActiveView;
-            if (doc == null || view == null) return;
-
-            Point buttonTopLeft = button.PointToScreen(new Point(0, 0));
-            double buttonBottom = buttonTopLeft.Y + button.ActualHeight;
-            const double popupHeight = 500;
-            const double popupWidth = 410;
-            bool expandUpward = buttonBottom + popupHeight > SystemParameters.WorkArea.Bottom;
-            double left = Math.Max(SystemParameters.WorkArea.Left,
-                Math.Min(buttonTopLeft.X, SystemParameters.WorkArea.Right - popupWidth));
-
-            GraphicsDisplaySearchPopupWindow popup = new GraphicsDisplaySearchPopupWindow(_uiapp, view, cfg)
-            {
-                Owner = this,
-                Left = left,
-                Top = expandUpward ? buttonTopLeft.Y - popupHeight : buttonBottom,
-            };
-            popup.Closed += (s, e) =>
-            {
-                if (ReferenceEquals(_openGraphicsDisplayPopup, popup))
-                {
-                    _openGraphicsDisplayPopup = null;
-                    _openGraphicsDisplayPopupButtonId = null;
-                }
-            };
-
-            _openGraphicsDisplayPopup = popup;
-            _openGraphicsDisplayPopupButtonId = cfg.Id;
             popup.Show();
         }
 

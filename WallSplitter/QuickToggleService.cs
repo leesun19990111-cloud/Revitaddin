@@ -47,24 +47,26 @@ namespace WallSplitter
                             view.GetWorksetVisibility(new WorksetId(id)) == WorksetVisibility.Visible);
                         return allWorksetsOn ? QuickToggleButtonState.On : QuickToggleButtonState.Off;
 
-                    case QuickToggleCategory.Preset:
-                        return DeterminePresetState(view, cfg);
-
                     // 색상 버튼은 켜짐/꺼짐 개념이 없다 - 클릭하면 색상/투명도 조절 패널이 열릴 뿐이라
                     // 항상 클릭 가능한 상태(Off)로 고정한다. Disabled를 반환하면 툴바가 버튼 자체를
                     // IsEnabled=false로 그려 클릭이 막힌다(QuickToggleToolbar.RebuildButtons 참고).
                     case QuickToggleCategory.ColorTool:
                         return QuickToggleButtonState.Off;
 
-                    // 그래픽 화면표시 검색 버튼도 상태를 켜고 끄는 버튼이 아니라 검색 패널을 여는 도구다.
-                    // 항상 Off로 두어 현재 뷰에서 클릭 가능한 상태를 유지한다.
-                    case QuickToggleCategory.GraphicsDisplaySearch:
-                        return QuickToggleButtonState.Off;
-
                     // 기능 버튼도 색상 버튼과 같은 이유로 항상 Off(클릭 가능) 고정 - on/off 개념이 없고
                     // 클릭할 때마다 지정된 명령을 한 번 실행할 뿐이다(RunCommand).
                     case QuickToggleCategory.CommandLauncher:
                         return QuickToggleButtonState.Off;
+
+                    // 링크 버튼(2026-09-02 추가)은 설정에 저장된 대상이 없고 "지금 이 뷰에 걸려 있는
+                    // 링크"가 곧 대상이다 - 링크가 하나도 없으면 Disabled(회색), 있으면 전부 숨겨졌을 때
+                    // Off, 하나라도 보이면 On이다. 즉 켜짐 = 링크가 화면에 보이는 상태이고, 켜진 버튼을
+                    // 누르면 꺼진다("클릭하면 끌 수 있게" 요청).
+                    case QuickToggleCategory.LinkedCad:
+                        return DetermineLinkState(view, LinkedCadCategoryIds(view));
+
+                    case QuickToggleCategory.LinkedModel:
+                        return DetermineLinkState(view, LinkedModelCategoryIds(view));
 
                     default:
                         return QuickToggleButtonState.Disabled;
@@ -78,71 +80,122 @@ namespace WallSplitter
             }
         }
 
-        // 프리셋 버튼은 뷰템플릿/필터/작업세트 세 필드를 동시에 가질 수 있고, 그중 비어있는 필드는
-        // "이 프리셋에 포함되지 않음"으로 해석해 판정에서 완전히 제외한다(단일 카테고리 버튼과 달리
-        // "선택 안 함 = 꺼짐"이 아니다) - 하나도 채워지지 않았으면 Disabled, 하나 이상 채워졌으면 채워진
-        // 부분들이 전부 On이어야 전체가 On, 하나라도 Off면 전체 Off. 이 뷰/문서가 지원하지 않는 부분
-        // (필터 없는 뷰 종류, 워크셰어링 안 된 문서 등)은 판정에서 조용히 제외한다.
-        private static QuickToggleButtonState DeterminePresetState(View view, QuickToggleButtonConfig cfg)
+        // ===== 링크된 도면(CAD) / 링크된 모델(RVT) 끄고 켜기 (2026-09-02 추가) =====
+
+        // 링크의 표시 여부는 Revit의 V/G 대화상자와 같은 방식으로 "카테고리 숨기기"로 다룬다 - 링크된
+        // CAD 도면은 도면 파일마다 가져온 카테고리("가져온 카테고리" 탭)가 하나씩 생기고, 링크된 Revit
+        // 모델은 전부 "Revit 링크" 카테고리(OST_RvtLinks) 하나에 묶인다. View.HideElements로 링크 인스턴스
+        // 자체를 숨기는 방법도 있지만, 그건 V/G 대화상자에 아무 표시도 남지 않아("숨겨진 요소 표시"를
+        // 켜야만 보임) 이 버튼으로 끈 걸 사용자가 다른 경로로 되돌리기 어렵다.
+        private static QuickToggleButtonState DetermineLinkState(View view, List<ElementId> categoryIds)
         {
-            bool anyPart = false;
-            bool allOn = true;
+            if (categoryIds.Count == 0) return QuickToggleButtonState.Disabled;
 
-            if (cfg.ViewTemplateId.HasValue)
-            {
-                anyPart = true;
-                if (view.ViewTemplateId.ToInt() != cfg.ViewTemplateId.Value) allOn = false;
-            }
-
-            if (cfg.FilterIds.Count > 0)
+            bool anyControllable = false;
+            bool allHidden = true;
+            foreach (ElementId categoryId in categoryIds)
             {
                 try
                 {
-                    ICollection<ElementId> appliedFilters = view.GetFilters();
-                    anyPart = true;
-                    bool filtersOn = cfg.FilterIds.All(id =>
-                    {
-                        ElementId eid = new ElementId(id);
-                        return appliedFilters.Contains(eid) && view.GetFilterVisibility(eid);
-                    });
-                    if (!filtersOn) allOn = false;
+                    bool hidden = view.GetCategoryHidden(categoryId);
+                    anyControllable = true;
+                    if (!hidden) allHidden = false;
                 }
-                catch { /* 이 뷰 종류가 필터를 지원하지 않음 - 이 부분만 건너뛰고 나머지로 판정 */ }
+                catch { /* 이 뷰 종류가 이 카테고리의 표시 여부를 다루지 못하는 경우 - 나머지로 판정 */ }
             }
 
-            if (cfg.WorksetIds.Count > 0 && view.Document.IsWorkshared)
-            {
-                anyPart = true;
-                bool worksetsOn = cfg.WorksetIds.All(id =>
-                    view.GetWorksetVisibility(new WorksetId(id)) == WorksetVisibility.Visible);
-                if (!worksetsOn) allOn = false;
-            }
+            if (!anyControllable) return QuickToggleButtonState.Disabled;
+            return allHidden ? QuickToggleButtonState.Off : QuickToggleButtonState.On;
+        }
 
-            // 카테고리(V/G) 재정의가 하나라도 포함되어 있으면 anyPart는 true - CONFIRMED 코드 결함으로
-            // 발견(2026-07-29 리뷰): 이 블록을 처음 짤 때 anyPart를 Visible이 있는 카테고리에서만 켰는데,
-            // 그러면 "표시 여부는 안 건드리고 색상/패턴만 재정의하는" 프리셋은 anyPart가 끝까지 false로
-            // 남아 DeterminePresetState가 Disabled를 반환 - 툴바가 Disabled 버튼을 IsEnabled=false로
-            // 그려서(QuickToggleToolbar.UpdateButtonStates) 그런 프리셋은 클릭 자체가 막혀버렸다. on/off
-            // 판정(allOn)은 여전히 표시 여부를 지정한 카테고리에 한해서만 반영한다 - 선/패턴/투명도 등은
-            // OverrideGraphicSettings에 동등성 비교가 없어 정확히 비교할 방법이 마땅치 않기 때문이다.
-            if (cfg.CategoryOverrides.Count > 0)
+        // 호출자가 이미 Transaction을 연 상태에서 호출해야 한다(Toggle과 같은 계약). 하나라도 실제로
+        // 반영됐으면 true - 전부 실패하면(뷰템플릿이 가시성을 제어하는 경우 등) 호출자가 사용자에게 알린다.
+        private static bool ToggleLinkVisibility(View view, List<ElementId> categoryIds, bool turnOn)
+        {
+            bool any = false;
+            foreach (ElementId categoryId in categoryIds)
             {
-                anyPart = true;
-                foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
+                try
                 {
-                    if (!co.Visible.HasValue) continue;
-                    try
-                    {
-                        bool hidden = view.GetCategoryHidden(new ElementId(co.CategoryId));
-                        bool expectedHidden = !co.Visible.Value;
-                        if (hidden != expectedHidden) allOn = false;
-                    }
-                    catch { /* 그 사이 삭제된 카테고리이거나 이 뷰에서 숨기기를 지원하지 않는 경우 */ }
+                    view.SetCategoryHidden(categoryId, !turnOn);
+                    any = true;
+                }
+                catch { /* 뷰템플릿이 가시성을 제어하거나 이 뷰에서 숨길 수 없는 카테고리 - 나머지는 계속 */ }
+            }
+            return any;
+        }
+
+        // 링크 목록 조회는 문서 전체를 훑는 작업인데, DetermineState는 툴바의 Idling 갱신(초당 여러 번,
+        // 버튼마다 한 번씩)에서도 호출된다 - 매 틱마다 다시 훑지 않도록 문서별로 짧게 캐시해둔다.
+        // 링크를 새로 걸거나 지워도 늦어도 이 시간 안에는 버튼 상태에 반영된다.
+        private sealed class LinkScan
+        {
+            public DateTime At;
+            // 링크된 CAD 도면: (그 도면의 가져온 카테고리 Id, 뷰 전용 가져오기면 그 뷰 Id / 아니면 -1)
+            public List<(int CategoryId, int OwnerViewId)> Cad = new List<(int, int)>();
+            public bool HasModelLink;
+        }
+
+        private static readonly Dictionary<string, LinkScan> LinkScans = new Dictionary<string, LinkScan>();
+        private static readonly TimeSpan LinkScanLifetime = TimeSpan.FromSeconds(2);
+
+        private static LinkScan ScanLinks(Document doc)
+        {
+            string key = string.IsNullOrEmpty(doc.PathName) ? "title:" + doc.Title : doc.PathName;
+            if (LinkScans.TryGetValue(key, out LinkScan? cached) && DateTime.UtcNow - cached.At < LinkScanLifetime)
+                return cached;
+
+            LinkScan scan = new LinkScan { At = DateTime.UtcNow };
+            try
+            {
+                foreach (ImportInstance import in new FilteredElementCollector(doc)
+                    .OfClass(typeof(ImportInstance)).Cast<ImportInstance>())
+                {
+                    // 링크가 아니라 "가져오기"로 들어온 CAD는 대상이 아니다 - 사용자가 말한 "링크된 도면"만.
+                    if (!import.IsLinked) continue;
+                    Category? category = import.Category;
+                    if (category == null) continue;
+                    scan.Cad.Add((category.Id.ToInt(), import.OwnerViewId.ToInt()));
                 }
             }
+            catch { /* 이 문서에서 가져오기 인스턴스를 훑을 수 없는 경우 - CAD 링크 없음으로 취급 */ }
 
-            if (!anyPart) return QuickToggleButtonState.Disabled;
-            return allOn ? QuickToggleButtonState.On : QuickToggleButtonState.Off;
+            try
+            {
+                scan.HasModelLink = new FilteredElementCollector(doc)
+                    .OfClass(typeof(RevitLinkInstance)).Any();
+            }
+            catch { /* 위와 동일 */ }
+
+            LinkScans[key] = scan;
+            return scan;
+        }
+
+        // 이 뷰에서 끄고 켤 수 있는 "링크된 도면"의 카테고리들. 특정 뷰에만 놓인 CAD 링크(뷰 전용
+        // 가져오기)는 그 뷰에서만 대상으로 삼고, 모델 공간에 놓인 링크는 어느 뷰에서든 대상이다
+        // (평면 뷰의 뷰 범위 밖에 있어 실제로는 안 보이는 경우까지 가려내지는 않는다 - Revit V/G의
+        // "가져온 카테고리" 탭도 뷰와 무관하게 문서의 링크를 전부 나열한다).
+        internal static List<ElementId> LinkedCadCategoryIds(View view)
+        {
+            List<ElementId> result = new List<ElementId>();
+            HashSet<int> seen = new HashSet<int>();
+            int viewId = view.Id.ToInt();
+            int invalidId = ElementId.InvalidElementId.ToInt();
+
+            foreach ((int categoryId, int ownerViewId) in ScanLinks(view.Document).Cad)
+            {
+                if (ownerViewId != invalidId && ownerViewId != viewId) continue;
+                if (seen.Add(categoryId)) result.Add(new ElementId(categoryId));
+            }
+            return result;
+        }
+
+        // 링크된 Revit 모델은 개별 링크마다 카테고리가 생기지 않고 전부 "Revit 링크" 카테고리 하나에
+        // 묶인다 - 그래서 이 버튼은 "이 뷰의 링크된 모델 전체"를 한 번에 끄고 켠다.
+        internal static List<ElementId> LinkedModelCategoryIds(View view)
+        {
+            if (!ScanLinks(view.Document).HasModelLink) return new List<ElementId>();
+            return new List<ElementId> { new ElementId(BuiltInCategory.OST_RvtLinks) };
         }
 
         // 호출자가 이미 Transaction을 연 상태에서 호출해야 한다. bool 반환값은 실제로 반영됐는지를
@@ -211,86 +264,14 @@ namespace WallSplitter
                     }
                     break;
 
-                case QuickToggleCategory.Preset:
-                    return TogglePreset(view, cfg, turnOn);
+                case QuickToggleCategory.LinkedCad:
+                    return ToggleLinkVisibility(view, LinkedCadCategoryIds(view), turnOn);
+
+                case QuickToggleCategory.LinkedModel:
+                    return ToggleLinkVisibility(view, LinkedModelCategoryIds(view), turnOn);
             }
 
             return true;
-        }
-
-        // 프리셋 버튼 적용 - 위 세 case와 같은 동작을 재사용하되, 비어있는 필드(이 프리셋에 포함되지
-        // 않은 항목)는 아예 건드리지 않는다는 점만 다르다. 특히 뷰템플릿은 단일 카테고리 버튼과 달리
-        // "선택 안 함"일 때 InvalidElementId로 강제 초기화하면 안 된다 - 프리셋에 뷰템플릿이 포함되지
-        // 않았을 뿐인데 클릭할 때마다 현재 뷰템플릿을 지워버리는 것을 막기 위함.
-        private static bool TogglePreset(View view, QuickToggleButtonConfig cfg, bool turnOn)
-        {
-            bool ok = true;
-
-            if (cfg.ViewTemplateId.HasValue)
-            {
-                try
-                {
-                    view.ViewTemplateId = turnOn
-                        ? new ElementId(cfg.ViewTemplateId.Value)
-                        : ElementId.InvalidElementId;
-                }
-                catch
-                {
-                    ok = false;
-                }
-            }
-
-            if (cfg.FilterIds.Count > 0)
-            {
-                try
-                {
-                    ICollection<ElementId> appliedFilters = view.GetFilters();
-                    foreach (int id in cfg.FilterIds)
-                    {
-                        try
-                        {
-                            ElementId eid = new ElementId(id);
-                            if (turnOn)
-                            {
-                                if (!appliedFilters.Contains(eid)) view.AddFilter(eid);
-                                view.SetFilterVisibility(eid, true);
-                            }
-                            else if (appliedFilters.Contains(eid))
-                            {
-                                view.SetFilterVisibility(eid, false);
-                            }
-                        }
-                        catch
-                        {
-                            // 그룹 중 하나가 실패해도(삭제된 필터 등) 나머지는 계속 적용
-                        }
-                    }
-                }
-                catch
-                {
-                    // 이 뷰 종류가 필터를 지원하지 않음
-                }
-            }
-
-            if (cfg.WorksetIds.Count > 0)
-            {
-                foreach (int id in cfg.WorksetIds)
-                {
-                    try
-                    {
-                        view.SetWorksetVisibility(new WorksetId(id),
-                            turnOn ? WorksetVisibility.Visible : WorksetVisibility.Hidden);
-                    }
-                    catch
-                    {
-                        // 워크셰어링 안 된 문서이거나 삭제된 작업세트 등 - 나머지는 계속 적용
-                    }
-                }
-            }
-
-            if (cfg.CategoryOverrides.Count > 0) ApplyCategoryOverrides(view, cfg, turnOn);
-
-            return ok;
         }
 
         // "기능 버튼" 클릭 - 지정된 Revit 명령을 한 번 실행한다(2026-08-03 추가). 트랜잭션을 열지 않는다 -
@@ -324,10 +305,10 @@ namespace WallSplitter
         }
 
         // "색상 버튼" 팝업이 색상 팔레트/투명도 슬라이더를 조작할 때마다 즉시 호출한다(2026-07-29 추가).
-        // 프리셋 카테고리 재정의(ApplyCategoryOverrides)와 달리 이건 "켜짐/꺼짐" 두 상태가 없는 실시간
-        // 조절 도구라, 매번 새 OverrideGraphicSettings로 덮어쓰지 않고 뷰에 이미 적용된 재정의를 먼저
-        // 읽어(view.GetCategoryOverrides) 그 위에 이번에 바뀐 속성만 얹는다 - 그래야 색상만 바꿨을 때
-        // 기존에 슬라이더로 조절해둔 투명도가 지워지지 않고, 반대의 경우도 마찬가지다. color/transparency
+        // 매번 새 OverrideGraphicSettings로 덮어쓰지 않고 뷰에 이미 적용된 재정의를 먼저
+        // 읽어(view.GetCategoryOverrides) 그 위에 이번에 바뀐 속성만 얹는다 - "켜짐/꺼짐" 두 상태가
+        // 없는 실시간 조절 도구라 그래야 색상만 바꿨을 때 기존에 슬라이더로 조절해둔 투명도가
+        // 지워지지 않고, 반대의 경우도 마찬가지다. color/transparency
         // 중 null인 쪽은 이번 호출에서 그 속성을 건드리지 않는다는 뜻(둘 다 채워서 호출할 수도 있음).
         public static void ApplyColorTool(View view, List<int> categoryIds, int? color, int? transparency)
         {
@@ -368,8 +349,7 @@ namespace WallSplitter
         // "재지정 지우기" 버튼 (2026-07-29 추가, "색상버튼에서 선택한 카테고리 요소에 입혀진 색상이
         // 아무것도 없게 만들어주는 버튼" 요청) - ApplyColorTool처럼 기존 재정의를 읽어 일부만 바꾸는 게
         // 아니라, 빈 OverrideGraphicSettings로 통째로 교체해 색상/패턴/투명도/하프톤 등 이 카테고리에
-        // 걸린 모든 그래픽 재정의를 완전히 비운다 - 프리셋 카테고리 탭을 끌 때(ApplyCategoryOverrides,
-        // turnOn=false)와 같은 방식.
+        // 걸린 모든 그래픽 재정의를 완전히 비운다.
         public static void ClearColorTool(View view, List<int> categoryIds)
         {
             foreach (int categoryId in categoryIds)
@@ -400,179 +380,13 @@ namespace WallSplitter
             }
         }
 
-        // 검색 패널에 노출할 수 있는 카테고리인지 읽기 전용으로 확인한다. 뷰 종류마다 V/G 지원 범위가
-        // 다르므로 종류를 하드코딩하지 않고, 해당 뷰에서 카테고리 재정의를 읽을 수 있는지를 기준으로 삼는다.
-        public static bool CanEditCategoryGraphics(View view, ElementId categoryId)
-        {
-            try
-            {
-                view.GetCategoryOverrides(categoryId);
-                return true;
-            }
-            catch
-            {
-                try
-                {
-                    view.GetCategoryHidden(categoryId);
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-        }
-
-        // "그래픽 화면표시 검색"에서 선택한 카테고리에 이번 편집에서 지정한 값만 적용한다. 프리셋의
-        // BuildOverrideGraphicSettings는 빈 OGS에서 시작하지만, 여기서는 현재 뷰의 OGS를 먼저 읽고 그
-        // 위에 값이 있는 필드만 덧씌운다. 따라서 투명도만 바꿔도 기존 선/패턴/색상 재정의가 지워지지 않는다.
-        public static bool ApplyGraphicsDisplayOverride(View view, CategoryOverrideConfig co)
-        {
-            ElementId categoryId = new ElementId(co.CategoryId);
-            bool visibilityRequested = co.Visible.HasValue;
-            bool graphicsRequested = HasGraphicOverrideValues(co);
-            bool visibilityApplied = !visibilityRequested;
-            bool graphicsApplied = !graphicsRequested;
-
-            if (visibilityRequested)
-            {
-                try
-                {
-                    view.SetCategoryHidden(categoryId, !co.Visible.GetValueOrDefault());
-                    visibilityApplied = true;
-                }
-                catch
-                {
-                    // 뷰 템플릿이 가시성을 제어하거나 이 카테고리를 숨길 수 없으면 그래픽 항목 적용은 계속 시도한다.
-                }
-            }
-
-            if (graphicsRequested)
-            {
-                try
-                {
-                    OverrideGraphicSettings existing = view.GetCategoryOverrides(categoryId);
-                    ApplyOverrideGraphicSettings(view.Document, existing, co);
-                    view.SetCategoryOverrides(categoryId, existing);
-                    graphicsApplied = true;
-                }
-                catch
-                {
-                    // 호출자가 false를 보고 트랜잭션을 되돌리고 사용자에게 원인을 안내한다.
-                }
-            }
-
-            // 두 그룹을 함께 요청했다면 둘 다 성공해야 커밋한다. 한쪽만 실패했는데 다른 쪽만 남는
-            // 부분 적용은 사용자가 결과를 오해하기 쉬우므로 호출자가 전체 트랜잭션을 되돌리게 한다.
-            return (visibilityRequested || graphicsRequested) && visibilityApplied && graphicsApplied;
-        }
-
-        private static bool HasGraphicOverrideValues(CategoryOverrideConfig co) =>
-            co.Halftone.HasValue || co.DetailLevel != null || co.Transparency.HasValue ||
-            co.ProjectionLineWeight.HasValue || co.ProjectionLineColor.HasValue || co.ProjectionLinePatternName != null ||
-            co.CutLineWeight.HasValue || co.CutLineColor.HasValue || co.CutLinePatternName != null ||
-            co.SurfaceForegroundVisible.HasValue || co.SurfaceForegroundPatternName != null || co.SurfaceForegroundColor.HasValue ||
-            co.SurfaceBackgroundVisible.HasValue || co.SurfaceBackgroundPatternName != null || co.SurfaceBackgroundColor.HasValue ||
-            co.CutForegroundVisible.HasValue || co.CutForegroundPatternName != null || co.CutForegroundColor.HasValue ||
-            co.CutBackgroundVisible.HasValue || co.CutBackgroundPatternName != null || co.CutBackgroundColor.HasValue;
-
-        // 프리셋의 카테고리(V/G) 탭 적용 - 켜질 때는 저장된 표시 여부 + 그래픽 재정의(선/패턴/투명도/
-        // 하프톤/상세수준)를 그대로 적용하고, 꺼질 때는 표시로 되돌리고 재정의를 완전히 지운다(빈
-        // OverrideGraphicSettings로 교체) - "되돌리기" 스냅샷과 달리 프리셋은 켜짐/꺼짐 두 상태를 직접
-        // 정의하는 방식이라(필터/작업세트와 동일한 사고방식), 끄기 = "그 사이 원래 어떤 상태였는지"가
-        // 아니라 "표시 + 재정의 없음"이라는 고정된 기본 상태로 정의했다.
-        private static void ApplyCategoryOverrides(View view, QuickToggleButtonConfig cfg, bool turnOn)
-        {
-            Document doc = view.Document;
-            foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
-            {
-                ElementId catId = new ElementId(co.CategoryId);
-                if (turnOn)
-                {
-                    if (co.Visible.HasValue)
-                    {
-                        try { view.SetCategoryHidden(catId, !co.Visible.Value); }
-                        catch { /* 그 사이 삭제된 카테고리이거나 뷰템플릿이 제어하는 경우 등 */ }
-                    }
-                    try { view.SetCategoryOverrides(catId, BuildOverrideGraphicSettings(doc, co)); }
-                    catch { /* 이 카테고리가 그래픽 재정의를 지원하지 않거나 삭제된 경우 등 */ }
-                }
-                else
-                {
-                    try { view.SetCategoryHidden(catId, false); }
-                    catch { /* 위와 동일 */ }
-                    try { view.SetCategoryOverrides(catId, new OverrideGraphicSettings()); }
-                    catch { /* 위와 동일 */ }
-                }
-            }
-        }
-
-        private static OverrideGraphicSettings BuildOverrideGraphicSettings(Document doc, CategoryOverrideConfig co)
-        {
-            OverrideGraphicSettings ogs = new OverrideGraphicSettings();
-
-            ApplyOverrideGraphicSettings(doc, ogs, co);
-            return ogs;
-        }
-
-        private static void ApplyOverrideGraphicSettings(Document doc, OverrideGraphicSettings ogs, CategoryOverrideConfig co)
-        {
-
-            if (co.Halftone.HasValue) ogs.SetHalftone(co.Halftone.Value);
-            if (co.Transparency.HasValue) ogs.SetSurfaceTransparency(co.Transparency.Value);
-            if (co.DetailLevel != null && Enum.TryParse(co.DetailLevel, out ViewDetailLevel detailLevel))
-            {
-                try { ogs.SetDetailLevel(detailLevel); } catch { /* 이 카테고리/뷰 조합이 상세수준 재정의를 지원하지 않는 경우 */ }
-            }
-
-            if (co.ProjectionLineWeight.HasValue) ogs.SetProjectionLineWeight(co.ProjectionLineWeight.Value);
-            if (co.ProjectionLineColor.HasValue) ogs.SetProjectionLineColor(IntToColor(co.ProjectionLineColor.Value));
-            ElementId? projLinePattern = ResolveLinePatternId(doc, co.ProjectionLinePatternName);
-            if (projLinePattern != null) ogs.SetProjectionLinePatternId(projLinePattern);
-
-            if (co.CutLineWeight.HasValue) ogs.SetCutLineWeight(co.CutLineWeight.Value);
-            if (co.CutLineColor.HasValue) ogs.SetCutLineColor(IntToColor(co.CutLineColor.Value));
-            ElementId? cutLinePattern = ResolveLinePatternId(doc, co.CutLinePatternName);
-            if (cutLinePattern != null) ogs.SetCutLinePatternId(cutLinePattern);
-
-            if (co.SurfaceForegroundVisible.HasValue) ogs.SetSurfaceForegroundPatternVisible(co.SurfaceForegroundVisible.Value);
-            ElementId? surfFgPattern = ResolveFillPatternId(doc, co.SurfaceForegroundPatternName);
-            if (surfFgPattern != null) ogs.SetSurfaceForegroundPatternId(surfFgPattern);
-            if (co.SurfaceForegroundColor.HasValue) ogs.SetSurfaceForegroundPatternColor(IntToColor(co.SurfaceForegroundColor.Value));
-
-            if (co.SurfaceBackgroundVisible.HasValue) ogs.SetSurfaceBackgroundPatternVisible(co.SurfaceBackgroundVisible.Value);
-            ElementId? surfBgPattern = ResolveFillPatternId(doc, co.SurfaceBackgroundPatternName);
-            if (surfBgPattern != null) ogs.SetSurfaceBackgroundPatternId(surfBgPattern);
-            if (co.SurfaceBackgroundColor.HasValue) ogs.SetSurfaceBackgroundPatternColor(IntToColor(co.SurfaceBackgroundColor.Value));
-
-            if (co.CutForegroundVisible.HasValue) ogs.SetCutForegroundPatternVisible(co.CutForegroundVisible.Value);
-            ElementId? cutFgPattern = ResolveFillPatternId(doc, co.CutForegroundPatternName);
-            if (cutFgPattern != null) ogs.SetCutForegroundPatternId(cutFgPattern);
-            if (co.CutForegroundColor.HasValue) ogs.SetCutForegroundPatternColor(IntToColor(co.CutForegroundColor.Value));
-
-            if (co.CutBackgroundVisible.HasValue) ogs.SetCutBackgroundPatternVisible(co.CutBackgroundVisible.Value);
-            ElementId? cutBgPattern = ResolveFillPatternId(doc, co.CutBackgroundPatternName);
-            if (cutBgPattern != null) ogs.SetCutBackgroundPatternId(cutBgPattern);
-            if (co.CutBackgroundColor.HasValue) ogs.SetCutBackgroundPatternColor(IntToColor(co.CutBackgroundColor.Value));
-
-        }
-
         private static Autodesk.Revit.DB.Color IntToColor(int rgb) =>
             new Autodesk.Revit.DB.Color((byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF));
 
-        // 카테고리 편집창의 "실선"/"실채우기" 항목은 실제 LinePatternElement/FillPatternElement가 아니라
-        // Revit이 내부적으로 특수 취급하는 값이라 이름으로 검색할 수 없다 - 그래서 이 두 문자열을 예약된
-        // 센티널로 쓰고, 그 외에는 이름으로 문서에서 검색한다(내보내기/가져오기에서도 동일하게 사용).
-        internal const string SolidLinePatternName = "<실선>";
+        // "실채우기"는 실제 FillPatternElement 이름이 아니라 Revit이 내부적으로 특수 취급하는 값이라
+        // 이름으로 검색할 수 없다 - 예약된 센티널 문자열로 쓰고, 그 외에는 이름으로 문서에서 찾는다
+        // (색상 버튼이 카테고리를 그 색으로 "칠할" 때 쓰는 실채우기 패턴).
         internal const string SolidFillPatternName = "<실채우기>";
-
-        private static ElementId? ResolveLinePatternId(Document doc, string? name)
-        {
-            if (name == null) return null;
-            if (name == SolidLinePatternName) return LinePatternElement.GetSolidPatternId();
-            return new FilteredElementCollector(doc).OfClass(typeof(LinePatternElement)).Cast<LinePatternElement>()
-                .FirstOrDefault(p => p.Name == name)?.Id;
-        }
 
         private static ElementId? ResolveFillPatternId(Document doc, string? name)
         {
@@ -582,27 +396,8 @@ namespace WallSplitter
             return all.FirstOrDefault(p => p.Name == name)?.Id;
         }
 
-        // 문서에 있는 선 패턴/채우기 패턴 목록 - 설정 창의 카테고리 재정의 편집 드롭다운에서 사용.
-        // "실선"/"실채우기"는 목록 맨 앞에 별도로 추가한다(위 센티널 참고, 실제 컬렉션에는 없음).
-        public static List<string> AllLinePatternNames(Document doc)
-        {
-            List<string> names = new List<string> { SolidLinePatternName };
-            names.AddRange(new FilteredElementCollector(doc).OfClass(typeof(LinePatternElement)).Cast<LinePatternElement>()
-                .Select(p => p.Name).OrderBy(n => n));
-            return names;
-        }
-
-        public static List<string> AllFillPatternNames(Document doc)
-        {
-            List<string> names = new List<string> { SolidFillPatternName };
-            names.AddRange(new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>()
-                .Where(p => !p.GetFillPattern().IsSolidFill)
-                .Select(p => p.Name).OrderBy(n => n));
-            return names;
-        }
-
-        // 프리셋 "카테고리(V/G)" 탭에서 쓰는 카테고리 목록 - Revit V/G 대화상자와 같은 4개 그룹으로
-        // 나눠 보여주기 위한 헬퍼. 모델/주석/해석모델은 doc.Settings.Categories(최상위 트리)를
+        // 카테고리 목록 - 색상 버튼의 대상 선택(모델 카테고리)과 내보내기/가져오기의 이름 매칭에서 쓴다.
+        // 모델/주석/해석모델은 doc.Settings.Categories(최상위 트리)를
         // CategoryType으로 걸러서 쓰고, 가져온 카테고리는 그 트리에 없어(CAD 가져오기별로 동적 생성됨)
         // 전용 루트 카테고리(OST_ImportObjectStyles)의 하위 카테고리에서 따로 모은다.
         public static List<Category> TopLevelCategoriesOfType(Document doc, CategoryType type)
@@ -936,7 +731,7 @@ namespace WallSplitter
             }
         }
 
-        // 프리셋 가져오기(다른 모델 간 이식)에서 이름으로 카테고리를 다시 찾을 때 쓰는 전체 목록 -
+        // 색상 버튼 가져오기(다른 모델 간 이식)에서 이름으로 카테고리를 다시 찾을 때 쓰는 전체 목록 -
         // AllCategories(모델/주석/해석모델)에 더해 가져온 카테고리(Imported Categories)까지 포함한다.
         public static IEnumerable<Category> AllCategoriesForNameMatching(Document doc)
         {
