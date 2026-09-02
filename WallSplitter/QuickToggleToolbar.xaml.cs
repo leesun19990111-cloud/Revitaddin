@@ -94,6 +94,12 @@ namespace WallSplitter
         private ColorToolPopupWindow? _openColorPopup;
         private string? _openColorPopupButtonId;
 
+        // "링크된 모델" 버튼 클릭으로 열린 링크 목록 패널 (2026-09-02 추가) - 색상 패널과 같은 규칙으로
+        // 한 번에 하나만 열어두고, 서로를 열 때 다른 쪽을 닫는다. 링크 표시 여부는 뷰마다 다르므로 뷰가
+        // 바뀌면 닫지 않고 새 뷰 기준으로 다시 그린다(RefreshState 참고).
+        private LinkedModelPopupWindow? _openLinkedModelPopup;
+        private string? _openLinkedModelPopupButtonId;
+
         public QuickToggleToolbar(UIApplication uiapp)
         {
             InitializeComponent();
@@ -168,6 +174,11 @@ namespace WallSplitter
                 return;
             }
 
+            // 링크 표시 여부는 뷰마다 다르므로, 팝업을 열어둔 채 다른 뷰로 가면 그 뷰 기준으로 다시
+            // 그린다(뷰가 실제로 바뀐 경우에만 - 매 Idling 틱마다 다시 그리면 클릭이 씹힌다).
+            if (_openLinkedModelPopup != null && _openLinkedModelPopup.CurrentViewId != view.Id.ToInt())
+                _openLinkedModelPopup.Refresh(view);
+
             EnsureSettingsLoaded(doc);
 
             // 버튼 "목록"이 실제로 바뀐 경우(설정 저장/문서 전환)에만 구조를 다시 짓는다 - 그 외의 매우
@@ -203,7 +214,14 @@ namespace WallSplitter
         private void CloseToolPopups()
         {
             _openColorPopup?.Close();
+            _openLinkedModelPopup?.Close();
         }
+
+        // "링크된 모델" 팝업이 열려 있으면 지금 뷰 기준으로 목록을 다시 읽는다 - 링크를 켜고 끈 직후
+        // (QuickToggleExternalEventHandler.ExecuteLinkedModelApply)와 뷰가 바뀐 직후에만 호출한다.
+        // Idling 틱마다 부르면 안 된다 - 이 파일이 세 번 겪은 "매 틱 UI 재생성" 부류의 문제가 그대로
+        // 재현된다(팝업의 버튼이 매 틱 교체되어 클릭이 씹힌다).
+        public void RefreshLinkedModelPopup(RevitView view) => _openLinkedModelPopup?.Refresh(view);
 
         // 색상 버튼(2줄 높이의 작은 리본 버튼)을 몇 개 등록하든 한 줄로 계속 옆으로 늘어나지 않고, 이
         // 높이(2줄 분량)에 맞춰 위아래로 채우다 꽉 차면 다음 칸으로 넘어가는 묶음으로 모아둔다 - Revit
@@ -350,15 +368,23 @@ namespace WallSplitter
 
             // 링크 버튼은 "대상이 지정되지 않았다"는 안내가 맞지 않는다 - 설정에서 고를 대상 자체가 없고
             // 비활성이면 이유는 하나뿐이다("이 뷰에 그런 링크가 없다"). 2026-09-02 추가.
-            if (cfg.Category == QuickToggleCategory.LinkedCad || cfg.Category == QuickToggleCategory.LinkedModel)
+            if (cfg.Category == QuickToggleCategory.LinkedCad)
             {
-                string linkLabel = cfg.Category == QuickToggleCategory.LinkedCad ? "링크된 도면" : "링크된 모델";
                 return state switch
                 {
-                    QuickToggleButtonState.On => cfg.Name + $" - 클릭하면 이 뷰의 {linkLabel}을 끕니다",
-                    QuickToggleButtonState.Off => cfg.Name + $" - 클릭하면 이 뷰의 {linkLabel}을 다시 켭니다",
-                    _ => cfg.Name + $" (이 뷰에 {linkLabel}이 없습니다)",
+                    QuickToggleButtonState.On => cfg.Name + " - 클릭하면 이 뷰의 링크된 도면을 끕니다",
+                    QuickToggleButtonState.Off => cfg.Name + " - 클릭하면 이 뷰의 링크된 도면을 다시 켭니다",
+                    _ => cfg.Name + " (이 뷰에 링크된 도면이 없습니다)",
                 };
+            }
+
+            // 링크된 모델은 링크마다 따로 끄고 켤 수 있어야 해서 클릭하면 목록 패널이 열린다(2026-09-02) -
+            // 색 자체는 "지금 보이는 링크가 있는가"를 알려주는 표시로 남는다.
+            if (cfg.Category == QuickToggleCategory.LinkedModel)
+            {
+                return state == QuickToggleButtonState.Disabled
+                    ? cfg.Name + " (이 뷰에 링크된 모델이 없습니다)"
+                    : cfg.Name + " - 클릭하면 이 뷰의 링크된 모델 목록을 열어 하나씩 끄고 켭니다";
             }
 
             // 기능 버튼도 켜짐/꺼짐이 없다 - 지정된 명령을 실행한다는 실제 동작에 맞는 문구를 쓴다.
@@ -423,6 +449,14 @@ namespace WallSplitter
             if (cfg.Category == QuickToggleCategory.ColorTool)
             {
                 ShowColorToolPopup(cfg, button);
+                return;
+            }
+
+            // 링크된 모델도 on/off 토글이 아니라 링크 목록 패널을 여는 버튼이다(2026-09-02) - 실제
+            // 적용은 그 패널이 LinkedModelApplyRequest로 따로 보낸다.
+            if (cfg.Category == QuickToggleCategory.LinkedModel)
+            {
+                ShowLinkedModelPopup(cfg, button);
                 return;
             }
 
@@ -493,6 +527,54 @@ namespace WallSplitter
 
             _openColorPopup = popup;
             _openColorPopupButtonId = cfg.Id;
+            popup.Show();
+        }
+
+        // 2026-09-02 추가 - "링크된 모델" 버튼을 누르면 그 자리에 링크 목록 패널을 띄운다. 열고 닫는
+        // 규칙(같은 버튼 다시 누르면 닫기, 다른 도구 패널은 닫기, 화면 아래 여유가 없으면 위로 펼치기)은
+        // 색상 패널과 동일하게 맞췄다.
+        private void ShowLinkedModelPopup(QuickToggleButtonConfig cfg, Button button)
+        {
+            _openColorPopup?.Close();
+            if (_openLinkedModelPopup != null)
+            {
+                bool wasSameButton = _openLinkedModelPopupButtonId == cfg.Id;
+                _openLinkedModelPopup.Close();
+                if (wasSameButton) return;
+            }
+
+            UIDocument? uidoc = _uiapp.ActiveUIDocument;
+            RevitDocument? doc = uidoc?.Document;
+            RevitView? view = doc?.ActiveView;
+            if (doc == null || view == null) return;
+
+            Point buttonTopLeft = button.PointToScreen(new Point(0, 0));
+            double buttonBottom = buttonTopLeft.Y + button.ActualHeight;
+            const double popupHeightEstimate = 220;
+            const double popupWidth = 300;
+            bool expandUpward = buttonBottom + popupHeightEstimate > SystemParameters.WorkArea.Bottom;
+            double left = Math.Max(SystemParameters.WorkArea.Left,
+                Math.Min(buttonTopLeft.X, SystemParameters.WorkArea.Right - popupWidth));
+
+            LinkedModelPopupWindow popup = new LinkedModelPopupWindow(view, cfg) { Owner = this, Left = left };
+            popup.Closed += (s, e) =>
+            {
+                if (ReferenceEquals(_openLinkedModelPopup, popup)) { _openLinkedModelPopup = null; _openLinkedModelPopupButtonId = null; }
+            };
+
+            if (expandUpward)
+            {
+                // 목록 길이에 따라 높이가 달라지므로(SizeToContent) 레이아웃이 끝난 뒤 한 번 보정한다.
+                popup.Top = buttonTopLeft.Y - popupHeightEstimate;
+                popup.Loaded += (s, e) => { popup.Top = buttonTopLeft.Y - popup.ActualHeight; };
+            }
+            else
+            {
+                popup.Top = buttonBottom;
+            }
+
+            _openLinkedModelPopup = popup;
+            _openLinkedModelPopupButtonId = cfg.Id;
             popup.Show();
         }
 

@@ -64,6 +64,16 @@ namespace WallSplitter
         public bool Clear { get; set; }
     }
 
+    // "링크된 모델" 팝업(LinkedModelPopupWindow)에서 링크 줄이나 전체 켜기/끄기를 눌렀을 때 보내는 요청
+    // (2026-09-02 추가). 링크 인스턴스 ElementId는 문서마다 다른 값이라, 팝업을 열어둔 채 다른 프로젝트로
+    // 전환한 경우 엉뚱한 요소에 적용되지 않도록 문서 경로를 같이 담아 실행 시점에 대조한다.
+    internal class LinkedModelApplyRequest
+    {
+        public string SourceDocumentPath { get; set; } = "";
+        public List<int> InstanceIds { get; set; } = new();
+        public bool Visible { get; set; }
+    }
+
     // 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라 버튼 클릭이 언제든 일어날 수
     // 있고, 그 시점엔 유효한 Revit API 컨텍스트(트랜잭션 등)가 열려있지 않다. ExternalEvent.Raise()로
     // 요청을 넣어두면 Revit이 다음 기회에 Execute를 유효한 컨텍스트에서 실행해준다.
@@ -85,6 +95,9 @@ namespace WallSplitter
         // "기능 버튼" 클릭 요청 (2026-08-03 추가) - 위 둘과 같은 방식으로 같은 ExternalEvent를 재사용한다.
         // 버튼 설정 자체(어느 명령을 실행할지)만 있으면 되므로 cfg 참조를 그대로 담는다.
         internal QuickToggleButtonConfig? PendingCommandLaunch { get; set; }
+
+        // "링크된 모델" 팝업에서 보낸 개별/전체 링크 표시 요청 (2026-09-02 추가).
+        internal LinkedModelApplyRequest? PendingLinkedModelApply { get; set; }
 
         // ExternalEvent 콜백에서 예외가 밖으로 나가면 Revit은 사용자에게 아무 것도 보여주지 않고
         // "버튼을 눌러도 반응이 없다"는 증상으로만 남는다(이 파일의 아래 주석과 같은 이유).
@@ -116,6 +129,14 @@ namespace WallSplitter
                 ColorToolApplyRequest request = PendingColorApply;
                 PendingColorApply = null;
                 ExecuteColorApply(app, request);
+                return;
+            }
+
+            if (PendingLinkedModelApply != null)
+            {
+                LinkedModelApplyRequest linkRequest = PendingLinkedModelApply;
+                PendingLinkedModelApply = null;
+                ExecuteLinkedModelApply(app, linkRequest);
                 return;
             }
 
@@ -217,6 +238,44 @@ namespace WallSplitter
                 else
                     QuickToggleService.ApplyColorTool(view, request.CategoryIds, request.Color, request.Transparency);
                 tx.Commit();
+            }
+        }
+
+        // "링크된 모델" 팝업의 요청 실행 (2026-09-02 추가) - 색상 버튼과 마찬가지로 실행 시점의 활성 뷰에
+        // 적용하되, ElementId는 문서마다 다른 값이라 팝업을 연 문서와 지금 활성 문서가 같은지 먼저 대조한다.
+        private static void ExecuteLinkedModelApply(UIApplication app, LinkedModelApplyRequest request)
+        {
+            UIDocument? uidoc = app.ActiveUIDocument;
+            Document? doc = uidoc?.Document;
+            View? view = doc?.ActiveView;
+            if (doc == null || view == null) return;
+
+            if (!string.Equals(doc.PathName ?? "", request.SourceDocumentPath ?? "", System.StringComparison.OrdinalIgnoreCase))
+            {
+                TaskDialog.Show("커스텀 버튼",
+                    "링크 목록을 연 문서와 현재 활성 문서가 다릅니다. 현재 문서에서 버튼을 다시 눌러 주세요.");
+                return;
+            }
+
+            bool applied;
+            TransactionStatus status;
+            using (Transaction tx = new Transaction(doc, request.Visible ? "커스텀 버튼: 링크된 모델 켜기" : "커스텀 버튼: 링크된 모델 끄기"))
+            {
+                tx.Start();
+                applied = QuickToggleService.SetLinkedModelsVisible(view, request.InstanceIds, request.Visible);
+                status = applied ? tx.Commit() : tx.RollBack();
+            }
+
+            QuickToggleToolbar.Instance?.RefreshState();
+            // 팝업의 켜짐/꺼짐 표시는 요청을 보낸 직후가 아니라 실제로 반영된 지금 다시 읽어야 모델과
+            // 어긋나지 않는다(ExternalEvent는 비동기라 Raise() 직후엔 아직 아무것도 바뀌지 않았다).
+            QuickToggleToolbar.Instance?.RefreshLinkedModelPopup(view);
+
+            if (!applied || status != TransactionStatus.Committed)
+            {
+                TaskDialog.Show("커스텀 버튼",
+                    "링크된 모델의 표시 상태를 바꾸지 못했습니다 (뷰 템플릿이 이 뷰의 가시성/그래픽 설정을 제어하고 있거나, " +
+                    "이 뷰에서 숨길 수 없는 링크일 수 있습니다).");
             }
         }
 

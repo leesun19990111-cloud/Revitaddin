@@ -65,8 +65,16 @@ namespace WallSplitter
                     case QuickToggleCategory.LinkedCad:
                         return DetermineLinkState(view, LinkedCadCategoryIds(view));
 
+                    // 링크된 모델은 개별 링크를 하나씩 끄고 켤 수 있어야 한다는 요청(2026-09-02)으로
+                    // 클릭하면 링크 목록 팝업이 열리는 버튼이 됐다 - 상태 색은 "이 뷰에 보이는 링크가
+                    // 하나라도 있는가"를 알려주는 표시로 남는다(클릭 자체는 팝업 열기라 On/Off 어느
+                    // 쪽이든 눌린다).
                     case QuickToggleCategory.LinkedModel:
-                        return DetermineLinkState(view, LinkedModelCategoryIds(view));
+                    {
+                        List<LinkedModelInfo> linkedModels = LinkedModelsInView(view);
+                        if (linkedModels.Count == 0) return QuickToggleButtonState.Disabled;
+                        return linkedModels.Any(l => l.Visible) ? QuickToggleButtonState.On : QuickToggleButtonState.Off;
+                    }
 
                     default:
                         return QuickToggleButtonState.Disabled;
@@ -82,11 +90,11 @@ namespace WallSplitter
 
         // ===== 링크된 도면(CAD) / 링크된 모델(RVT) 끄고 켜기 (2026-09-02 추가) =====
 
-        // 링크의 표시 여부는 Revit의 V/G 대화상자와 같은 방식으로 "카테고리 숨기기"로 다룬다 - 링크된
-        // CAD 도면은 도면 파일마다 가져온 카테고리("가져온 카테고리" 탭)가 하나씩 생기고, 링크된 Revit
-        // 모델은 전부 "Revit 링크" 카테고리(OST_RvtLinks) 하나에 묶인다. View.HideElements로 링크 인스턴스
-        // 자체를 숨기는 방법도 있지만, 그건 V/G 대화상자에 아무 표시도 남지 않아("숨겨진 요소 표시"를
-        // 켜야만 보임) 이 버튼으로 끈 걸 사용자가 다른 경로로 되돌리기 어렵다.
+        // 링크된 CAD 도면의 표시 여부는 Revit의 V/G 대화상자와 같은 방식으로 "카테고리 숨기기"로 다룬다 -
+        // 도면 파일마다 가져온 카테고리("가져온 카테고리" 탭)가 하나씩 생기므로 카테고리 단위가 곧 도면
+        // 단위다. View.HideElements로 인스턴스 자체를 숨기는 방법도 있지만, 그건 V/G 대화상자에 아무 표시도
+        // 남지 않아("숨겨진 요소 표시"를 켜야만 보임) 이 버튼으로 끈 걸 다른 경로로 되돌리기 어렵다.
+        // (링크된 Revit 모델은 사정이 다르다 - 아래 LinkedModelsInView/SetLinkedModelsVisible 참고.)
         private static QuickToggleButtonState DetermineLinkState(View view, List<ElementId> categoryIds)
         {
             if (categoryIds.Count == 0) return QuickToggleButtonState.Disabled;
@@ -133,7 +141,8 @@ namespace WallSplitter
             public DateTime At;
             // 링크된 CAD 도면: (그 도면의 가져온 카테고리 Id, 뷰 전용 가져오기면 그 뷰 Id / 아니면 -1)
             public List<(int CategoryId, int OwnerViewId)> Cad = new List<(int, int)>();
-            public bool HasModelLink;
+            // 링크된 Revit 모델: (링크 인스턴스 Id, 목록에 보여줄 이름)
+            public List<(int InstanceId, string Name)> Models = new List<(int, string)>();
         }
 
         private static readonly Dictionary<string, LinkScan> LinkScans = new Dictionary<string, LinkScan>();
@@ -162,13 +171,46 @@ namespace WallSplitter
 
             try
             {
-                scan.HasModelLink = new FilteredElementCollector(doc)
-                    .OfClass(typeof(RevitLinkInstance)).Any();
+                foreach (RevitLinkInstance link in new FilteredElementCollector(doc)
+                    .OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>())
+                {
+                    // 중첩 링크(링크된 모델이 다시 물고 있는 링크)는 부모 링크를 끄면 같이 사라지므로
+                    // 목록에서 뺀다 - V/G의 "Revit 링크" 탭도 중첩 링크는 부모 아래 하위 항목으로만
+                    // 보여주고 따로 끄고 켜지 않는다.
+                    try
+                    {
+                        if (doc.GetElement(link.GetTypeId()) is RevitLinkType linkType && linkType.IsNestedLink) continue;
+                    }
+                    catch { /* 중첩 여부를 판정하지 못하면 목록에 남긴다 - 안 보이는 것보다 낫다 */ }
+
+                    scan.Models.Add((link.Id.ToInt(), LinkedModelDisplayName(doc, link)));
+                }
             }
             catch { /* 위와 동일 */ }
 
             LinkScans[key] = scan;
             return scan;
+        }
+
+        // 목록에 보여줄 링크 이름 - RevitLinkInstance.Name은 보통 "파일이름.rvt : 위치" 형태로 같은 파일을
+        // 여러 번 링크한 경우까지 Revit이 알아서 구분해준다. 비어 있거나 읽지 못하면 링크 유형(파일) 이름으로
+        // 대체한다.
+        private static string LinkedModelDisplayName(Document doc, RevitLinkInstance link)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(link.Name)) return link.Name;
+            }
+            catch { /* 아래 유형 이름으로 대체 */ }
+
+            try
+            {
+                Element? linkType = doc.GetElement(link.GetTypeId());
+                if (linkType != null && !string.IsNullOrWhiteSpace(linkType.Name)) return linkType.Name;
+            }
+            catch { /* 아래 기본 이름으로 대체 */ }
+
+            return "링크된 모델";
         }
 
         // 이 뷰에서 끄고 켤 수 있는 "링크된 도면"의 카테고리들. 특정 뷰에만 놓인 CAD 링크(뷰 전용
@@ -190,12 +232,128 @@ namespace WallSplitter
             return result;
         }
 
-        // 링크된 Revit 모델은 개별 링크마다 카테고리가 생기지 않고 전부 "Revit 링크" 카테고리 하나에
-        // 묶인다 - 그래서 이 버튼은 "이 뷰의 링크된 모델 전체"를 한 번에 끄고 켠다.
-        internal static List<ElementId> LinkedModelCategoryIds(View view)
+        // ===== 링크된 모델: 링크 하나씩 끄고 켜기 (2026-09-02, "링크된 모델도 개별 링크로 끄고 켤 수
+        // 있게 해줘") =====
+        //
+        // 링크된 CAD 도면과 달리 링크된 Revit 모델은 개별 링크마다 카테고리가 생기지 않고 전부 "Revit
+        // 링크" 카테고리(OST_RvtLinks) 하나에 묶인다 - 카테고리 숨기기로는 전부 함께 끄는 것밖에 안 된다.
+        // 그래서 개별 제어는 요소 단위 숨기기(View.HideElements/UnhideElements)로 한다. 이건 Revit의
+        // V/G "Revit 링크" 탭에서 링크의 표시 체크박스를 끄는 것과 같은 저장소를 쓰므로, 이 팝업으로 끈
+        // 링크는 V/G에서도 꺼진 것으로 보이고 거기서 다시 켤 수도 있다.
+        public class LinkedModelInfo
         {
-            if (!ScanLinks(view.Document).HasModelLink) return new List<ElementId>();
-            return new List<ElementId> { new ElementId(BuiltInCategory.OST_RvtLinks) };
+            public int InstanceId { get; set; }
+            public string Name { get; set; } = "";
+            public bool Visible { get; set; }
+        }
+
+        // 이 뷰에서 끄고 켤 수 있는 링크된 모델 목록 + 각각의 현재 표시 여부. 카테고리가 통째로 꺼져
+        // 있으면(예: 사용자가 V/G에서 "Revit 링크"를 끈 경우) 요소 숨김 여부와 무관하게 전부 안 보이는
+        // 상태이므로 그때는 모두 Visible=false로 보고한다.
+        public static List<LinkedModelInfo> LinkedModelsInView(View view)
+        {
+            List<LinkedModelInfo> result = new List<LinkedModelInfo>();
+            Document doc = view.Document;
+
+            bool categoryHidden = false;
+            try { categoryHidden = view.GetCategoryHidden(new ElementId(BuiltInCategory.OST_RvtLinks)); }
+            catch { /* 이 뷰 종류가 링크 카테고리를 다루지 못하면 개별 판정으로만 처리 */ }
+
+            foreach ((int instanceId, string name) in ScanLinks(doc).Models)
+            {
+                Element? link = null;
+                try { link = doc.GetElement(new ElementId(instanceId)); }
+                catch { /* 캐시된 뒤 지워진 링크 - 건너뛴다 */ }
+                if (link == null) continue;
+
+                bool hidden;
+                try { hidden = link.IsHidden(view); }
+                catch { continue; /* 이 뷰에서 표시 여부를 읽을 수 없는 링크(일람표 등)는 목록에서 뺀다 */ }
+
+                result.Add(new LinkedModelInfo
+                {
+                    InstanceId = instanceId,
+                    Name = name,
+                    Visible = !categoryHidden && !hidden,
+                });
+            }
+            return result;
+        }
+
+        // 호출자가 이미 Transaction을 연 상태에서 호출해야 한다(Toggle과 같은 계약). 하나라도 실제로
+        // 반영됐으면 true.
+        public static bool SetLinkedModelsVisible(View view, List<int> instanceIds, bool visible)
+        {
+            if (instanceIds.Count == 0) return false;
+            Document doc = view.Document;
+
+            if (visible) PrepareLinkCategoryForElementControl(view);
+
+            bool any = false;
+            foreach (int instanceId in instanceIds)
+            {
+                Element? link = null;
+                try { link = doc.GetElement(new ElementId(instanceId)); }
+                catch { /* 그 사이 지워진 링크 - 나머지는 계속 적용 */ }
+                if (link == null) continue;
+
+                if (SetElementHidden(view, link, hidden: !visible)) any = true;
+            }
+            return any;
+        }
+
+        // "Revit 링크" 카테고리 자체가 꺼져 있으면 개별 링크를 켜도 화면에 나타나지 않는다(카테고리 숨김이
+        // 요소 숨김보다 우선). 그래서 켜기 전에 카테고리를 켜되, 그 순간 같이 드러날 다른 링크는 요소
+        // 숨김으로 눌러 화면에 보이던 상태(= 하나도 안 보임)를 그대로 유지한 뒤, 호출자가 원하는 링크만
+        // 개별로 켠다. 설치본 v63은 이 버튼을 카테고리 숨기기로 구현했었으므로, 그때 꺼둔 뷰에서도 개별
+        // 켜기가 제대로 동작하려면 이 보정이 필요하다.
+        private static void PrepareLinkCategoryForElementControl(View view)
+        {
+            ElementId categoryId = new ElementId(BuiltInCategory.OST_RvtLinks);
+            bool categoryHidden;
+            try { categoryHidden = view.GetCategoryHidden(categoryId); }
+            catch { return; }
+            if (!categoryHidden) return;
+
+            Document doc = view.Document;
+            foreach ((int instanceId, string _) in ScanLinks(doc).Models)
+            {
+                try
+                {
+                    if (doc.GetElement(new ElementId(instanceId)) is Element link)
+                        SetElementHidden(view, link, hidden: true);
+                }
+                catch { /* 개별 실패는 무시하고 나머지는 계속 */ }
+            }
+
+            try { view.SetCategoryHidden(categoryId, false); }
+            catch { /* 뷰템플릿이 제어하는 경우 등 - 호출자가 결과로 판단한다 */ }
+        }
+
+        // 이미 원하는 상태면 아무것도 하지 않는다 - UnhideElements는 숨겨지지 않은 요소를 넘기면 예외를
+        // 던지고, HideElements도 이미 숨겨진 요소에 대해 같은 문제가 있어 상태를 먼저 확인해야 한다.
+        private static bool SetElementHidden(View view, Element element, bool hidden)
+        {
+            try
+            {
+                if (element.IsHidden(view) == hidden) return true;
+
+                List<ElementId> ids = new List<ElementId> { element.Id };
+                if (hidden)
+                {
+                    if (!element.CanBeHidden(view)) return false;
+                    view.HideElements(ids);
+                }
+                else
+                {
+                    view.UnhideElements(ids);
+                }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // 호출자가 이미 Transaction을 연 상태에서 호출해야 한다. bool 반환값은 실제로 반영됐는지를
@@ -267,8 +425,8 @@ namespace WallSplitter
                 case QuickToggleCategory.LinkedCad:
                     return ToggleLinkVisibility(view, LinkedCadCategoryIds(view), turnOn);
 
-                case QuickToggleCategory.LinkedModel:
-                    return ToggleLinkVisibility(view, LinkedModelCategoryIds(view), turnOn);
+                // LinkedModel은 여기로 오지 않는다 - 클릭하면 링크 목록 팝업이 열리고, 실제 적용은
+                // 팝업이 보내는 LinkedModelApplyRequest(SetLinkedModelsVisible)로 처리한다.
             }
 
             return true;

@@ -82,3 +82,5 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitte
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\bin\Debug2026\net8.0-windows\Clipper2Lib.dll
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\WallSpli.73662DD6.Up2Date
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ref\WallSplitter.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\LinkedModelPopupWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\LinkedModelPopupWindow.g.cs
