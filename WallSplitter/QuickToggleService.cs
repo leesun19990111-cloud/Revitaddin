@@ -18,22 +18,149 @@ namespace WallSplitter
     // Revit API를 직접 만지는 순수 로직. 트랜잭션은 호출자(QuickToggleExternalEventHandler)가 연다.
     public static class QuickToggleService
     {
+        // ===== 대상 해석: 이름 → 이 문서의 ElementId (2026-09-03) =====
+        //
+        // 커스텀 버튼 설정이 PC 전역이 되면서(QuickToggleSettings 주석 참고) 저장된 ElementId는 더 이상
+        // 믿을 수 없다 - 같은 정수 ID가 문서마다 전혀 다른 요소를 가리키기 때문이다. 그래서 뷰템플릿/
+        // 필터/작업세트/색상 카테고리는 전부 **이름**으로 지금 문서에서 다시 찾는다. 이름이 비어 있는
+        // 옛 설정(2026-07-28에 이름 필드가 생기기 전에 만든 버튼)만 저장된 ID로 되돌아간다.
+        //
+        // **반드시 캐시할 것**: DetermineState는 툴바의 Idling 갱신에서 **버튼마다 매 틱** 호출된다.
+        // 여기서 FilteredElementCollector로 문서를 통째로 훑으면 이 기능이 이미 세 번 겪은 "Idling
+        // 콜백에서 매 틱 비싼 일을 한다" 부류의 문제가 그대로 재발한다(ScanLinks와 같은 이유·같은 방식).
+        private sealed class TargetIndex
+        {
+            public Dictionary<string, int> ViewTemplates = new Dictionary<string, int>();
+            public Dictionary<string, int> Filters = new Dictionary<string, int>();
+            public Dictionary<string, int> Worksets = new Dictionary<string, int>();
+            public DateTime StampUtc;
+        }
+
+        private static readonly Dictionary<string, TargetIndex> TargetIndexes = new Dictionary<string, TargetIndex>();
+        private static readonly TimeSpan TargetIndexLifetime = TimeSpan.FromSeconds(2);
+
+        // 문서 식별 키 - 저장 안 된 새 문서는 PathName이 비어 있어 Title로 대신한다(같은 제목의 저장 안 된
+        // 문서를 동시에 여러 개 열어두면 뭉뚱그려지는데, 이 파일의 다른 캐시들과 같은 이미 알려진 제약이다).
+        private static string DocKey(Document doc) =>
+            string.IsNullOrEmpty(doc.PathName) ? "__unsaved__:" + doc.Title : doc.PathName;
+
+        private static TargetIndex IndexOf(Document doc)
+        {
+            string key = DocKey(doc);
+            if (TargetIndexes.TryGetValue(key, out TargetIndex? cached) && cached != null &&
+                DateTime.UtcNow - cached.StampUtc < TargetIndexLifetime)
+                return cached;
+
+            TargetIndex index = new TargetIndex { StampUtc = DateTime.UtcNow };
+            try
+            {
+                foreach (View v in new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>())
+                    if (v.IsTemplate) index.ViewTemplates[v.Name] = v.Id.ToInt();
+            }
+            catch
+            {
+                // 문서 상태에 따라 조회가 실패할 수 있다 - 그 종류만 못 찾는 것으로 두고 나머지는 계속한다.
+            }
+            try
+            {
+                foreach (ParameterFilterElement f in new FilteredElementCollector(doc)
+                             .OfClass(typeof(ParameterFilterElement)).Cast<ParameterFilterElement>())
+                    index.Filters[f.Name] = f.Id.ToInt();
+            }
+            catch
+            {
+            }
+            try
+            {
+                if (doc.IsWorkshared)
+                    foreach (Workset w in new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset))
+                        index.Worksets[w.Name] = w.Id.IntegerValue;
+            }
+            catch
+            {
+            }
+
+            TargetIndexes[key] = index;
+            return index;
+        }
+
+        // 설정 창에서 저장한 직후처럼 "방금 만든 요소를 곧바로 찾아야 하는" 경우를 위해 캐시를 버린다.
+        public static void InvalidateTargetIndex() => TargetIndexes.Clear();
+
+        public static int? ResolveViewTemplateId(Document doc, QuickToggleButtonConfig cfg)
+        {
+            if (string.IsNullOrEmpty(cfg.ViewTemplateName)) return cfg.ViewTemplateId;
+            return IndexOf(doc).ViewTemplates.TryGetValue(cfg.ViewTemplateName!, out int id) ? id : (int?)null;
+        }
+
+        public static List<int> ResolveFilterIds(Document doc, QuickToggleButtonConfig cfg) =>
+            ResolveByName(cfg.FilterNames, cfg.FilterIds, IndexOf(doc).Filters);
+
+        public static List<int> ResolveWorksetIds(Document doc, QuickToggleButtonConfig cfg) =>
+            ResolveByName(cfg.WorksetNames, cfg.WorksetIds, IndexOf(doc).Worksets);
+
+        // 이름 목록이 있으면 그걸로만 찾고(이 문서에 없는 이름은 조용히 빠진다 - 삭제된 대상을 건너뛰는
+        // 기존 방침과 같다), 이름이 아예 없는 옛 설정만 저장된 ID를 그대로 쓴다.
+        private static List<int> ResolveByName(List<string> names, List<int> legacyIds, Dictionary<string, int> index)
+        {
+            if (names == null || names.Count == 0) return legacyIds ?? new List<int>();
+
+            List<int> resolved = new List<int>(names.Count);
+            foreach (string name in names)
+                if (index.TryGetValue(name, out int id) && !resolved.Contains(id)) resolved.Add(id);
+            return resolved;
+        }
+
+        // 색상 버튼의 대상 카테고리. 내장 카테고리(BuiltInCategory)의 Id는 문서가 달라도 같은 음수 값이라
+        // ID만으로도 대개 맞지만, 사용자가 만든 하위 카테고리나 가져온 CAD 레이어는 문서마다 다르다 -
+        // 그래서 (부모 이름, 카테고리 이름)으로 먼저 찾고 못 찾으면 저장된 Id로 되돌아간다. 이 경로는
+        // Idling에서 호출되지 않으므로(ColorTool의 DetermineState는 항상 Off 고정) 캐시하지 않는다.
+        public static List<int> ResolveColorCategoryIds(Document doc, QuickToggleButtonConfig cfg)
+        {
+            List<int> resolved = new List<int>(cfg.ColorButtonCategories.Count);
+            List<Category> all = null!;
+
+            foreach (ColorToolCategoryConfig wanted in cfg.ColorButtonCategories)
+            {
+                if (string.IsNullOrEmpty(wanted.CategoryName))
+                {
+                    if (!resolved.Contains(wanted.CategoryId)) resolved.Add(wanted.CategoryId);
+                    continue;
+                }
+
+                all ??= AllCategoriesForNameMatching(doc).ToList();
+                Category? match = all.FirstOrDefault(c =>
+                    c.Name == wanted.CategoryName &&
+                    string.Equals(c.Parent?.Name ?? "", wanted.ParentCategoryName ?? "", StringComparison.Ordinal));
+                int id = match != null ? match.Id.ToInt() : wanted.CategoryId;
+                if (!resolved.Contains(id)) resolved.Add(id);
+            }
+
+            return resolved;
+        }
+
         public static QuickToggleButtonState DetermineState(View view, QuickToggleButtonConfig cfg)
         {
             try
             {
                 switch (cfg.Category)
                 {
+                    // 아래 세 케이스의 대상은 저장된 ElementId가 아니라 이름으로 이 문서에서 다시 찾은
+                    // 것이다(설정이 PC 전역이 된 2026-09-03부터 - 위 "대상 해석" 절 참고). 이름이 이
+                    // 문서에 없으면 해석 결과가 비고, 그러면 예전에 "대상 미지정"이 그랬듯 Disabled(회색)로
+                    // 표시된다 - 다른 프로젝트에서 없는 대상을 조용히 건드리지 않는다는 뜻이다.
                     case QuickToggleCategory.ViewTemplate:
-                        if (cfg.ViewTemplateId == null) return QuickToggleButtonState.Disabled;
-                        return view.ViewTemplateId.ToInt() == cfg.ViewTemplateId.Value
+                        int? templateId = ResolveViewTemplateId(view.Document, cfg);
+                        if (templateId == null) return QuickToggleButtonState.Disabled;
+                        return view.ViewTemplateId.ToInt() == templateId.Value
                             ? QuickToggleButtonState.On
                             : QuickToggleButtonState.Off;
 
                     case QuickToggleCategory.Filter:
-                        if (cfg.FilterIds.Count == 0) return QuickToggleButtonState.Disabled;
+                        List<int> filterIds = ResolveFilterIds(view.Document, cfg);
+                        if (filterIds.Count == 0) return QuickToggleButtonState.Disabled;
                         ICollection<ElementId> appliedFilters = view.GetFilters();
-                        bool allFiltersOn = cfg.FilterIds.All(id =>
+                        bool allFiltersOn = filterIds.All(id =>
                         {
                             ElementId eid = new ElementId(id);
                             return appliedFilters.Contains(eid) && view.GetFilterVisibility(eid);
@@ -42,8 +169,9 @@ namespace WallSplitter
 
                     case QuickToggleCategory.Workset:
                         if (!view.Document.IsWorkshared) return QuickToggleButtonState.Disabled;
-                        if (cfg.WorksetIds.Count == 0) return QuickToggleButtonState.Disabled;
-                        bool allWorksetsOn = cfg.WorksetIds.All(id =>
+                        List<int> worksetIds = ResolveWorksetIds(view.Document, cfg);
+                        if (worksetIds.Count == 0) return QuickToggleButtonState.Disabled;
+                        bool allWorksetsOn = worksetIds.All(id =>
                             view.GetWorksetVisibility(new WorksetId(id)) == WorksetVisibility.Visible);
                         return allWorksetsOn ? QuickToggleButtonState.On : QuickToggleButtonState.Off;
 
@@ -370,8 +498,11 @@ namespace WallSplitter
                 case QuickToggleCategory.ViewTemplate:
                     try
                     {
-                        view.ViewTemplateId = turnOn && cfg.ViewTemplateId.HasValue
-                            ? new ElementId(cfg.ViewTemplateId.Value)
+                        // 대상은 DetermineState와 똑같이 이름으로 다시 찾는다 - 두 곳이 서로 다른 대상을
+                        // 보면 "켜졌다고 표시되는데 눌러도 그게 안 꺼지는" 어긋남이 생긴다.
+                        int? resolvedTemplateId = ResolveViewTemplateId(view.Document, cfg);
+                        view.ViewTemplateId = turnOn && resolvedTemplateId.HasValue
+                            ? new ElementId(resolvedTemplateId.Value)
                             : ElementId.InvalidElementId;
                     }
                     catch
@@ -383,7 +514,7 @@ namespace WallSplitter
 
                 case QuickToggleCategory.Filter:
                     ICollection<ElementId> appliedFilters = view.GetFilters();
-                    foreach (int id in cfg.FilterIds)
+                    foreach (int id in ResolveFilterIds(view.Document, cfg))
                     {
                         try
                         {
@@ -408,7 +539,7 @@ namespace WallSplitter
                     break;
 
                 case QuickToggleCategory.Workset:
-                    foreach (int id in cfg.WorksetIds)
+                    foreach (int id in ResolveWorksetIds(view.Document, cfg))
                     {
                         try
                         {

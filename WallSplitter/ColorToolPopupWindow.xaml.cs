@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,6 +18,8 @@ namespace WallSplitter
     public partial class ColorToolPopupWindow : Window
     {
         private readonly QuickToggleButtonConfig _cfg;
+        // 이 팝업을 연 문서에서 이름으로 다시 찾은 대상 카테고리 - 저장된 CategoryId를 그대로 쓰지 않는다.
+        private readonly List<int> _resolvedCategoryIds = new List<int>();
 
         private static readonly (string Hex, string Name)[] Palette =
         {
@@ -44,7 +47,22 @@ namespace WallSplitter
                 return;
             }
 
-            int firstCategoryId = _cfg.ColorButtonCategories[0].CategoryId;
+            // 저장된 CategoryId는 문서마다 다를 수 있어(설정이 PC 전역이 된 2026-09-03부터) 이름으로
+            // 다시 찾은 결과를 쓴다. 사용자가 카테고리를 골랐는데 이 문서에 하나도 없으면 조작할 대상이
+            // 없으므로 위의 "지정된 카테고리가 없습니다"와 같은 안내를 보여준다.
+            _resolvedCategoryIds = QuickToggleService.ResolveColorCategoryIds(view.Document, _cfg);
+            if (_resolvedCategoryIds.Count == 0)
+            {
+                RootPanel.Children.Add(new TextBlock
+                {
+                    Text = "이 버튼에 지정된 모델 카테고리를 지금 열려 있는 프로젝트에서 찾지 못했습니다.",
+                    Foreground = Theme.WarningText,
+                    TextWrapping = TextWrapping.Wrap,
+                });
+                return;
+            }
+
+            int firstCategoryId = _resolvedCategoryIds[0];
             (int? initialColor, int initialTransparency) = QuickToggleService.ReadCurrentColorAndTransparency(view, firstCategoryId);
             RenderControls(initialColor, initialTransparency);
         }
@@ -144,7 +162,7 @@ namespace WallSplitter
 
             App.QuickToggleHandler.PendingColorApply = new ColorToolApplyRequest
             {
-                CategoryIds = _cfg.ColorButtonCategories.Select(c => c.CategoryId).ToList(),
+                CategoryIds = new List<int>(_resolvedCategoryIds),
                 Color = color,
                 Transparency = transparency,
                 Clear = clear,

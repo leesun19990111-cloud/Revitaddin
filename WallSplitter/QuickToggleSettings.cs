@@ -133,14 +133,33 @@ namespace WallSplitter
         public string? ParentCategoryName { get; set; }
     }
 
-    // 프로젝트 파일 경로별로 저장되는 설정 (이 PC 안에서만 유지 - Q&A로 확정).
+    // 이 PC에 하나만 있는 전역 설정 (2026-09-03부터 - 그 전에는 프로젝트 파일 경로별로 따로 저장했다).
+    //
+    // **왜 전역으로 바꿨나** (사용자 요청): "레빗 파일마다 저장되도록 했었는데, 그것보다는 사용자 로컬
+    // 컴퓨터에 저장되어서 어떤 프로젝트를 열어도 설정이 변하지 않도록 하는게 훨씬 편리할 것 같아."
+    // 툴바 위치(QuickToggleGlobalSettings)가 2026-07-28에 같은 이유로 이미 전역이 됐고, 이제 버튼 목록도
+    // 같은 폴더의 파일 하나에 담긴다.
+    //
+    // **그래서 대상은 반드시 이름으로 다시 찾아야 한다**: ViewTemplateId/FilterIds/WorksetIds에 담긴
+    // ElementId는 문서마다 완전히 다른 값이라, 전역 설정을 다른 프로젝트에서 그대로 쓰면 엉뚱한 요소를
+    // 가리키거나(더 나쁘게는 조용히 다른 요소를 켜고 끄거나) 아무것도 못 찾는다. 실제 해석은
+    // QuickToggleService.ResolveViewTemplateId/ResolveFilterIds/ResolveWorksetIds가 **이름**으로 하고,
+    // ID 필드는 이름이 비어 있는 옛 설정(2026-07-28에 이름 필드가 생기기 전에 만든 버튼)을 위한
+    // fallback으로만 남는다 - 그 경우는 원래 그 프로젝트에서만 동작한다.
     public class QuickToggleSettings
     {
         // 목록의 순서가 곧 툴바에 표시되는 버튼 순서.
         public List<QuickToggleButtonConfig> Buttons { get; set; } = new List<QuickToggleButtonConfig>();
         public bool ToolbarVisible { get; set; } = true;
 
-        // 디버깅/향후 마이그레이션 참고용으로 원본 경로도 같이 저장한다 (해시만으로는 사람이 못 알아봄).
+        // 2026-09-03, "색상버튼은 색상버튼끼리, 작업세트는 작업세트끼리 묶여서 함께 이동하고, 연결고리
+        // 버튼을 눌러 고리를 끊으면 개별로도 움직일 수 있게" 요청으로 추가. 여기에 들어 있는 종류만
+        // 고리가 끊긴 것이고, 나머지는 전부 묶여 있다(빈 목록 = 전부 묶임 = 기존 설정 파일과 호환).
+        // 묶여 있는 종류는 NormalizeGrouping()이 Buttons 안에서 한 덩어리로 모아 준다.
+        public List<QuickToggleCategory> UnlinkedCategories { get; set; } = new List<QuickToggleCategory>();
+
+        // 전역으로 바뀌기 전(2026-09-03 이전) 이 설정이 어느 프로젝트 것이었는지 - 마이그레이션 흔적으로만
+        // 남긴다. 지금은 아무 데서도 읽지 않는다.
         public string ProjectPath { get; set; } = "";
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
@@ -153,9 +172,12 @@ namespace WallSplitter
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "WallSplitter", "quick-toggle");
 
-        // 저장 안 된 새 문서는 PathName이 비어 있어 프로젝트별로 저장할 곳이 없다 - 이 경우 null을 반환하고
-        // 호출자는 툴바를 비활성 상태로 표시해야 한다 (최초 저장 후부터 정상 동작).
-        public static string? PathFor(Document doc)
+        // 전역 설정 파일 하나. 이름이 해시가 아니라 사람이 읽을 수 있는 이름인 것도 의도한 것이다
+        // (프로젝트별 시절에는 경로 해시가 파일명이었다).
+        internal static string PathFile => Path.Combine(RootDir, "buttons.json");
+
+        // 2026-09-03 이전에 쓰던 프로젝트별 설정 파일 경로 - 이제 마이그레이션에서만 읽는다.
+        private static string? LegacyPathFor(Document? doc)
         {
             string? projectPath = doc?.PathName;
             if (string.IsNullOrEmpty(projectPath)) return null;
@@ -173,43 +195,99 @@ namespace WallSplitter
             return sb.ToString();
         }
 
-        public static QuickToggleSettings Load(Document doc)
+        // doc은 이제 "전역 파일이 아직 없을 때 어느 프로젝트의 옛 설정을 이어받을지"에만 쓰인다
+        // (사용자 확정: "지금 열린 프로젝트 것을 이어받기"). 옛 프로젝트별 파일은 지우지 않고 그대로 둔다 -
+        // 되돌릴 일이 생겼을 때의 안전망이고, 어차피 다시 읽히지 않는다.
+        public static QuickToggleSettings Load(Document? doc)
         {
-            string? path = PathFor(doc);
-            if (path != null)
+            QuickToggleSettings? loaded = ReadFrom(PathFile);
+            if (loaded != null) return loaded;
+
+            string? legacy = LegacyPathFor(doc);
+            if (legacy != null)
             {
-                try
+                QuickToggleSettings? migrated = ReadFrom(legacy);
+                if (migrated != null)
                 {
-                    if (File.Exists(path))
+                    // 이어받은 즉시 전역 파일로 굳혀 둔다 - 그래야 다음에 다른 프로젝트를 열어도 같은
+                    // 설정이 나온다(이 시점에 저장하지 않으면 "마지막에 연 프로젝트 것"이 계속 따라온다).
+                    try { migrated.Save(); }
+                    catch
                     {
-                        string json = File.ReadAllText(path, Encoding.UTF8);
-                        QuickToggleSettings? loaded = JsonSerializer.Deserialize<QuickToggleSettings>(json, JsonOptions);
-                        if (loaded != null)
-                        {
-                            loaded.Buttons ??= new List<QuickToggleButtonConfig>();
-                            loaded.Buttons.RemoveAll(b => IsRemovedCategory(b.Category));
-                            return loaded;
-                        }
+                        // 저장에 실패해도 이번 세션에는 이어받은 설정을 그대로 쓴다.
                     }
-                }
-                catch
-                {
-                    // 설정 파일이 손상된 경우 빈 설정으로 대체
+                    return migrated;
                 }
             }
-            return new QuickToggleSettings { ProjectPath = doc?.PathName ?? "" };
+
+            return new QuickToggleSettings();
         }
 
-        public void Save(Document doc)
+        private static QuickToggleSettings? ReadFrom(string path)
         {
-            string? path = PathFor(doc);
-            if (path == null)
-                throw new InvalidOperationException("저장되지 않은 문서에는 커스텀 버튼 설정을 저장할 수 없습니다. 먼저 프로젝트 파일을 저장하세요.");
+            try
+            {
+                if (!File.Exists(path)) return null;
+                string json = File.ReadAllText(path, Encoding.UTF8);
+                QuickToggleSettings? loaded = JsonSerializer.Deserialize<QuickToggleSettings>(json, JsonOptions);
+                if (loaded == null) return null;
 
-            ProjectPath = doc.PathName;
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                loaded.Buttons ??= new List<QuickToggleButtonConfig>();
+                loaded.UnlinkedCategories ??= new List<QuickToggleCategory>();
+                loaded.Buttons.RemoveAll(b => IsRemovedCategory(b.Category));
+                loaded.NormalizeGrouping();
+                return loaded;
+            }
+            catch
+            {
+                // 설정 파일이 손상된 경우 빈 설정으로 대체
+                return null;
+            }
+        }
+
+        public void Save()
+        {
+            NormalizeGrouping();
+            Directory.CreateDirectory(RootDir);
             string json = JsonSerializer.Serialize(this, JsonOptions);
-            File.WriteAllText(path, json, Encoding.UTF8);
+            File.WriteAllText(PathFile, json, Encoding.UTF8);
+        }
+
+        // ===== 종류별 묶음 (2026-09-03) =====
+
+        public bool IsLinked(QuickToggleCategory category) => !UnlinkedCategories.Contains(category);
+
+        public void SetLinked(QuickToggleCategory category, bool linked)
+        {
+            if (linked) UnlinkedCategories.RemoveAll(c => c == category);
+            else if (!UnlinkedCategories.Contains(category)) UnlinkedCategories.Add(category);
+            NormalizeGrouping();
+        }
+
+        // 묶여 있는 종류는 Buttons 안에서 반드시 연속된 한 덩어리여야 한다("함께 이동"이 성립하려면).
+        // 각 종류를 그 종류가 처음 나온 자리로 끌어모으고, 고리가 끊긴 종류는 있던 자리에 그대로 둔다 -
+        // 그래야 풀어놓은 버튼이 다른 종류 사이에 끼워둔 위치를 잃지 않는다.
+        public void NormalizeGrouping()
+        {
+            if (Buttons.Count < 2) return;
+
+            List<QuickToggleButtonConfig> result = new List<QuickToggleButtonConfig>(Buttons.Count);
+            HashSet<QuickToggleCategory> placed = new HashSet<QuickToggleCategory>();
+
+            foreach (QuickToggleButtonConfig cfg in Buttons)
+            {
+                if (!IsLinked(cfg.Category))
+                {
+                    result.Add(cfg);
+                    continue;
+                }
+                if (!placed.Add(cfg.Category)) continue; // 이미 이 종류 덩어리를 통째로 넣었다
+                foreach (QuickToggleButtonConfig sibling in Buttons)
+                    if (sibling.Category == cfg.Category) result.Add(sibling);
+            }
+
+            Buttons.Clear();
+            Buttons.AddRange(result);
         }
 
         // 2026-09-02에 삭제된 버튼 종류 - 예전 설정 파일/JSON에 남아 있어도 목록에 싣지 않는다

@@ -45,7 +45,6 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitte
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\MaterialAssignWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ModelSyncWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\NamerWindow.baml
-C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\OpenDocumentPickerWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\PatternPunchWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\PatternStudioWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\QuickToggleSettingsWindow.baml
@@ -59,7 +58,6 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitte
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\MaterialAssignWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ModelSyncWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\NamerWindow.g.cs
-C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\OpenDocumentPickerWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\PatternPunchWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\PatternStudioWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\QuickToggleSettingsWindow.g.cs

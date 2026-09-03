@@ -267,3 +267,89 @@ GetName()` 등 실제 화면에 보이는 문자열만 바꿨다. 클래스/파�
 주 버튼("+ 버튼 추가"/"저장")과 단계 번호 뱃지뿐이라는 규칙을 그대로 따랐다. 2026-07-27 테마 이식 때
 "창마다 레이아웃을 건드려야 한다"는 이유로 옮기지 않았던 `.blueprint` 모서리 등록 마크는, 이번엔 창을 다시
 짜는 김에 **툴바 미리보기 카드 한 곳에만** 넣었다(남용하면 설계도면 은유가 오히려 옅어진다).
+
+## 설정 전역화 + 종류별 묶음/연결고리 + 미리보기 정확도 (2026-09-03, 같은 날 후속)
+
+세 가지 요청이 이어졌다. 앞의 두 개는 서로 얽혀 있다.
+
+### 1. 툴바 미리보기가 실제와 달랐다 (수정)
+
+사용자 지적: *"툴바 미리보기가 실제 미리보기라 좀 다른것 같아. 색상 버튼은 작은 버튼으로 여러개씩 그룹으로
+묶여서 다니는데 좀 다르게 보여지는 것 같네."* 맞는 지적이었다 — 첫 구현은 등록 버튼을 그냥 한 줄로
+나열했지만, 실제 툴바는 (a) 왼쪽에 28px 드래그 그립이 있고, (b) 색상 버튼을 `Orientation=Vertical`,
+`Height=64`인 `WrapPanel`에 모아 2단으로 쌓으며, (c) 그 그룹 앞에 1px 구분선을 넣고, (d) 오른쪽 끝에
+"뷰 저장"/"되돌리기"가 구분선과 함께 항상 붙어 있다. `RefreshPreviewStrip`/`CreateToolbarFrame`이 이
+구조를 통째로 흉내 내도록 고쳤고, 버튼 사이 바깥 `Margin`도 없앴다(실제 툴바는 클릭 사각지대를 없애려고
+버튼끼리 완전히 맞닿게 해 뒀다 — 선택 표시용 2px 테두리만 모든 버튼에 똑같이 두른다).
+**`QuickToggleToolbar.RebuildButtons`의 배치를 바꾸면 이 두 메서드도 같이 맞출 것** — 어긋나면 미리보기가
+거짓말을 한다. `IsSmallToolButton`/`SmallToolGroupHeightDip`은 툴바 쪽과 같은 값을 복제해 두었다.
+미리보기 카드의 배경은 `WindowBackground`로 뒀다 — 카드까지 `Surface`면 툴바 자신의 `Surface` 배경과
+테두리가 묻혀 보인다.
+
+### 2. 설정을 프로젝트별 → PC 전역으로
+
+사용자 요청: *"커스텀 버튼 설정을 레빗 파일마다 저장되도록 했었는데, 그것보다는 사용자 로컬 컴퓨터에
+저장되어서 어떤 프로젝트를 열어도 설정이 변하지 않도록 하는게 훨씬 편리할 것 같아."*
+
+- **저장 위치**: `%APPDATA%\WallSplitter\quick-toggle\<sha256(프로젝트경로)>.json` →
+  `%APPDATA%\WallSplitter\quick-toggle\buttons.json` 하나. 툴바 위치(`QuickToggleGlobalSettings`)가
+  2026-07-28에 같은 이유로 이미 전역이 됐고, 이제 버튼 목록·툴바 표시 여부까지 같은 폴더의 파일 하나다.
+- **마이그레이션 (사용자 확정: "지금 열린 프로젝트 것을 이어받기")**: `Load(doc)`은 전역 파일이 없으면
+  `doc`의 옛 프로젝트별 파일을 읽어 그대로 전역 파일로 굳힌다(`ReadFrom` → `Save()`). **옛 파일은 지우지
+  않는다** — 되돌릴 일이 생겼을 때의 안전망이고 어차피 다시 읽히지 않는다. `Load`가 `doc`을 계속 받는
+  이유는 오직 이것뿐이다.
+- **★ 그래서 대상은 반드시 이름으로 다시 찾아야 한다 (이 변경의 핵심)**: `ViewTemplateId`/`FilterIds`/
+  `WorksetIds`의 `ElementId`는 **문서마다 완전히 다른 값**이다. 전역 설정을 다른 프로젝트에서 저장된 ID
+  그대로 쓰면 아무것도 못 찾거나, 더 나쁘게는 **같은 정수 ID를 가진 전혀 다른 요소를 조용히 켜고 끈다**.
+  `QuickToggleService.ResolveViewTemplateId`/`ResolveFilterIds`/`ResolveWorksetIds`/
+  `ResolveColorCategoryIds`가 2026-07-28에 내보내기/가져오기용으로 만들어 둔 이름 필드
+  (`ViewTemplateName`/`FilterNames`/`WorksetNames`/`ColorToolCategoryConfig.CategoryName`)로 지금 문서에서
+  다시 찾는다. **ID 필드는 이름이 비어 있는 옛 설정(2026-07-28 이전에 만든 버튼)의 fallback으로만 남는다**
+  — 지우지 말 것, 그 경우는 원래 그 프로젝트에서만 동작한다.
+  - **반드시 캐시할 것**: `DetermineState`는 툴바의 `Idling` 갱신에서 **버튼마다 매 틱** 호출된다. 이름→ID
+    조회가 매번 `FilteredElementCollector`를 돌면 이 파일이 세 번이나 겪은 "Idling 콜백에서 매 틱 비싼
+    일을 한다" 문제가 그대로 재발한다. `TargetIndex`(뷰템플릿/필터/작업세트 이름→ID 사전)를 문서 키별로
+    2초 캐시한다 — `ScanLinks`와 같은 방식·같은 이유. 색상 카테고리는 `DetermineState`가 `ColorTool`에서
+    항상 `Off`를 즉시 반환하므로 Idling 경로에 없어 캐시하지 않는다.
+  - `DetermineState`와 `Toggle`은 **같은 해석 결과**를 봐야 한다 — 서로 다른 대상을 보면 "켜졌다고
+    표시되는데 눌러도 그게 안 꺼지는" 어긋남이 생긴다. 두 곳 모두 `Resolve*`를 통해서만 대상을 얻는다.
+  - 설정 창의 "저장"은 `QuickToggleService.InvalidateTargetIndex()`를 부른다 — 안 그러면 방금 고른 대상이
+    최대 2초간 예전 해석 결과로 남는다.
+  - 설정 창의 라디오/체크박스 선택 표시(`IsChecked`)도 전부 **이름**으로 맞춘다. ID로 맞추면 다른
+    프로젝트에서 만든 버튼을 열었을 때 아무것도 안 골라진 것처럼 보인다.
+- **새 상태 "이 프로젝트에 없음"**(`ButtonReadiness`): 전역 설정이 되면서 "대상을 골랐는가"와 "그 대상이
+  이 프로젝트에 있는가"가 서로 다른 질문이 됐다. 목록 요약과 편집 제목 뱃지가 세 상태(`Ready`/`NoTarget`/
+  `NotInProject`)를 구분해 보여준다 — 툴바가 그 버튼을 회색으로 그리는 이유를 설정 창이 설명해 준다.
+- **모델 간 이식 삭제 (사용자 확정: "둘 다 삭제")**: 설정이 전역이 되면 "모델에서 가져오기"는 같은 전역
+  파일을 읽게 되어 아무 일도 하지 않는다. `ExportToModelButton`/`ImportFromModelButton`과 그 구현
+  (`TransferButtons`/`ResolveNamedTargets`/`OpenOtherDocuments`), 전용 파일 `QuickToggleTransferService.cs`
+  (`AutoUseDestinationTypesHandler`/`SilentWarningsPreprocessor`/`CopyNamedElement`/`EnsureWorkset` 포함)와
+  `OpenDocumentPickerWindow.xaml(.cs)`를 전부 지웠다. 되살릴 일이 생기면 이 커밋 직전 이력에서 꺼낼 것.
+  JSON 내보내기/가져오기는 남되 **크게 단순해졌다** — 예전엔 가져온 버튼의 ID를 이 문서 기준으로 다시
+  풀어줘야 했지만, 이제 대상은 실행 시점에 이름으로 찾으므로 이름만 그대로 들고 오면 된다(새 `Guid`만 발급).
+- `QuickToggleVisibilityToggleCommand`의 `Save(doc)` → `Save()`. 툴바 표시 여부도 이제 PC 기준이다.
+
+### 3. 등록 목록을 종류별로 묶고, 연결고리로 풀기
+
+사용자 요청: *"등록된 버튼 부분에서도 색상버튼은 색상버튼끼리, 작업세트버튼은 작업세트끼리, 필터는
+필터들끼리 묶여서 함께 이동할 수도 있고, 연결고리버튼을 눌러 고리를 끊으면 개별로도 움직일수 있게끔."*
+Q&A로 **종류별 개별 고리** + **프로젝트가 아니라 설정에 저장** + **툴바 구분선은 지금대로**로 확정.
+
+- **데이터**: `QuickToggleSettings.UnlinkedCategories`(`List<QuickToggleCategory>`) — 여기 든 종류만 고리가
+  끊긴 것이고 나머지는 전부 묶여 있다. **빈 목록 = 전부 묶임**이라 기존 설정 파일과 그대로 호환된다.
+- **불변식 — 묶인 종류는 `Buttons` 안에서 항상 연속된 한 덩어리**: `NormalizeGrouping()`이 묶인 종류를
+  "그 종류가 처음 나온 자리"로 끌어모으고, 고리가 끊긴 종류는 있던 자리에 그대로 둔다. `Load`/`Save`/
+  버튼 추가/`SetLinked`에서 부른다. 이 불변식이 깨지면 "그룹 통째 이동"이 성립하지 않는다.
+- **UI**(`BuildRuns`/`BuildGroupHeader`/`BuildButtonRow`): 목록을 run(같은 종류가 연속인 구간) 단위로 그리고
+  run마다 머리글(종류명 + 개수 + 연결고리 + 그룹 ▲▼)을 붙인다. 고리가 끊긴 종류는 run이 여러 개 생길 수
+  있고 그때는 머리글도 여러 개다 — 지금 어디에 흩어져 있는지를 그대로 보여주는 편이 낫다고 판단했다.
+- **이동 규칙**: 묶인 종류의 개별 ▲▼는 **그 덩어리 안에서만** 움직인다(밖으로 나가면 묶음이 깨진다).
+  그룹 머리글의 ▲▼는 `MoveRun`이 이웃 run과 두 구간을 통째로 맞바꾼다(덩어리 안 순서는 유지).
+- **CONFIRMED 설계 결함, 구현 중 발견·수정 — 풀린 버튼이 묶인 덩어리를 못 넘어간다**: 처음엔 풀린 버튼도
+  그냥 한 칸씩 스왑하고 `NormalizeGrouping()`으로 정리하려 했는데, 그러면 **정리 과정이 그 이동을 정확히
+  되돌려 놓아** 묶인 덩어리 위로는 영원히 못 올라간다(예: `[F1, F2, C1]`에서 C1을 올리면 `[F1, C1, F2]`가
+  됐다가 정리 후 다시 `[F1, F2, C1]`). 고정: `MoveLooseButton`이 **묶인 덩어리를 통째로 건너뛰도록** 직접
+  삽입 위치를 계산한다 — 정리에 맡기지 않는다.
+- **아이콘**: `CreateChainGlyph` — 고리 두 개(`System.Windows.Shapes.Ellipse` 외곽선)가 묶였을 땐 겹치고,
+  끊기면 벌어지면서 가운데에 경고색 사선이 그어진다. 텍스트 글리프(⛓)를 안 쓰는 이 창의 관례를 따랐고,
+  `Autodesk.Revit.DB.Ellipse`와 충돌해 완전한 이름을 썼다(`Grid`/`Line`/`Panel`에 이은 네 번째 충돌 사례).

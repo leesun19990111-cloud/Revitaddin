@@ -40,12 +40,14 @@
                 <TextBlock Text="커스텀 버튼 설정" FontSize="19" FontWeight="Bold"/>
                 <TextBlock Margin="0,3,0,0" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextSecondaryBrush}"
-                           Text="Revit 화면에 떠 있는 커스텀 버튼바에 넣을 버튼을 만들고 순서를 정합니다. 이 설정은 이 PC의 이 프로젝트 파일에만 저장됩니다."/>
+                           Text="Revit 화면에 떠 있는 커스텀 버튼바에 넣을 버튼을 만들고 순서를 정합니다. 이 설정은 이 PC에 저장되어 어떤 프로젝트를 열어도 그대로 유지되며, 대상(뷰템플릿·필터·작업세트)은 열려 있는 프로젝트에서 같은 이름으로 다시 찾습니다."/>
             </StackPanel>
 
             <!-- ===== 툴바 미리보기 ===== -->
+            <!-- 카드 배경은 창 바탕색(WindowBackground)으로 둔다 - 안에 그리는 툴바 미리보기 자체가
+                 실제 툴바와 같은 SurfaceBrush 배경이라, 카드까지 Surface면 툴바 테두리가 묻혀 보인다. -->
             <Border Grid.Row="1" Margin="0,0,0,12" Padding="12,10,12,10"
-                    Background="{DynamicResource SurfaceBrush}"
+                    Background="{DynamicResource WindowBackgroundBrush}"
                     BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
                 <!-- PreviewCard: 코드비하인드가 Industry 디자인 시스템의 .blueprint 모서리 등록 마크를 여기에 얹는다. -->
                 <Grid x:Name="PreviewCard">
@@ -122,12 +124,10 @@
                 <StackPanel>
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
                                Foreground="{DynamicResource TextSecondaryBrush}"
-                               Text="'모델로/모델에서'는 같은 Revit 세션에 열려 있는 다른 프로젝트와 직접 주고받으며, 대상 문서에 없는 뷰템플릿/필터는 실제로 복사해 옵니다. JSON은 이름만 다시 찾으므로 대상 문서에 같은 이름이 있어야 연결됩니다. 가져온 버튼은 기존 버튼을 지우지 않고 뒤에 추가됩니다."/>
+                               Text="JSON 내보내기/가져오기는 다른 PC로 이 설정을 옮길 때 씁니다. 가져온 버튼은 기존 버튼을 지우지 않고 뒤에 추가되며, 대상은 파일에 담긴 이름으로 다시 찾으므로 그 이름의 뷰템플릿·필터·작업세트가 있는 프로젝트에서 동작합니다."/>
                     <WrapPanel>
                         <Button x:Name="ExportJsonButton" Content="JSON으로 내보내기" Padding="10,5" Margin="0,0,6,6" Click="ExportJsonButton_Click"/>
                         <Button x:Name="ImportJsonButton" Content="JSON에서 가져오기" Padding="10,5" Margin="0,0,16,6" Click="ImportJsonButton_Click"/>
-                        <Button x:Name="ExportToModelButton" Content="모델로 내보내기" Padding="10,5" Margin="0,0,6,6" Click="ExportToModelButton_Click"/>
-                        <Button x:Name="ImportFromModelButton" Content="모델에서 가져오기" Padding="10,5" Margin="0,0,16,6" Click="ImportFromModelButton_Click"/>
                         <Button x:Name="ResetPositionButton" Content="툴바 위치 초기화" Padding="10,5" Margin="0,0,0,6" Click="ResetPositionButton_Click"/>
                     </WrapPanel>
                     <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontSize="11"
