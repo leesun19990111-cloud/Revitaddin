@@ -24,6 +24,14 @@ namespace WallSplitter
         // 강조색(채워진 배경) 위에 놓이는 밝은 전경색 - Theme.xaml의 OnAccentBrush와 맞춰 유지.
         // QuickToggleIcons.ContrastingForeground가 어두운 배경 위 전경색으로 이걸 반환한다.
         public static readonly SolidColorBrush OnAccent = Freeze("#F2F2F3");
+        // 강조색 자체(스틸블루) - Theme.xaml의 AccentBrush와 맞춰 유지. Industry 디자인 시스템은 강조색으로
+        // "채워진" 오브젝트를 주 버튼 등 소수로 제한하므로, 코드로 만드는 단계 번호 뱃지/선택 테두리처럼
+        // 그 역할에 해당하는 곳에만 쓴다.
+        public static readonly SolidColorBrush Accent = Freeze("#5980A6");
+        // 실제로 칠해진 구분선 - 반투명 Border로는 존재감이 옅은 자리에 쓴다. Theme.xaml의 DividerSolidBrush와 맞춰 유지.
+        public static readonly SolidColorBrush Divider = Freeze("#D4D4D7");
+        // 창 바탕(종이색) - Theme.xaml의 WindowBackgroundBrush와 맞춰 유지.
+        public static readonly SolidColorBrush WindowBackground = Freeze("#F2F2F3");
 
         private static SolidColorBrush Freeze(string hex)
         {
