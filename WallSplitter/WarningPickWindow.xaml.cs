@@ -41,6 +41,29 @@ namespace WallSplitter
         // (2026-08-25 확인). 그래서 레벨과 상관없이 화면에 그려진 체크박스 전부를 한 목록에 모아둔다.
         private readonly List<CheckBox> _allCheckboxes = new();
 
+        // ===== 실시간 갱신 (2026-09-03, "새로고침을 누르지 않아도 경고가 사라지고 나타나는 게 바로
+        // 보였으면 좋겠다"는 요청) =====
+        //
+        // App이 ControlledApplication.DocumentChanged(트랜잭션이 커밋될 때마다 발생)에서
+        // RequestLiveRefresh를 부르고, 실제 조회는 기존 "새로고침"과 똑같이 ExternalEvent를 거친다.
+        // 여기서 지켜야 할 두 가지:
+        //  (1) **경고가 실제로 달라졌을 때만 다시 그린다**(_lastSignature 비교). 트랜잭션마다 무조건 다시
+        //      그리면 체크·펼침·스크롤이 계속 튀고, 이 프로젝트가 여러 번 겪은 "필요 없는데 다시 그려서
+        //      클릭이 씹힌다" 문제가 그대로 재현된다.
+        //  (2) 다시 그릴 때는 체크 상태/펼침/스크롤 위치를 최대한 살린다 - 사용자가 경고를 하나씩 고치는
+        //      도중에 화면이 초기화되면 실시간 갱신이 오히려 방해가 된다.
+        private string _lastSignature = "";
+
+        // 펼쳐 둔 발생 건(WarningPickGroup.Key) - 다시 그려도 펼침 상태를 유지하기 위한 창 한정 상태.
+        private readonly HashSet<string> _expandedOccurrenceKeys = new();
+
+        // 다시 그리기 직전에 체크돼 있던 요소 ID - RenderTypeGroups가 끝난 뒤 같은 요소를 다시 체크한다.
+        private readonly HashSet<int> _checkedElementIds = new();
+
+        // true면 이번 갱신은 사용자가 "새로고침"을 누른 것이고, false면 자동(문서 변경) 갱신이다 -
+        // 상태 문구를 다르게 보여주려고 구분한다.
+        private bool _refreshWasManual = true;
+
         // ===== 요소 행 드래그/쉬프트 범위 체크 (NamerWindow의 드래그 체크와 같은 패턴) =====
         private bool _dragging;
         private bool _dragTargetChecked;
@@ -62,6 +85,7 @@ namespace WallSplitter
             Closed += (_, _) => { if (Instance == this) Instance = null; };
 
             UpdateDocumentText();
+            _lastSignature = WarningPickTypeGroup.SignatureOf(_allTypeGroups);
             RenderTypeGroups(_allTypeGroups);
         }
 
@@ -72,6 +96,11 @@ namespace WallSplitter
             _doc = doc;
             _handler.TargetDocument = doc;
             _allTypeGroups = typeGroups;
+            _lastSignature = WarningPickTypeGroup.SignatureOf(_allTypeGroups);
+            // 다른 문서로 갈아탄 것일 수 있으므로 이전 문서에서 펼쳐 두었던 상태는 버린다
+            // (요소 ID가 문서마다 달라 그대로 두면 엉뚱한 발생 건이 펼쳐진 것처럼 보인다).
+            _expandedOccurrenceKeys.Clear();
+            _checkedElementIds.Clear();
             StatusText.Text = "";
             UpdateDocumentText();
             RenderTypeGroups(FilterTypeGroups(_allTypeGroups, FilterBox.Text));
@@ -83,9 +112,34 @@ namespace WallSplitter
         // 직접 갱신하는 것과 같은 전제).
         public void ApplyRefreshedTypeGroups(List<WarningPickTypeGroup> typeGroups)
         {
+            string signature = WarningPickTypeGroup.SignatureOf(typeGroups);
+            if (signature == _lastSignature)
+            {
+                // 경고가 그대로다 - 화면은 손대지 않는다(위 "실시간 갱신" 주석의 (1)).
+                if (_refreshWasManual) StatusText.Text = $"새로고침됨 - 변경 없음 ({DateTime.Now:HH:mm:ss})";
+                _refreshWasManual = true;
+                return;
+            }
+
+            _lastSignature = signature;
             _allTypeGroups = typeGroups;
-            StatusText.Text = $"새로고침됨 ({DateTime.Now:HH:mm:ss})";
+            StatusText.Text = _refreshWasManual
+                ? $"새로고침됨 ({DateTime.Now:HH:mm:ss})"
+                : $"경고가 바뀌어 자동 갱신됨 ({DateTime.Now:HH:mm:ss})";
+            _refreshWasManual = true;
             RenderTypeGroups(FilterTypeGroups(_allTypeGroups, FilterBox.Text));
+        }
+
+        // App.OnWarningPickDocumentChanged가 트랜잭션이 커밋될 때마다 부른다 - 여기서는 실제 조회를 하지
+        // 않고(그 콜백은 Revit이 문서를 정리하는 도중이라 가볍게 끝내야 한다) 기존 "새로고침"과 똑같이
+        // ExternalEvent에 요청만 넣는다. 실제로 목록이 바뀌었는지는 ApplyRefreshedTypeGroups가 판단한다.
+        public void RequestLiveRefresh(Document changedDoc)
+        {
+            if (!_handler.IsTargetDocument(changedDoc)) return;
+            _refreshWasManual = false;
+            _handler.PendingRefresh = true;
+            _handler.PendingRefreshSilent = true;
+            _event.Raise();
         }
 
         public void ShowDocumentMismatch()
@@ -115,6 +169,13 @@ namespace WallSplitter
 
         private void RenderTypeGroups(List<WarningPickTypeGroup> typeGroups)
         {
+            // 실시간 갱신으로 다시 그릴 때 사용자가 골라 둔 체크와 스크롤 위치를 잃지 않도록 먼저 기억해
+            // 둔다(2026-09-03). 펼침 상태는 _expandedOccurrenceKeys가 이미 들고 있다.
+            _checkedElementIds.Clear();
+            foreach ((CheckBox checkBox, WarningPickElement element) in _elementCheckboxes)
+                if (checkBox.IsChecked == true) _checkedElementIds.Add(element.ElementId.ToInt());
+            double savedScrollOffset = GroupsScroll.VerticalOffset;
+
             GroupsPanel.Children.Clear();
             _elementCheckboxes.Clear();
             _allCheckboxes.Clear();
@@ -135,6 +196,20 @@ namespace WallSplitter
                 foreach (WarningPickTypeGroup typeGroup in typeGroups)
                     GroupsPanel.Children.Add(BuildTypeGroupPanel(typeGroup));
             }
+
+            // 다시 그리기 전에 체크돼 있던 요소를 같은 ID 기준으로 되살린다 - 상위(종류/발생 건)
+            // 체크박스는 하위를 향한 캐스케이드만 있고 하위를 보고 스스로 켜지지는 않으므로 건드리지
+            // 않는다(사라진 경고의 체크는 자연히 없어진다).
+            if (_checkedElementIds.Count > 0)
+                foreach ((CheckBox checkBox, WarningPickElement element) in _elementCheckboxes)
+                    if (_checkedElementIds.Contains(element.ElementId.ToInt())) checkBox.IsChecked = true;
+
+            // 스크롤 위치 복원은 레이아웃이 끝난 뒤여야 의미가 있다(방금 지웠다 다시 채운 직후에는
+            // ScrollableHeight가 아직 0이라 ScrollToVerticalOffset이 잘린다).
+            if (savedScrollOffset > 0)
+                Dispatcher.BeginInvoke(
+                    new Action(() => GroupsScroll.ScrollToVerticalOffset(savedScrollOffset)),
+                    System.Windows.Threading.DispatcherPriority.Loaded);
 
             int totalOccurrences = _allTypeGroups.Sum(t => t.Occurrences.Count);
             int shownOccurrences = typeGroups.Sum(t => t.Occurrences.Count);
@@ -211,9 +286,13 @@ namespace WallSplitter
             var container = new StackPanel { Margin = new Thickness(20, 0, 0, 4) };
 
             var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
+            // 실시간 갱신으로 다시 그려도 펼쳐 뒀던 발생 건은 계속 펼쳐진 채로 둔다(2026-09-03).
+            string occurrenceKey = occurrence.Key;
+            bool startExpanded = _expandedOccurrenceKeys.Contains(occurrenceKey);
+
             var toggle = new TextBlock
             {
-                Text = "▸", // ▸ 접힘 표시
+                Text = startExpanded ? "▾" : "▸", // ▾ 펼침 / ▸ 접힘
                 Width = 16,
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
@@ -240,7 +319,10 @@ namespace WallSplitter
 
             // Window(UIElement)에도 인스턴스 속성 Visibility가 있어, 이 안에서 그냥 "Visibility.Collapsed"라고
             // 쓰면 열거형이 아니라 "this.Visibility.Collapsed"로 해석돼 CS0176이 난다 - 완전한 이름 필요.
-            var elementsPanel = new StackPanel { Visibility = System.Windows.Visibility.Collapsed };
+            var elementsPanel = new StackPanel
+            {
+                Visibility = startExpanded ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed,
+            };
             container.Children.Add(elementsPanel);
 
             void ToggleExpanded(object? sender, MouseButtonEventArgs e)
@@ -248,6 +330,8 @@ namespace WallSplitter
                 bool expand = elementsPanel.Visibility != System.Windows.Visibility.Visible;
                 elementsPanel.Visibility = expand ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
                 toggle.Text = expand ? "▾" : "▸"; // ▾ 펼침 / ▸ 접힘
+                if (expand) _expandedOccurrenceKeys.Add(occurrenceKey);
+                else _expandedOccurrenceKeys.Remove(occurrenceKey);
             }
             toggle.MouseLeftButtonDown += ToggleExpanded;
             descText.MouseLeftButtonDown += ToggleExpanded;
@@ -379,6 +463,9 @@ namespace WallSplitter
 
         private void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
+            // 실시간 갱신이 있어도 수동 새로고침은 남겨둔다 - 문서 변경 없이 목록을 다시 확인하고 싶을
+            // 때(또는 자동 갱신이 어떤 이유로 놓쳤을 때)의 확실한 수단이다.
+            _refreshWasManual = true;
             _handler.PendingRefresh = true;
             _event.Raise();
         }

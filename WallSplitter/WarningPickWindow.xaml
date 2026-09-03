@@ -44,7 +44,7 @@
         </WrapPanel>
 
         <Border Grid.Row="4" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6" Background="{DynamicResource SurfaceBrush}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ScrollViewer x:Name="GroupsScroll" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="GroupsPanel" Margin="6" Background="Transparent"
                             MouseMove="GroupsPanel_MouseMove"
                             MouseLeftButtonUp="GroupsPanel_MouseLeftButtonUp"

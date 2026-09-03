@@ -228,7 +228,24 @@ namespace WallSplitter
             application.ControlledApplication.DocumentClosing += OnQuickToggleDocumentClosing;
             application.Idling += OnQuickToggleIdling;
 
+            // 경고Pick 창이 열려 있는 동안 경고가 생기거나 사라지면 새로고침을 누르지 않아도 목록이 따라
+            // 바뀌게 한다(2026-09-03 요청). DocumentChanged는 트랜잭션이 커밋될 때마다 한 번씩만 발생하므로
+            // Idling(초당 여러 번)보다 훨씬 적합하다 - 경고는 모델이 바뀔 때만 달라지기 때문이다.
+            application.ControlledApplication.DocumentChanged += OnWarningPickDocumentChanged;
+
             return Result.Succeeded;
+        }
+
+        // Revit 이벤트 콜백이므로 예외가 밖으로 새면 안 된다(이 파일의 다른 콜백들과 같은 방침).
+        // 여기서는 무거운 조회를 하지 않고 창에 "다시 읽어라"는 요청만 넘긴다 - 실제 조회는 기존
+        // "새로고침"과 똑같이 WarningPickExternalEventHandler가 유효한 컨텍스트에서 수행한다.
+        private static void OnWarningPickDocumentChanged(object? sender, DocumentChangedEventArgs e)
+        {
+            try { WarningPickWindow.Instance?.RequestLiveRefresh(e.GetDocument()); }
+            catch
+            {
+                // 무시 - 실패해도 사용자가 "새로고침"으로 언제든 직접 갱신할 수 있다.
+            }
         }
 
         public Result OnShutdown(UIControlledApplication application)

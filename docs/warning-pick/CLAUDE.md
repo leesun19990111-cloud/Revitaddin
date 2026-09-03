@@ -106,3 +106,30 @@ Added 2026-08-25 on request: Revit 기본 경고 대화상자는 경고를 클�
   예외가 밖으로 나가면 Revit은 사용자에게 아무 것도 보여주지 않아 "버튼을 눌러도 반응이 없다"는 증상으로만
   남는다(`docs/quick-toggle/CLAUDE.md`에 기록된 것과 같은 문제). 문서 불일치·요소 삭제 같은 예상 가능한 경우는
   기존처럼 각 `Execute*` 메서드가 직접 안내하고, 이 최상위 catch는 예상 못 한 예외 전용이다.
+- **실시간 갱신 (2026-09-03)**: 사용자 요청 — *"경고가 없어지거나 생겼을때 새로고침을 누르지않아도
+  실시간으로 경고가 사라지고 나타나는게 창에서 바로 보였으면 좋겠어."* `App.OnStartup`이
+  `ControlledApplication.DocumentChanged`를 구독하고(`OnWarningPickDocumentChanged`),
+  `WarningPickWindow.RequestLiveRefresh(changedDoc)`가 기존 "새로고침"과 **똑같은** `ExternalEvent`
+  경로에 요청만 넣는다. **`Idling`을 쓰지 않은 이유**: 경고는 모델이 바뀔 때만 달라지는데 `Idling`은
+  초당 여러 번 발생한다 - `DocumentChanged`는 트랜잭션이 커밋될 때마다 한 번씩이라 이 용도에 정확히
+  맞고, `docs/quick-toggle/CLAUDE.md`가 세 번 기록한 "Idling 콜백에서 매 틱 비싼 일을 한다" 문제도
+  애초에 생기지 않는다. `DocumentChanged` 콜백 자체에서는 조회를 전혀 하지 않는다(그 콜백은 Revit이
+  문서를 정리하는 도중이라 가볍게 끝내야 한다) - 실제 `GetWarnings()`는 `ExecuteRefresh`가 유효한
+  컨텍스트에서 한다.
+  - **경고가 실제로 달라졌을 때만 다시 그린다** (`WarningPickTypeGroup.SignatureOf` ↔
+    `_lastSignature`). 트랜잭션마다 무조건 다시 그리면 체크 상태·펼침·스크롤이 계속 튀고, 이 프로젝트가
+    여러 번 겪은 "필요 없는데 다시 그려서 클릭이 씹힌다" 문제가 그대로 재현된다. 지문은 발생 건별
+    `WarningPickGroup.Key`(설명 문구 + **정렬한** 요소 ID 집합)를 모아 정렬해 이은 문자열이다 -
+    `FailureMessage`에는 세션을 넘어 안정적인 식별자가 없고, 목록 안 순서(index)는 다른 발생 건이
+    사라지면 밀려서 키로 쓸 수 없다.
+  - **다시 그릴 때 사용자 상태를 살린다**: 체크된 요소 ID(`_checkedElementIds`), 펼쳐 둔 발생 건
+    (`_expandedOccurrenceKeys`, `WarningPickGroup.Key` 기준), 스크롤 위치를 보존한다. 스크롤 복원은
+    `Dispatcher.BeginInvoke(..., DispatcherPriority.Loaded)`로 미뤄야 한다 - 방금 지웠다 다시 채운
+    직후에는 `ScrollableHeight`가 아직 0이라 `ScrollToVerticalOffset`이 잘린다. 상위(종류/발생 건)
+    체크박스는 되살리지 않는다(하위를 향한 캐스케이드만 있고 역방향 로직이 없으므로 - 위 항목 참고).
+  - **자동 갱신은 문서 불일치를 조용히 넘긴다** (`PendingRefreshSilent`). 요청을 넣은 시점엔 대상
+    문서가 맞았어도 `ExternalEvent`가 실제로 실행될 때까지 사용자가 다른 프로젝트로 전환했을 수 있는데,
+    그때 `ShowDocumentMismatch()`를 띄우면 **다른 프로젝트에서 작업하는 내내 대화상자가 저절로
+    튀어나온다**(구현 중 발견해 미리 막은 것). 수동 "새로고침"은 예전처럼 그대로 알려준다.
+  - 수동 "새로고침" 버튼은 남겨 뒀다 - 문서 변경 없이 다시 확인하고 싶을 때, 또는 자동 갱신이 어떤
+    이유로 놓쳤을 때의 확실한 수단이다. 눌렀는데 목록이 그대로면 "새로고침됨 - 변경 없음"으로 알려준다.

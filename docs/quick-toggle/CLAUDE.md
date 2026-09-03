@@ -405,3 +405,37 @@ commands** can be posted"* 도 이 경로가 유효하다는 근거다.
 **여전히 라이브 검증 필요**: 저널 실측으로 id 형식은 확정했지만, `LookupCommandId`가 그 문자열로 실제
 `RevitCommandId`를 돌려주는지와 `PostCommand`가 모드리스 툴바 → `ExternalEvent` 경로에서 명령을 실제로
 띄우는지는 실행 중인 Revit에서 확인해야 한다. 안 되면 이제는 실패 팝업이 어느 단계에서 막혔는지 알려준다.
+
+## "뷰 저장"/"되돌리기" 삭제 → 톱니바퀴(설정) 버튼 (2026-09-03)
+
+사용자 요청: *"커스텀 버튼 툴바에 현재뷰 저장 버튼 및 되돌리기 버튼을 없애주고 그자리에 톱니바퀴버튼을
+추가해서 바로 커스텀 버튼 설정창을 갈 수 있도록 바꿔줬으면 좋겠어."*
+
+**지운 것 — 구현째로 삭제했다** (2026-09-02의 프리셋 삭제와 같은 방침: 이 두 버튼이 그 기능의 유일한
+진입점이라 버튼만 빼면 죽은 코드만 남는다. 되살릴 일이 생기면 이 커밋 직전 이력에서 꺼낼 것):
+- `QuickToggleToolbar`: `SaveViewButton`/`RevertButton`(XAML), `SaveViewButton_Click`/`RevertButton_Click`/
+  `RefreshSaveRevertButtons`, 스냅샷 저장소 `_savedViewStates`/`SnapshotsFor`/`DocKey`, 그리고 매 `Idling`
+  틱마다 값이 안 바뀌었는지 확인하던 `_lastSaveButtonDocKey`/`_lastSaveButtonViewId`/
+  `_lastSaveButtonHasSnapshot`(그 방어가 필요했던 버튼 자체가 사라졌다).
+- `QuickToggleExternalEventHandler`: `ViewStateSnapshot` 클래스 전체(20여 개 필드), `PendingRevertSnapshot`,
+  `ExecuteRevert`.
+- `QuickToggleService`: `CaptureViewState`/`RestoreViewState`와 그 전용 헬퍼들(카테고리 재정의/크롭·뷰범위/
+  3D 단면상자·투영모드·렌더링설정/`GraphicsIntegerParams` 캐치올 등 약 270줄).
+- `QuickToggleIcons`: `CreateBookmarkIcon`/`CreateUndoIcon`.
+
+**새로 넣은 것 — `SettingsButton`(톱니바퀴)**:
+- `QuickToggleIcons.CreateGearIcon`: 톱니 8개를 45°씩 회전 배치(사각형이 아니라 바깥으로 갈수록 넓어지는
+  사다리꼴 - 회전시켰을 때 서로 어긋나 보이지 않게)하고, 몸통 원과 가운데 구멍을 **하나의 `Path`에
+  `FillRule.EvenOdd`로** 그려 실제로 뚫는다. 작은 원을 배경색으로 덧그리면 안 된다 - 이 아이콘은 켜짐
+  색으로 채워진 버튼 위에도 올라갈 수 있어 배경색을 가정할 수 없다(`Eye` 아이콘과 같은 이유·같은 방식).
+  실제로 렌더링해 28px 버튼에서 톱니바퀴로 읽히는지 확인했다.
+- 클릭은 다른 툴바 버튼들과 똑같이 `ExternalEvent`를 거친다(`PendingOpenSettings` →
+  `ExecuteOpenSettings`). 툴바는 모드리스라 클릭 시점엔 유효한 API 컨텍스트가 없고, 설정 창 생성자가
+  `FilteredElementCollector`로 문서를 읽으므로 반드시 이 경로여야 한다. **`SunnyToolsCommands`의 리본
+  명령 id + `PostCommand`로 여는 방법도 있지만 쓰지 않았다** - 그쪽은 아직 라이브 검증 전이고, 여기서는
+  `QuickToggleSettingsCommand.Execute`가 하는 일(창 생성 + `WindowInteropHelper`로 오너 지정 +
+  `ShowDialog`)을 그대로 직접 하는 게 더 확실하다.
+- 이 버튼은 상태에 따라 모양이 변하지 않으므로 생성자에서 한 번만 그린다 - `RefreshState`가 매 `Idling`
+  틱마다 손댈 것이 없어졌다(예전 두 버튼은 그 때문에 `_lastSaveButton*` 방어가 필요했다).
+- 설정 창의 툴바 미리보기(`QuickToggleSettingsWindow.CreateToolbarFrame`)도 같이 톱니바퀴 하나로 바꿨다 -
+  미리보기가 실제 툴바와 어긋나면 안 된다(2026-09-03 지적사항).

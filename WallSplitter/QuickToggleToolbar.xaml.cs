@@ -55,40 +55,6 @@ namespace WallSplitter
         // 기억해두고(_lastStates), 실제로 상태가 바뀐 버튼만 갱신한다.
         private readonly Dictionary<string, QuickToggleButtonState> _lastStates = new();
 
-        // "뷰 저장" 버튼으로 찍어둔 스냅샷 - 뷰 ID별로 독립적으로 저장한다(2026-07-28, "각 뷰마다 따로
-        // 저장 가능하고, 뷰를 닫아도(x) 그 뷰의 저장은 유지되어야 한다"는 요청 - 예전엔 필드 하나뿐이라
-        // 다른 뷰를 저장하면 이전 뷰의 저장 내용을 덮어썼다). ElementId는 문서마다 독립적이라 같은 정수
-        // ID가 서로 다른 문서의 서로 다른 뷰를 가리킬 수 있으므로(여러 모델을 동시에 열어둔 세션), 바깥
-        // 키를 문서 경로(DocKey)로 한 번 더 나눠 문서 간 충돌을 막는다. 이번 Revit 세션(창 인스턴스)
-        // 한정 메모리 값이라 디스크에 저장하지 않는다 - 뷰를 닫는 것(탭 x)은 View 요소 자체를 지우지
-        // 않으므로 이 딕셔너리 항목은 그대로 남지만, 문서를 완전히 닫았다 다시 열면 사라지는 게
-        // 자연스럽다(그 문서에 대한 View 참조가 더 이상 유효하지 않으므로).
-        private readonly Dictionary<string, Dictionary<int, ViewStateSnapshot>> _savedViewStates = new();
-
-        // 저장 안 된 새 문서(PathName 없음)는 전부 같은 키로 뭉뚱그려진다 - 여러 개의 저장 안 된 새
-        // 문서를 동시에 열어두는 경우는 극히 드물고, 애초에 빠른 토글 설정 자체가 저장 안 된 문서에서는
-        // 동작하지 않는 기존 제약과 같은 성격의 가장자리 경우로 남겨둔다.
-        private static string DocKey(RevitDocument doc) => string.IsNullOrEmpty(doc.PathName) ? "__unsaved__" : doc.PathName;
-
-        private Dictionary<int, ViewStateSnapshot> SnapshotsFor(RevitDocument doc)
-        {
-            string key = DocKey(doc);
-            if (!_savedViewStates.TryGetValue(key, out Dictionary<int, ViewStateSnapshot>? map))
-            {
-                map = new Dictionary<int, ViewStateSnapshot>();
-                _savedViewStates[key] = map;
-            }
-            return map;
-        }
-
-        // Save/Revert 버튼 갱신을 RefreshState(Idling에서도 호출됨)에서 안전하게 하기 위한 마지막 상태
-        // 기억 - _lastStates와 같은 이유(값이 바뀌지 않았는데도 WPF 속성을 재대입하면 클릭 캡처가
-        // 끊기는 문제가 이 파일에서 이미 3차례 반복됐다, 위 클래스 주석 참고). 뷰가 바뀌거나 그 뷰의
-        // 저장 여부가 바뀐 경우에만 실제로 갱신한다.
-        private string? _lastSaveButtonDocKey;
-        private int? _lastSaveButtonViewId;
-        private bool? _lastSaveButtonHasSnapshot;
-
         // "색상 버튼" 클릭으로 열린 실시간 조절 패널 - 한 번에 하나만 열어둔다(다른 색상 버튼을 누르면
         // 이전 패널은 닫고 새로 연다). 2026-07-29 추가.
         private ColorToolPopupWindow? _openColorPopup;
@@ -108,11 +74,9 @@ namespace WallSplitter
 
             new WindowInteropHelper(this) { Owner = uiapp.MainWindowHandle };
 
-            // 아직 활성 뷰를 모르는 시점(생성 직후)의 초기 표시 - 첫 RefreshState 호출에서 실제 뷰
-            // 기준으로 바로 갱신된다.
-            SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary) };
-            RevertButton.IsEnabled = false;
-            RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.ToggleDisabled) };
+            // 우측 끝 고정 "설정"(톱니바퀴) 버튼 - 상태에 따라 모양이 바뀌지 않으므로 여기서 한 번만
+            // 그려두면 되고, RefreshState가 매 Idling 틱마다 손댈 일이 없다.
+            SettingsButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateGearIcon(Theme.TextSecondary) };
         }
 
         // 문서가 하나도 없을 때(전부 닫힘) 호출 - 떠 있는 툴바를 정리한다.
@@ -194,8 +158,6 @@ namespace WallSplitter
             {
                 UpdateButtonStates(view);
             }
-
-            RefreshSaveRevertButtons(view);
 
             CurrentToolbarVisible = _cachedSettings.ToolbarVisible;
 
@@ -578,84 +540,17 @@ namespace WallSplitter
             popup.Show();
         }
 
-        // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 바로 처리한다. 캡처 로직 자체는
-        // QuickToggleService.CaptureViewState로 옮겨(뷰템플릿/필터/작업세트/카테고리 표시/크롭·범위까지
-        // 전부 포함 - 2026-07-28 확장) 이 파일은 UI 갱신만 담당한다.
-        private void SaveViewButton_Click(object sender, RoutedEventArgs e)
+        // 우측 끝 고정 "설정"(톱니바퀴) 버튼 - 커스텀 버튼 설정 창을 연다 (2026-09-03, 사용자 요청으로
+        // 이 자리의 "뷰 저장"/"되돌리기" 버튼 쌍을 대체했다). 이 창은 모드리스라 클릭 시점엔 유효한
+        // Revit API 컨텍스트가 없고, 설정 창 생성자가 FilteredElementCollector로 문서를 읽으므로
+        // 다른 버튼들과 똑같이 ExternalEvent로 넘긴다(QuickToggleExternalEventHandler.ExecuteOpenSettings).
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            UIDocument? uidoc = _uiapp.ActiveUIDocument;
-            RevitView? view = uidoc?.Document?.ActiveView;
-            if (view == null) return;
-
-            SnapshotsFor(view.Document)[view.Id.ToInt()] = QuickToggleService.CaptureViewState(view);
-            RefreshSaveRevertButtons(view, force: true);
-        }
-
-        // 2026-07-28, "뷰가 저장이 되고 있는지 전혀 알 수가 없다"는 피드백으로 추가 - 저장된 스냅샷이
-        // 있는 동안은 다른 빠른 토글 버튼의 On 상태와 같은 시각 언어(배경 전체를 강조색으로 채우고,
-        // 아이콘은 그 배경에 대비되는 색)로 "뷰 저장" 버튼 자체를 표시한다. 이 버튼은 RebuildButtons/
-        // UpdateButtonStates가 매 Idling 틱마다 갱신하는 등록형 버튼 목록(_rows)에 속하지 않고 XAML에
-        // 고정된 별도 버튼이라, 여기서 직접 호출할 때만 갱신하면 되고 그 사이에 다른 코드가 덮어쓸 일이
-        // 없다. 2026-07-28, 스냅샷이 뷰별 딕셔너리로 바뀌면서 뷰 전환마다(RefreshState에서도) 다시
-        // 계산해야 하므로 - Idling에서 초당 여러 번 불려도 값이 실제로 바뀐 경우에만 WPF 속성을
-        // 재대입한다(_lastSaveButtonViewId/_lastSaveButtonHasSnapshot - 이 파일에 이미 3차례 기록된
-        // "매 틱 재대입하면 클릭 캡처가 끊긴다" 버그 패턴을 또 만들지 않기 위한 방어).
-        private void RefreshSaveRevertButtons(RevitView view, bool force = false)
-        {
-            string docKey = DocKey(view.Document);
-            int viewId = view.Id.ToInt();
-            bool hasSnapshot = SnapshotsFor(view.Document).ContainsKey(viewId);
-
-            if (!force && _lastSaveButtonDocKey == docKey && _lastSaveButtonViewId == viewId && _lastSaveButtonHasSnapshot == hasSnapshot)
-                return;
-            _lastSaveButtonDocKey = docKey;
-            _lastSaveButtonViewId = viewId;
-            _lastSaveButtonHasSnapshot = hasSnapshot;
-
-            if (hasSnapshot)
-            {
-                Color color = ((SolidColorBrush)Theme.ToggleOn).Color;
-                SolidColorBrush fill = new SolidColorBrush(color);
-                fill.Freeze();
-                SaveViewButton.Background = fill;
-                SaveViewButton.BorderBrush = fill;
-                SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(QuickToggleIcons.ContrastingForeground(color)) };
-                SaveViewButton.ToolTip =
-                    $"'{view.Name}' 뷰의 상태(모델/주석/해석모델/가져온 카테고리 표시, 필터, 작업세트, 뷰템플릿, " +
-                    "가시성/그래픽 재정의, 색상표, 상세수준, 비주얼스타일, 크롭 및 범위 등)가 저장되어 있습니다. 다시 누르면 갱신합니다.";
-
-                RevertButton.IsEnabled = true;
-                RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.TextSecondary) };
-                RevertButton.ToolTip = $"'{view.Name}' 뷰의 저장된 상태로 되돌립니다.";
-            }
-            else
-            {
-                SaveViewButton.Background = Brushes.Transparent;
-                SaveViewButton.BorderBrush = Theme.Border;
-                SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary) };
-                SaveViewButton.ToolTip = $"'{view.Name}' 뷰의 현재 상태를 저장합니다.";
-
-                RevertButton.IsEnabled = false;
-                RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.ToggleDisabled) };
-                RevertButton.ToolTip = "이 뷰에는 저장된 상태가 없습니다.";
-            }
-        }
-
-        // "되돌리기" - Revit API 호출(뷰 전환, 뷰템플릿/필터/작업세트 반영)이 필요하므로 다른 버튼들과
-        // 같은 ExternalEvent 경로를 그대로 재사용한다(QuickToggleExternalEventHandler.ExecuteRevert 참고).
-        // 되돌리는 대상은 항상 "지금 활성 뷰"의 저장분이다 - 각 뷰가 독립적으로 저장되므로 다른 뷰의
-        // 스냅샷을 실수로 가져올 일이 없다.
-        private void RevertButton_Click(object sender, RoutedEventArgs e)
-        {
-            UIDocument? uidoc = _uiapp.ActiveUIDocument;
-            RevitView? view = uidoc?.Document?.ActiveView;
-            if (view == null) return;
-            if (!SnapshotsFor(view.Document).TryGetValue(view.Id.ToInt(), out ViewStateSnapshot? snapshot)) return;
             if (App.QuickToggleHandler == null || App.QuickToggleEvent == null) return;
-
-            App.QuickToggleHandler.PendingRevertSnapshot = snapshot;
+            App.QuickToggleHandler.PendingOpenSettings = true;
             App.QuickToggleEvent.Raise();
         }
+
 
         // 버튼 목록이 바뀔 때만(RebuildButtons 직후) 호출 - 내용에 맞춰 창 너비를 계산한다.
         // 2026-07-27, 사용자 요청으로 최대 너비 제한(가로 스크롤로 처리)을 없앴다 - "등록된 버튼이 많으면

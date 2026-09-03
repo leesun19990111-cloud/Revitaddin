@@ -23,7 +23,9 @@ namespace WallSplitter
         // Equals로 다시 비교하지 말 것.
         private static string DocKey(Document doc) => string.IsNullOrEmpty(doc.PathName) ? doc.Title : doc.PathName;
 
-        private bool IsTargetDocument(Document doc) => TargetDocument != null && DocKey(doc) == DocKey(TargetDocument);
+        // 2026-09-03: 실시간 갱신(WarningPickWindow.RequestLiveRefresh)이 "지금 바뀐 문서가 이 창의
+        // 대상 문서인가"를 물어봐야 해서 internal로 열었다.
+        internal bool IsTargetDocument(Document doc) => TargetDocument != null && DocKey(doc) == DocKey(TargetDocument);
 
         internal List<ElementId>? PendingSelectIds { get; set; }
 
@@ -34,7 +36,12 @@ namespace WallSplitter
         internal bool PendingResetIsolate { get; set; }
 
         // true면 이번 Raise()는 "선택"이 아니라 경고 목록 새로고침 요청이다 - 같은 ExternalEvent를 재사용한다.
+        // PendingRefreshSilent는 그 요청이 사용자가 누른 "새로고침"이 아니라 문서 변경에 따른 자동 갱신
+        // (2026-09-03 실시간 갱신)이라는 표시다 - 자동 갱신은 활성 문서가 그 사이 바뀌어 있어도 조용히
+        // 넘어가야 한다. 안 그러면 사용자가 다른 프로젝트에서 작업할 때마다 "활성 문서가 아닙니다"
+        // 대화상자가 저절로 튀어나온다.
         internal bool PendingRefresh { get; set; }
+        internal bool PendingRefreshSilent { get; set; }
 
         // ExternalEvent 콜백에서 예외가 나면 Revit은 사용자에게 아무 것도 보여주지 않는다 - "버튼을 눌러도
         // 반응이 없다"는 증상으로만 남는다(커스텀 버튼에서 실제로 겪은 문제, docs/quick-toggle 참고).
@@ -87,7 +94,9 @@ namespace WallSplitter
             if (PendingRefresh)
             {
                 PendingRefresh = false;
-                ExecuteRefresh(app);
+                bool silent = PendingRefreshSilent;
+                PendingRefreshSilent = false;
+                ExecuteRefresh(app, silent);
             }
         }
 
@@ -244,12 +253,15 @@ namespace WallSplitter
             }
         }
 
-        private void ExecuteRefresh(UIApplication app)
+        private void ExecuteRefresh(UIApplication app, bool silent)
         {
             UIDocument? uidoc = app.ActiveUIDocument;
             if (uidoc == null || !IsTargetDocument(uidoc.Document))
             {
-                WarningPickWindow.Instance?.ShowDocumentMismatch();
+                // 자동 갱신(문서 변경)이면 조용히 넘어간다 - 요청을 넣은 시점엔 대상 문서가 맞았어도
+                // ExternalEvent가 실제로 실행될 때까지 사용자가 다른 프로젝트로 전환했을 수 있는데,
+                // 그때마다 대화상자를 띄우면 다른 프로젝트에서 작업하는 내내 팝업이 튀어나온다.
+                if (!silent) WarningPickWindow.Instance?.ShowDocumentMismatch();
                 return;
             }
 

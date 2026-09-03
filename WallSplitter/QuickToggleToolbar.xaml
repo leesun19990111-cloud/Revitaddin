@@ -58,21 +58,17 @@
                  그만큼 옆으로 늘린다(더 이상 최대 너비 제한 없음) - QuickToggleToolbar.xaml.cs 참고. -->
             <StackPanel Grid.Column="1" x:Name="ButtonsPanel" Orientation="Horizontal" Margin="4"/>
 
-            <!-- 2026-07-27, 사용자 요청으로 추가 - 등록된 버튼 목록과 무관하게 항상 우측 끝에 고정되는
-                 "뷰 저장"/"되돌리기" 버튼 쌍. 현재 활성 뷰의 뷰템플릿/필터 표시/작업세트 표시 상태를
-                 저장해뒀다가, 그 사이 다른 뷰들을 오가더라도 저장했던 뷰·상태로 그대로 되돌아갈 수 있다
-                 (모델 자체의 변경사항은 건드리지 않음 - QuickToggleToolbar.xaml.cs의 SaveViewButton_Click/
-                 RevertButton_Click 참고). ResizeToContent()가 이 패널도 함께 측정해서 창 너비에 반영한다.
-                 되돌리기는 이번 세션에서 저장을 한 번도 안 했으면 비활성(회색)으로 시작한다. -->
+            <!-- 등록된 버튼 목록과 무관하게 항상 우측 끝에 고정되는 자리. ResizeToContent()가 이 패널도
+                 함께 측정해서 창 너비에 반영한다.
+                 2026-09-03, 사용자 요청("현재뷰 저장 버튼 및 되돌리기 버튼을 없애주고 그자리에 톱니바퀴
+                 버튼을 추가해서 바로 커스텀 버튼 설정창을 갈 수 있도록")으로 예전의 "뷰 저장"/"되돌리기"
+                 버튼 쌍을 설정(톱니바퀴) 버튼 하나로 교체했다 - 그 두 기능의 구현 코드도 함께 지웠다
+                 (docs/quick-toggle/CLAUDE.md 참고). -->
             <StackPanel Grid.Column="2" x:Name="RightControlsPanel" Orientation="Horizontal" Margin="0,4,4,4">
                 <Border Width="1" Margin="4,2" Background="{DynamicResource AppBorderBrush}"/>
-                <Button x:Name="SaveViewButton" Width="28" Height="28" Padding="4"
-                        ToolTip="현재 뷰의 뷰템플릿/필터/작업세트 표시 상태를 저장합니다."
-                        Click="SaveViewButton_Click"/>
-                <Button x:Name="RevertButton" Width="28" Height="28" Padding="4" Margin="2,0,0,0"
-                        IsEnabled="False"
-                        ToolTip="아직 저장된 뷰 상태가 없습니다."
-                        Click="RevertButton_Click"/>
+                <Button x:Name="SettingsButton" Width="28" Height="28" Padding="4"
+                        ToolTip="커스텀 버튼 설정 창을 엽니다."
+                        Click="SettingsButton_Click"/>
             </StackPanel>
         </Grid>
     </Border>

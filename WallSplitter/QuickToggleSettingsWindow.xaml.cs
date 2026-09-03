@@ -316,8 +316,8 @@ namespace WallSplitter
             WpfGrid.SetColumn(buttons, 1);
             grid.Children.Add(buttons);
 
-            // 우측에 항상 고정으로 붙는 "뷰 저장"/"되돌리기" - 등록 버튼 목록과 무관하게 늘 있으므로
-            // 미리보기에도 포함해야 실제 폭·모양이 맞는다. 아직 저장한 상태가 없는 시작 시점의 모습으로 그린다.
+            // 우측에 항상 고정으로 붙는 "설정"(톱니바퀴) 버튼 - 등록 버튼 목록과 무관하게 늘 있으므로
+            // 미리보기에도 포함해야 실제 폭·모양이 맞는다(2026-09-03, 이 자리의 "뷰 저장"/"되돌리기"를 대체).
             StackPanel right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 4, 4) };
             right.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 2, 4, 2), Background = Theme.Border });
             right.Children.Add(new Button
@@ -326,18 +326,8 @@ namespace WallSplitter
                 Height = 28,
                 Padding = new Thickness(4),
                 IsHitTestVisible = false,
-                ToolTip = "현재 뷰의 표시 상태를 저장합니다 (툴바에 항상 붙어 있는 고정 버튼).",
-                Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary) },
-            });
-            right.Children.Add(new Button
-            {
-                Width = 28,
-                Height = 28,
-                Padding = new Thickness(4),
-                Margin = new Thickness(2, 0, 0, 0),
-                IsEnabled = false,
-                ToolTip = "저장해 둔 뷰 상태로 되돌립니다 (툴바에 항상 붙어 있는 고정 버튼).",
-                Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.ToggleDisabled) },
+                ToolTip = "커스텀 버튼 설정 창을 엽니다 (툴바에 항상 붙어 있는 고정 버튼).",
+                Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateGearIcon(Theme.TextSecondary) },
             });
             WpfGrid.SetColumn(right, 2);
             grid.Children.Add(right);
