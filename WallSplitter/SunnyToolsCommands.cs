@@ -12,13 +12,48 @@ namespace WallSplitter
 {
     // "기능 버튼"(QuickToggleCategory.CommandLauncher, 2026-08-03 추가 - "커스텀 버튼 설정에 재료지정/
     // 네이머/동기화 등 다른 기능도 버튼으로 추가하고 싶다"는 요청)이 검색해서 고를 수 있는 명령 목록.
-    // Sunny Tools 자체 명령은 App.cs가 리본 버튼으로 등록할 때 쓴 것과 똑같은 IExternalCommand 클래스의
-    // FullName을 쓴다(RevitCommandId.LookupCommandId가 이 문자열로 조회한다 - App.cs의 PushButtonData
-    // 생성자에 넘기는 className 인자와 같은 값). Revit 기본 명령은 PostableCommand enum 전체를 대상으로
-    // 하는데, 수백 개라 검색어 없이는 나열하지 않는다(QuickToggleSettingsWindow.RenderCommandList 참고).
+    // Sunny Tools 자체 명령은 설정 파일에 IExternalCommand 클래스의 FullName으로 저장한다 - 문서와 무관한
+    // 안정적인 식별자라서(실제 Revit 명령 id로 바꾸는 방법은 아래 RibbonCommandIds 참고). Revit 기본
+    // 명령은 PostableCommand enum 전체를 대상으로 하는데, 수백 개라 검색어 없이는 나열하지 않는다
+    // (QuickToggleSettingsWindow.RenderCommandList 참고).
     internal static class SunnyToolsCommands
     {
         private const string CommandLabelsResourceName = "WallSplitter.Resources.RevitCommandLabels.2027.tsv";
+
+        // ===== Sunny Tools 자체 명령의 Revit 명령 id (클래스 FullName → id) =====
+        //
+        // **CONFIRMED LIVE BUG (2026-09-03) — 기능 버튼이 항상 "실행하지 못했습니다"로 끝나던 원인.**
+        // 2026-08-03 최초 구현은 `RevitCommandId.LookupCommandId(클래스 FullName)`으로 조회했는데, 그건
+        // `.addin` 매니페스트에 `<AddIn Type="Command">`로 등록된 외부 명령에만 통한다. 이 프로젝트의
+        // 매니페스트에는 `<AddIn Type="Application">` 하나뿐이고 명령은 전부 `App.OnStartup`의
+        // `PushButtonData`로 리본에만 등록되므로, Revit의 명령 레지스트리에 "클래스 이름"이라는 키가 아예
+        // 없다 → `LookupCommandId`가 늘 null → `RunCommand`가 false → 실패 팝업만 떴다.
+        //
+        // Revit이 실제로 쓰는 id는 **리본 경로**다. 저널(`%LOCALAPPDATA%\Autodesk\Revit\...\Journals`)에서
+        // 실측한 실제 문자열:
+        //   Jrn.RibbonEvent "Execute external command:
+        //     CustomCtrl_%CustomCtrl_%Sunny Tools%커스텀 버튼%WallSplitter_QuickToggleSettings
+        //     :WallSplitter.QuickToggleSettingsCommand"
+        // 즉 `CustomCtrl_%CustomCtrl_%<탭 이름>%<패널 이름>%<PushButtonData의 internal name>` 이다
+        // (`LookupCommandId` API 문서도 "저널에 있는 문자열을 쓰라"고만 말한다). `CanPostCommand` 문서의
+        // "Only members of PostableCommand **or external commands** can be posted"도 이 경로가 맞다는 근거다.
+        //
+        // **이 문자열을 여기에 손으로 적어두지 말 것** - 패널/버튼 이름을 바꾸는 순간 조용히 깨진다.
+        // `App.OnStartup`이 리본을 다 만든 뒤 실제로 만들어진 `RibbonPanel`/`PushButton`에서 읽어
+        // `RegisterRibbonCommandId`로 채운다(App.RegisterRibbonCommandIds).
+        private static readonly Dictionary<string, string> RibbonCommandIds =
+            new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // 같은 명령이 여러 패널에 중복 등록될 수 있다(예: SettingsCommand는 벽체 분리/바닥 분리 패널에
+        // 각각 있다) - 어느 버튼을 눌러도 같은 명령이므로 처음 등록된 것만 쓴다.
+        public static void RegisterRibbonCommandId(string className, string commandId)
+        {
+            if (string.IsNullOrEmpty(className) || string.IsNullOrEmpty(commandId)) return;
+            if (!RibbonCommandIds.ContainsKey(className)) RibbonCommandIds[className] = commandId;
+        }
+
+        public static string? RibbonCommandIdFor(string className) =>
+            RibbonCommandIds.TryGetValue(className, out string? id) ? id : null;
 
         public static readonly IReadOnlyList<(string Label, string ClassName)> All = new List<(string, string)>
         {

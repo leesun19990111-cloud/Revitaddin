@@ -184,7 +184,8 @@ namespace WallSplitter
                 ToolTip = "선택한 호스트에서 Sunny Tools로 실행한 가장 최근 패턴 타공 1회를 안전하게 복원합니다. 타공 뒤 프로파일이 달라졌으면 자동 덮어쓰기를 중단합니다.",
                 Image = LoadIcon(ToggleIconResource(false)),
             };
-            patternPanel.AddStackedItems(captureButtonData, punchButtonData, restorePunchButtonData);
+            foreach (RibbonItem patternStacked in patternPanel.AddStackedItems(captureButtonData, punchButtonData, restorePunchButtonData))
+                RegisterRibbonCommandId(patternPanel, patternStacked);
 
             RibbonPanel quickTogglePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == QuickTogglePanelName)
                 ?? application.CreateRibbonPanel(TabName, QuickTogglePanelName);
@@ -205,6 +206,12 @@ namespace WallSplitter
                 warningPickButton.LargeImage = CreateWarningIcon(32);
                 warningPickButton.Image = CreateWarningIcon(16);
             }
+
+            // 리본을 다 만든 뒤 한 번 훑어 "명령 클래스 → Revit 명령 id" 표를 채운다 - 커스텀 "기능 버튼"이
+            // 이 id로 PostCommand한다(왜 클래스 이름으로는 안 되는지는 SunnyToolsCommands.RibbonCommandIds의
+            // CONFIRMED LIVE BUG 주석 참고). 새 리본 버튼을 추가해도 여기서 자동으로 잡히므로 별도 표를
+            // 손으로 유지할 필요가 없다.
+            RegisterRibbonCommandIds(application);
 
             // 빠른 토글 커스텀 툴바: 실제 Revit 신속접근 도구모음(QAT)에는 API로 버튼을 추가할 수 없어
             // Revit 메인 창 상단에 고정되는 자체 플로팅 창으로 대체 구현했다 (CLAUDE.md 참고).
@@ -279,6 +286,34 @@ namespace WallSplitter
             }
         }
 
+        // 커스텀 "기능 버튼"이 PostCommand로 쓸 Revit 명령 id를 실제 리본에서 읽어 등록한다.
+        // 형식은 저널에서 실측한 `CustomCtrl_%CustomCtrl_%<탭>%<패널>%<버튼 internal name>`
+        // (SunnyToolsCommands.RibbonCommandIds 주석 참고).
+        private static void RegisterRibbonCommandIds(UIControlledApplication application)
+        {
+            try
+            {
+                foreach (RibbonPanel panel in application.GetRibbonPanels(TabName))
+                    foreach (RibbonItem item in panel.GetItems())
+                        RegisterRibbonCommandId(panel, item);
+            }
+            catch
+            {
+                // 리본 조회가 실패해도 애드인 로드 자체를 막지는 않는다 - 기능 버튼만 못 쓰게 된다.
+            }
+        }
+
+        // GetItems()가 스택 안의 버튼까지 돌려주는지는 연도별 API 동작을 실측하지 못했으므로,
+        // AddStackedItems를 쓰는 두 곳(AddSettingsStack/AddQuickToggleStack)에서도 반환된 항목으로
+        // 직접 한 번 더 등록한다 - 첫 등록만 유지되므로 중복 호출은 무해하다.
+        private static void RegisterRibbonCommandId(RibbonPanel panel, RibbonItem item)
+        {
+            if (item is PushButton button && !string.IsNullOrEmpty(button.ClassName))
+                SunnyToolsCommands.RegisterRibbonCommandId(
+                    button.ClassName,
+                    "CustomCtrl_%CustomCtrl_%" + TabName + "%" + panel.Name + "%" + button.Name);
+        }
+
         // "설정" 버튼 바로 밑에 작은 "단일/복수" 토글 버튼을 쌓아서(stacked) 붙인다.
         // '유형 직접 지정' 모드에서 지정한 유형을 다음 벽/바닥에도 이어서 쓸지(복수) 매번 새로 지정할지(단일)
         // 클릭 한 번으로 전환한다 - 별도 창을 열 필요가 없도록 리본에 직접 노출.
@@ -307,6 +342,7 @@ namespace WallSplitter
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(settingsButtonData, toggleButtonData);
+            foreach (RibbonItem stacked in stackedItems) RegisterRibbonCommandId(targetPanel, stacked);
             if (stackedItems.Count == 2 && stackedItems[1] is PushButton toggleButton)
                 _typeAssignmentToggleButtons.Add(toggleButton);
         }
@@ -346,6 +382,7 @@ namespace WallSplitter
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(settingsButtonData, toggleButtonData);
+            foreach (RibbonItem stacked in stackedItems) RegisterRibbonCommandId(targetPanel, stacked);
             if (stackedItems.Count == 2 && stackedItems[1] is PushButton toggleButton)
                 _quickToggleVisibilityButtons.Add(toggleButton);
         }

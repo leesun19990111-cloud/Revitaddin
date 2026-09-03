@@ -144,10 +144,10 @@ namespace WallSplitter
             {
                 QuickToggleButtonConfig launchCfg = PendingCommandLaunch;
                 PendingCommandLaunch = null;
-                if (!QuickToggleService.RunCommand(app, launchCfg))
+                if (!QuickToggleService.RunCommand(app, launchCfg, out string failureReason))
                 {
                     TaskDialog.Show("커스텀 버튼",
-                        $"'{launchCfg.Name}' 기능을 실행하지 못했습니다 (지금 상황에서 사용할 수 없는 기능일 수 있습니다).");
+                        $"'{launchCfg.Name}' 기능을 실행하지 못했습니다.\n\n{failureReason}");
                 }
                 return;
             }

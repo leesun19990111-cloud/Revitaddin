@@ -353,3 +353,55 @@ Q&A로 **종류별 개별 고리** + **프로젝트가 아니라 설정에 저�
 - **아이콘**: `CreateChainGlyph` — 고리 두 개(`System.Windows.Shapes.Ellipse` 외곽선)가 묶였을 땐 겹치고,
   끊기면 벌어지면서 가운데에 경고색 사선이 그어진다. 텍스트 글리프(⛓)를 안 쓰는 이 창의 관례를 따랐고,
   `Autodesk.Revit.DB.Ellipse`와 충돌해 완전한 이름을 썼다(`Grid`/`Line`/`Panel`에 이은 네 번째 충돌 사례).
+
+## CONFIRMED LIVE BUG (2026-09-03), 수정 — 기능 버튼이 Sunny Tools 명령을 전혀 실행하지 못했다
+
+사용자 보고: *"커스텀 버튼에서 기능추가 버튼을 통해서 Sunny Tools에 있는 기능버튼을 추가하고 싶은데,
+추가하고 버튼을 누르니 자꾸 기능을 실행하지 못했다는 경고팝업만 나오면서 실행이 안되고 있어."*
+2026-08-03에 기능 버튼을 만들면서 "라이브 테스트 필요 — 안 되면 `QuickToggleService.RunCommand`부터
+확인할 것"이라고 예고해 둔 바로 그 지점이었다.
+
+**근본 원인**: `RunCommand`가 Sunny Tools 자체 명령을 `RevitCommandId.LookupCommandId(클래스 FullName)`으로
+조회했다. 그 방식은 `.addin` 매니페스트에 `<AddIn Type="Command">`로 등록된 외부 명령에만 통하는데,
+이 프로젝트의 매니페스트에는 `<AddIn Type="Application">` 항목 하나뿐이고 명령은 전부 `App.OnStartup`의
+`PushButtonData`로 **리본에만** 등록된다 — 그래서 Revit의 명령 레지스트리에는 "클래스 이름"이라는 키가
+아예 없고, `LookupCommandId`는 **언제나 null**을 돌려줬다. `id == null` → `RunCommand`가 false →
+`QuickToggleExternalEventHandler`가 실패 `TaskDialog`. 즉 이 기능은 **추가된 날부터 한 번도 동작한 적이
+없다**(Revit 기본 명령 쪽은 `LookupPostableCommandId`를 쓰므로 영향 없음).
+
+**Revit이 실제로 쓰는 id는 리본 경로다.** `LookupCommandId` API 문서가 "저널에 있는 문자열을 쓰라"고만
+하길래 이 PC의 Revit 저널(`%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit 2026\Journals`)을 직접 뒤져
+실측했다 — 6개 버튼(일반 버튼 4 + 스택 버튼 2)에서 형식이 정확히 일치했다:
+
+```
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Sunny Tools%NAMER%WallSplitter_Namer:WallSplitter.NamerCommand"
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Sunny Tools%커스텀 버튼%WallSplitter_QuickToggleSettings:WallSplitter.QuickToggleSettingsCommand"
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Sunny Tools%패턴%WallSplitter_PatternPunch:WallSplitter.PatternPunchCommand"
+```
+
+→ id = `CustomCtrl_%CustomCtrl_%<탭 이름>%<패널 이름>%<PushButtonData의 internal name>`
+(뒤의 `:클래스이름`은 저널 로그의 일부일 뿐 id가 아니다). `AddStackedItems`로 넣은 버튼도 같은 평면
+형식을 쓴다. `UIApplication.CanPostCommand` 문서의 *"Only members of PostableCommand **or external
+commands** can be posted"* 도 이 경로가 유효하다는 근거다.
+
+**고정**:
+- `SunnyToolsCommands.RibbonCommandIds`(클래스 FullName → Revit 명령 id) + `RegisterRibbonCommandId`/
+  `RibbonCommandIdFor`.
+- `App.RegisterRibbonCommandIds(application)`가 **리본을 다 만든 뒤** `GetRibbonPanels(TabName)` →
+  `panel.GetItems()`를 훑어 `PushButton.ClassName`/`RibbonItem.Name`/`RibbonPanel.Name`으로 id를 조립해
+  등록한다. **이 문자열을 코드에 손으로 적어두지 말 것** — 패널/버튼 이름을 바꾸는 순간 조용히 깨진다.
+  새 리본 버튼을 추가해도 여기서 자동으로 잡힌다.
+- `GetItems()`가 스택 안의 버튼까지 돌려주는지는 연도별로 실측하지 못했으므로, `AddStackedItems`를 쓰는
+  세 곳(`AddSettingsStack`/`AddQuickToggleStack`/패턴 패널)에서도 반환 항목으로 한 번 더 등록한다.
+  첫 등록만 유지되므로 중복 호출은 무해하다(같은 명령이 두 패널에 있는 `SettingsCommand`/
+  `ToggleTypeAssignmentPersistenceCommand`도 첫 버튼 것만 쓴다 — 어느 쪽을 눌러도 같은 명령이라 무방).
+- `RunCommand`가 `out string failureReason`을 돌려준다. 예전엔 성공/실패만 반환해서 사용자가 받는 안내가
+  늘 "지금 상황에서 사용할 수 없는 기능일 수 있습니다" 하나뿐이었고, 실제로는 id 조회가 아예 안 되던
+  버그인데도 그 사실이 전혀 드러나지 않았다 — 이제 "리본 버튼을 찾지 못했다 / Revit이 명령을 찾지
+  못했다(id: …) / 진행 중인 명령을 끝내라" 중 실제 원인을 그대로 보여준다.
+- 클래스 이름 조회는 마지막 fallback으로 한 번 더 시도한다(매니페스트에 명령이 등록된 환경이면 이득,
+  아니면 그대로 null).
+
+**여전히 라이브 검증 필요**: 저널 실측으로 id 형식은 확정했지만, `LookupCommandId`가 그 문자열로 실제
+`RevitCommandId`를 돌려주는지와 `PostCommand`가 모드리스 툴바 → `ExternalEvent` 경로에서 명령을 실제로
+띄우는지는 실행 중인 Revit에서 확인해야 한다. 안 되면 이제는 실패 팝업이 어느 단계에서 막혔는지 알려준다.

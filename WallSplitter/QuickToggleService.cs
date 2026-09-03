@@ -570,25 +570,67 @@ namespace WallSplitter
         // 조회한다 - 둘 다 조회에 성공하고 CanPostCommand가 참일 때만 PostCommand로 실행 요청을 넣는다
         // (PostCommand는 즉시 실행이 아니라 "다음 기회에 실행해달라"는 요청이라 이 메서드 반환 시점에는
         // 아직 실행되지 않았을 수 있다 - Revit 자체 리본 버튼을 누르는 것과 동일한 메커니즘).
-        public static bool RunCommand(UIApplication uiapp, QuickToggleButtonConfig cfg)
+        // 실패하면 false를 반환하고 failureReason에 "왜 안 됐는지"를 채운다 - 예전에는 성공/실패만
+        // 돌려줘서 사용자가 받는 안내가 늘 "지금 상황에서 사용할 수 없는 기능일 수 있습니다" 하나뿐이었고,
+        // 실제로는 명령 id 조회가 아예 안 되던 버그였는데도 그 사실이 전혀 드러나지 않았다
+        // (SunnyToolsCommands.RibbonCommandIds의 CONFIRMED LIVE BUG 참고).
+        public static bool RunCommand(UIApplication uiapp, QuickToggleButtonConfig cfg, out string failureReason)
         {
-            if (cfg.CommandKind == null || string.IsNullOrEmpty(cfg.CommandId)) return false;
+            failureReason = "";
+            if (cfg.CommandKind == null || string.IsNullOrEmpty(cfg.CommandId))
+            {
+                failureReason = "이 버튼에 실행할 기능이 지정되어 있지 않습니다. 커스텀 버튼 설정에서 기능을 골라 주세요.";
+                return false;
+            }
 
             try
             {
-                RevitCommandId? id = cfg.CommandKind == QuickToggleCommandKind.NativeRevit
-                    ? (Enum.TryParse(cfg.CommandId, out PostableCommand postable) ? RevitCommandId.LookupPostableCommandId(postable) : null)
-                    : RevitCommandId.LookupCommandId(cfg.CommandId);
+                RevitCommandId? id;
+                if (cfg.CommandKind == QuickToggleCommandKind.NativeRevit)
+                {
+                    id = Enum.TryParse(cfg.CommandId, out PostableCommand postable)
+                        ? RevitCommandId.LookupPostableCommandId(postable)
+                        : null;
+                    if (id == null)
+                    {
+                        failureReason = "이 Revit 버전에는 없는 기본 명령입니다.";
+                        return false;
+                    }
+                }
+                else
+                {
+                    // Sunny Tools 자체 명령은 리본에 실제로 만들어진 버튼에서 읽어 둔 id로 조회한다.
+                    // 클래스 이름으로는 조회되지 않는다(매니페스트가 명령을 등록하지 않으므로) - 자세한
+                    // 이유와 저널 실측 근거는 SunnyToolsCommands.RibbonCommandIds 주석 참고.
+                    string? ribbonId = SunnyToolsCommands.RibbonCommandIdFor(cfg.CommandId!);
+                    id = ribbonId != null ? RevitCommandId.LookupCommandId(ribbonId) : null;
 
-                if (id == null || !uiapp.CanPostCommand(id)) return false;
+                    // 혹시 이 명령이 매니페스트에 <AddIn Type="Command">로도 등록된 환경이라면 클래스
+                    // 이름으로도 잡힌다 - 마지막으로 한 번 더 시도한다(있으면 이득, 없으면 그대로 null).
+                    id ??= RevitCommandId.LookupCommandId(cfg.CommandId);
+
+                    if (id == null)
+                    {
+                        failureReason = ribbonId == null
+                            ? "이 기능의 리본 버튼을 찾지 못했습니다. Revit을 다시 시작해도 같으면 알려 주세요."
+                            : "Revit이 이 기능의 명령을 찾지 못했습니다(id: " + ribbonId + ").";
+                        return false;
+                    }
+                }
+
+                if (!uiapp.CanPostCommand(id))
+                {
+                    failureReason = "지금은 이 기능을 실행할 수 없습니다. 진행 중인 명령이나 열려 있는 대화상자를 먼저 끝내고 다시 눌러 주세요.";
+                    return false;
+                }
 
                 uiapp.PostCommand(id);
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
-                // 이 시점(문서 없음, 다른 명령 진행 중 등)에 이 명령을 실행할 수 없는 경우 - 호출자가
-                // 실패로 보고한다.
+                // 문서 없음, 다른 명령이 이미 posted 상태(InvalidOperationException) 등.
+                failureReason = ex.GetBaseException().Message;
                 return false;
             }
         }
