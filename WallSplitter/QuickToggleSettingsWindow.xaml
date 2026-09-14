@@ -124,10 +124,10 @@
                 <StackPanel>
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
                                Foreground="{DynamicResource TextSecondaryBrush}"
-                               Text="JSON 내보내기/가져오기는 다른 PC로 이 설정을 옮길 때 씁니다. 가져온 버튼은 기존 버튼을 지우지 않고 뒤에 추가되며, 대상은 파일에 담긴 이름으로 다시 찾으므로 그 이름의 뷰템플릿·필터·작업세트가 있는 프로젝트에서 동작합니다."/>
+                               Text="버튼모음 내보내기/가져오기는 지금 등록해 둔 버튼들을 파일 하나로 저장했다가 다른 PC에서 그대로 불러올 때 씁니다. 가져온 버튼은 기존 버튼을 지우지 않고 뒤에 추가되며, 대상은 파일에 담긴 이름으로 다시 찾으므로 그 이름의 뷰템플릿·필터·작업세트가 있는 프로젝트에서 동작합니다."/>
                     <WrapPanel>
-                        <Button x:Name="ExportJsonButton" Content="JSON으로 내보내기" Padding="10,5" Margin="0,0,6,6" Click="ExportJsonButton_Click"/>
-                        <Button x:Name="ImportJsonButton" Content="JSON에서 가져오기" Padding="10,5" Margin="0,0,16,6" Click="ImportJsonButton_Click"/>
+                        <Button x:Name="ExportJsonButton" Content="버튼모음 내보내기" Padding="10,5" Margin="0,0,6,6" Click="ExportJsonButton_Click"/>
+                        <Button x:Name="ImportJsonButton" Content="버튼모음 가져오기" Padding="10,5" Margin="0,0,16,6" Click="ImportJsonButton_Click"/>
                         <Button x:Name="ResetPositionButton" Content="툴바 위치 초기화" Padding="10,5" Margin="0,0,0,6" Click="ResetPositionButton_Click"/>
                     </WrapPanel>
                     <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontSize="11"
@@ -180,7 +180,7 @@
                     <TextBlock Margin="0,0,0,14" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                Text="종류만 고르면 됩니다. 이름·아이콘·색과 대상은 만든 뒤에 얼마든지 바꿀 수 있습니다."/>
-                    <WrapPanel x:Name="AddChooserPanel"/>
+                    <StackPanel x:Name="AddChooserPanel"/>
                 </StackPanel>
             </Border>
         </Grid>

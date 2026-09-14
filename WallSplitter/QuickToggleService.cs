@@ -190,6 +190,11 @@ namespace WallSplitter
                     // 링크"가 곧 대상이다 - 링크가 하나도 없으면 Disabled(회색), 있으면 전부 숨겨졌을 때
                     // Off, 하나라도 보이면 On이다. 즉 켜짐 = 링크가 화면에 보이는 상태이고, 켜진 버튼을
                     // 누르면 꺼진다("클릭하면 끌 수 있게" 요청).
+                    // "링크된 요소"(2026-09-04) - 모든 종류의 링크 카테고리를 한꺼번에 본다. 판정 규칙은
+                    // CAD 버튼과 같다: 대상이 하나도 없으면 Disabled, 하나라도 보이면 On, 전부 숨겨졌으면 Off.
+                    case QuickToggleCategory.LinkedAll:
+                        return DetermineLinkState(view, AllLinkCategoryIds(view));
+
                     case QuickToggleCategory.LinkedCad:
                         return DetermineLinkState(view, LinkedCadCategoryIds(view));
 
@@ -268,10 +273,31 @@ namespace WallSplitter
         {
             public DateTime At;
             // 링크된 CAD 도면: (그 도면의 가져온 카테고리 Id, 뷰 전용 가져오기면 그 뷰 Id / 아니면 -1)
+            // DWF 마크업도 Revit에서는 같은 "가져온 카테고리"로 들어오므로 여기에 함께 담긴다.
             public List<(int CategoryId, int OwnerViewId)> Cad = new List<(int, int)>();
-            // 링크된 Revit 모델: (링크 인스턴스 Id, 목록에 보여줄 이름)
+            // 링크된 Revit 모델: (링크 인스턴스 Id, 목록에 보여줄 이름). IFC 링크도 Revit이 내부적으로
+            // RevitLinkInstance로 만들기 때문에(RevitLinkType.CreateFromIFC) 여기에 함께 들어온다.
             public List<(int InstanceId, string Name)> Models = new List<(int, string)>();
+            // "링크된 요소" 버튼(LinkedAll)이 쓰는, 이 문서에 실제로 존재하는 링크 계열 최상위 카테고리.
+            // 위 Cad(가져온 카테고리)와 달리 종류당 하나씩이고, 요소가 하나도 없으면 넣지 않는다.
+            public List<int> OtherLinkCategoryIds = new List<int>();
         }
+
+        // "링크된 요소" 버튼이 한 번에 다루는 링크 계열 카테고리. 가져온 카테고리(CAD 도면/DWF 마크업)는
+        // 도면마다 하위 카테고리가 따로 생겨서 여기 없고 ScanLinks.Cad가 따로 모은다.
+        //
+        // **전 연도(2023~2027) 확인 완료**: 이 여섯 멤버는 다섯 개 참조 어셈블리 모두에 존재한다
+        // (MetadataLoadContext로 실측). 반대로 `ExternalData.CoordinationModelLinkUtils`는 2026부터라
+        // 쓰지 않고 좌표 모델도 카테고리 조회로 찾는다 - 편해 보인다고 그 유틸로 바꾸면 2023/2024/2025
+        // 빌드가 깨진다.
+        private static readonly BuiltInCategory[] OtherLinkCategories =
+        {
+            BuiltInCategory.OST_RvtLinks,          // Revit 링크 (IFC 링크 포함)
+            BuiltInCategory.OST_TopographyLink,    // 지형 링크
+            BuiltInCategory.OST_ToposolidLink,     // 지형솔리드 링크 (2024+에서 실제로 쓰임)
+            BuiltInCategory.OST_PointClouds,       // 포인트 클라우드
+            BuiltInCategory.OST_Coordination_Model, // 좌표 모델 (NWD/NWC 등 외부 좌표 모델)
+        };
 
         private static readonly Dictionary<string, LinkScan> LinkScans = new Dictionary<string, LinkScan>();
         private static readonly TimeSpan LinkScanLifetime = TimeSpan.FromSeconds(2);
@@ -316,8 +342,45 @@ namespace WallSplitter
             }
             catch { /* 위와 동일 */ }
 
+            // "링크된 요소" 버튼용 - 종류별로 요소가 실제로 하나라도 있는 카테고리만 모은다. 없는 종류를
+            // 넣으면 끄고 켤 게 없는데도 버튼이 활성화되어(그리고 아무 변화도 없어) 고장난 것처럼 보인다.
+            foreach (BuiltInCategory builtIn in OtherLinkCategories)
+            {
+                try
+                {
+                    Category? category = Category.GetCategory(doc, builtIn);
+                    if (category == null) continue; // 이 Revit 버전/문서에 없는 카테고리
+
+                    bool any = new FilteredElementCollector(doc)
+                        .OfCategory(builtIn)
+                        .WhereElementIsNotElementType()
+                        .Any();
+                    if (any) scan.OtherLinkCategoryIds.Add(category.Id.ToInt());
+                }
+                catch
+                {
+                    // 이 문서에서 그 카테고리를 조회할 수 없으면 그 종류만 건너뛴다.
+                }
+            }
+
             LinkScans[key] = scan;
             return scan;
+        }
+
+        // "링크된 요소" 버튼의 대상 - 지금 이 뷰에 걸려 있는 모든 종류의 링크 카테고리를 한 목록으로 합친다
+        // (CAD 도면/DWF 마크업의 가져온 카테고리 + Revit·IFC 링크 + 지형/지형솔리드 링크 + 포인트 클라우드
+        // + 좌표 모델). 종류별로 버튼을 쪼개지 않고 하나로 묶는다는 사용자 결정(2026-09-04)에 따른 것이라,
+        // 판정(DetermineLinkState)과 적용(ToggleLinkVisibility)은 기존 CAD 버튼 로직을 그대로 재사용한다.
+        internal static List<ElementId> AllLinkCategoryIds(View view)
+        {
+            List<ElementId> result = LinkedCadCategoryIds(view);
+            HashSet<int> seen = new HashSet<int>();
+            foreach (ElementId id in result) seen.Add(id.ToInt());
+
+            foreach (int categoryId in ScanLinks(view.Document).OtherLinkCategoryIds)
+                if (seen.Add(categoryId)) result.Add(new ElementId(categoryId));
+
+            return result;
         }
 
         // 목록에 보여줄 링크 이름 - RevitLinkInstance.Name은 보통 "파일이름.rvt : 위치" 형태로 같은 파일을
@@ -552,6 +615,9 @@ namespace WallSplitter
                         }
                     }
                     break;
+
+                case QuickToggleCategory.LinkedAll:
+                    return ToggleLinkVisibility(view, AllLinkCategoryIds(view), turnOn);
 
                 case QuickToggleCategory.LinkedCad:
                     return ToggleLinkVisibility(view, LinkedCadCategoryIds(view), turnOn);

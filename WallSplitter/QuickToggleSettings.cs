@@ -44,6 +44,12 @@ namespace WallSplitter
         // 찾는다(QuickToggleService.LinkedCadCategoryIds/LinkedModelCategoryIds).
         LinkedCad,
         LinkedModel,
+        // 2026-09-04, "IFC/지형연결/DWF 마크업/포인트 클라우드/외부좌표모델 링크도 껐다 켤 수 있게"
+        // 요청에서 출발했으나, 종류별로 버튼을 쪼개지 말고 "링크된 요소 하나로 전부 묶는 게 더 직관적"
+        // 이라는 사용자 결정으로 확정된 단일 버튼. 지금 뷰에 걸려 있는 **모든 종류의 링크**(CAD 도면,
+        // Revit 모델, IFC, 지형/지형솔리드, DWF 마크업, 포인트 클라우드, 좌표 모델)를 한 번에 끄고 켠다.
+        // LinkedCad/LinkedModel과 마찬가지로 설정에서 고를 대상이 없다 - 대상은 클릭할 때마다 다시 찾는다.
+        LinkedAll,
     }
 
     // CommandLauncher 버튼이 가리키는 명령의 종류 - RevitCommandId를 조회하는 API가 서로 다르다
@@ -305,6 +311,7 @@ namespace WallSplitter
                 QuickToggleCategory.Workset => "작업세트버튼",
                 QuickToggleCategory.ColorTool => "색상버튼",
                 QuickToggleCategory.CommandLauncher => "기능버튼",
+                QuickToggleCategory.LinkedAll => "링크버튼",
                 QuickToggleCategory.LinkedCad => "링크도면버튼",
                 QuickToggleCategory.LinkedModel => "링크모델버튼",
                 _ => "버튼",

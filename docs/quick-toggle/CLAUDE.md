@@ -439,3 +439,52 @@ commands** can be posted"* 도 이 경로가 유효하다는 근거다.
   틱마다 손댈 것이 없어졌다(예전 두 버튼은 그 때문에 `_lastSaveButton*` 방어가 필요했다).
 - 설정 창의 툴바 미리보기(`QuickToggleSettingsWindow.CreateToolbarFrame`)도 같이 톱니바퀴 하나로 바꿨다 -
   미리보기가 실제 툴바와 어긋나면 안 된다(2026-09-03 지적사항).
+
+## "링크된 요소" 버튼 (모든 종류의 링크를 한 번에) + 버튼 종류 선택 오버레이 섹션 분리 (2026-09-04)
+
+사용자 요청은 *"IFC링크, 지형연결 링크, DWF마크업 링크, 포인트 클라우드 링크, 외부좌표모델링크들도 선택해서
+껏다킬 수 있는 버튼"* + *"버튼추가버튼을 눌렀을 때 요소가 너무 많아질 수 있으니 링크만 카테고리로 따로 빼서
+작게 표시"* 였는데, **종류별로 버튼을 쪼개는 대신 하나로 묶기로 사용자가 방향을 바꿨다**:
+*"그냥 링크를 다 나누지 않고, 링크된 요소로 전부 묶어서 현재 뷰에서 보이는 모든 링크를 전부 다 껏다 켤 수
+있도록 기능을 함축적으로 만드는게 더 직관적이고 쉬울 것 같네."* 조작 방식은 Q&A로 "단순 on/off 토글" 확정.
+
+**Revit API 조사 결과 (추측하지 말 것 - 실측으로 확인한 사실들)**:
+- **IFC 링크는 Revit 링크와 같은 것이다.** `RevitLinkType.CreateFromIFC`가 만들고, 인스턴스는 그냥
+  `RevitLinkInstance`이며 카테고리도 `OST_RvtLinks`를 공유한다. 즉 기존 "링크된 모델" 버튼은 **이미**
+  IFC 링크를 함께 다루고 있었다 - IFC 전용 버튼을 따로 만들려면 카테고리가 아니라 요소 단위로 갈라야 한다.
+- **DWF 마크업은 CAD 링크와 같은 "가져온 카테고리"로 들어온다.** 전용 `BuiltInCategory`가 없다
+  (`OST_*Markup*` 없음). 링크된 DWF는 `ImportInstance.IsLinked == true`라 기존 "링크된 도면" 버튼이
+  **이미** 함께 끄고 켜고 있었다.
+- 나머지는 전용 최상위 카테고리가 있다: `OST_TopographyLink`(지형 링크), `OST_ToposolidLink`(2024+의
+  지형솔리드 링크), `OST_PointClouds`, `OST_Coordination_Model`(외부 좌표 모델).
+- **전 연도 존재 확인**: 위 다섯 `BuiltInCategory` 멤버는 2023~2027 참조 어셈블리 **전부**에 있다
+  (`MetadataLoadContext`로 다섯 개 ref 어셈블리를 직접 열어 실측). 반대로
+  `Autodesk.Revit.DB.ExternalData.CoordinationModelLinkUtils`는 **2026부터만** 존재한다 -
+  `GetAllCoordinationModelInstanceIds`가 편해 보여도 쓰면 2023/2024/2025 빌드가 깨진다. 좌표 모델도
+  카테고리 조회(`OfCategory(OST_Coordination_Model)`)로 찾을 것.
+
+**구현**: 새 카테고리 `QuickToggleCategory.LinkedAll`("링크된 요소").
+- `QuickToggleService.AllLinkCategoryIds(view)` = 기존 `LinkedCadCategoryIds(view)`(CAD 도면 + DWF 마크업의
+  가져온 카테고리) + `ScanLinks(doc).OtherLinkCategoryIds`(위 다섯 카테고리 중 이 문서에 요소가 **실제로
+  있는** 것만). 판정/적용은 기존 `DetermineLinkState`/`ToggleLinkVisibility`를 그대로 재사용한다 -
+  결국 V/G 카테고리 끄고 켜기라 CAD 버튼과 완전히 같은 로직이다.
+- **요소가 없는 카테고리는 목록에 넣지 않는다**: 넣으면 끄고 켤 게 없는데도 버튼이 활성화되고, 눌러도
+  아무 변화가 없어 고장난 것처럼 보인다. 이 검사(`FilteredElementCollector.Any()` × 5)는 `ScanLinks`의
+  2초 캐시 안에서만 돌기 때문에 `Idling` 부담이 없다 - **이 검사를 캐시 밖으로 옮기지 말 것**(이 파일이
+  세 번 기록한 "Idling 콜백에서 매 틱 비싼 일" 문제가 그대로 재발한다).
+- **알려진 동작**: 카테고리 단위로만 끄고 켠다. "링크된 모델만" 버튼의 팝업으로 링크 하나를 요소 단위로
+  꺼 둔 경우, "링크된 요소"로 전체를 켜도 그 링크는 꺼진 채로 남는다(V/G와 같은 방식이라 예측 가능하고,
+  일부러 꺼 둔 개별 상태를 이 버튼이 몰래 되돌리지 않는 게 맞다고 판단). 설정 창 안내문에도 적어 두었다.
+- 기존 `LinkedCad`/`LinkedModel`은 그대로 뒀다 - 사용자가 2026-09-02에 명시적으로 요청한 "링크된 모델
+  개별 끄고 켜기" 팝업이 거기에 있고, 종류별로 따로 다루고 싶을 때의 수단으로 여전히 유효하다.
+- 아이콘: `QuickToggleIconShape.Link`(사슬 고리 두 개가 맞물린 모양, -35° 회전한 둥근 사각형 외곽선 2개)
+  추가. 선으로만 그리므로 `SetBrush`의 "원래 칠해져 있던 쪽만 갱신" 규칙에 그대로 맞는다.
+
+**버튼 종류 선택 오버레이를 두 섹션으로** (`QuickToggleSettingsWindow.BuildAddChooser`/`BuildKindCard`):
+`ButtonKinds` 하나였던 표를 `MainButtonKinds`(뷰템플릿/필터/작업세트/색상/기능 - 큰 카드)와
+`LinkButtonKinds`(링크 3종 - 한 줄짜리 낮은 카드)로 나누고, 그 사이에 구분선 + "링크" 섹션 머리글을 넣었다.
+링크 종류가 더 늘어도 오버레이가 세로로 길어지지 않고, "이건 같은 계열"이라는 것이 형태로도 드러난다.
+
+**"JSON" 표현 제거 (같은 날, 별도 요청)**: *"일반인들은 어려울수도 있으니 JSON이라는 표현을 버튼모음이라고
+바꿔주자."* 고급 설정의 버튼 라벨을 "버튼모음 내보내기"/"버튼모음 가져오기"로, 파일 대화상자 필터도
+"Sunny Tools 버튼모음 (*.json)"으로 바꿨다(확장자 자체는 그대로 `.json` - 기존에 내보낸 파일과 호환).

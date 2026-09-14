@@ -26,6 +26,9 @@ namespace WallSplitter
         // 아이콘으로 추가 - 기존 도형만으로는 "도면"과 "모델"을 형태로 구분할 수가 없었다.
         Sheet,
         Cube,
+        // 2026-09-04, "링크된 요소" 버튼(QuickToggleCategory.LinkedAll)의 기본 아이콘으로 추가 -
+        // 특정 링크 종류가 아니라 "링크" 자체를 뜻하는 모양이 필요했다.
+        Link,
     }
 
     // QuickToggleToolbar(실제 툴바 렌더링)와 QuickToggleSettingsWindow(설정 창의 아이콘 선택 미리보기)가
@@ -44,6 +47,7 @@ namespace WallSplitter
             QuickToggleCategory.CommandLauncher => QuickToggleIconShape.Bolt,
             QuickToggleCategory.LinkedCad => QuickToggleIconShape.Sheet,
             QuickToggleCategory.LinkedModel => QuickToggleIconShape.Cube,
+            QuickToggleCategory.LinkedAll => QuickToggleIconShape.Link,
             _ => QuickToggleIconShape.Dot,
         };
 
@@ -61,6 +65,7 @@ namespace WallSplitter
             QuickToggleIconShape.Bolt => "번개",
             QuickToggleIconShape.Sheet => "도면",
             QuickToggleIconShape.Cube => "상자",
+            QuickToggleIconShape.Link => "링크",
             _ => "",
         };
 
@@ -241,6 +246,33 @@ namespace WallSplitter
                     canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 1.6, Y2 = 4.8, Stroke = brush, StrokeThickness = 1.6 });
                     canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 18.4, Y2 = 4.8, Stroke = brush, StrokeThickness = 1.6 });
                     canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 10, Y2 = 15.4, Stroke = brush, StrokeThickness = 1.6 });
+                    break;
+                }
+
+                case QuickToggleIconShape.Link:
+                {
+                    // 사슬 고리 두 개가 맞물린 모양 - 특정 링크 종류가 아니라 "링크" 자체를 은유한다
+                    // ("링크된 요소" 버튼의 기본 아이콘, 2026-09-04). 도면/상자 아이콘과 마찬가지로
+                    // 선으로만 그린다 - SetBrush가 원래 칠해져 있던 쪽(Fill/Stroke)만 갱신하므로
+                    // 상태가 바뀌어도 선 그림 그대로 유지된다.
+                    // 기울어진 고리 두 개를 겹쳐 그리기 위해 각 고리를 중심 기준으로 -35° 회전시킨다.
+                    foreach (double centerX in new[] { 7.2, 12.8 })
+                    {
+                        Rectangle ring = new Rectangle
+                        {
+                            Width = 9.5,
+                            Height = 6.4,
+                            RadiusX = 3.2,
+                            RadiusY = 3.2,
+                            Stroke = brush,
+                            StrokeThickness = 1.8,
+                            RenderTransformOrigin = new Point(0.5, 0.5),
+                            RenderTransform = new RotateTransform(-35),
+                        };
+                        canvas.Children.Add(ring);
+                        Canvas.SetLeft(ring, centerX - 9.5 / 2);
+                        Canvas.SetTop(ring, 8 - 6.4 / 2);
+                    }
                     break;
                 }
 

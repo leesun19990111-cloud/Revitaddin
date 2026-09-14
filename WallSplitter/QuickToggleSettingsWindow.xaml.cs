@@ -60,7 +60,7 @@ namespace WallSplitter
         // "어떤 버튼을 만들까요?" 카드 목록. 설명 문구는 "이 버튼을 누르면 무슨 일이 일어나는가"를
         // 한 문장으로만 적는다 - 종류를 고르는 순간 필요한 정보는 그것뿐이고, 세부 사항은 고른 뒤
         // 편집 화면의 ③ 대상 안내에서 다시 설명한다.
-        private static readonly (QuickToggleCategory Category, string Title, string Description)[] ButtonKinds =
+        private static readonly (QuickToggleCategory Category, string Title, string Description)[] MainButtonKinds =
         {
             (QuickToggleCategory.ViewTemplate, "뷰템플릿",
                 "지정해 둔 뷰템플릿을 지금 보는 뷰에 씌우고, 다시 누르면 벗깁니다."),
@@ -68,14 +68,22 @@ namespace WallSplitter
                 "지정해 둔 필터들의 표시를 한 번에 켜고 끕니다."),
             (QuickToggleCategory.Workset, "작업세트",
                 "지정해 둔 작업세트들의 표시를 한 번에 켜고 끕니다."),
-            (QuickToggleCategory.LinkedCad, "링크된 도면",
-                "지금 보는 뷰에 링크된 CAD 도면을 한 번에 끄고 켭니다. 미리 고를 대상이 없습니다."),
-            (QuickToggleCategory.LinkedModel, "링크된 모델",
-                "링크된 Revit 모델 목록을 열어 하나씩 끄고 켭니다. 미리 고를 대상이 없습니다."),
             (QuickToggleCategory.ColorTool, "색상",
                 "고른 모델 카테고리의 색과 투명도를 패널에서 즉시 조절합니다."),
             (QuickToggleCategory.CommandLauncher, "기능",
                 "재료 지정·NAMER·동기화 같은 기능을 클릭 한 번으로 실행합니다."),
+        };
+
+        // 링크 계열은 개수가 늘어나면서 위 목록에 섞여 있으면 카드가 너무 많아 보인다는 지적(2026-09-04)으로
+        // 따로 뺐다 - "링크" 섹션에 한 줄짜리 작은 카드로 모아 그린다(BuildAddChooser).
+        private static readonly (QuickToggleCategory Category, string Title, string Description)[] LinkButtonKinds =
+        {
+            (QuickToggleCategory.LinkedAll, "링크된 요소 (전체)",
+                "이 뷰의 모든 링크 - CAD·Revit·IFC·지형·DWF 마크업·포인트 클라우드·좌표 모델"),
+            (QuickToggleCategory.LinkedCad, "링크된 도면만",
+                "링크된 CAD 도면(과 DWF 마크업)만 한 번에 끄고 켭니다"),
+            (QuickToggleCategory.LinkedModel, "링크된 모델만",
+                "링크된 Revit·IFC 모델 목록을 열어 하나씩 끄고 켭니다"),
         };
 
         public QuickToggleSettingsWindow(Document doc)
@@ -691,6 +699,7 @@ namespace WallSplitter
             QuickToggleCategory.Workset => "작업세트",
             QuickToggleCategory.ColorTool => "색상",
             QuickToggleCategory.CommandLauncher => "기능",
+            QuickToggleCategory.LinkedAll => "링크된 요소",
             QuickToggleCategory.LinkedCad => "링크된 도면",
             QuickToggleCategory.LinkedModel => "링크된 모델",
             _ => "",
@@ -821,58 +830,118 @@ namespace WallSplitter
 
         // ===== "어떤 버튼을 만들까요?" 오버레이 =====
 
+        // 2026-09-04, "링크만 좀 카테고리로 따로 빼서 요소들을 작게 표시해주면 도움이 될 것 같아"는 요청으로
+        // 한 덩어리였던 카드 목록을 "기본"(큰 카드)과 "링크"(한 줄짜리 작은 카드) 두 섹션으로 나눴다.
         private void BuildAddChooser()
         {
             AddChooserPanel.Children.Clear();
 
-            foreach ((QuickToggleCategory category, string title, string description) in ButtonKinds)
+            WrapPanel mainCards = new WrapPanel();
+            foreach ((QuickToggleCategory category, string title, string description) in MainButtonKinds)
+                mainCards.Children.Add(BuildKindCard(category, title, description, compact: false));
+            AddChooserPanel.Children.Add(mainCards);
+
+            AddChooserPanel.Children.Add(CreateDivider());
+            AddChooserPanel.Children.Add(CreateStepHeaderlessLabel(
+                "링크", "여러 종류가 있어 따로 모았습니다. 대부분은 맨 위 '링크된 요소 (전체)' 하나면 충분합니다."));
+
+            StackPanel linkCards = new StackPanel();
+            foreach ((QuickToggleCategory category, string title, string description) in LinkButtonKinds)
+                linkCards.Children.Add(BuildKindCard(category, title, description, compact: true));
+            AddChooserPanel.Children.Add(linkCards);
+        }
+
+        // 섹션 머리글 - 단계 번호 뱃지가 어울리지 않는 자리(오버레이 안)라 굵은 라벨 + 부연 한 줄로만 쓴다.
+        private static UIElement CreateStepHeaderlessLabel(string title, string hint)
+        {
+            StackPanel row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            row.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock
             {
-                QuickToggleCategory captured = category;
-                bool enabled = category != QuickToggleCategory.Workset || _isWorkshared;
+                Text = hint,
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            return row;
+        }
 
-                StackPanel head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-                head.Children.Add(new Viewbox
-                {
-                    Width = 20,
-                    Height = 16,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = QuickToggleIcons.Create(QuickToggleIcons.DefaultFor(category), Theme.Accent),
-                });
-                head.Children.Add(new TextBlock
-                {
-                    Text = title,
-                    FontWeight = FontWeights.Bold,
-                    Margin = new Thickness(8, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                });
+        // compact=false: 아이콘+제목 위, 설명 아래의 큰 카드(기본 5종).
+        // compact=true : 아이콘·제목·설명이 한 줄에 들어가는 낮은 카드(링크 3종) - 종류가 늘어도 오버레이가
+        //                길어지지 않고, "이건 같은 계열"이라는 것도 형태로 드러난다.
+        private UIElement BuildKindCard(QuickToggleCategory category, string title, string description, bool compact)
+        {
+            QuickToggleCategory captured = category;
+            bool enabled = category != QuickToggleCategory.Workset || _isWorkshared;
 
-                StackPanel content = new StackPanel();
-                content.Children.Add(head);
-                content.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = Theme.TextSecondary,
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 11,
-                });
+            Viewbox icon = new Viewbox
+            {
+                Width = compact ? 17 : 20,
+                Height = compact ? 14 : 16,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = QuickToggleIcons.Create(QuickToggleIcons.DefaultFor(category), Theme.Accent),
+            };
+            TextBlock titleText = new TextBlock
+            {
+                Text = title,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            TextBlock descriptionText = new TextBlock
+            {
+                Text = description,
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                TextWrapping = compact ? TextWrapping.NoWrap : TextWrapping.Wrap,
+                TextTrimming = compact ? TextTrimming.CharacterEllipsis : TextTrimming.None,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = compact ? new Thickness(10, 0, 0, 0) : new Thickness(0),
+            };
 
-                Button card = new Button
-                {
-                    Content = content,
-                    Width = 232,
-                    Height = 112,
-                    Margin = new Thickness(0, 0, 10, 10),
-                    Padding = new Thickness(12, 10, 12, 10),
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    VerticalContentAlignment = VerticalAlignment.Top,
-                    Cursor = Cursors.Hand,
-                    IsEnabled = enabled,
-                    ToolTip = enabled ? null : "이 문서는 작업공유(워크셰어링)가 설정되어 있지 않아 작업세트 버튼을 추가할 수 없습니다.",
-                };
-                card.Click += (s, e) => { HideAddOverlay(); AddButtonOfCategory(captured); };
-
-                AddChooserPanel.Children.Add(card);
+            UIElement content;
+            if (compact)
+            {
+                WpfGrid row = new WpfGrid();
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                WpfGrid.SetColumn(icon, 0);
+                WpfGrid.SetColumn(titleText, 1);
+                WpfGrid.SetColumn(descriptionText, 2);
+                row.Children.Add(icon);
+                row.Children.Add(titleText);
+                row.Children.Add(descriptionText);
+                content = row;
             }
+            else
+            {
+                StackPanel head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+                head.Children.Add(icon);
+                head.Children.Add(titleText);
+
+                StackPanel stack = new StackPanel();
+                stack.Children.Add(head);
+                stack.Children.Add(descriptionText);
+                content = stack;
+            }
+
+            Button card = new Button
+            {
+                Content = content,
+                Width = compact ? 716 : 232,
+                Height = compact ? 38 : 112,
+                Margin = compact ? new Thickness(0, 0, 0, 6) : new Thickness(0, 0, 10, 10),
+                Padding = compact ? new Thickness(12, 4, 12, 4) : new Thickness(12, 10, 12, 10),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = compact ? VerticalAlignment.Center : VerticalAlignment.Top,
+                Cursor = Cursors.Hand,
+                IsEnabled = enabled,
+                ToolTip = enabled ? null : "이 문서는 작업공유(워크셰어링)가 설정되어 있지 않아 작업세트 버튼을 추가할 수 없습니다.",
+            };
+            card.Click += (s, e) => { HideAddOverlay(); AddButtonOfCategory(captured); };
+            return card;
         }
 
         private void AddButton_Click(object sender, RoutedEventArgs e) => ShowAddOverlay();
@@ -998,6 +1067,7 @@ namespace WallSplitter
 
             switch (cfg.Category)
             {
+                case QuickToggleCategory.LinkedAll:
                 case QuickToggleCategory.LinkedCad:
                 case QuickToggleCategory.LinkedModel:
                     BuildLinkedInfo(cfg, EditPanelHost);
@@ -1313,7 +1383,8 @@ namespace WallSplitter
         }
 
         private static bool HasTargetPicker(QuickToggleCategory category) =>
-            category != QuickToggleCategory.LinkedCad && category != QuickToggleCategory.LinkedModel;
+            category != QuickToggleCategory.LinkedCad && category != QuickToggleCategory.LinkedModel &&
+            category != QuickToggleCategory.LinkedAll;
 
         // ===== ③ 대상: 공통 부품 =====
 
@@ -1394,32 +1465,53 @@ namespace WallSplitter
 
         private void BuildLinkedInfo(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
-            bool isCad = cfg.Category == QuickToggleCategory.LinkedCad;
+            string what;
+            string caveat;
+            switch (cfg.Category)
+            {
+                case QuickToggleCategory.LinkedAll:
+                    what = "커스텀 버튼바에서 누르면 지금 보고 있는 뷰의 링크를 종류에 상관없이 전부 한 번에 끄고, " +
+                           "다시 누르면 켭니다 - 링크된 CAD 도면, Revit 모델, IFC, 지형(지형솔리드) 링크, " +
+                           "DWF 마크업, 포인트 클라우드, 외부 좌표 모델이 대상입니다.";
+                    caveat = "Revit의 가시성/그래픽 설정에서 그 카테고리들을 끄고 켜는 것과 같은 동작이라 V/G 대화상자에서도 " +
+                             "그대로 확인·복구할 수 있습니다. 이 뷰에 링크가 하나도 없으면 버튼이 회색(비활성)으로 표시됩니다. " +
+                             "'링크된 모델만' 버튼으로 링크 하나만 따로 꺼 둔 것이 있으면, 이 버튼으로 전체를 켜도 그 링크는 꺼진 채로 남습니다.";
+                    break;
+
+                case QuickToggleCategory.LinkedCad:
+                    what = "커스텀 버튼바에서 누르면 지금 보고 있는 뷰에 링크된 CAD 도면을 한 번에 끄고, 다시 누르면 켭니다" +
+                           "(Revit의 가시성/그래픽 설정 - '가져온 카테고리'를 끄고 켜는 것과 같습니다). DWF 마크업도 Revit에서 " +
+                           "같은 '가져온 카테고리'로 들어오므로 함께 꺼지고 켜집니다.";
+                    caveat = "링크된 도면이 없는 뷰에서는 버튼이 회색(비활성)으로 표시됩니다. 도면을 '링크'가 아니라 '가져오기'로 넣은 경우는 대상이 아닙니다.";
+                    break;
+
+                default:
+                    what = "커스텀 버튼바에서 누르면 지금 보고 있는 뷰에 링크된 Revit 모델 목록이 열리고, 거기서 링크를 " +
+                           "하나씩 끄고 켤 수 있습니다('전체 켜기'/'전체 끄기' 버튼도 있습니다). IFC 링크는 Revit이 내부적으로 " +
+                           "Revit 링크로 만들기 때문에 이 목록에 함께 나옵니다.";
+                    caveat = "링크된 모델이 없는 뷰에서는 버튼이 회색(비활성)으로 표시됩니다. 버튼 색은 지금 이 뷰에 보이는 링크가 하나라도 있는지를 알려줍니다.";
+                    break;
+            }
 
             Border note = new Border
             {
                 BorderBrush = Theme.Border,
                 BorderThickness = new Thickness(1),
-                Background = Theme.Surface,
+                // 이 안내 상자는 Surface 배경 카드 안에 들어가므로 창 바탕색으로 칠해야 구분된다.
+                Background = Theme.WindowBackground,
                 Padding = new Thickness(12),
                 Margin = new Thickness(26, 0, 0, 0),
             };
             StackPanel content = new StackPanel();
             content.Children.Add(new TextBlock
             {
-                Text = isCad
-                    ? "커스텀 버튼바에서 누르면 지금 보고 있는 뷰에 링크된 CAD 도면을 한 번에 끄고, 다시 누르면 켭니다" +
-                      "(Revit의 가시성/그래픽 설정 - '가져온 카테고리'를 끄고 켜는 것과 같습니다)."
-                    : "커스텀 버튼바에서 누르면 지금 보고 있는 뷰에 링크된 Revit 모델 목록이 열리고, 거기서 링크를 " +
-                      "하나씩 끄고 켤 수 있습니다('전체 켜기'/'전체 끄기' 버튼도 있습니다).",
+                Text = what,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8),
             });
             content.Children.Add(new TextBlock
             {
-                Text = isCad
-                    ? "링크된 도면이 없는 뷰에서는 버튼이 회색(비활성)으로 표시됩니다. 도면을 '링크'가 아니라 '가져오기'로 넣은 경우는 대상이 아닙니다."
-                    : "링크된 모델이 없는 뷰에서는 버튼이 회색(비활성)으로 표시됩니다. 버튼 색은 지금 이 뷰에 보이는 링크가 하나라도 있는지를 알려줍니다.",
+                Text = caveat,
                 Foreground = Theme.TextSecondary,
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -1987,8 +2079,8 @@ namespace WallSplitter
         {
             Microsoft.Win32.SaveFileDialog dialog = new Microsoft.Win32.SaveFileDialog
             {
-                Filter = "JSON 파일 (*.json)|*.json",
-                FileName = "커스텀버튼_설정.json",
+                Filter = "Sunny Tools 버튼모음 (*.json)|*.json",
+                FileName = "커스텀버튼_버튼모음.json",
             };
             if (dialog.ShowDialog(this) != true) return;
 
@@ -2008,7 +2100,7 @@ namespace WallSplitter
         {
             Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "JSON 파일 (*.json)|*.json",
+                Filter = "Sunny Tools 버튼모음 (*.json)|*.json",
             };
             if (dialog.ShowDialog(this) != true) return;
 
