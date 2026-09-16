@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WallSplitter")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug2023")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fbfeb031d47c160d14a96f53c72b380b23149c39")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+289ec018830b61fc644ba93490e90c415232e356")]
 [assembly: System.Reflection.AssemblyProductAttribute("WallSplitter")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WallSplitter")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

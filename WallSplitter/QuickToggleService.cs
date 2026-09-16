@@ -15,6 +15,27 @@ namespace WallSplitter
         Disabled,
     }
 
+    // "층별 단면상자" 버튼이 이 문서에서 실제로 쓸 레벨 두 개 (2026-09-05).
+    // BottomName/TopName은 **이 문서에서 찾아낸** 레벨 이름이라 설정에 저장된 이름과 다를 수 있다
+    // (다른 모델에서 층 번호나 높이로 맞춰진 경우) - Exact가 false면 그 경우다.
+    public sealed class LevelRangeMatch
+    {
+        public double Bottom { get; }
+        public double Top { get; }
+        public string BottomName { get; }
+        public string TopName { get; }
+        public bool Exact { get; }
+
+        public LevelRangeMatch(double bottom, double top, string bottomName, string topName, bool exact)
+        {
+            Bottom = bottom;
+            Top = top;
+            BottomName = bottomName;
+            TopName = topName;
+            Exact = exact;
+        }
+    }
+
     // Revit API를 직접 만지는 순수 로직. 트랜잭션은 호출자(QuickToggleExternalEventHandler)가 연다.
     public static class QuickToggleService
     {
@@ -35,7 +56,9 @@ namespace WallSplitter
             public Dictionary<string, int> Worksets = new Dictionary<string, int>();
             // "층별 단면상자" 버튼용 - 레벨 이름 → 높이(내부 단위). DetermineState가 "이 프로젝트에 그
             // 레벨이 있는가"를 매 Idling 틱마다 물어보므로 여기 같이 캐시한다.
-            public Dictionary<string, double> LevelElevations = new Dictionary<string, double>();
+            // 이름 → 높이만으로는 "층 번호가 같은 레벨 찾기"를 할 수 없어 목록으로 들고 있는다
+            // (레벨은 보통 수십 개 이하라 선형 탐색으로 충분하다).
+            public List<(string Name, double Elevation)> Levels = new List<(string, double)>();
             public DateTime StampUtc;
         }
 
@@ -86,7 +109,7 @@ namespace WallSplitter
             try
             {
                 foreach (Level level in new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>())
-                    index.LevelElevations[level.Name] = level.Elevation;
+                    index.Levels.Add((level.Name, level.Elevation));
             }
             catch
             {
@@ -99,15 +122,115 @@ namespace WallSplitter
         // "층별 단면상자" 버튼이 고른 두 레벨을 이 문서에서 이름으로 찾아 **높이 순으로 정렬해** 돌려준다.
         // 둘 중 하나라도 없으면 null - 호출자는 버튼을 회색으로 그리거나(DetermineState) 안내한다.
         // 위/아래를 저장된 순서 그대로 믿지 않는 이유는 QuickToggleButtonConfig의 해당 필드 주석 참고.
-        public static (double Bottom, double Top)? ResolveLevelRange(Document doc, QuickToggleButtonConfig cfg)
+        // ===== 다른 모델에서도 "같은 층"을 찾아내기 (2026-09-05) =====
+        //
+        // 사용자 요청: *"다른 레빗모델을 열었을때마다 레벨을 다시 지정해주어야하는데, 대충 1-2층으로
+        // 잡았을때 1-2층으로 보이는 레벨을 다른모델에서도 자동으로 감지해서 잡아줄 수 있도록"*.
+        // 설정이 PC 전역이라 버튼 하나가 여러 모델에서 쓰이는데, 모델마다 레벨 이름 규칙이 달라
+        // ("1F" vs "1층" vs "Level 1") 이름이 정확히 같을 때만 잡히던 기존 방식은 매번 회색이 됐다.
+        //
+        // Q&A로 확정한 3단 순서 - **위에서 하나라도 잡히면 아래는 보지 않는다**:
+        //   1) 이름이 정확히 같은 레벨          (가장 확실 - 같은 템플릿에서 뽑은 모델끼리)
+        //   2) 이름에서 읽어낸 **층 번호**가 같은 레벨  ("1층"="1F"="Level 1"="L1", "지하1층"="B1")
+        //   3) 버튼을 만들 때 고른 레벨의 **높이와 가장 가까운** 레벨 (이름 규칙이 전혀 다른 모델용)
+        // 셋 다 실패하면 null → 버튼은 회색으로 남고 사용자가 직접 고르면 된다.
+        public static LevelRangeMatch? ResolveLevelRange(Document doc, QuickToggleButtonConfig cfg)
         {
             if (string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)) return null;
 
-            Dictionary<string, double> levels = IndexOf(doc).LevelElevations;
-            if (!levels.TryGetValue(cfg.LevelBottomName!, out double a)) return null;
-            if (!levels.TryGetValue(cfg.LevelTopName!, out double b)) return null;
+            List<(string Name, double Elevation)> levels = IndexOf(doc).Levels;
+            if (levels.Count == 0) return null;
 
-            return a <= b ? (a, b) : (b, a);
+            (string Name, double Elevation)? bottom = MatchLevel(levels, cfg.LevelBottomName!, cfg.LevelBottomElevation);
+            (string Name, double Elevation)? top = MatchLevel(levels, cfg.LevelTopName!, cfg.LevelTopElevation);
+            if (bottom == null || top == null) return null;
+
+            // 서로 다른 두 레벨로 갈라져야 단면상자를 만들 수 있다. 예를 들어 "1F"와 "2F"가 이 모델에서
+            // 둘 다 같은 레벨 하나로 매칭되면(층 번호를 못 읽고 높이도 그 레벨이 제일 가까운 경우)
+            // 두께가 0인 상자가 되므로 실패로 본다 - 호출자가 안내 문구를 띄운다.
+            if (bottom.Value.Name == top.Value.Name) return null;
+
+            bool flipped = bottom.Value.Elevation > top.Value.Elevation;
+            (string Name, double Elevation) low = flipped ? top.Value : bottom.Value;
+            (string Name, double Elevation) high = flipped ? bottom.Value : top.Value;
+
+            // 이름이 둘 다 저장된 것과 똑같으면 "정확히 맞은 것"이고, 하나라도 다르면 자동으로 찾아낸
+            // 것이다 - 설정 창/툴팁이 "이 프로젝트에서는 ○○로 잡힙니다"를 보여줄지 판단하는 데 쓴다.
+            bool exact = low.Name == (flipped ? cfg.LevelTopName : cfg.LevelBottomName)
+                         && high.Name == (flipped ? cfg.LevelBottomName : cfg.LevelTopName);
+
+            return new LevelRangeMatch(low.Elevation, high.Elevation, low.Name, high.Name, exact);
+        }
+
+        private static (string Name, double Elevation)? MatchLevel(
+            List<(string Name, double Elevation)> levels, string wantedName, double? wantedElevation)
+        {
+            // 1) 이름이 정확히 같은 레벨
+            foreach ((string Name, double Elevation) level in levels)
+                if (level.Name == wantedName) return level;
+
+            // 2) 층 번호가 같은 레벨. 후보가 여럿이면(예: "2F"와 "2층"이 한 모델에 다 있는 경우)
+            //    저장된 높이에 가장 가까운 것을, 높이 정보가 없으면 가장 낮은 것을 고른다.
+            if (TryParseFloorNumber(wantedName, out int wantedFloor))
+            {
+                List<(string Name, double Elevation)> sameFloor = new List<(string, double)>();
+                foreach ((string Name, double Elevation) level in levels)
+                    if (TryParseFloorNumber(level.Name, out int floor) && floor == wantedFloor) sameFloor.Add(level);
+
+                if (sameFloor.Count == 1) return sameFloor[0];
+                if (sameFloor.Count > 1)
+                    return wantedElevation.HasValue
+                        ? NearestByElevation(sameFloor, wantedElevation.Value)
+                        : sameFloor.OrderBy(l => l.Elevation).First();
+            }
+
+            // 3) 높이가 가장 가까운 레벨 (버튼을 만들 때의 높이를 기억해 둔 경우에만)
+            return wantedElevation.HasValue ? NearestByElevation(levels, wantedElevation.Value) : null;
+        }
+
+        private static (string Name, double Elevation) NearestByElevation(
+            List<(string Name, double Elevation)> levels, double elevation) =>
+            levels.OrderBy(l => Math.Abs(l.Elevation - elevation)).First();
+
+        // 레벨 이름에서 층 번호를 읽는다. 지상은 양수, 지하는 음수 (예: "B2" → -2).
+        //
+        // **일부러 느슨하지 않게 했다**: "T.O. Slab 2"나 "기초 1"처럼 층 이름이 아닌데 숫자가 들어간
+        // 이름까지 잡아버리면 엉뚱한 층으로 조용히 매칭된다. 아래 정해진 모양에 맞을 때만 인정하고,
+        // 나머지는 3단계(높이 근접)로 넘긴다 - 그쪽이 훨씬 안전하다.
+        internal static bool TryParseFloorNumber(string name, out int floor)
+        {
+            floor = 0;
+            if (string.IsNullOrWhiteSpace(name)) return false;
+
+            // 공백·점·하이픈·언더스코어는 표기 차이일 뿐이라 전부 지우고 대문자로 맞춘다
+            // ("B 1", "B-1", "B.1", "b1" → "B1"; "Level 1" → "LEVEL1").
+            string s = name.Trim().ToUpperInvariant();
+            foreach (char c in new[] { ' ', '.', '-', '_', '/' }) s = s.Replace(c.ToString(), "");
+            if (s.Length == 0) return false;
+
+            // 지상 1층을 뜻하는 관용 표기
+            if (s == "GF" || s == "G" || s == "GROUNDFLOOR" || s == "GROUND" || s == "1LAYER") { floor = 1; return true; }
+
+            bool basement = false;
+            if (s.StartsWith("지하")) { basement = true; s = s.Substring(2); }
+            else if (s.StartsWith("BASEMENT")) { basement = true; s = s.Substring("BASEMENT".Length); }
+            else if (s.StartsWith("B") && s.Length > 1 && char.IsDigit(s[1])) { basement = true; s = s.Substring(1); }
+            else if (s.StartsWith("LEVEL")) s = s.Substring("LEVEL".Length);
+            else if (s.StartsWith("L") && s.Length > 1 && char.IsDigit(s[1])) s = s.Substring(1);
+
+            // 남은 부분은 "숫자 + 층 표기(선택)"여야 한다: "1", "1F", "1FL", "1층", "01F"
+            int digits = 0;
+            while (digits < s.Length && char.IsDigit(s[digits])) digits++;
+            if (digits == 0) return false;
+
+            string suffix = s.Substring(digits);
+            if (suffix.Length > 0 && suffix != "F" && suffix != "FL" && suffix != "층") return false;
+
+            if (!int.TryParse(s.Substring(0, digits), out int value)) return false;
+            if (value == 0) return false; // "0F" 같은 표기는 지상/지하 판단이 모호해 넘긴다
+
+            floor = basement ? -value : value;
+            return true;
         }
 
         // 설정 창에서 저장한 직후처럼 "방금 만든 요소를 곧바로 찾아야 하는" 경우를 위해 캐시를 버린다.
@@ -696,19 +819,21 @@ namespace WallSplitter
                 return false;
             }
 
-            (double Bottom, double Top)? range = ResolveLevelRange(doc, cfg);
+            LevelRangeMatch? range = ResolveLevelRange(doc, cfg);
             if (range == null)
             {
                 failureReason = string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)
                     ? "이 버튼에 레벨이 지정되어 있지 않습니다. 커스텀 버튼 설정에서 아래/위 레벨을 골라 주세요."
-                    : $"'{cfg.LevelBottomName}' / '{cfg.LevelTopName}' 레벨을 지금 열려 있는 프로젝트에서 찾지 못했습니다.";
+                    : $"'{cfg.LevelBottomName}' / '{cfg.LevelTopName}'에 해당하는 레벨을 지금 열려 있는 프로젝트에서 " +
+                      "찾지 못했습니다(이름·층 번호·높이 어느 쪽으로도 맞는 레벨이 없습니다). 커스텀 버튼 설정에서 이 프로젝트의 레벨로 다시 골라 주세요.";
                 return false;
             }
 
-            (double bottom, double top) = range.Value;
+            double bottom = range.Bottom;
+            double top = range.Top;
             if (top - bottom < 1e-6)
             {
-                failureReason = "고른 두 레벨의 높이가 같아 단면상자를 만들 수 없습니다. 서로 다른 레벨을 골라 주세요.";
+                failureReason = "찾아낸 두 레벨의 높이가 같아 단면상자를 만들 수 없습니다. 서로 다른 레벨을 골라 주세요.";
                 return false;
             }
 
@@ -719,7 +844,9 @@ namespace WallSplitter
                 return false;
             }
 
-            string viewName = LevelSectionBoxViewName(cfg);
+            // 뷰 이름은 설정에 저장된 이름이 아니라 **이 모델에서 실제로 잡힌 레벨 이름**으로 짓는다 -
+            // 다른 모델에서 자동으로 맞춰진 경우 뷰 이름과 실제 내용이 어긋나지 않게 하기 위함이다.
+            string viewName = LevelSectionBoxViewName(range.BottomName, range.TopName);
             View3D? target = FindViewByName(doc, viewName);
 
             using (Transaction tx = new Transaction(doc, "커스텀 버튼: " + cfg.Name))
@@ -823,8 +950,8 @@ namespace WallSplitter
 
         // 뷰 이름은 고른 두 레벨에서 그대로 만든다 - 같은 조합의 버튼을 다시 눌러도 뷰가 새로 쌓이지 않고
         // 기존 것을 재사용하게 하기 위한 키이기도 하다. Revit 뷰 이름에 못 쓰는 문자는 미리 바꿔 둔다.
-        internal static string LevelSectionBoxViewName(QuickToggleButtonConfig cfg) =>
-            SanitizeViewName($"단면상자 {cfg.LevelBottomName}~{cfg.LevelTopName}");
+        internal static string LevelSectionBoxViewName(string bottomName, string topName) =>
+            SanitizeViewName($"단면상자 {bottomName}~{topName}");
 
         private static string SanitizeViewName(string name)
         {

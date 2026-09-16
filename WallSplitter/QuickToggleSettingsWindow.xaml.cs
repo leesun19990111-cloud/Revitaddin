@@ -174,9 +174,10 @@ namespace WallSplitter
 
                 case QuickToggleCategory.LevelSectionBox:
                     if (string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)) return ButtonReadiness.NoTarget;
-                    return _levels.Any(l => l.Name == cfg.LevelBottomName) && _levels.Any(l => l.Name == cfg.LevelTopName)
-                        ? ButtonReadiness.Ready
-                        : ButtonReadiness.NotInProject;
+                    // 이름이 정확히 같은 레벨이 없어도 층 번호나 높이로 찾아내면 쓸 수 있는 상태다
+                    // (2026-09-05) - 그래서 목록을 직접 뒤지지 않고 툴바와 **같은 해석기**를 쓴다.
+                    // 두 곳이 서로 다른 기준으로 판단하면 "설정 창은 준비됨인데 툴바는 회색"이 된다.
+                    return LevelMatchFor(cfg) != null ? ButtonReadiness.Ready : ButtonReadiness.NotInProject;
 
                 case QuickToggleCategory.CommandLauncher:
                     return string.IsNullOrEmpty(cfg.CommandId) ? ButtonReadiness.NoTarget : ButtonReadiness.Ready;
@@ -188,6 +189,15 @@ namespace WallSplitter
         }
 
         private bool IsConfigured(QuickToggleButtonConfig cfg) => ReadinessOf(cfg) == ButtonReadiness.Ready;
+
+        // "층별 단면상자" 버튼이 **지금 이 프로젝트에서** 실제로 쓰게 될 레벨 두 개. 툴바가 쓰는 것과
+        // 똑같은 해석기라 설정 창과 툴바의 판단이 어긋날 수 없다. 조회 실패는 조용히 null로 둔다
+        // (설정 창은 정보 표시용이고, 실제 실행 시엔 툴바가 같은 경로로 다시 판단한다).
+        private LevelRangeMatch? LevelMatchFor(QuickToggleButtonConfig cfg)
+        {
+            try { return QuickToggleService.ResolveLevelRange(_doc, cfg); }
+            catch { return null; }
+        }
 
         // 왼쪽 목록의 두 번째 줄에 쓰는 한 줄 요약 - 지금 무엇이 걸려 있는지를 목록에서 바로 보여준다.
         private string TargetSummary(QuickToggleButtonConfig cfg)
@@ -1500,7 +1510,9 @@ namespace WallSplitter
         {
             headerHost.Children.Add(CreateNote(
                 "고른 두 레벨 사이만 남기고 잘라 보는 3D 뷰를 만들어 그 뷰로 이동합니다. 같은 조합으로 다시 누르면 " +
-                "이미 만들어 둔 뷰를 재사용하고 범위만 다시 맞춥니다. 가로 범위는 모델 전체를 감싸도록 매번 다시 계산합니다."));
+                "이미 만들어 둔 뷰를 재사용하고 범위만 다시 맞춥니다. 가로 범위는 모델 전체를 감싸도록 매번 다시 계산합니다.\n" +
+                "다른 프로젝트에서는 레벨 이름이 달라도 알아서 찾습니다 - 같은 이름이 없으면 층 번호로(\"1층\"=\"1F\"=\"Level 1\"=\"L1\", " +
+                "\"지하1층\"=\"B1\"), 그것도 안 되면 높이가 가장 가까운 레벨로 맞춥니다."));
 
             if (_levels.Count < 2)
             {
@@ -1526,9 +1538,32 @@ namespace WallSplitter
             _refreshTargetSummary = () =>
             {
                 bool both = !string.IsNullOrEmpty(cfg.LevelBottomName) && !string.IsNullOrEmpty(cfg.LevelTopName);
-                summary.Text = both
-                    ? $"현재 선택: {cfg.LevelBottomName} ~ {cfg.LevelTopName}"
-                    : "현재 선택: (아래·위 레벨을 각각 골라 주세요)";
+                if (!both)
+                {
+                    summary.Text = "현재 선택: (아래·위 레벨을 각각 골라 주세요)";
+                    summary.Foreground = Theme.TextSecondary;
+                    return;
+                }
+
+                // 다른 모델에서는 이름이 달라 자동으로 찾아낸 것일 수 있으므로, 지금 이 프로젝트에서
+                // 실제로 무엇이 잡히는지를 함께 보여준다 - 안 보여주면 "왜 이 층이 나오지?"가 된다.
+                LevelRangeMatch? match = LevelMatchFor(cfg);
+                string chosen = $"현재 선택: {cfg.LevelBottomName} ~ {cfg.LevelTopName}";
+                if (match == null)
+                {
+                    summary.Text = chosen + "  →  이 프로젝트에서는 맞는 레벨을 찾지 못했습니다. 아래에서 직접 골라 주세요.";
+                    summary.Foreground = Theme.WarningText;
+                }
+                else if (match.Exact)
+                {
+                    summary.Text = chosen;
+                    summary.Foreground = Theme.TextSecondary;
+                }
+                else
+                {
+                    summary.Text = chosen + $"  →  이 프로젝트에서는 '{match.BottomName} ~ {match.TopName}'로 자동으로 맞춥니다.";
+                    summary.Foreground = Theme.TextSecondary;
+                }
             };
             _refreshTargetSummary();
 
@@ -1565,8 +1600,8 @@ namespace WallSplitter
                 };
                 radio.Checked += (s, e) =>
                 {
-                    if (bottom) cfg.LevelBottomName = name;
-                    else cfg.LevelTopName = name;
+                    if (bottom) { cfg.LevelBottomName = name; cfg.LevelBottomElevation = level.Elevation; }
+                    else { cfg.LevelTopName = name; cfg.LevelTopElevation = level.Elevation; }
                     OnTargetChanged();
                 };
                 column.Children.Add(radio);

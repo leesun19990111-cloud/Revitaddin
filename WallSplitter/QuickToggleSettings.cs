@@ -134,6 +134,15 @@ namespace WallSplitter
         // 동작해야 하고, 다른 프로젝트에서는 같은 이름의 레벨 높이 순서가 다를 수도 있다.
         public string? LevelBottomName { get; set; }
         public string? LevelTopName { get; set; }
+
+        // 2026-09-05, "다른 레빗모델을 열 때마다 레벨을 다시 지정해야 하는데, 1-2층으로 잡았으면 다른
+        // 모델에서도 자동으로 감지해서 잡아달라"는 요청으로 추가 - 버튼을 만들 때 고른 레벨의 **높이**를
+        // 같이 기억해 둔다. 다른 모델에서 이름도 다르고 층 번호도 못 읽을 때(예: "T.O. Slab", "기초")
+        // 이 높이와 가장 가까운 레벨로 맞추는 마지막 단서다(QuickToggleService.ResolveLevelRange).
+        // Revit 내부 단위(피트)로 저장한다 - 프로젝트 단위 설정과 무관하게 일정하다.
+        // 예전 설정 파일에는 이 값이 없는데(null), 그때는 이름·층 번호 매칭까지만 시도한다.
+        public double? LevelBottomElevation { get; set; }
+        public double? LevelTopElevation { get; set; }
     }
 
     // "색상 버튼"이 색상/투명도를 적용할 카테고리 한 줄. ElementId는 문서마다 달라 이식(내보내기/
