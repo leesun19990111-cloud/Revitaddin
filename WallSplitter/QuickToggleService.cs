@@ -804,6 +804,20 @@ namespace WallSplitter
                 return false;
             }
 
+            // 화면에 맞춰 줌한다 (2026-09-04 추가) - 전에 쓰던 카메라 위치가 그대로 남아 있으면 방금 맞춘
+            // 층이 화면 밖이거나 점처럼 작게 보여 "어디 있는지 못 찾겠다"가 된다. 실제로 그 증상으로
+            // 보고를 받았고(원인은 아래 ModelPlanExtent의 과대 범위였지만), 범위를 고친 뒤에도 줌은
+            // 맞춰 주는 게 맞다 - 이 버튼의 목적 자체가 "그 층을 바로 본다"이기 때문이다.
+            try
+            {
+                foreach (UIView uiView in uidoc.GetOpenUIViews())
+                    if (uiView.ViewId == target!.Id) uiView.ZoomToFit();
+            }
+            catch
+            {
+                // 줌은 부가 동작이라 실패해도 성공으로 본다 - 뷰와 단면상자는 이미 제대로 맞춰졌다.
+            }
+
             return true;
         }
 
@@ -846,15 +860,52 @@ namespace WallSplitter
             return null;
         }
 
+        // 가로(평면) 범위 계산에서 빼는 카테고리 (2026-09-04 수정).
+        //
+        // **CONFIRMED LIVE BUG**: 처음 구현은 뷰에 종속되지 않은 요소를 전부 합쳤는데, 사용자가
+        // "1-2층을 선택했는데 모델이 점처럼 작아질 정도로 단면상자가 거대하게 잡힌다"고 보고했다.
+        // 원인은 건물과 무관하게 넓은 것들까지 다 합쳐졌다는 것이다:
+        //  - **레벨/그리드/참조평면** - 데이텀 평면이라 건물보다 훨씬 넓게 뻗는다(V/G에서 "주석
+        //    카테고리"에 들어 있는 이유이기도 하다). 이게 가장 흔한 원인.
+        //  - **프로젝트 기준점/측량점/내부 원점** - 공유 좌표를 쓰면 수 km 밖에 있을 수 있다.
+        //  - **링크·가져온 CAD·포인트 클라우드·좌표 모델** - 공유 좌표로 멀리 배치되는 경우가 많다.
+        //  - **지형/대지** - 건물보다 몇 배 넓은 게 정상이다.
+        // 이것들은 "박스 크기를 정하는 기준"에서만 빠질 뿐, 박스 안에 들어오면 화면에는 그대로 보인다.
+        private static readonly BuiltInCategory[] PlanExtentExcludedCategories =
+        {
+            BuiltInCategory.OST_Levels,
+            BuiltInCategory.OST_Grids,
+            BuiltInCategory.OST_CLines,            // 참조 평면
+            BuiltInCategory.OST_VolumeOfInterest,  // 범위 상자
+            BuiltInCategory.OST_ProjectBasePoint,
+            BuiltInCategory.OST_SharedBasePoint,   // 측량점
+            BuiltInCategory.OST_IOS_GeoSite,
+            BuiltInCategory.OST_Cameras,
+            BuiltInCategory.OST_RvtLinks,
+            BuiltInCategory.OST_ImportObjectStyles,
+            BuiltInCategory.OST_PointClouds,
+            BuiltInCategory.OST_Coordination_Model,
+            BuiltInCategory.OST_Topography,
+            BuiltInCategory.OST_Toposolid,
+            BuiltInCategory.OST_Site,
+            BuiltInCategory.OST_SiteSurface,
+        };
+
         // 단면상자의 가로(평면) 범위 - 사용자 확정("모델 전체를 감싸게")에 따라 매번 다시 계산한다.
-        // 뷰 기준 수집기(FilteredElementCollector(doc, viewId))를 쓰면 안 된다 - 그 뷰에 이미 걸려 있는
-        // 단면상자에 잘린 결과만 돌려주므로, 버튼을 누를 때마다 범위가 조금씩 쪼그라든다. 그래서 문서
-        // 전체에서 뷰에 종속되지 않은(=모델) 요소만 훑는다. 클릭할 때 1회만 도는 경로라 Idling 부담은 없다.
+        // **뷰 기준 수집기(FilteredElementCollector(doc, viewId))를 쓰면 안 된다** - 그 뷰에 이미 걸려
+        // 있는 단면상자에 잘린 결과만 돌려주므로 버튼을 누를 때마다 범위가 조금씩 쪼그라든다. 그래서 문서
+        // 전체를 훑되, 위 목록의 카테고리와 주석(비-모델) 카테고리는 빼고 실제 건물 요소만 본다.
+        // 클릭할 때 1회만 도는 경로라 Idling 부담은 없다.
         private static (double MinX, double MinY, double MaxX, double MaxY)? ModelPlanExtent(Document doc)
         {
-            double minX = double.MaxValue, minY = double.MaxValue;
-            double maxX = double.MinValue, maxY = double.MinValue;
-            bool any = false;
+            HashSet<int> excluded = new HashSet<int>();
+            foreach (BuiltInCategory builtIn in PlanExtentExcludedCategories) excluded.Add((int)builtIn);
+
+            // (중심X, 중심Y, 최소X, 최소Y, 최대X, 최대Y) - 이상치를 걸러내려면 한 번 모아둬야 한다.
+            // Revit 타입을 섞지 않은 순수 숫자로 담는다 - 이상치 제거 계산(RejectOutliersAndUnion)을
+            // Revit 없이도 스크래치패드에서 그대로 돌려 검증할 수 있게 하기 위함이다.
+            List<(double CenterX, double CenterY, double MinX, double MinY, double MaxX, double MaxY)> boxes =
+                new List<(double, double, double, double, double, double)>();
 
             try
             {
@@ -862,23 +913,67 @@ namespace WallSplitter
                              .WhereElementIsNotElementType()
                              .WhereElementIsViewIndependent())
                 {
+                    Category? category = element.Category;
+                    if (category == null) continue;
+                    // 주석(레벨/그리드/참조평면 등)은 건물 크기를 대표하지 않는다.
+                    if (category.CategoryType != CategoryType.Model) continue;
+                    if (excluded.Contains(category.Id.ToInt())) continue;
+
                     BoundingBoxXYZ? box;
                     try { box = element.get_BoundingBox(null); }
                     catch { continue; }
                     if (box == null) continue;
 
-                    XYZ min = box.Transform.OfPoint(box.Min);
-                    XYZ max = box.Transform.OfPoint(box.Max);
-                    minX = Math.Min(minX, Math.Min(min.X, max.X));
-                    minY = Math.Min(minY, Math.Min(min.Y, max.Y));
-                    maxX = Math.Max(maxX, Math.Max(min.X, max.X));
-                    maxY = Math.Max(maxY, Math.Max(min.Y, max.Y));
-                    any = true;
+                    XYZ a = box.Transform.OfPoint(box.Min);
+                    XYZ b = box.Transform.OfPoint(box.Max);
+                    XYZ min = new XYZ(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Min(a.Z, b.Z));
+                    XYZ max = new XYZ(Math.Max(a.X, b.X), Math.Max(a.Y, b.Y), Math.Max(a.Z, b.Z));
+                    if (double.IsNaN(min.X) || double.IsNaN(max.X) || double.IsNaN(min.Y) || double.IsNaN(max.Y)) continue;
+
+                    boxes.Add(((min.X + max.X) / 2, (min.Y + max.Y) / 2, min.X, min.Y, max.X, max.Y));
                 }
             }
             catch
             {
                 return null;
+            }
+
+            return RejectOutliersAndUnion(boxes);
+        }
+
+        // **이상치 한 개가 박스를 통째로 망치는 걸 막는다.** 카테고리를 걸러내도 엉뚱한 곳에 놓인 요소
+        // 하나(잘못 배치된 패밀리, 원점 근처에 남은 잔재 등)가 남아 있을 수 있는데, 그 하나 때문에 건물이
+        // 점처럼 작아지는 게 2026-09-04에 보고된 증상이다. 중앙값에서 각 요소 중심까지의 거리를 재서
+        // 75번째 백분위수의 6배(최소 100ft ≈ 30m)를 넘는 것만 버린다 - 실제 건물의 반대쪽 날개는 넉넉히
+        // 살아남고 수백 m~km 밖의 외톨이만 걸러진다.
+        //
+        // Revit 타입을 전혀 쓰지 않는 순수 계산이라 스크래치패드에서 그대로 호출해 검증할 수 있다
+        // (라이브 Revit 없이 확인할 수 있는 몇 안 되는 지점이라 일부러 이렇게 떼어 뒀다).
+        internal static (double MinX, double MinY, double MaxX, double MaxY)? RejectOutliersAndUnion(
+            List<(double CenterX, double CenterY, double MinX, double MinY, double MaxX, double MaxY)> boxes)
+        {
+            if (boxes == null || boxes.Count == 0) return null;
+
+            double medianX = Median(boxes.Select(b => b.CenterX).ToList());
+            double medianY = Median(boxes.Select(b => b.CenterY).ToList());
+            List<double> distances = boxes
+                .Select(b => Math.Sqrt(Sq(b.CenterX - medianX) + Sq(b.CenterY - medianY)))
+                .ToList();
+            double q75 = Percentile(distances, 0.75);
+            const double minAllowedFeet = 100.0; // 작은 모델에서 q75가 0에 가까울 때의 하한
+            double limit = Math.Max(q75 * 6.0, minAllowedFeet);
+
+            double minX = double.MaxValue, minY = double.MaxValue;
+            double maxX = double.MinValue, maxY = double.MinValue;
+            bool any = false;
+            for (int i = 0; i < boxes.Count; i++)
+            {
+                if (distances[i] > limit) continue;
+                minX = Math.Min(minX, boxes[i].MinX);
+                minY = Math.Min(minY, boxes[i].MinY);
+                maxX = Math.Max(maxX, boxes[i].MaxX);
+                maxY = Math.Max(maxY, boxes[i].MaxY);
+                any = true;
             }
 
             if (!any) return null;
@@ -887,6 +982,25 @@ namespace WallSplitter
             // (경고Pick의 단면상자와 같은 처리).
             const double padding = 3.0;
             return (minX - padding, minY - padding, maxX + padding, maxY + padding);
+        }
+
+        private static double Sq(double v) => v * v;
+
+        private static double Median(List<double> values)
+        {
+            values.Sort();
+            int n = values.Count;
+            if (n == 0) return 0;
+            return n % 2 == 1 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
+        }
+
+        private static double Percentile(List<double> values, double fraction)
+        {
+            if (values.Count == 0) return 0;
+            List<double> sorted = new List<double>(values);
+            sorted.Sort();
+            int index = (int)Math.Round(fraction * (sorted.Count - 1));
+            return sorted[Math.Max(0, Math.Min(sorted.Count - 1, index))];
         }
 
         public static bool RunCommand(UIApplication uiapp, QuickToggleButtonConfig cfg, out string failureReason)
