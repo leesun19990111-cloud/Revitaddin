@@ -704,3 +704,34 @@ Button이 캡처를 잃고 `LostMouseCapture`를 올려보내는데, 그게 호�
   (2) `AutoScrollWhileDragging` — 드래그 중 커서가 좌우 끝 28px 안에 들어오면 26px씩 밀어준다.
   버튼이 많아 화면 밖에 있는 자리로도 끌어다 놓을 수 있어야 하기 때문이다. 자동 스크롤 직후에는
   `UpdateLayout()`을 불러야 뒤이은 좌표 계산이 옛 오프셋을 보지 않는다.
+
+#### CONFIRMED LIVE BUG (2026-09-06, v75 이후 재보고): 진짜 원인은 "Button이 MouseMove를 Handled로 만든다"
+
+사용자 재보고: *"지금 아무리 적용해도 드래그로 툴바미리보기에서 순서가 움직이지 않아."* v75의
+LostMouseCapture 수정은 **맞는 수정이었지만 원인의 전부가 아니었다**. 진짜로 막고 있던 것은 이것이다:
+
+> **눌린 `Button`이 마우스를 캡처하고 있는 동안, 그 Button은 `MouseMove`를 `Handled = true`로 표시한다.**
+> 평범한 `PreviewDragHost.MouseMove += ...` 등록은 **Handled로 표시된 이벤트를 받지 못하므로**,
+> 드래그 판정 코드가 단 한 번도 실행되지 않았다.
+
+- **고정**: `PreviewDragHost.AddHandler(MouseMoveEvent, ..., handledEventsToo: true)`. `MouseLeftButtonUp`은
+  이미 같은 이유로 그렇게 등록돼 있었다(Button이 Click을 만들며 Handled로 표시). **`+=`로 되돌리면
+  드래그가 통째로 죽는다.**
+- **어떻게 찾았나 (이 방법을 앞으로도 쓸 것)**: 하네스에 `SetCursorPos` + `mouse_event`로 **진짜 마우스
+  입력**을 넣는 모드(`dotnet run -- input`)를 만들었다. 거기서 호스트에 핸들러를 두 벌 달아
+  (`handledEventsToo: true` 한 벌, 평범한 `+=` 한 벌) 개수를 비교했더니:
+  ```
+  이동 2 : moves(전체)=14  moves(Handled아님)=8
+  이동 12: moves(전체)=24  moves(Handled아님)=8   ← 드래그 내내 하나도 안 늘어난다
+  MouseMove를 Handled로 만든 쪽: Button
+  ```
+  즉 드래그 중 호스트에 도착한 MouseMove 중 **Handled가 아닌 것이 단 하나도 없었다**. 이 한 줄이 원인을
+  확정했다. 고친 뒤 같은 테스트가 `_dragActive=True`, `captured=PreviewDragHost`, `_dropIndex` 8→0,
+  그리고 실제로 순서가 바뀌는 것(`INPUT DRAG: OK`)까지 보여 준다.
+- **왜 계산 테스트로는 못 잡았나**: v74·v75의 하네스 검증은 `ComputeDropIndex`/`DropPreviewButton`만
+  리플렉션으로 불렀고 이벤트를 태우지 않았다. 게다가 **하네스의 생성자 사본(`preview_ctor.txt`)이
+  production과 다른 방식(`+=`)으로 핸들러를 달고 있어서**, 설령 이벤트를 태웠어도 같은 조건이 아니었다.
+  지금은 사본이 production과 **똑같이** `AddHandler(..., true)`로 달도록 맞춰 뒀다 — **이 둘이 어긋나면
+  하네스는 통과하는데 실물은 죽는 상태가 다시 생긴다.**
+- 실제 입력 테스트 두 가지가 모두 통과한다: (1) 맨 뒤 버튼을 맨 앞으로 끌기, (2) **작은 버튼 위아래
+  2단에서 아래 칸을 위 칸 위쪽에 떨어뜨려 순서 바꾸기**(사용자가 요청한 "작은 아이콘 2단" 조작).

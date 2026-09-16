@@ -135,10 +135,15 @@ namespace WallSplitter
 
             // 드래그 순서 바꾸기는 개별 버튼이 아니라 이 호스트에서 받는다 - 드래그 도중 커서가 버튼
             // 밖으로 나가도 계속 따라가야 하고(마우스 캡처 대상), 삽입 위치 계산의 좌표 기준도 여기다.
-            PreviewDragHost.MouseMove += PreviewDragHost_MouseMove;
-            // 뗌(Up)은 handledEventsToo로 받는다 - Button은 자기가 캡처를 쥐고 있을 때 MouseLeftButtonUp을
-            // Handled로 표시해 Click을 만든다. 캡처 가져오기가 어떤 이유로든 실패하면 그 Handled 때문에
-            // 드롭이 통째로 사라지는데, 그러면 "끌었는데 아무 일도 안 일어난다"가 된다.
+            // CONFIRMED LIVE BUG (2026-09-06, v75 실측 재보고: "아무리 적용해도 순서가 움직이지 않아"):
+            // 이 둘은 반드시 **handledEventsToo: true**로 등록해야 한다. 평범한 `+=`(handledEventsToo가
+            // false)는 이미 Handled로 표시된 이벤트를 받지 못하는데, **눌린 Button이 마우스를 캡처한
+            // 동안에는 그 Button이 MouseMove를 Handled로 만든다**(진짜 마우스 입력으로 추적해 확인:
+            // 드래그 중 호스트에 도달한 MouseMove 중 Handled가 아닌 것은 단 하나도 없었다). 그래서
+            // 드래그 판정 자체가 한 번도 실행되지 않았고, v75의 LostMouseCapture 수정만으로는 여전히
+            // 꿈쩍도 하지 않았다. MouseLeftButtonUp도 같은 이유(Button이 Click을 만들며 Handled로 표시).
+            // **`+=`로 되돌리지 말 것 — 그 순간 드래그 기능 전체가 죽는다.**
+            PreviewDragHost.AddHandler(MouseMoveEvent, new MouseEventHandler(PreviewDragHost_MouseMove), true);
             PreviewDragHost.AddHandler(MouseLeftButtonUpEvent, new MouseButtonEventHandler(PreviewDragHost_MouseLeftButtonUp), true);
             PreviewDragHost.LostMouseCapture += PreviewDragHost_LostMouseCapture;
             // 툴바가 길어지면 미리보기가 가로로 스크롤된다 - 휠로 좌우 스크롤이 되게 한다(가로 전용
