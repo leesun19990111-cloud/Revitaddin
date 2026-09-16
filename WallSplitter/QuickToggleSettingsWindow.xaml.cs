@@ -136,8 +136,14 @@ namespace WallSplitter
             // 드래그 순서 바꾸기는 개별 버튼이 아니라 이 호스트에서 받는다 - 드래그 도중 커서가 버튼
             // 밖으로 나가도 계속 따라가야 하고(마우스 캡처 대상), 삽입 위치 계산의 좌표 기준도 여기다.
             PreviewDragHost.MouseMove += PreviewDragHost_MouseMove;
-            PreviewDragHost.MouseLeftButtonUp += PreviewDragHost_MouseLeftButtonUp;
+            // 뗌(Up)은 handledEventsToo로 받는다 - Button은 자기가 캡처를 쥐고 있을 때 MouseLeftButtonUp을
+            // Handled로 표시해 Click을 만든다. 캡처 가져오기가 어떤 이유로든 실패하면 그 Handled 때문에
+            // 드롭이 통째로 사라지는데, 그러면 "끌었는데 아무 일도 안 일어난다"가 된다.
+            PreviewDragHost.AddHandler(MouseLeftButtonUpEvent, new MouseButtonEventHandler(PreviewDragHost_MouseLeftButtonUp), true);
             PreviewDragHost.LostMouseCapture += PreviewDragHost_LostMouseCapture;
+            // 툴바가 길어지면 미리보기가 가로로 스크롤된다 - 휠로 좌우 스크롤이 되게 한다(가로 전용
+            // ScrollViewer는 기본적으로 휠에 반응하지 않아 "스크롤바를 잡는 수밖에" 없었다).
+            PreviewScroll.PreviewMouseWheel += PreviewScroll_PreviewMouseWheel;
 
             AddBlueprintCornerMarks(PreviewCard, new Thickness(12, 10, 12, 10));
             BuildAddChooser();
@@ -535,8 +541,44 @@ namespace WallSplitter
                 if (_dragElement != null) _dragElement.Opacity = 0.4;
             }
 
-            _dropIndex = ComputeDropIndex(now);
+            AutoScrollWhileDragging(e.GetPosition(PreviewScroll));
+
+            // 자동 스크롤로 내용이 움직였을 수 있으니 커서 위치를 다시 읽는다 - 스크롤된 뒤의 좌표로
+            // 계산해야 표시선이 커서를 따라온다(PreviewDragHost는 스크롤되는 내용 쪽이라 같이 움직인다).
+            _dropIndex = ComputeDropIndex(e.GetPosition(PreviewDragHost));
             ShowDropIndicator(_dropIndex);
+        }
+
+        // 버튼이 많아 툴바가 길어지면 화면 밖의 자리로도 끌어다 놓을 수 있어야 한다 - 커서가 미리보기의
+        // 좌우 끝에 가면 그쪽으로 조금씩 밀어준다.
+        private const double DragScrollEdgeDip = 28;
+        private const double DragScrollStepDip = 26;
+
+        private void AutoScrollWhileDragging(System.Windows.Point cursorInViewport)
+        {
+            if (PreviewScroll.ScrollableWidth <= 0) return;
+
+            double offset = PreviewScroll.HorizontalOffset;
+            if (cursorInViewport.X < DragScrollEdgeDip)
+                PreviewScroll.ScrollToHorizontalOffset(Math.Max(0, offset - DragScrollStepDip));
+            else if (cursorInViewport.X > PreviewScroll.ViewportWidth - DragScrollEdgeDip)
+                PreviewScroll.ScrollToHorizontalOffset(Math.Min(PreviewScroll.ScrollableWidth, offset + DragScrollStepDip));
+            else
+                return;
+
+            // ScrollToHorizontalOffset은 다음 레이아웃 패스에 반영된다 - 바로 이어지는 좌표 계산이 옛
+            // 오프셋을 보지 않도록 여기서 한 번 밀어준다.
+            PreviewScroll.UpdateLayout();
+        }
+
+        // 가로로만 스크롤되는 ScrollViewer는 휠에 반응하지 않는다(세로로 스크롤할 게 없으면 그냥 흘려보낸다)
+        // - 휠을 가로 스크롤로 돌려준다. 2026-09-06 실측 피드백("스크롤 잡는 게 너무 어렵다")의 절반은
+        // 이걸로 해결된다(나머지 절반은 Theme.xaml의 가로 스크롤바 자체 수정).
+        private void PreviewScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (PreviewScroll.ScrollableWidth <= 0) return;
+            PreviewScroll.ScrollToHorizontalOffset(PreviewScroll.HorizontalOffset - e.Delta);
+            e.Handled = true;
         }
 
         private void PreviewDragHost_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -551,7 +593,21 @@ namespace WallSplitter
 
         // 캡처가 다른 곳으로 넘어가면(예: 창이 비활성화) 드래그를 조용히 취소한다 - 표시선과 흐려진
         // 버튼이 그대로 남지 않도록.
-        private void PreviewDragHost_LostMouseCapture(object sender, MouseEventArgs e) => CancelDrag();
+        //
+        // CONFIRMED LIVE BUG (2026-09-06, v74 실측: "꾹 누르고 드래그했을때 전혀 움직이지 않아"):
+        // 여기서 무조건 CancelDrag()를 불렀더니 드래그가 시작하는 순간 스스로 죽었다. **LostMouseCapture는
+        // 버블링 이벤트**다 - Button은 눌리는 순간 자기가 마우스를 캡처하는데(ButtonBase의 기본 동작),
+        // 드래그를 시작하며 PreviewDragHost가 캡처를 가져오면 그 Button이 캡처를 잃고 LostMouseCapture를
+        // 올려보낸다. 그게 이 핸들러까지 버블링돼 방금 시작한 드래그를 취소해 버렸다(캡처 이전이
+        // Mouse.Capture 안에서 동기적으로 일어나므로, 첫 MouseMove 안에서 시작과 취소가 연달아 났다).
+        // 고정: **호스트 자신이** 캡처를 잃은 경우에만 취소한다.
+        // 교훈: 이 기능의 하네스 검증은 계산(ComputeDropIndex/DropPreviewButton)만 했고 이벤트 배선은
+        // 보지 않아서 놓쳤다 - 지금은 이 버그를 그대로 재현하는 회귀 테스트가 하네스에 들어 있다.
+        private void PreviewDragHost_LostMouseCapture(object sender, MouseEventArgs e)
+        {
+            if (!ReferenceEquals(e.OriginalSource, PreviewDragHost)) return;
+            CancelDrag();
+        }
 
         private void CancelDrag()
         {

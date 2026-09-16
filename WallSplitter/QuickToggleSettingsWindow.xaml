@@ -66,7 +66,7 @@
                                        Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
                                        Text="버튼을 클릭하면 오른쪽에서 편집하고, 끌어서 순서를 바꿉니다. 켜고 끄는 버튼은 &apos;켜졌을 때&apos;, 실행형 버튼은 늘 칠해진 모습입니다."/>
                         </Grid>
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ScrollViewer x:Name="PreviewScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                             <!-- PreviewDragHost: 미리보기 버튼을 끌어서 순서를 바꾸는 드래그의 좌표 기준이자
                                  마우스 캡처 대상. 삽입 위치 표시선은 겹쳐 놓은 Canvas에 그리므로(레이아웃을
                                  건드리지 않으므로) 드래그 중에 버튼들이 들썩이지 않는다. -->

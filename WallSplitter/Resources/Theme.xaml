@@ -489,11 +489,21 @@
     </Style>
 
     <!-- ===== ScrollBar (ScrollViewer 자체는 기본 템플릿을 그대로 쓰고, 내부에서 생성하는
-         ScrollBar만 얇은 트랙/썸으로 교체한다) ===== -->
+         ScrollBar만 얇은 트랙/썸으로 교체한다) =====
+
+         CONFIRMED LIVE BUG (2026-09-06, 커스텀 버튼 설정 창의 가로 스크롤 실측: "스크롤 잡는 게 너무
+         어렵고 일반적인 스크롤이 아니야"): 여기에는 **세로 스크롤바 템플릿 하나뿐**이었는데, WPF는 가로
+         스크롤바에도 같은 Style을 적용한다. 그래서 가로 스크롤바가
+           (1) `Width=10`을 그대로 물려받아 **폭 10px짜리 조각**이 되고(높이가 아니라 폭이 고정된다),
+           (2) 썸도 `Width=6` 고정이라 트랙을 따라 길어지지 못했으며,
+           (3) `IsDirectionReversed=True`(세로에서만 맞는 값)라 **끄는 방향과 스크롤 방향이 반대**였다.
+         고정: 기본(세로) 템플릿은 그대로 두고, Orientation=Horizontal일 때 높이/썸/방향을 제대로 준
+         템플릿으로 바꾼다. 썸은 "보이는 두께"(6px)와 **잡는 영역**(스크롤바 두께 전부)을 분리한다 -
+         투명 Grid가 트랙 두께를 다 차지하므로 6px 막대를 정확히 겨냥하지 않아도 잡힌다. -->
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Width" Value="10"/>
-        <Setter Property="MinWidth" Value="10"/>
+        <Setter Property="Width" Value="11"/>
+        <Setter Property="MinWidth" Value="11"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
@@ -521,8 +531,11 @@
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="{DynamicResource ScrollThumbBrush}" CornerRadius="0"
-                                                    Width="6" HorizontalAlignment="Center"/>
+                                            <!-- 바깥 투명 Grid = 잡는 영역(스크롤바 폭 전부), 안쪽 Border = 보이는 막대 -->
+                                            <Grid Background="Transparent">
+                                                <Border Background="{DynamicResource ScrollThumbBrush}" CornerRadius="0"
+                                                        Width="6" HorizontalAlignment="Center"/>
+                                            </Grid>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
@@ -532,5 +545,55 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="Height" Value="13"/>
+                <Setter Property="MinHeight" Value="13"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="{TemplateBinding Background}">
+                                <!-- 가로는 IsDirectionReversed=False가 맞다(True면 끄는 방향과 반대로 스크롤된다).
+                                     Track.Orientation도 명시해야 썸이 가로로 늘어난다. -->
+                                <Track x:Name="PART_Track" Orientation="Horizontal" IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageLeftCommand" Focusable="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Rectangle Fill="Transparent"/>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageRightCommand" Focusable="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Rectangle Fill="Transparent"/>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Grid Background="Transparent">
+                                                        <Border Background="{DynamicResource ScrollThumbBrush}" CornerRadius="0"
+                                                                Height="6" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 </ResourceDictionary>

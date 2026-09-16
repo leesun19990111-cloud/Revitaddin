@@ -671,3 +671,36 @@ commands** can be posted"* 도 이 경로가 유효하다는 근거다.
   줬다. Industry 디자인 시스템의 "모서리 반지름 0" 규칙에서 **의도적으로** 벗어난 것이니 0으로 되돌리지
   말 것(`docs/design-system/CLAUDE.md`에도 같은 내용을 적어 뒀다). 버튼·입력창은 그대로 0이고
   `Theme.xaml`은 건드리지 않았다 - 다른 창으로 번지면 안 되기 때문이다.
+
+#### CONFIRMED LIVE BUG (2026-09-06, v74 직후): 드래그가 시작하자마자 스스로 죽었다
+
+사용자 실측: *"미리보기에서 버튼을 꾹 누르고 드래그 했을때 움직였으면 좋겠는데 전혀 움직이지 않아."*
+
+원인은 **`LostMouseCapture`가 버블링 이벤트**라는 것이다. `Button`은 눌리는 순간 `ButtonBase`의 기본
+동작으로 **스스로 마우스를 캡처**한다. 드래그를 시작하며 `PreviewDragHost.CaptureMouse()`를 부르면 그
+Button이 캡처를 잃고 `LostMouseCapture`를 올려보내는데, 그게 호스트까지 버블링돼
+`PreviewDragHost_LostMouseCapture`(무조건 `CancelDrag()`)를 때렸다. 캡처 이전은 `Mouse.Capture` 안에서
+**동기적으로** 일어나므로, 첫 MouseMove 한 번 안에서 "드래그 시작 → 즉시 취소"가 연달아 났고 겉으로는
+버튼이 꿈쩍도 하지 않았다.
+
+- **고정**: `if (!ReferenceEquals(e.OriginalSource, PreviewDragHost)) return;` — **호스트 자신이** 캡처를
+  잃은 경우에만 취소한다. 이 한 줄을 지우면 드래그가 통째로 죽으니 "쓸데없는 방어처럼 보인다"고 걷어내지 말 것.
+- 같은 이유로 뗌(Up)은 `AddHandler(MouseLeftButtonUpEvent, ..., handledEventsToo: true)`로 받는다 -
+  Button은 자기가 캡처를 쥔 상태에서 `MouseLeftButtonUp`을 Handled로 표시해 Click을 만들기 때문에,
+  캡처 가져오기가 실패하는 상황이 생기면 평범한 `+=` 핸들러로는 드롭이 통째로 사라진다.
+- **왜 하네스 검증을 통과했었나**: v74의 테스트는 계산(`ComputeDropIndex`/`DropPreviewButton`)만 돌렸고
+  **이벤트 배선은 한 번도 타지 않았다**. 지금은 하네스가 이 버그를 그대로 재현하는 회귀 테스트를 갖고
+  있다 - 캡처를 실제로 옮기지 않고 **Button에서 `Mouse.LostMouseCaptureEvent`를 직접 RaiseEvent**해서
+  버블링 경로를 태우고, 드래그 상태가 살아남는지 본다(고정을 되돌리면 이 테스트가 실제로 실패하는 것까지
+  확인했다). 마우스 입력을 흉내 내지 않고도 라우팅 버그를 잡을 수 있는 방법이라 앞으로도 이 패턴을 쓸 것.
+
+#### 가로 스크롤 (같은 날 실측: "스크롤 잡는 게 너무 어렵고 일반적인 스크롤이 아니야")
+
+- **근본 원인은 `Theme.xaml`의 ScrollBar Style이 세로 전용이었다는 것** - 자세한 내용은
+  `docs/design-system/CLAUDE.md` 참고(가로 스크롤바가 폭 10px 조각이 되고 방향까지 반대였다).
+  이 창만의 문제가 아니라 애드인 전체의 가로 스크롤바가 같은 증상이었다.
+- 여기(설정 창)에는 두 가지를 더했다: (1) `PreviewScroll_PreviewMouseWheel` — 가로 전용 ScrollViewer는
+  휠에 반응하지 않으므로(세로로 스크롤할 게 없으면 그냥 흘려보낸다) 휠을 가로 스크롤로 돌려준다,
+  (2) `AutoScrollWhileDragging` — 드래그 중 커서가 좌우 끝 28px 안에 들어오면 26px씩 밀어준다.
+  버튼이 많아 화면 밖에 있는 자리로도 끌어다 놓을 수 있어야 하기 때문이다. 자동 스크롤 직후에는
+  `UpdateLayout()`을 불러야 뒤이은 좌표 계산이 옛 오프셋을 보지 않는다.
