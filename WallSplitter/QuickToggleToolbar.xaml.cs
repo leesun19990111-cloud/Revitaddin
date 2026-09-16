@@ -191,8 +191,8 @@ namespace WallSplitter
         // 작게 한줄로 들어가 있어, 버튼들이 두줄로 나열되게 만들어줘").
         private const double SmallToolGroupHeightDip = 64;
 
-        private static bool IsSmallToolButton(QuickToggleCategory category) =>
-            category == QuickToggleCategory.ColorTool;
+        // 2026-09-05부터 버튼마다 큰/작은을 고를 수 있다 - 판정은 QuickToggleButtonStyle이 한 곳에서 한다.
+        private static bool IsSmallToolButton(QuickToggleButtonConfig cfg) => QuickToggleButtonStyle.IsSmall(cfg);
 
         private void RebuildButtons(RevitView view)
         {
@@ -212,7 +212,7 @@ namespace WallSplitter
                 TextBlock label;
                 UIElement content;
 
-                if (IsSmallToolButton(cfg.Category))
+                if (IsSmallToolButton(cfg))
                 {
                     // 2026-07-29, "색상버튼은 다른 버튼과는 모양이 좀 달랐으면 좋겠어. on/off가 의미
                     // 없으니까, 작은 리본버튼으로 두줄로 들어가게 만들어줘" - Revit 리본의 "작은" 버튼
@@ -274,7 +274,7 @@ namespace WallSplitter
                 };
                 button.Click += ToggleButton_Click;
 
-                if (IsSmallToolButton(cfg.Category))
+                if (IsSmallToolButton(cfg))
                 {
                     if (smallToolGroup == null)
                     {
@@ -290,6 +290,10 @@ namespace WallSplitter
                 }
                 else
                 {
+                    // 큰 버튼이 끼어들면 작은 버튼 그룹은 거기서 끊는다 - 2026-09-05부터 버튼마다 크기를
+                    // 고를 수 있어서 "작은-큰-작은" 순서도 가능한데, 그룹을 계속 재사용하면 뒤쪽 작은
+                    // 버튼이 앞 그룹으로 빨려 들어가 설정 창의 순서와 툴바의 순서가 어긋난다.
+                    smallToolGroup = null;
                     ButtonsPanel.Children.Add(button);
                 }
 
@@ -377,9 +381,16 @@ namespace WallSplitter
         // 언어(readme의 "주 버튼만 유일하게 채워진 입체 오브젝트")와도 맞는다.
         private static (Brush Background, Brush BorderBrush, Brush Foreground) VisualsFor(QuickToggleButtonState state, QuickToggleButtonConfig cfg)
         {
-            if (state == QuickToggleButtonState.On)
+            // 2026-09-05, "on/off 버튼이 아닌 버튼들은 기본적으로 색상이 칠해져 있으면 좋겠어"라는 요청 -
+            // 실행형 버튼(색상/기능/층별 단면상자)은 켜짐/꺼짐이 없어 늘 Off로 판정되는 탓에 예전에는
+            // 영영 투명한 "선 그림"으로만 보였다. 이제 쓸 수 있는 상태(Disabled가 아님)면 항상 채운다.
+            bool fillAlways = QuickToggleButtonStyle.IsActionButton(cfg.Category)
+                              && state != QuickToggleButtonState.Disabled;
+
+            if (state == QuickToggleButtonState.On || fillAlways)
             {
-                Color color = CustomOnColor(cfg) ?? ((SolidColorBrush)Theme.ToggleOn).Color;
+                Color color = CustomOnColor(cfg)
+                              ?? ParseHex(QuickToggleButtonStyle.DefaultColorHexFor(cfg.Category));
                 SolidColorBrush fill = new SolidColorBrush(color);
                 fill.Freeze();
                 return (fill, fill, QuickToggleIcons.ContrastingForeground(color));
@@ -388,6 +399,9 @@ namespace WallSplitter
                 return (Brushes.Transparent, Theme.Border, Theme.TextSecondary);
             return (Brushes.Transparent, Theme.Border, Theme.ToggleDisabled);
         }
+
+        // QuickToggleButtonStyle이 돌려주는 기본 색상 문자열(코드에 박힌 상수)을 Color로 바꾼다.
+        private static Color ParseHex(string hex) => (Color)ColorConverter.ConvertFromString(hex);
 
         private static Color? CustomOnColor(QuickToggleButtonConfig cfg)
         {
@@ -398,7 +412,7 @@ namespace WallSplitter
             }
             catch
             {
-                return null; // 저장된 값이 손상된 경우 공용 색으로 안전하게 대체
+                return null; // 저장된 값이 손상된 경우 기본색으로 안전하게 대체
             }
         }
 

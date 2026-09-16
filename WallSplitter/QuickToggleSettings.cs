@@ -108,6 +108,11 @@ namespace WallSplitter
         public QuickToggleIconShape? IconShape { get; set; }
         public string? OnColorHex { get; set; }
 
+        // 2026-09-05, "각 버튼들의 크기를 큰버튼과 작은버튼으로 선택해서 변경할 수 있으면" 요청으로 추가.
+        // null이면 예전과 똑같은 기본값(색상 버튼만 작게) - 기존 설정 파일과 그대로 호환된다.
+        // 판정은 항상 QuickToggleButtonStyle.IsSmall(cfg)로 할 것(툴바/설정 창이 같은 규칙을 봐야 한다).
+        public bool? SmallButton { get; set; }
+
         // 2026-07-29, "색상 버튼" 전용 필드 - 이 버튼이 색상/투명도를 적용할 모델 카테고리 목록.
         // (2026-09-02 프리셋 삭제 전까지는 프리셋의 카테고리별 V/G 재정의를 담는 CategoryOverrides
         // 필드도 같은 타입을 공유했다 - 그 필드가 사라지면서 타입도 색상 버튼 전용으로 줄였다.)
@@ -143,6 +148,34 @@ namespace WallSplitter
         // 예전 설정 파일에는 이 값이 없는데(null), 그때는 이름·층 번호 매칭까지만 시도한다.
         public double? LevelBottomElevation { get; set; }
         public double? LevelTopElevation { get; set; }
+    }
+
+    // 툴바와 설정 창이 **똑같이** 따라야 하는 버튼 겉모습 규칙. 두 곳에 각각 적으면 미리보기와 실제
+    // 툴바가 어긋나므로(2026-09-03에 실제로 지적받은 문제) 여기 한 곳에 모아 둔다.
+    internal static class QuickToggleButtonStyle
+    {
+        // on/off 개념이 없고 누르면 1회 실행되는 버튼들. DetermineState가 늘 Off(또는 Disabled)를
+        // 돌려주므로, 예전에는 툴바에서 영영 "꺼진 모습"(투명 배경)으로만 보였다.
+        public static bool IsActionButton(QuickToggleCategory category) =>
+            category == QuickToggleCategory.ColorTool ||
+            category == QuickToggleCategory.CommandLauncher ||
+            category == QuickToggleCategory.LevelSectionBox;
+
+        // 2026-09-05, 사용자 요청 - "on/off 버튼이 아닌 버튼들은 기본적으로 색상이 칠해져 있으면 좋겠어.
+        // 버튼의 켜짐색상과는 다른 색상으로." 그래서 실행형 버튼은 **항상** 이 색으로 채워지고, 기본값도
+        // 토글 버튼의 기본 켜짐색(초록 #3D8F5C)과 다른 강조색(스틸블루)으로 둬서 한눈에 구분된다.
+        // 두 기본값 모두 Theme/Theme.xaml의 토큰과 맞춰서 유지할 것(ToggleOnBrush / AccentBrush).
+        public const string DefaultActionColorHex = "#5980A6";
+        public const string DefaultToggleOnColorHex = "#3D8F5C";
+
+        public static string DefaultColorHexFor(QuickToggleCategory category) =>
+            IsActionButton(category) ? DefaultActionColorHex : DefaultToggleOnColorHex;
+
+        // 2026-09-05, 사용자 요청 - "각 버튼들의 크기를 큰버튼과 작은버튼으로 선택해서 변경할 수 있으면".
+        // 예전엔 색상 버튼만 무조건 작은 버튼이었는데, 이제 버튼마다 고를 수 있다.
+        // cfg.SmallButton이 null이면 예전과 똑같은 기본값(색상 버튼만 작게)을 쓴다 - 기존 설정 파일 호환.
+        public static bool IsSmall(QuickToggleButtonConfig cfg) =>
+            cfg.SmallButton ?? (cfg.Category == QuickToggleCategory.ColorTool);
     }
 
     // "색상 버튼"이 색상/투명도를 적용할 카테고리 한 줄. ElementId는 문서마다 달라 이식(내보내기/

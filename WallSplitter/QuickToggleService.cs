@@ -129,11 +129,15 @@ namespace WallSplitter
         // 설정이 PC 전역이라 버튼 하나가 여러 모델에서 쓰이는데, 모델마다 레벨 이름 규칙이 달라
         // ("1F" vs "1층" vs "Level 1") 이름이 정확히 같을 때만 잡히던 기존 방식은 매번 회색이 됐다.
         //
-        // Q&A로 확정한 3단 순서 - **위에서 하나라도 잡히면 아래는 보지 않는다**:
-        //   1) 이름이 정확히 같은 레벨          (가장 확실 - 같은 템플릿에서 뽑은 모델끼리)
-        //   2) 이름에서 읽어낸 **층 번호**가 같은 레벨  ("1층"="1F"="Level 1"="L1", "지하1층"="B1")
-        //   3) 버튼을 만들 때 고른 레벨의 **높이와 가장 가까운** 레벨 (이름 규칙이 전혀 다른 모델용)
-        // 셋 다 실패하면 null → 버튼은 회색으로 남고 사용자가 직접 고르면 된다.
+        // **2026-09-05 재조정 (사용자 피드백)**: 처음엔 "이름 → 층 번호 → 높이" 순서였는데,
+        // *"아주 간단한 이름도 비슷한걸로 찾지 못하고 있는 것 같아. 그리고 레벨이름 -> 비슷할 레벨
+        // 순서가 아니라, 비슷한 레벨을 우선순위로 하고, 레벨이름은 참고만 하면 될 것 같아"* 라는 지적으로
+        // **높이를 1순위로, 이름은 참고(동점 처리)로** 뒤집었다. 지금 순서는:
+        //   1) 저장해 둔 높이와 **가장 가까운 레벨** — 이름 규칙이 어떻든 층은 높이로 정해진다
+        //      · 거의 같은 높이(1ft 이내)에 레벨이 여럿이면(구조/건축 레벨 쌍 등) 그때만 **이름을 참고**해
+        //        고른다: 이름이 같은 것 → 층 번호가 같은 것 → 가장 가까운 것
+        //   2) 높이를 모를 때만(= v72 이전에 만든 버튼) 이름으로: 같은 이름 → 같은 층 번호
+        // 둘 다 실패하면 null → 버튼은 회색으로 남고 사용자가 직접 고르면 된다.
         public static LevelRangeMatch? ResolveLevelRange(Document doc, QuickToggleButtonConfig cfg)
         {
             if (string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)) return null;
@@ -145,10 +149,25 @@ namespace WallSplitter
             (string Name, double Elevation)? top = MatchLevel(levels, cfg.LevelTopName!, cfg.LevelTopElevation);
             if (bottom == null || top == null) return null;
 
-            // 서로 다른 두 레벨로 갈라져야 단면상자를 만들 수 있다. 예를 들어 "1F"와 "2F"가 이 모델에서
-            // 둘 다 같은 레벨 하나로 매칭되면(층 번호를 못 읽고 높이도 그 레벨이 제일 가까운 경우)
-            // 두께가 0인 상자가 되므로 실패로 본다 - 호출자가 안내 문구를 띄운다.
-            if (bottom.Value.Name == top.Value.Name) return null;
+            // 서로 다른 두 레벨로 갈라져야 단면상자를 만들 수 있다. 높이를 1순위로 바꾸면서 둘이 같은
+            // 레벨로 수렴할 여지가 생겼으므로(레벨이 성긴 모델에서 두 높이 사이에 레벨이 하나뿐인 경우),
+            // 바로 실패로 처리하지 않고 **더 멀리 빗나간 쪽을 그 레벨만 빼고 다시 찾는다**.
+            if (bottom.Value.Name == top.Value.Name)
+            {
+                List<(string Name, double Elevation)> others =
+                    levels.Where(l => l.Name != bottom!.Value.Name).ToList();
+                if (others.Count == 0) return null;
+
+                double bottomMiss = cfg.LevelBottomElevation.HasValue
+                    ? Math.Abs(bottom.Value.Elevation - cfg.LevelBottomElevation.Value) : double.MaxValue;
+                double topMiss = cfg.LevelTopElevation.HasValue
+                    ? Math.Abs(top.Value.Elevation - cfg.LevelTopElevation.Value) : double.MaxValue;
+
+                if (bottomMiss <= topMiss) top = MatchLevel(others, cfg.LevelTopName!, cfg.LevelTopElevation);
+                else bottom = MatchLevel(others, cfg.LevelBottomName!, cfg.LevelBottomElevation);
+
+                if (bottom == null || top == null || bottom.Value.Name == top.Value.Name) return null;
+            }
 
             bool flipped = bottom.Value.Elevation > top.Value.Elevation;
             (string Name, double Elevation) low = flipped ? top.Value : bottom.Value;
@@ -162,72 +181,94 @@ namespace WallSplitter
             return new LevelRangeMatch(low.Elevation, high.Elevation, low.Name, high.Name, exact);
         }
 
+        // 거의 같은 높이로 볼 기준 - 건축/구조 레벨처럼 같은 층에 몇 백 mm 차이로 겹쳐 있는 쌍을
+        // "동점"으로 묶어 이름으로 고르게 하려는 값이다(1ft ≈ 305mm).
+        private const double SameElevationToleranceFeet = 1.0;
+
         private static (string Name, double Elevation)? MatchLevel(
             List<(string Name, double Elevation)> levels, string wantedName, double? wantedElevation)
         {
-            // 1) 이름이 정확히 같은 레벨
+            if (levels.Count == 0) return null;
+
+            // 1순위: 높이가 가장 가까운 레벨 (사용자 확정 - "비슷한 레벨을 우선순위로")
+            if (wantedElevation.HasValue)
+            {
+                double wanted = wantedElevation.Value;
+                double best = levels.Min(l => Math.Abs(l.Elevation - wanted));
+
+                // 거의 같은 높이에 여러 개가 있을 때만 **이름을 참고**해서 고른다.
+                List<(string Name, double Elevation)> ties = levels
+                    .Where(l => Math.Abs(l.Elevation - wanted) - best <= SameElevationToleranceFeet)
+                    .ToList();
+                if (ties.Count == 1) return ties[0];
+
+                foreach ((string Name, double Elevation) level in ties)
+                    if (level.Name == wantedName) return level;
+
+                if (TryParseFloorNumber(wantedName, out int wantedFloorForTie))
+                    foreach ((string Name, double Elevation) level in ties)
+                        if (TryParseFloorNumber(level.Name, out int floor) && floor == wantedFloorForTie) return level;
+
+                return ties.OrderBy(l => Math.Abs(l.Elevation - wanted)).First();
+            }
+
+            // 높이를 모르는 경우(v72 이전에 만든 버튼)에만 이름으로 찾는다.
             foreach ((string Name, double Elevation) level in levels)
                 if (level.Name == wantedName) return level;
 
-            // 2) 층 번호가 같은 레벨. 후보가 여럿이면(예: "2F"와 "2층"이 한 모델에 다 있는 경우)
-            //    저장된 높이에 가장 가까운 것을, 높이 정보가 없으면 가장 낮은 것을 고른다.
             if (TryParseFloorNumber(wantedName, out int wantedFloor))
             {
-                List<(string Name, double Elevation)> sameFloor = new List<(string, double)>();
-                foreach ((string Name, double Elevation) level in levels)
-                    if (TryParseFloorNumber(level.Name, out int floor) && floor == wantedFloor) sameFloor.Add(level);
-
-                if (sameFloor.Count == 1) return sameFloor[0];
-                if (sameFloor.Count > 1)
-                    return wantedElevation.HasValue
-                        ? NearestByElevation(sameFloor, wantedElevation.Value)
-                        : sameFloor.OrderBy(l => l.Elevation).First();
+                List<(string Name, double Elevation)> sameFloor = levels
+                    .Where(l => TryParseFloorNumber(l.Name, out int floor) && floor == wantedFloor)
+                    .OrderBy(l => l.Elevation)
+                    .ToList();
+                if (sameFloor.Count > 0) return sameFloor[0];
             }
 
-            // 3) 높이가 가장 가까운 레벨 (버튼을 만들 때의 높이를 기억해 둔 경우에만)
-            return wantedElevation.HasValue ? NearestByElevation(levels, wantedElevation.Value) : null;
+            return null;
         }
-
-        private static (string Name, double Elevation) NearestByElevation(
-            List<(string Name, double Elevation)> levels, double elevation) =>
-            levels.OrderBy(l => Math.Abs(l.Elevation - elevation)).First();
 
         // 레벨 이름에서 층 번호를 읽는다. 지상은 양수, 지하는 음수 (예: "B2" → -2).
         //
-        // **일부러 느슨하지 않게 했다**: "T.O. Slab 2"나 "기초 1"처럼 층 이름이 아닌데 숫자가 들어간
-        // 이름까지 잡아버리면 엉뚱한 층으로 조용히 매칭된다. 아래 정해진 모양에 맞을 때만 인정하고,
-        // 나머지는 3단계(높이 근접)로 넘긴다 - 그쪽이 훨씬 안전하다.
+        // **2026-09-05 완화**: 높이가 1순위가 되면서 이 파서는 "동점일 때의 참고"와 "높이를 모르는 옛
+        // 버튼의 마지막 수단"으로만 쓰인다 - 처음처럼 빡빡하게 막을 이유가 없어졌고, 오히려 "1F 슬라브",
+        // "1st Floor", "F1", "FL1" 같은 흔한 이름을 못 읽는 게 문제였다("아주 간단한 이름도 못 찾는다"는
+        // 피드백). 그래서 **접두부만 보고 뒤에 뭐가 붙든 무시**하도록 바꿨다.
+        // 다만 접두부 자체는 여전히 층 표기여야 한다 - "T.O. Slab 2"나 "기초 1"처럼 숫자가 뒤에 있는
+        // 이름은 계속 인식하지 않는다(앞이 숫자/층 접두어가 아니므로 자연히 걸러진다).
         internal static bool TryParseFloorNumber(string name, out int floor)
         {
             floor = 0;
             if (string.IsNullOrWhiteSpace(name)) return false;
 
-            // 공백·점·하이픈·언더스코어는 표기 차이일 뿐이라 전부 지우고 대문자로 맞춘다
-            // ("B 1", "B-1", "B.1", "b1" → "B1"; "Level 1" → "LEVEL1").
+            // 공백·점·하이픈·언더스코어·슬래시·괄호는 표기 차이일 뿐이라 전부 지우고 대문자로 맞춘다
+            // ("B 1", "B-1", "B.1", "b1" → "B1"; "Level 1" → "LEVEL1"; "1층(구조)" → "1층구조").
             string s = name.Trim().ToUpperInvariant();
-            foreach (char c in new[] { ' ', '.', '-', '_', '/' }) s = s.Replace(c.ToString(), "");
+            foreach (char c in new[] { ' ', '.', '-', '_', '/', '(', ')', '[', ']', '#' })
+                s = s.Replace(c.ToString(), "");
             if (s.Length == 0) return false;
 
-            // 지상 1층을 뜻하는 관용 표기
-            if (s == "GF" || s == "G" || s == "GROUNDFLOOR" || s == "GROUND" || s == "1LAYER") { floor = 1; return true; }
+            // 지상 1층을 뜻하는 관용 표기 (뒤에 설명이 붙어도 인정: "GF 바닥")
+            // "GF"는 접두어로, 한 글자 "G"는 정확히 일치할 때만 인정한다 - StartsWith("G")로 하면
+            // "GARAGE"/"GRADE" 같은 이름까지 1층으로 읽어버린다.
+            if (s.StartsWith("GROUNDFLOOR") || s.StartsWith("GROUND") || s.StartsWith("GF") || s == "G") { floor = 1; return true; }
 
             bool basement = false;
             if (s.StartsWith("지하")) { basement = true; s = s.Substring(2); }
             else if (s.StartsWith("BASEMENT")) { basement = true; s = s.Substring("BASEMENT".Length); }
             else if (s.StartsWith("B") && s.Length > 1 && char.IsDigit(s[1])) { basement = true; s = s.Substring(1); }
             else if (s.StartsWith("LEVEL")) s = s.Substring("LEVEL".Length);
-            else if (s.StartsWith("L") && s.Length > 1 && char.IsDigit(s[1])) s = s.Substring(1);
+            else if (s.StartsWith("FL") && s.Length > 2 && char.IsDigit(s[2])) s = s.Substring(2);
+            else if ((s.StartsWith("L") || s.StartsWith("F")) && s.Length > 1 && char.IsDigit(s[1])) s = s.Substring(1);
 
-            // 남은 부분은 "숫자 + 층 표기(선택)"여야 한다: "1", "1F", "1FL", "1층", "01F"
+            // 이제 맨 앞이 숫자여야 한다. 그 뒤에 무엇이 붙든("F", "층", "FL", "ST FLOOR", "슬라브" …)
+            // 신경 쓰지 않는다 - 층 번호만 알면 되고, 최종 판단은 어차피 높이가 한다.
             int digits = 0;
             while (digits < s.Length && char.IsDigit(s[digits])) digits++;
             if (digits == 0) return false;
 
-            string suffix = s.Substring(digits);
-            if (suffix.Length > 0 && suffix != "F" && suffix != "FL" && suffix != "층") return false;
-
             if (!int.TryParse(s.Substring(0, digits), out int value)) return false;
-            if (value == 0) return false; // "0F" 같은 표기는 지상/지하 판단이 모호해 넘긴다
+            if (value == 0) return false; // "0F"는 지상/지하 판단이 모호해 넘긴다(높이가 대신 판단한다)
 
             floor = basement ? -value : value;
             return true;

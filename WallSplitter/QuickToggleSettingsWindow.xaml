@@ -61,7 +61,7 @@
                             <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
                                        Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
-                                       Text="켜고 끄는 버튼은 '켜졌을 때'의 모습입니다. 버튼을 클릭하면 오른쪽에서 편집합니다."/>
+                                       Text="켜고 끄는 버튼은 &apos;켜졌을 때&apos;의 모습이고, 실행형 버튼은 늘 칠해져 있습니다. 버튼을 클릭하면 오른쪽에서 편집합니다."/>
                         </Grid>
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                             <StackPanel x:Name="PreviewPanel" Orientation="Horizontal"/>

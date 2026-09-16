@@ -120,6 +120,8 @@ namespace WallSplitter
                 .OrderBy(l => l.Elevation)
                 .ToList();
 
+            BackfillLevelElevations();
+
             AddBlueprintCornerMarks(PreviewCard, new Thickness(12, 10, 12, 10));
             BuildAddChooser();
             UpdateAdvancedSection();
@@ -190,6 +192,25 @@ namespace WallSplitter
 
         private bool IsConfigured(QuickToggleButtonConfig cfg) => ReadinessOf(cfg) == ButtonReadiness.Ready;
 
+        // v72 이전에 만든 "층별 단면상자" 버튼은 레벨 이름만 있고 높이가 없다. 그런데 2026-09-05부터는
+        // **높이가 1순위**라(QuickToggleService.MatchLevel) 높이를 모르면 다른 모델에서 이름이 조금만
+        // 달라도 못 찾는다. 지금 열린 문서에 그 이름의 레벨이 실제로 있으면 그 높이를 조용히 채워 둔다 -
+        // 원래 만들었던 모델(또는 같은 이름 규칙의 모델)에서 설정 창을 한 번 열기만 하면 저절로 보강된다.
+        // 이름이 없는 레벨은 건드리지 않고, 저장은 사용자가 "저장"을 눌렀을 때만 이뤄진다(이 창의 다른
+        // 편집과 동일).
+        private void BackfillLevelElevations()
+        {
+            foreach (QuickToggleButtonConfig cfg in _settings.Buttons)
+            {
+                if (cfg.Category != QuickToggleCategory.LevelSectionBox) continue;
+
+                if (cfg.LevelBottomElevation == null && !string.IsNullOrEmpty(cfg.LevelBottomName))
+                    cfg.LevelBottomElevation = _levels.FirstOrDefault(l => l.Name == cfg.LevelBottomName)?.Elevation;
+                if (cfg.LevelTopElevation == null && !string.IsNullOrEmpty(cfg.LevelTopName))
+                    cfg.LevelTopElevation = _levels.FirstOrDefault(l => l.Name == cfg.LevelTopName)?.Elevation;
+            }
+        }
+
         // "층별 단면상자" 버튼이 **지금 이 프로젝트에서** 실제로 쓰게 될 레벨 두 개. 툴바가 쓰는 것과
         // 똑같은 해석기라 설정 창과 툴바의 판단이 어긋날 수 없다. 조회 실패는 조용히 null로 둔다
         // (설정 창은 정보 표시용이고, 실제 실행 시엔 툴바가 같은 경로로 다시 판단한다).
@@ -228,22 +249,21 @@ namespace WallSplitter
             };
         }
 
-        // 켜짐/꺼짐 개념이 있는 버튼만 "켜짐 색상"이 실제로 화면에 나타난다 - 색상/기능 버튼은
-        // QuickToggleService.DetermineState가 항상 Off를 돌려주므로 지정한 색이 쓰일 일이 없다
-        // (QuickToggleToolbar.VisualsFor는 On일 때만 그 색으로 채운다).
-        private static bool ColorAppliesTo(QuickToggleCategory category) =>
-            category != QuickToggleCategory.ColorTool && category != QuickToggleCategory.CommandLauncher;
+        // 2026-09-05부터 모든 버튼이 색을 쓴다 - 켜짐/꺼짐이 있는 버튼은 "켜졌을 때"의 색으로,
+        // on/off가 없는 실행형 버튼(색상/기능/층별단면상자)은 평소에도 그 색으로 칠해진다
+        // (QuickToggleButtonStyle.IsActionButton / QuickToggleToolbar.VisualsFor와 같은 규칙).
+        // 라벨만 "켜짐 색상"/"버튼 색상"으로 달라진다.
+        private static string ColorLabelFor(QuickToggleCategory category) =>
+            QuickToggleButtonStyle.IsActionButton(category) ? "버튼 색상" : "켜짐 색상";
 
         // 설정 창에는 활성 뷰가 없어 진짜 on/off를 알 수 없다 - 켜고 끌 수 있는 버튼은 "켜졌을 때"의
-        // 모습으로(사용자가 고른 색을 확인하는 게 미리보기의 목적), on/off 개념이 없는 색상·기능
-        // 버튼은 툴바에서 늘 그렇듯 꺼진 모습으로, 대상을 안 고른 버튼은 회색(Disabled)으로 그린다.
+        // 모습으로(사용자가 고른 색을 확인하는 게 미리보기의 목적), 실행형 버튼은 툴바에서 늘 그렇듯
+        // 칠해진 모습으로, 대상을 안 고른 버튼은 회색(Disabled)으로 그린다.
         // 색 조합 자체는 QuickToggleToolbar.VisualsFor와 같은 규칙이다.
         private (Brush Background, Brush BorderBrush, Brush Foreground) PreviewVisualsFor(QuickToggleButtonConfig cfg)
         {
             if (!IsConfigured(cfg))
                 return (Brushes.Transparent, Theme.Border, Theme.ToggleDisabled);
-            if (!ColorAppliesTo(cfg.Category))
-                return (Brushes.Transparent, Theme.Border, Theme.TextSecondary);
 
             SolidColorBrush fill = OnColorBrush(cfg);
             return (fill, fill, QuickToggleIcons.ContrastingForeground(fill.Color));
@@ -251,21 +271,21 @@ namespace WallSplitter
 
         private static SolidColorBrush OnColorBrush(QuickToggleButtonConfig cfg)
         {
-            if (!string.IsNullOrEmpty(cfg.OnColorHex))
+            string hex = string.IsNullOrEmpty(cfg.OnColorHex)
+                ? QuickToggleButtonStyle.DefaultColorHexFor(cfg.Category)
+                : cfg.OnColorHex!;
+            try
             {
-                try
-                {
-                    SolidColorBrush brush = new SolidColorBrush(
-                        (System.Windows.Media.Color)ColorConverter.ConvertFromString(cfg.OnColorHex));
-                    brush.Freeze();
-                    return brush;
-                }
-                catch
-                {
-                    // 저장된 값이 손상된 경우 공용 색으로 안전하게 대체 (툴바의 CustomOnColor와 같은 방침).
-                }
+                SolidColorBrush brush = new SolidColorBrush(
+                    (System.Windows.Media.Color)ColorConverter.ConvertFromString(hex));
+                brush.Freeze();
+                return brush;
             }
-            return Theme.ToggleOn;
+            catch
+            {
+                // 저장된 값이 손상된 경우 공용 색으로 안전하게 대체 (툴바의 CustomOnColor와 같은 방침).
+                return Theme.ToggleOn;
+            }
         }
 
         private static Canvas IconOf(QuickToggleButtonConfig cfg, Brush brush) =>
@@ -273,9 +293,9 @@ namespace WallSplitter
 
         // ===== 상단: 툴바 미리보기 =====
 
-        // 툴바에서 "작은 도구형 버튼"으로 그려지는 종류 - QuickToggleToolbar.IsSmallToolButton과 맞춰서 유지.
-        private static bool IsSmallToolButton(QuickToggleCategory category) =>
-            category == QuickToggleCategory.ColorTool;
+        // 툴바에서 "작은 도구형 버튼"으로 그려지는지 - 판정은 QuickToggleButtonStyle이 한 곳에서 한다
+        // (툴바와 미리보기가 어긋나면 안 되므로).
+        private static bool IsSmallToolButton(QuickToggleButtonConfig cfg) => QuickToggleButtonStyle.IsSmall(cfg);
 
         // 색상 버튼 묶음의 높이(대략 작은 버튼 2개) - QuickToggleToolbar.SmallToolGroupHeightDip과 같은 값.
         private const double SmallToolGroupHeightDip = 64;
@@ -310,8 +330,11 @@ namespace WallSplitter
                 foreach (QuickToggleButtonConfig cfg in _settings.Buttons)
                 {
                     UIElement item = CreatePreviewButton(cfg);
-                    if (!IsSmallToolButton(cfg.Category))
+                    if (!IsSmallToolButton(cfg))
                     {
+                        // 큰 버튼이 끼어들면 작은 버튼 그룹을 끊는다 - 실제 툴바(RebuildButtons)와 같은
+                        // 규칙이어야 미리보기와 실제 순서가 어긋나지 않는다.
+                        smallToolGroup = null;
                         buttons.Children.Add(item);
                         continue;
                     }
@@ -390,7 +413,7 @@ namespace WallSplitter
             Canvas icon = IconOf(cfg, foreground);
             UIElement content;
 
-            if (cfg.Category == QuickToggleCategory.ColorTool)
+            if (IsSmallToolButton(cfg))
             {
                 StackPanel horizontal = new StackPanel
                 {
@@ -1287,9 +1310,12 @@ namespace WallSplitter
             Border toggleGlyphHost, TextBlock toggleText)
         {
             bool expanded = !collapsible || _appearanceExpanded;
-            bool colorApplies = ColorAppliesTo(cfg.Category);
+            string colorLabel = ColorLabelFor(cfg.Category);
             QuickToggleIconShape currentShape = cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category);
-            string currentColor = string.IsNullOrEmpty(cfg.OnColorHex) ? DefaultOnColorHex : cfg.OnColorHex!;
+            string currentColor = string.IsNullOrEmpty(cfg.OnColorHex)
+                ? QuickToggleButtonStyle.DefaultColorHexFor(cfg.Category)
+                : cfg.OnColorHex!;
+            bool isSmall = QuickToggleButtonStyle.IsSmall(cfg);
 
             toggleGlyphHost.Child = CreateExpandGlyph(expanded);
             toggleText.Text = expanded ? "접기" : "변경";
@@ -1315,27 +1341,32 @@ namespace WallSplitter
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 0, 0),
             });
-            if (colorApplies)
+            summary.Children.Add(new Border
             {
-                summary.Children.Add(new Border
-                {
-                    Width = 16,
-                    Height = 16,
-                    Background = OnColorBrush(cfg),
-                    BorderBrush = Theme.Border,
-                    BorderThickness = new Thickness(1),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(12, 0, 0, 0),
-                });
-                summary.Children.Add(new TextBlock
-                {
-                    Text = ColorNameOf(currentColor),
-                    Foreground = Theme.TextSecondary,
-                    FontSize = 11,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(6, 0, 0, 0),
-                });
-            }
+                Width = 16,
+                Height = 16,
+                Background = OnColorBrush(cfg),
+                BorderBrush = Theme.Border,
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0),
+            });
+            summary.Children.Add(new TextBlock
+            {
+                Text = ColorNameOf(currentColor),
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0),
+            });
+            summary.Children.Add(new TextBlock
+            {
+                Text = isSmall ? "· 작은 버튼" : "· 큰 버튼",
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+            });
 
             body.Children.Clear();
             body.Visibility = expanded ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
@@ -1364,19 +1395,27 @@ namespace WallSplitter
             }
             body.Children.Add(iconRow);
 
-            if (!colorApplies)
+            // 2026-09-05 추가: 버튼 크기 - "큰 버튼"은 아이콘과 이름이 함께 놓인 넓은 버튼,
+            // "작은 버튼"은 아이콘만 있는 정사각형이라 여러 개가 두 줄로 묶여 자리를 덜 차지한다.
+            // (기본값은 색상 버튼만 작은 버튼 - QuickToggleButtonStyle.IsSmall 참고)
+            body.Children.Add(new TextBlock { Text = "버튼 크기", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            StackPanel sizeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            sizeRow.Children.Add(CreateSizeChoice(cfg, "큰 버튼", "아이콘 + 이름", false, !isSmall));
+            sizeRow.Children.Add(CreateSizeChoice(cfg, "작은 버튼", "아이콘만, 두 줄로 묶임", true, isSmall));
+            body.Children.Add(sizeRow);
+
+            body.Children.Add(new TextBlock { Text = colorLabel, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            if (QuickToggleButtonStyle.IsActionButton(cfg.Category))
             {
                 body.Children.Add(new TextBlock
                 {
-                    Text = "이 종류의 버튼은 켜짐/꺼짐이 없어 '켜짐 색상'이 화면에 나타나지 않습니다 - 아이콘 모양으로 구분하세요.",
+                    Text = "이 버튼은 켜짐/꺼짐이 없어 늘 이 색으로 칠해집니다.",
                     Foreground = Theme.TextSecondary,
-                    TextWrapping = TextWrapping.Wrap,
                     FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 5),
                 });
-                return;
             }
-
-            body.Children.Add(new TextBlock { Text = "켜짐 색상", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
             WrapPanel colorRow = new WrapPanel();
             foreach ((string hex, string name) in ColorPalette)
             {
@@ -1397,6 +1436,40 @@ namespace WallSplitter
                 colorRow.Children.Add(swatch);
             }
             body.Children.Add(colorRow);
+        }
+
+        // "큰 버튼 / 작은 버튼" 중 하나를 고르는 카드 - 아이콘 팔레트와 같은 선택 표현(굵은 테두리 +
+        // 강조색)을 써서 한 섹션 안에서 선택 규칙이 일관되게 보이도록 한다.
+        private Border CreateSizeChoice(QuickToggleButtonConfig cfg, string title, string hint, bool small, bool isSelected)
+        {
+            StackPanel content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontWeight = isSelected ? FontWeights.Bold : FontWeights.Normal,
+                Foreground = Theme.TextPrimary,
+                FontSize = 12,
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = hint,
+                Foreground = Theme.TextSecondary,
+                FontSize = 10,
+                Margin = new Thickness(0, 1, 0, 0),
+            });
+
+            Border card = new Border
+            {
+                Padding = new Thickness(9, 5, 9, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+                BorderThickness = new Thickness(isSelected ? 2 : 1),
+                BorderBrush = isSelected ? Theme.Accent : Theme.Border,
+                Background = Theme.Surface,
+                Cursor = Cursors.Hand,
+                Child = content,
+            };
+            card.MouseLeftButtonDown += (s, e) => { cfg.SmallButton = small; OnAppearanceChanged(); };
+            return card;
         }
 
         // 아이콘/색을 바꿨을 때 실제로 달라지는 것만 다시 그린다 - 예전처럼 BuildEditPanel로 전체를
@@ -2150,18 +2223,13 @@ namespace WallSplitter
         private static Border CreateDivider() =>
             new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 6, 0, 12) };
 
-        // OnColorHex가 비어 있을 때 툴바가 실제로 쓰는 색(QuickToggleToolbar.VisualsFor → Theme.ToggleOn).
-        // 팔레트의 "초록"과 같은 값이어야 하고, Theme.xaml의 ToggleOnBrush와도 맞춰서 유지할 것.
-        // 예전 구현은 아무것도 안 고른 버튼의 "선택된 스와치"를 팔레트 첫 항목(스틸블루)으로 표시해서,
-        // 설정 창이 보여주는 색과 툴바가 실제로 칠하는 색(초록)이 서로 달랐다 - 렌더링해서 확인 후 수정.
-        private const string DefaultOnColorHex = "#3D8F5C";
 
         // 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가된 팔레트.
         // 이 프로젝트는 전체 색상환 같은 커스텀 컨트롤을 쓰지 않으므로 미리 정한 스와치 중에서만 고른다.
         private static readonly (string Hex, string Name)[] ColorPalette =
         {
-            ("#5980A6", "스틸블루"),
-            ("#3D8F5C", "초록(기본)"),
+            ("#5980A6", "스틸블루(실행 기본)"),
+            ("#3D8F5C", "초록(켜짐 기본)"),
             ("#A6595D", "빨강"),
             ("#A67B3D", "호박"),
             ("#6B5DA6", "보라"),
