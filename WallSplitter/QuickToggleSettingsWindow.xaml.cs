@@ -47,6 +47,17 @@ namespace WallSplitter
         // 새로 열면 초기화되는 세션 한정 UI 상태라 QuickToggleButtonConfig에는 저장하지 않는다.
         private readonly HashSet<int> _expandedCategoryIds = new HashSet<int>();
 
+        // ===== 툴바 미리보기의 드래그 순서 바꾸기 (2026-09-06) =====
+        // 미리보기에 그려진 버튼과 그 버튼이 나타내는 설정을 순서대로 짝지어 둔다 - 드롭 위치를 계산할 때
+        // 시각 트리를 뒤지는 대신 이 목록의 화면 좌표만 보면 되고, 작은 버튼이 중첩 WrapPanel 안에 있어도
+        // 평평한 한 줄로 다룰 수 있다(목록 순서 = _settings.Buttons 순서).
+        private readonly List<(QuickToggleButtonConfig Cfg, FrameworkElement Element)> _previewItems = new();
+        private QuickToggleButtonConfig? _dragCfg;      // 마우스를 누른 버튼(아직 드래그는 아닐 수 있다)
+        private FrameworkElement? _dragElement;
+        private System.Windows.Point _dragOrigin;
+        private bool _dragActive;                       // 최소 드래그 거리를 넘겨 실제로 끌기 시작했는가
+        private int _dropIndex = -1;
+
         // "② 모양"(아이콘/켜짐 색)은 기본으로 접어 두고 세로 공간을 "③ 대상"에 몰아준다 - 2026-07-27의
         // "이름/아이콘/색상 부분이 너무 커서 아래 대상 선택 부분이 작아 보인다"는 피드백을 구조 자체로
         // 해결한 것. "고급"(내보내기/가져오기/툴바 위치)도 같은 이유로 접어 둔다. 둘 다 세션 한정 상태.
@@ -121,6 +132,12 @@ namespace WallSplitter
                 .ToList();
 
             BackfillLevelElevations();
+
+            // 드래그 순서 바꾸기는 개별 버튼이 아니라 이 호스트에서 받는다 - 드래그 도중 커서가 버튼
+            // 밖으로 나가도 계속 따라가야 하고(마우스 캡처 대상), 삽입 위치 계산의 좌표 기준도 여기다.
+            PreviewDragHost.MouseMove += PreviewDragHost_MouseMove;
+            PreviewDragHost.MouseLeftButtonUp += PreviewDragHost_MouseLeftButtonUp;
+            PreviewDragHost.LostMouseCapture += PreviewDragHost_LostMouseCapture;
 
             AddBlueprintCornerMarks(PreviewCard, new Thickness(12, 10, 12, 10));
             BuildAddChooser();
@@ -311,6 +328,8 @@ namespace WallSplitter
         private void RefreshPreviewStrip()
         {
             PreviewPanel.Children.Clear();
+            _previewItems.Clear();
+            ClearDropIndicator();
 
             StackPanel buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4) };
 
@@ -456,20 +475,258 @@ namespace WallSplitter
                 BorderBrush = borderBrush,
                 Padding = new Thickness(0),
                 Cursor = Cursors.Hand,
-                ToolTip = CategoryLabel(cfg.Category) + " 버튼 · " + TargetSummary(cfg) + "\n클릭하면 이 버튼을 편집합니다.",
+                ToolTip = CategoryLabel(cfg.Category) + " 버튼 · " + TargetSummary(cfg)
+                          + "\n클릭하면 이 버튼을 편집하고, 끌어서 순서를 바꿉니다.",
             };
+            // 드래그로 끝난 경우에는 Click 자체가 발생하지 않는다 - 드래그를 시작할 때 마우스 캡처를
+            // PreviewDragHost로 가져가므로 Button이 누름/뗌 짝을 완성하지 못하기 때문이다. 덕분에
+            // "옮기려고 끌었는데 편집 대상까지 바뀌는" 일이 없다.
             button.Click += (s, e) => SelectButton(cfg);
 
             // 지금 편집 중인 버튼을 강조색 테두리로 표시한다 - 미리보기와 오른쪽 편집 영역이 같은 버튼을
             // 가리키고 있다는 걸 눈으로 잇기 위함(테두리만 두르므로 버튼 자신의 색은 가리지 않는다).
             // 실제 툴바는 버튼끼리 완전히 맞닿아 있으므로(클릭 사각지대를 없애려고 일부러 그렇게 했다)
             // 바깥 Margin은 주지 않는다 - 선택 표시용 2px 테두리만 모든 버튼에 똑같이 둘러 간격을 맞춘다.
-            return new Border
+            Border wrapper = new Border
             {
                 BorderThickness = new Thickness(2),
                 BorderBrush = ReferenceEquals(cfg, _selected) ? Theme.Accent : Brushes.Transparent,
                 Child = button,
             };
+
+            // 누를 때는 "후보"로만 기억해 둔다 - 여기서 바로 캡처해 버리면 그냥 클릭(편집 대상 선택)까지
+            // 드래그로 먹혀서 Click이 안 난다. 최소 드래그 거리를 넘겼을 때만 PreviewDragHost_MouseMove가
+            // 실제 드래그를 시작한다.
+            wrapper.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                _dragCfg = cfg;
+                _dragElement = wrapper;
+                _dragOrigin = e.GetPosition(PreviewDragHost);
+            };
+
+            _previewItems.Add((cfg, wrapper));
+            return wrapper;
+        }
+
+        // ===== 미리보기 드래그로 순서 바꾸기 (2026-09-06) =====
+        //
+        // 사용자 요청: "툴바 미리보기에서 버튼들의 위치를 드래그로 이동시킬 수 있으면 좋겠어. 각 작은버튼
+        // 두개를 옮겨서 위아래 2줄로 만들거나, 좌우로 이동시키면서 순서를 바꾸는 방식으로" + "등록된
+        // 버튼에서 위아래로 움직이게 만드는 화살표는 제거". 그래서 순서 변경 수단은 이제 여기 하나뿐이다.
+        //
+        // 위아래 2줄은 따로 만드는 게 아니라 배치 규칙에서 저절로 나온다 - 작은 버튼끼리 이웃하면
+        // RefreshPreviewStrip이 세로 WrapPanel(높이 64) 하나로 묶어 두 개가 위아래로 쌓인다. 즉 "작은
+        // 버튼 두 개를 나란히 끌어다 놓으면" 2줄이 된다.
+        private void PreviewDragHost_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (_dragCfg == null) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { CancelDrag(); return; }
+
+            System.Windows.Point now = e.GetPosition(PreviewDragHost);
+            if (!_dragActive)
+            {
+                if (Math.Abs(now.X - _dragOrigin.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                    Math.Abs(now.Y - _dragOrigin.Y) < SystemParameters.MinimumVerticalDragDistance)
+                    return;
+
+                _dragActive = true;
+                PreviewDragHost.CaptureMouse();
+                PreviewDragHost.Cursor = Cursors.SizeAll;
+                if (_dragElement != null) _dragElement.Opacity = 0.4;
+            }
+
+            _dropIndex = ComputeDropIndex(now);
+            ShowDropIndicator(_dropIndex);
+        }
+
+        private void PreviewDragHost_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_dragActive) { ResetDragState(); return; }
+
+            QuickToggleButtonConfig? cfg = _dragCfg;
+            int target = _dropIndex;
+            CancelDrag();
+            if (cfg != null && target >= 0) DropPreviewButton(cfg, target);
+        }
+
+        // 캡처가 다른 곳으로 넘어가면(예: 창이 비활성화) 드래그를 조용히 취소한다 - 표시선과 흐려진
+        // 버튼이 그대로 남지 않도록.
+        private void PreviewDragHost_LostMouseCapture(object sender, MouseEventArgs e) => CancelDrag();
+
+        private void CancelDrag()
+        {
+            if (_dragActive)
+            {
+                if (PreviewDragHost.IsMouseCaptured) PreviewDragHost.ReleaseMouseCapture();
+                PreviewDragHost.Cursor = null;
+            }
+            if (_dragElement != null) _dragElement.Opacity = 1.0;
+            ClearDropIndicator();
+            ResetDragState();
+        }
+
+        private void ResetDragState()
+        {
+            _dragCfg = null;
+            _dragElement = null;
+            _dragActive = false;
+            _dropIndex = -1;
+        }
+
+        // 미리보기에 그려진 버튼의 화면 사각형(PreviewDragHost 좌표계). 아직 레이아웃이 잡히지 않았거나
+        // 트리에서 떨어진 요소면 TransformToAncestor가 예외를 던지므로 빈 사각형으로 넘긴다 - 순서를
+        // 바꾸려다 창이 죽는 것보다 그 버튼 하나를 계산에서 빼는 편이 낫다(호출부가 0 크기를 걸러낸다).
+        private Rect PreviewRect(FrameworkElement element)
+        {
+            try
+            {
+                System.Windows.Point topLeft = element.TransformToAncestor(PreviewDragHost).Transform(new System.Windows.Point(0, 0));
+                return new Rect(topLeft, new Size(element.ActualWidth, element.ActualHeight));
+            }
+            catch (InvalidOperationException)
+            {
+                return Rect.Empty;
+            }
+        }
+
+        // 커서 위치 → "몇 번째 앞에 끼워 넣을 것인가". 버튼들은 읽는 순서(왼→오, 한 칸 안에서는 위→아래)로
+        // 놓여 있으므로, 커서보다 "앞선" 버튼의 개수가 곧 삽입 위치다. 세로로 쌓인 작은 버튼도 같은 규칙으로
+        // 다뤄지도록, 같은 칸 안에서는 X가 아니라 Y의 중간선을 기준으로 앞뒤를 가른다.
+        private int ComputeDropIndex(System.Windows.Point cursor)
+        {
+            int index = 0;
+            foreach ((QuickToggleButtonConfig _, FrameworkElement element) in _previewItems)
+            {
+                Rect r = PreviewRect(element);
+                if (r.Width <= 0 || r.Height <= 0) continue;
+                bool after = cursor.X > r.Right
+                             || (cursor.X > r.Left && cursor.Y > r.Top + r.Height / 2);
+                if (after) index++;
+            }
+            return index;
+        }
+
+        private void ShowDropIndicator(int index)
+        {
+            PreviewDropCanvas.Children.Clear();
+            if (_previewItems.Count == 0) return;
+
+            // 표시선은 강조색(스틸블루)이 아니라 **어두운 선 + 흰 테두리**다 - 강조색으로 그렸더니 같은
+            // 스틸블루로 칠해진 버튼(실행형 버튼의 기본색) 위에서는 선이 통째로 묻혀 보이지 않았다
+            // (하네스로 렌더해서 확인). 이 조합은 밝은 카드 바탕에서도, 채워진 버튼 위에서도 다 보인다.
+            const double thickness = 5;   // 흰 테두리 1px + 어두운 심 3px + 흰 테두리 1px
+            Border line = new Border
+            {
+                Background = Theme.TextPrimary,
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(1),
+            };
+
+            if (index >= _previewItems.Count)
+            {
+                // 맨 뒤 - 마지막 버튼의 오른쪽에 세로선.
+                Rect last = PreviewRect(_previewItems[_previewItems.Count - 1].Element);
+                if (last.IsEmpty) return;
+                line.Width = thickness;
+                line.Height = last.Height;
+                Canvas.SetLeft(line, last.Right - thickness / 2);
+                Canvas.SetTop(line, last.Top);
+            }
+            else
+            {
+                Rect target = PreviewRect(_previewItems[index].Element);
+                if (target.IsEmpty) return;
+                bool stackedUnderPrevious = index > 0 && IsStackedUnder(PreviewRect(_previewItems[index - 1].Element), target);
+                if (stackedUnderPrevious)
+                {
+                    // 같은 칸에서 위아래로 쌓인 작은 버튼 사이 - 가로선.
+                    line.Width = target.Width;
+                    line.Height = thickness;
+                    Canvas.SetLeft(line, target.Left);
+                    Canvas.SetTop(line, target.Top - thickness / 2);
+                }
+                else
+                {
+                    line.Width = thickness;
+                    line.Height = target.Height;
+                    Canvas.SetLeft(line, target.Left - thickness / 2);
+                    Canvas.SetTop(line, target.Top);
+                }
+            }
+
+            PreviewDropCanvas.Children.Add(line);
+        }
+
+        // 같은 칸(세로 WrapPanel의 한 열)에서 바로 아래에 쌓였는가.
+        private static bool IsStackedUnder(Rect upper, Rect lower) =>
+            Math.Abs(upper.Left - lower.Left) < 1.0 && lower.Top > upper.Top + 1.0;
+
+        private void ClearDropIndicator() => PreviewDropCanvas.Children.Clear();
+
+        // 드롭 확정. 묶음(연결고리) 규칙은 예전 ▲▼와 같은 뜻을 유지한다:
+        //  - 묶여 있는 종류를 **자기 덩어리 안에** 떨어뜨리면 그 안에서 순서만 바뀐다(작은 버튼 두 개의
+        //    위아래를 바꾸는 것이 바로 이 경우다).
+        //  - 묶여 있는 종류를 **덩어리 밖에** 떨어뜨리면 그 종류 전체가 통째로 그 자리로 옮겨간다
+        //    (예전 그룹 머리글의 ▲▼가 하던 일 - 화살표를 없앴으므로 이 경로가 그 대체다).
+        //  - 고리가 끊긴 버튼은 혼자 움직이되, 다른 묶인 덩어리 한가운데로는 들어가지 않는다
+        //    (들어가면 "묶인 종류는 항상 연속된 한 덩어리"라는 전제가 깨진다).
+        private void DropPreviewButton(QuickToggleButtonConfig cfg, int dropIndex)
+        {
+            List<QuickToggleButtonConfig> list = _settings.Buttons;
+            int from = list.IndexOf(cfg);
+            if (from < 0) return;
+
+            (int runStart, int runCount) = RunAt(from);
+            bool linked = _settings.IsLinked(cfg.Category);
+
+            if (linked && (dropIndex < runStart || dropIndex > runStart + runCount))
+            {
+                List<QuickToggleButtonConfig> run = list.GetRange(runStart, runCount);
+                list.RemoveRange(runStart, runCount);
+                int target = dropIndex > runStart ? dropIndex - runCount : dropIndex;
+                target = SnapOutsideLinkedRuns(Math.Max(0, Math.Min(list.Count, target)));
+                list.InsertRange(target, run);
+            }
+            else
+            {
+                list.RemoveAt(from);
+                int target = dropIndex > from ? dropIndex - 1 : dropIndex;
+                target = Math.Max(0, Math.Min(list.Count, target));
+                target = linked
+                    ? Math.Max(runStart, Math.Min(runStart + runCount - 1, target))
+                    : SnapOutsideLinkedRuns(target);
+                list.Insert(target, cfg);
+            }
+
+            // 안전망 - 위 규칙대로면 이미 조건을 만족하지만, 묶인 종류가 흩어지는 일만은 없어야 한다.
+            _settings.NormalizeGrouping();
+            RefreshButtonList();
+            RefreshPreviewStrip();
+        }
+
+        // index가 들어 있는 "같은 종류가 연속으로 이어지는 구간"의 시작과 개수.
+        private (int Start, int Count) RunAt(int index)
+        {
+            List<QuickToggleButtonConfig> list = _settings.Buttons;
+            QuickToggleCategory category = list[index].Category;
+            int start = index;
+            while (start > 0 && list[start - 1].Category == category) start--;
+            int end = index;
+            while (end + 1 < list.Count && list[end + 1].Category == category) end++;
+            return (start, end - start + 1);
+        }
+
+        // 삽입 위치가 묶여 있는 덩어리 한가운데면 가까운 쪽 경계로 밀어낸다.
+        private int SnapOutsideLinkedRuns(int index)
+        {
+            List<QuickToggleButtonConfig> list = _settings.Buttons;
+            if (index <= 0 || index >= list.Count) return index;
+            if (list[index - 1].Category != list[index].Category) return index;
+            if (!_settings.IsLinked(list[index].Category)) return index;
+
+            (int start, int count) = RunAt(index);
+            int end = start + count;
+            return (index - start) <= (end - index) ? start : end;
         }
 
         // Industry 디자인 시스템의 .blueprint 모서리 등록 마크("+"). 2026-07-27 테마 이식 때는 "창마다
@@ -542,7 +799,7 @@ namespace WallSplitter
                 ButtonListPanel.Children.Add(BuildGroupHeader(runs, r));
 
                 for (int i = runStart; i < runStart + runCount; i++)
-                    ButtonListPanel.Children.Add(BuildButtonRow(i, runStart, runCount));
+                    ButtonListPanel.Children.Add(BuildButtonRow(i));
             }
         }
 
@@ -560,7 +817,7 @@ namespace WallSplitter
             return runs;
         }
 
-        // 종류 덩어리의 머리글 - 종류 이름 + 개수 + 연결고리 토글 + (묶여 있을 때만) 그룹 통째 이동.
+        // 종류 덩어리의 머리글 - 종류 이름 + 개수 + 연결고리 토글 (+ 고리가 끊겼으면 "풀림" 표시).
         private UIElement BuildGroupHeader(List<(int Start, int Count, QuickToggleCategory Category)> runs, int runIndex)
         {
             (int start, int count, QuickToggleCategory category) = runs[runIndex];
@@ -613,55 +870,35 @@ namespace WallSplitter
             WpfGrid.SetColumn(chain, 1);
             grid.Children.Add(chain);
 
-            StackPanel groupMove = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            if (linked)
+            // 2026-09-06, "등록된 버튼에서 위아래로 움직이게 만드는 화살표는 제거" 요청으로 그룹 통째
+            // 이동 ▲▼를 없앴다 - 묶인 종류를 통째로 옮기는 일은 이제 미리보기에서 그 종류의 버튼 하나를
+            // 덩어리 밖으로 끌어다 놓으면 된다(DropPreviewButton 참고). 이 칸에는 고리가 끊겼다는 표시만
+            // 남는다.
+            if (!linked)
             {
-                Button groupUp = new Button
-                {
-                    Content = CreateTriangle(pointingUp: true), Width = 24, Height = 24, Padding = new Thickness(2),
-                    Background = Theme.Surface, Margin = new Thickness(0, 0, 2, 0),
-                    IsEnabled = runIndex > 0, ToolTip = "이 종류를 통째로 위로 옮기기",
-                };
-                groupUp.Click += (s, e) => MoveRun(runIndex, -1);
-                groupMove.Children.Add(groupUp);
-
-                Button groupDown = new Button
-                {
-                    Content = CreateTriangle(pointingUp: false), Width = 24, Height = 24, Padding = new Thickness(2),
-                    Background = Theme.Surface,
-                    IsEnabled = runIndex < runs.Count - 1, ToolTip = "이 종류를 통째로 아래로 옮기기",
-                };
-                groupDown.Click += (s, e) => MoveRun(runIndex, +1);
-                groupMove.Children.Add(groupDown);
-            }
-            else
-            {
-                groupMove.Children.Add(new TextBlock
+                TextBlock loose = new TextBlock
                 {
                     Text = "풀림",
                     FontSize = 11,
                     Foreground = Theme.WarningText,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 4, 0),
-                });
+                };
+                WpfGrid.SetColumn(loose, 2);
+                grid.Children.Add(loose);
             }
-            WpfGrid.SetColumn(groupMove, 2);
-            grid.Children.Add(groupMove);
 
             return header;
         }
 
-        // 묶여 있는 종류의 개별 ▲▼는 그 덩어리 안에서만 움직이고(밖으로 나가면 묶음이 깨지므로),
-        // 고리가 끊긴 종류는 목록 전체를 한 칸씩 넘나든다.
-        private UIElement BuildButtonRow(int index, int runStart, int runCount)
+        // 목록 한 줄 - 고르기와 삭제만 한다. 순서 바꾸기는 위 툴바 미리보기의 드래그가 전담한다
+        // (2026-09-06에 ▲▼를 없앴다).
+        private UIElement BuildButtonRow(int index)
         {
             {
                 QuickToggleButtonConfig cfg = _settings.Buttons[index];
                 bool isSelected = ReferenceEquals(cfg, _selected);
                 bool configured = IsConfigured(cfg);
-                bool linked = _settings.IsLinked(cfg.Category);
-                int lowerBound = linked ? runStart : 0;
-                int upperBound = linked ? runStart + runCount - 1 : _settings.Buttons.Count - 1;
 
                 Border row = new Border
                 {
@@ -718,22 +955,13 @@ namespace WallSplitter
 
                 StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
 
-                // CONFIRMED LIVE BUG (2026-07-27), 수정 (1차): 위/아래 버튼이 "투명하게 보여 뭐가 위/아래인지
-                // 안 보인다"는 실측 피드백 - Industry 라이트 테마에서 기본 버튼 배경이 투명("선 그림")이라
-                // 22px짜리 작은 아이콘 버튼은 존재감이 약했다. 배경을 명시적으로 Surface로 채운다.
+                // CONFIRMED LIVE BUG (2026-07-27), 수정 (1차): 이 자리의 작은 아이콘 버튼들이 "투명하게
+                // 보여 뭔지 안 보인다"는 실측 피드백 - Industry 라이트 테마에서 기본 버튼 배경이
+                // 투명("선 그림")이라 존재감이 약했다. 배경을 명시적으로 Surface로 채운다.
                 // CONFIRMED LIVE BUG (2026-07-27), 수정 (2차, 진짜 원인): Width/Height만 24로 키우고
                 // Padding은 그대로 뒀던 게 문제였다 - BaseButtonStyle의 기본 Padding("10,5")이 그대로
                 // 적용되면 24x24 버튼의 콘텐츠 영역이 4x14로 쪼그라들어 도형이 대부분 잘렸다.
-                // 세 버튼 모두 Padding을 작게 명시해야 한다.
-                string moveScope = linked ? " (이 종류 안에서)" : "";
-                Button upButton = new Button { Content = CreateTriangle(pointingUp: true), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(0, 0, 2, 0), IsEnabled = index > lowerBound, ToolTip = "위로 옮기기" + moveScope };
-                upButton.Click += (s, e) => { if (linked) MoveButton(index, index - 1); else MoveLooseButton(index, -1); };
-                actions.Children.Add(upButton);
-
-                Button downButton = new Button { Content = CreateTriangle(pointingUp: false), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(0, 0, 6, 0), IsEnabled = index < upperBound, ToolTip = "아래로 옮기기" + moveScope };
-                downButton.Click += (s, e) => { if (linked) MoveButton(index, index + 1); else MoveLooseButton(index, +1); };
-                actions.Children.Add(downButton);
-
+                // Padding을 작게 명시해야 한다(지금 남은 삭제 버튼도 마찬가지).
                 Button deleteButton = new Button { Content = CreateXMark(), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, ToolTip = "이 버튼 삭제" };
                 deleteButton.Click += (s, e) => { DeleteButton(index); };
                 actions.Children.Add(deleteButton);
@@ -759,77 +987,6 @@ namespace WallSplitter
             _ => "",
         };
 
-        private void MoveButton(int index, int newIndex)
-        {
-            if (newIndex < 0 || newIndex >= _settings.Buttons.Count) return;
-            (_settings.Buttons[index], _settings.Buttons[newIndex]) = (_settings.Buttons[newIndex], _settings.Buttons[index]);
-            RefreshButtonList();
-            RefreshPreviewStrip();
-        }
-
-        // 고리가 끊긴 버튼 하나를 목록 전체에서 옮긴다. 한 칸씩 움직이되 **묶여 있는 종류 덩어리는 통째로
-        // 건너뛴다** - 그러지 않으면 묶인 덩어리 한가운데로 끼어들어가 "묶인 종류는 항상 한 덩어리"라는
-        // 전제가 깨진다. (한 칸씩 옮긴 뒤 NormalizeGrouping으로 정리하는 방법도 생각했지만, 그러면 묶인
-        // 덩어리 위로는 영원히 못 올라간다 - 정리 과정이 그 이동을 그대로 되돌려 놓기 때문이다.)
-        private void MoveLooseButton(int index, int direction)
-        {
-            if (index < 0 || index >= _settings.Buttons.Count) return;
-
-            List<QuickToggleButtonConfig> list = _settings.Buttons;
-            QuickToggleButtonConfig cfg = list[index];
-            list.RemoveAt(index);
-
-            int target;
-            if (direction < 0)
-            {
-                int j = index - 1;
-                if (j >= 0 && _settings.IsLinked(list[j].Category))
-                {
-                    QuickToggleCategory blocking = list[j].Category;
-                    while (j >= 0 && list[j].Category == blocking) j--;
-                    target = j + 1;
-                }
-                else target = index - 1;
-            }
-            else
-            {
-                // 위에서 자기 자신을 뺐으므로, 원래 "바로 아래" 항목이 지금 index 자리에 있다.
-                int j = index;
-                if (j < list.Count && _settings.IsLinked(list[j].Category))
-                {
-                    QuickToggleCategory blocking = list[j].Category;
-                    while (j < list.Count && list[j].Category == blocking) j++;
-                    target = j;
-                }
-                else target = index + 1;
-            }
-
-            list.Insert(Math.Max(0, Math.Min(list.Count, target)), cfg);
-            RefreshButtonList();
-            RefreshPreviewStrip();
-        }
-
-        // 묶여 있는 종류 덩어리를 통째로 이웃 덩어리와 자리바꿈한다 - 한 칸씩 미는 게 아니라 두 구간을
-        // 통으로 맞바꾸므로, 덩어리 안의 순서는 그대로 유지된다.
-        private void MoveRun(int runIndex, int direction)
-        {
-            List<(int Start, int Count, QuickToggleCategory Category)> runs = BuildRuns();
-            int otherIndex = runIndex + direction;
-            if (runIndex < 0 || runIndex >= runs.Count || otherIndex < 0 || otherIndex >= runs.Count) return;
-
-            (int firstStart, int firstCount, _) = runs[Math.Min(runIndex, otherIndex)];
-            (int secondStart, int secondCount, _) = runs[Math.Max(runIndex, otherIndex)];
-
-            List<QuickToggleButtonConfig> first = _settings.Buttons.GetRange(firstStart, firstCount);
-            List<QuickToggleButtonConfig> second = _settings.Buttons.GetRange(secondStart, secondCount);
-
-            _settings.Buttons.RemoveRange(firstStart, firstCount + secondCount);
-            _settings.Buttons.InsertRange(firstStart, second);
-            _settings.Buttons.InsertRange(firstStart + secondCount, first);
-
-            RefreshButtonList();
-            RefreshPreviewStrip();
-        }
 
         // 연결고리 아이콘 - 고리 두 개가 걸려 있으면(묶임) 서로 겹치고, 끊기면 사이가 벌어진다.
         // 텍스트 글리프(⛓) 대신 도형으로 직접 그리는 이 창의 관례를 따른다(폰트에 따라 안 보일 수 있음).
@@ -2153,16 +2310,8 @@ namespace WallSplitter
 
         // ===== 작은 도형 부품 =====
 
-        // 이 코드베이스는 텍스트 글리프(▲▼✕ 등) 대신 도형을 직접 그린다 - 폰트/테마에 따라 안 보일 수
+        // 이 코드베이스는 텍스트 글리프(✕ 등) 대신 도형을 직접 그린다 - 폰트/테마에 따라 안 보일 수
         // 있어서. 작은 UI 패턴을 공유 컴포넌트로 뽑지 않고 각 창에 복제하는 관례도 그대로 따른다.
-        private static Polygon CreateTriangle(bool pointingUp)
-        {
-            PointCollection points = pointingUp
-                ? new PointCollection { new System.Windows.Point(6, 0), new System.Windows.Point(12, 10), new System.Windows.Point(0, 10) }
-                : new PointCollection { new System.Windows.Point(0, 0), new System.Windows.Point(12, 0), new System.Windows.Point(6, 10) };
-            return new Polygon { Points = points, Fill = Theme.TextPrimary, Width = 12, Height = 10 };
-        }
-
         private static UIElement CreateXMark()
         {
             Canvas canvas = new Canvas { Width = 12, Height = 12 };

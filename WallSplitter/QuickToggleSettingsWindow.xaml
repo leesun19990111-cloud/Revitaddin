@@ -21,8 +21,11 @@
         (2) 2단 본문 - 왼쪽 목록 + 오른쪽 ①이름 ②모양 ③대상 단계형 편집,
         (3) 카드형 "버튼 종류 선택" 오버레이 - 종류마다 한 줄 설명을 붙여 고르는 순간 이해되게,
         (4) 접이식 "고급" - 내보내기/가져오기/툴바 위치처럼 가끔 쓰는 것을 평소엔 감춤.
-        시각 언어는 기존 Industry 디자인 시스템 그대로다(스틸블루 단일 강조색, 모서리 반지름 0,
-        얇은 실선 테두리, 채워진 오브젝트는 주 버튼과 강조 뱃지뿐) - docs/design-system/CLAUDE.md 참고.
+        시각 언어는 기존 Industry 디자인 시스템 그대로다(스틸블루 단일 강조색, 얇은 실선 테두리,
+        채워진 오브젝트는 주 버튼과 강조 뱃지뿐) - docs/design-system/CLAUDE.md 참고.
+        **예외**: 2026-09-06 사용자 지시로 이 창의 영역 테두리에만 CornerRadius 3(오버레이는 4)을 준다.
+        디자인 시스템의 "모서리 반지름 0" 규칙에서 의도적으로 벗어난 것이니 0으로 되돌리지 말 것.
+        영역 테두리(카드/패널)에만 주고 버튼·입력창은 그대로 0이다 - Theme.xaml은 건드리지 않는다.
     -->
     <!-- 바깥 Grid는 본문 위에 "버튼 종류 선택" 오버레이를 겹치기 위한 것. -->
     <Grid>
@@ -46,7 +49,7 @@
             <!-- ===== 툴바 미리보기 ===== -->
             <!-- 카드 배경은 창 바탕색(WindowBackground)으로 둔다 - 안에 그리는 툴바 미리보기 자체가
                  실제 툴바와 같은 SurfaceBrush 배경이라, 카드까지 Surface면 툴바 테두리가 묻혀 보인다. -->
-            <Border Grid.Row="1" Margin="0,0,0,12" Padding="12,10,12,10"
+            <Border Grid.Row="1" Margin="0,0,0,12" Padding="12,10,12,10" CornerRadius="3"
                     Background="{DynamicResource WindowBackgroundBrush}"
                     BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
                 <!-- PreviewCard: 코드비하인드가 Industry 디자인 시스템의 .blueprint 모서리 등록 마크를 여기에 얹는다. -->
@@ -61,10 +64,16 @@
                             <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
                                        Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
-                                       Text="켜고 끄는 버튼은 &apos;켜졌을 때&apos;의 모습이고, 실행형 버튼은 늘 칠해져 있습니다. 버튼을 클릭하면 오른쪽에서 편집합니다."/>
+                                       Text="버튼을 클릭하면 오른쪽에서 편집하고, 끌어서 순서를 바꿉니다. 켜고 끄는 버튼은 &apos;켜졌을 때&apos;, 실행형 버튼은 늘 칠해진 모습입니다."/>
                         </Grid>
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                            <StackPanel x:Name="PreviewPanel" Orientation="Horizontal"/>
+                            <!-- PreviewDragHost: 미리보기 버튼을 끌어서 순서를 바꾸는 드래그의 좌표 기준이자
+                                 마우스 캡처 대상. 삽입 위치 표시선은 겹쳐 놓은 Canvas에 그리므로(레이아웃을
+                                 건드리지 않으므로) 드래그 중에 버튼들이 들썩이지 않는다. -->
+                            <Grid x:Name="PreviewDragHost">
+                                <StackPanel x:Name="PreviewPanel" Orientation="Horizontal"/>
+                                <Canvas x:Name="PreviewDropCanvas" IsHitTestVisible="False"/>
+                            </Grid>
                         </ScrollViewer>
                     </StackPanel>
                 </Grid>
@@ -85,10 +94,15 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="등록된 버튼" FontWeight="Bold" Margin="0,0,0,6"/>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,6">
+                        <TextBlock Text="등록된 버튼" FontWeight="Bold"/>
+                        <TextBlock Margin="0,1,0,0" FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Text="순서는 위 '툴바 미리보기'에서 버튼을 끌어서 바꿉니다."/>
+                    </StackPanel>
 
                     <Border Grid.Row="1" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
-                            Background="{DynamicResource SurfaceBrush}">
+                            CornerRadius="3" Background="{DynamicResource SurfaceBrush}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="ButtonListPanel" Margin="2"/>
                         </ScrollViewer>
@@ -102,7 +116,7 @@
                 <!-- 제목/이름/모양/대상 헤더는 위쪽에 고정하고(EditHeaderHost), 대상 목록만 아래에서
                      스크롤되게 나눈다 - 목록이 길어져도 이름 칸과 검색창이 항상 보이게 하기 위함
                      (2026-07-27 실측 피드백: "스크롤을 내리면 이름 변경 부분이 같이 사라진다"). -->
-                <Border Grid.Column="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                <Border Grid.Column="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="3"
                         Background="{DynamicResource SurfaceBrush}" Padding="14">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -118,7 +132,7 @@
             </Grid>
 
             <!-- ===== 고급 (접이식) ===== -->
-            <Border Grid.Row="3" x:Name="AdvancedPanel" Visibility="Collapsed" Margin="0,12,0,0" Padding="12"
+            <Border Grid.Row="3" x:Name="AdvancedPanel" Visibility="Collapsed" Margin="0,12,0,0" Padding="12" CornerRadius="3"
                     Background="{DynamicResource SurfaceBrush}"
                     BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
                 <StackPanel>
@@ -165,7 +179,7 @@
              "+ 버튼 추가"를 누르면 본문 위에 겹쳐 뜬다. 종류마다 실제 기본 아이콘과 "이 버튼이 무슨 일을
              하는지" 한 줄 설명을 함께 보여줘서, 예전처럼 이름만 보고 짐작해서 고르지 않아도 되게 했다. -->
         <Grid x:Name="AddOverlay" Visibility="Collapsed" Background="#661D1F20">
-            <Border MaxWidth="770" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="20"
+            <Border MaxWidth="770" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="20" CornerRadius="4"
                     Background="{DynamicResource WindowBackgroundBrush}"
                     BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
                 <StackPanel>
