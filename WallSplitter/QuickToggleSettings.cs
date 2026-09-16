@@ -50,6 +50,10 @@ namespace WallSplitter
         // Revit 모델, IFC, 지형/지형솔리드, DWF 마크업, 포인트 클라우드, 좌표 모델)를 한 번에 끄고 켠다.
         // LinkedCad/LinkedModel과 마찬가지로 설정에서 고를 대상이 없다 - 대상은 클릭할 때마다 다시 찾는다.
         LinkedAll,
+        // 2026-09-04, "두개의 레벨을 선택해서 그 선택한 레벨 사이의 3D 단면상자뷰를 만들어 볼 수 있는
+        // 기능" 요청으로 추가. 색상/기능 버튼처럼 on/off 토글이 아니라 누를 때마다 1회 적용한다 -
+        // 고른 두 레벨 높이로 단면상자를 맞춘 전용 3D 뷰를 만들어(있으면 재사용) 그 뷰로 전환한다.
+        LevelSectionBox,
     }
 
     // CommandLauncher 버튼이 가리키는 명령의 종류 - RevitCommandId를 조회하는 API가 서로 다르다
@@ -121,6 +125,15 @@ namespace WallSplitter
         public QuickToggleCommandKind? CommandKind { get; set; }
         public string? CommandId { get; set; }
         public string? CommandLabel { get; set; }
+
+        // 2026-09-04, "층별 단면상자"(LevelSectionBox) 전용 - 단면상자의 아래/위 높이를 정하는 레벨 두 개.
+        // **이름만 저장하고 ElementId는 저장하지 않는다**: 이 설정은 PC 전역이라(아래 QuickToggleSettings
+        // 주석 참고) 저장된 ElementId가 다른 프로젝트에서는 의미가 없다. 뷰템플릿/필터처럼 "예전에 ID만
+        // 저장하던 시절"의 호환 부담이 없는 새 필드라 처음부터 이름 하나만 둔다(레벨 이름은 한 문서 안에서
+        // 유일하다). 위/아래는 저장된 그대로 쓰지 않고 실제 높이를 비교해 정렬한다 - 사용자가 반대로 골라도
+        // 동작해야 하고, 다른 프로젝트에서는 같은 이름의 레벨 높이 순서가 다를 수도 있다.
+        public string? LevelBottomName { get; set; }
+        public string? LevelTopName { get; set; }
     }
 
     // "색상 버튼"이 색상/투명도를 적용할 카테고리 한 줄. ElementId는 문서마다 달라 이식(내보내기/
@@ -312,6 +325,7 @@ namespace WallSplitter
                 QuickToggleCategory.ColorTool => "색상버튼",
                 QuickToggleCategory.CommandLauncher => "기능버튼",
                 QuickToggleCategory.LinkedAll => "링크버튼",
+                QuickToggleCategory.LevelSectionBox => "층단면버튼",
                 QuickToggleCategory.LinkedCad => "링크도면버튼",
                 QuickToggleCategory.LinkedModel => "링크모델버튼",
                 _ => "버튼",

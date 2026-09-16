@@ -33,6 +33,9 @@ namespace WallSplitter
             public Dictionary<string, int> ViewTemplates = new Dictionary<string, int>();
             public Dictionary<string, int> Filters = new Dictionary<string, int>();
             public Dictionary<string, int> Worksets = new Dictionary<string, int>();
+            // "층별 단면상자" 버튼용 - 레벨 이름 → 높이(내부 단위). DetermineState가 "이 프로젝트에 그
+            // 레벨이 있는가"를 매 Idling 틱마다 물어보므로 여기 같이 캐시한다.
+            public Dictionary<string, double> LevelElevations = new Dictionary<string, double>();
             public DateTime StampUtc;
         }
 
@@ -80,8 +83,31 @@ namespace WallSplitter
             {
             }
 
+            try
+            {
+                foreach (Level level in new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>())
+                    index.LevelElevations[level.Name] = level.Elevation;
+            }
+            catch
+            {
+            }
+
             TargetIndexes[key] = index;
             return index;
+        }
+
+        // "층별 단면상자" 버튼이 고른 두 레벨을 이 문서에서 이름으로 찾아 **높이 순으로 정렬해** 돌려준다.
+        // 둘 중 하나라도 없으면 null - 호출자는 버튼을 회색으로 그리거나(DetermineState) 안내한다.
+        // 위/아래를 저장된 순서 그대로 믿지 않는 이유는 QuickToggleButtonConfig의 해당 필드 주석 참고.
+        public static (double Bottom, double Top)? ResolveLevelRange(Document doc, QuickToggleButtonConfig cfg)
+        {
+            if (string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)) return null;
+
+            Dictionary<string, double> levels = IndexOf(doc).LevelElevations;
+            if (!levels.TryGetValue(cfg.LevelBottomName!, out double a)) return null;
+            if (!levels.TryGetValue(cfg.LevelTopName!, out double b)) return null;
+
+            return a <= b ? (a, b) : (b, a);
         }
 
         // 설정 창에서 저장한 직후처럼 "방금 만든 요소를 곧바로 찾아야 하는" 경우를 위해 캐시를 버린다.
@@ -192,6 +218,15 @@ namespace WallSplitter
                     // 누르면 꺼진다("클릭하면 끌 수 있게" 요청).
                     // "링크된 요소"(2026-09-04) - 모든 종류의 링크 카테고리를 한꺼번에 본다. 판정 규칙은
                     // CAD 버튼과 같다: 대상이 하나도 없으면 Disabled, 하나라도 보이면 On, 전부 숨겨졌으면 Off.
+                    // "층별 단면상자"(2026-09-04)는 색상/기능 버튼과 같은 1회 실행형이라 켜짐/꺼짐이 없다 -
+                    // 고른 두 레벨이 이 프로젝트에 다 있으면 언제든 누를 수 있는 Off, 하나라도 없거나 아직
+                    // 안 골랐으면 Disabled(회색)다. 설정이 PC 전역이라 다른 프로젝트에는 그 레벨 이름이
+                    // 없을 수 있는데, 그때 회색으로 보이는 게 링크 버튼들과 같은 정직한 표시다.
+                    case QuickToggleCategory.LevelSectionBox:
+                        return ResolveLevelRange(view.Document, cfg) == null
+                            ? QuickToggleButtonState.Disabled
+                            : QuickToggleButtonState.Off;
+
                     case QuickToggleCategory.LinkedAll:
                         return DetermineLinkState(view, AllLinkCategoryIds(view));
 
@@ -640,6 +675,220 @@ namespace WallSplitter
         // 돌려줘서 사용자가 받는 안내가 늘 "지금 상황에서 사용할 수 없는 기능일 수 있습니다" 하나뿐이었고,
         // 실제로는 명령 id 조회가 아예 안 되던 버그였는데도 그 사실이 전혀 드러나지 않았다
         // (SunnyToolsCommands.RibbonCommandIds의 CONFIRMED LIVE BUG 참고).
+        // ===== "층별 단면상자" (2026-09-04) =====
+        //
+        // 사용자 요청: "두개의 레벨을 선택해서 그 선택한 레벨 사이의 3D 단면상자뷰를 만들어 볼 수 있는 기능".
+        // Q&A로 확정한 동작: (1) 그 층 전용 3D 뷰를 새로 만들어 전환한다(같은 이름의 뷰가 이미 있으면
+        // 재사용 - 누를 때마다 뷰가 쌓이는 걸 막는다), (2) on/off 토글이 아니라 누를 때마다 1회 적용,
+        // (3) 가로(평면) 범위는 모델 전체를 감싸도록 매번 다시 계산한다.
+        //
+        // 트랜잭션은 호출자가 아니라 여기서 직접 연다 - 뷰 생성/단면상자 설정은 트랜잭션 안에서 해야 하고,
+        // 반대로 uidoc.ActiveView 전환은 **트랜잭션이 닫힌 뒤에만** 가능해서 둘의 순서를 이 안에서 맞춰야
+        // 하기 때문이다(이 파일의 다른 메서드들이 "트랜잭션은 호출자가 연다"는 계약을 따르는 것과 다르다).
+        public static bool ApplyLevelSectionBox(UIApplication uiapp, QuickToggleButtonConfig cfg, out string failureReason)
+        {
+            failureReason = "";
+            UIDocument? uidoc = uiapp.ActiveUIDocument;
+            Document? doc = uidoc?.Document;
+            if (uidoc == null || doc == null)
+            {
+                failureReason = "먼저 프로젝트 파일을 여세요.";
+                return false;
+            }
+
+            (double Bottom, double Top)? range = ResolveLevelRange(doc, cfg);
+            if (range == null)
+            {
+                failureReason = string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)
+                    ? "이 버튼에 레벨이 지정되어 있지 않습니다. 커스텀 버튼 설정에서 아래/위 레벨을 골라 주세요."
+                    : $"'{cfg.LevelBottomName}' / '{cfg.LevelTopName}' 레벨을 지금 열려 있는 프로젝트에서 찾지 못했습니다.";
+                return false;
+            }
+
+            (double bottom, double top) = range.Value;
+            if (top - bottom < 1e-6)
+            {
+                failureReason = "고른 두 레벨의 높이가 같아 단면상자를 만들 수 없습니다. 서로 다른 레벨을 골라 주세요.";
+                return false;
+            }
+
+            (double MinX, double MinY, double MaxX, double MaxY)? extent = ModelPlanExtent(doc);
+            if (extent == null)
+            {
+                failureReason = "모델에서 형상을 찾지 못해 단면상자 범위를 계산할 수 없습니다.";
+                return false;
+            }
+
+            string viewName = LevelSectionBoxViewName(cfg);
+            View3D? target = FindViewByName(doc, viewName);
+
+            using (Transaction tx = new Transaction(doc, "커스텀 버튼: " + cfg.Name))
+            {
+                tx.Start();
+
+                if (target == null)
+                {
+                    ElementId? typeId = ThreeDViewFamilyTypeId(doc);
+                    if (typeId == null)
+                    {
+                        tx.RollBack();
+                        failureReason = "이 프로젝트에서 3D 뷰 종류를 찾지 못해 뷰를 만들 수 없습니다.";
+                        return false;
+                    }
+
+                    try
+                    {
+                        target = View3D.CreateIsometric(doc, typeId);
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.RollBack();
+                        failureReason = "3D 뷰를 만들지 못했습니다: " + ex.GetBaseException().Message;
+                        return false;
+                    }
+
+                    // 뷰 이름은 3D 뷰끼리가 아니라 **모든 뷰**를 통틀어 유일해야 한다 - 같은 이름의 평면
+                    // 뷰 등이 이미 있으면 대입이 예외를 던진다(FindViewByName은 View3D만 보므로 그런
+                    // 충돌을 미리 걸러내지 못한다). 그때는 뒤에 번호를 붙여 가며 비켜 준다.
+                    // 이름을 못 붙여도 뷰 자체와 단면상자는 멀쩡하므로 기본 이름("3D 뷰 1" 등)으로 둔다.
+                    for (int attempt = 0; attempt < 20; attempt++)
+                    {
+                        try
+                        {
+                            target.Name = attempt == 0 ? viewName : $"{viewName} ({attempt + 1})";
+                            break;
+                        }
+                        catch
+                        {
+                            // 다음 번호로 재시도
+                        }
+                    }
+                }
+
+                BoundingBoxXYZ box = new BoundingBoxXYZ
+                {
+                    Min = new XYZ(extent.Value.MinX, extent.Value.MinY, bottom),
+                    Max = new XYZ(extent.Value.MaxX, extent.Value.MaxY, top),
+                };
+
+                try
+                {
+                    // 회전된 단면상자가 남아 있을 수 있으므로 Transform을 항등으로 되돌린다 - 안 그러면
+                    // 여기서 넘기는 Min/Max가 모델 좌표가 아니라 그 회전된 상자의 로컬 좌표로 해석된다.
+                    box.Transform = Transform.Identity;
+                    target.SetSectionBox(box);
+                    target.IsSectionBoxActive = true;
+                }
+                catch (Exception ex)
+                {
+                    tx.RollBack();
+                    failureReason = "단면상자를 적용하지 못했습니다: " + ex.GetBaseException().Message;
+                    return false;
+                }
+
+                if (tx.Commit() != TransactionStatus.Committed)
+                {
+                    failureReason = "변경 사항을 저장하지 못했습니다.";
+                    return false;
+                }
+            }
+
+            // ActiveView 전환은 트랜잭션이 닫힌 뒤에만 가능하다.
+            try
+            {
+                if (doc.ActiveView == null || doc.ActiveView.Id != target!.Id) uidoc.ActiveView = target;
+            }
+            catch (Exception ex)
+            {
+                failureReason = "만든 3D 뷰로 전환하지 못했습니다: " + ex.GetBaseException().Message;
+                return false;
+            }
+
+            return true;
+        }
+
+        // 뷰 이름은 고른 두 레벨에서 그대로 만든다 - 같은 조합의 버튼을 다시 눌러도 뷰가 새로 쌓이지 않고
+        // 기존 것을 재사용하게 하기 위한 키이기도 하다. Revit 뷰 이름에 못 쓰는 문자는 미리 바꿔 둔다.
+        internal static string LevelSectionBoxViewName(QuickToggleButtonConfig cfg) =>
+            SanitizeViewName($"단면상자 {cfg.LevelBottomName}~{cfg.LevelTopName}");
+
+        private static string SanitizeViewName(string name)
+        {
+            foreach (char bad in new[] { '\\', ':', '{', '}', '[', ']', '|', ';', '<', '>', '?', '`', '~' })
+                name = name.Replace(bad, '-');
+            return name.Trim();
+        }
+
+        private static View3D? FindViewByName(Document doc, string name)
+        {
+            try
+            {
+                foreach (View3D v in new FilteredElementCollector(doc).OfClass(typeof(View3D)).Cast<View3D>())
+                    if (!v.IsTemplate && v.Name == name) return v;
+            }
+            catch
+            {
+            }
+            return null;
+        }
+
+        private static ElementId? ThreeDViewFamilyTypeId(Document doc)
+        {
+            try
+            {
+                foreach (ViewFamilyType t in new FilteredElementCollector(doc)
+                             .OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>())
+                    if (t.ViewFamily == ViewFamily.ThreeDimensional) return t.Id;
+            }
+            catch
+            {
+            }
+            return null;
+        }
+
+        // 단면상자의 가로(평면) 범위 - 사용자 확정("모델 전체를 감싸게")에 따라 매번 다시 계산한다.
+        // 뷰 기준 수집기(FilteredElementCollector(doc, viewId))를 쓰면 안 된다 - 그 뷰에 이미 걸려 있는
+        // 단면상자에 잘린 결과만 돌려주므로, 버튼을 누를 때마다 범위가 조금씩 쪼그라든다. 그래서 문서
+        // 전체에서 뷰에 종속되지 않은(=모델) 요소만 훑는다. 클릭할 때 1회만 도는 경로라 Idling 부담은 없다.
+        private static (double MinX, double MinY, double MaxX, double MaxY)? ModelPlanExtent(Document doc)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue;
+            double maxX = double.MinValue, maxY = double.MinValue;
+            bool any = false;
+
+            try
+            {
+                foreach (Element element in new FilteredElementCollector(doc)
+                             .WhereElementIsNotElementType()
+                             .WhereElementIsViewIndependent())
+                {
+                    BoundingBoxXYZ? box;
+                    try { box = element.get_BoundingBox(null); }
+                    catch { continue; }
+                    if (box == null) continue;
+
+                    XYZ min = box.Transform.OfPoint(box.Min);
+                    XYZ max = box.Transform.OfPoint(box.Max);
+                    minX = Math.Min(minX, Math.Min(min.X, max.X));
+                    minY = Math.Min(minY, Math.Min(min.Y, max.Y));
+                    maxX = Math.Max(maxX, Math.Max(min.X, max.X));
+                    maxY = Math.Max(maxY, Math.Max(min.Y, max.Y));
+                    any = true;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+
+            if (!any) return null;
+
+            // 모델 외곽에 딱 붙으면 가장자리 요소가 잘려 보이므로 사방으로 약간 여유를 둔다
+            // (경고Pick의 단면상자와 같은 처리).
+            const double padding = 3.0;
+            return (minX - padding, minY - padding, maxX + padding, maxY + padding);
+        }
+
         public static bool RunCommand(UIApplication uiapp, QuickToggleButtonConfig cfg, out string failureReason)
         {
             failureReason = "";

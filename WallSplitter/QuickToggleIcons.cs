@@ -29,6 +29,9 @@ namespace WallSplitter
         // 2026-09-04, "링크된 요소" 버튼(QuickToggleCategory.LinkedAll)의 기본 아이콘으로 추가 -
         // 특정 링크 종류가 아니라 "링크" 자체를 뜻하는 모양이 필요했다.
         Link,
+        // 2026-09-04, "층별 단면상자" 버튼(QuickToggleCategory.LevelSectionBox)의 기본 아이콘.
+        // 뷰템플릿의 Layers와 헷갈리지 않도록 "쌓인 층 중 한 켜만 채워진" 형태로 따로 그린다.
+        SectionBand,
     }
 
     // QuickToggleToolbar(실제 툴바 렌더링)와 QuickToggleSettingsWindow(설정 창의 아이콘 선택 미리보기)가
@@ -48,6 +51,7 @@ namespace WallSplitter
             QuickToggleCategory.LinkedCad => QuickToggleIconShape.Sheet,
             QuickToggleCategory.LinkedModel => QuickToggleIconShape.Cube,
             QuickToggleCategory.LinkedAll => QuickToggleIconShape.Link,
+            QuickToggleCategory.LevelSectionBox => QuickToggleIconShape.SectionBand,
             _ => QuickToggleIconShape.Dot,
         };
 
@@ -66,6 +70,7 @@ namespace WallSplitter
             QuickToggleIconShape.Sheet => "도면",
             QuickToggleIconShape.Cube => "상자",
             QuickToggleIconShape.Link => "링크",
+            QuickToggleIconShape.SectionBand => "층 단면",
             _ => "",
         };
 
@@ -273,6 +278,27 @@ namespace WallSplitter
                         Canvas.SetLeft(ring, centerX - 9.5 / 2);
                         Canvas.SetTop(ring, 8 - 6.4 / 2);
                     }
+                    break;
+                }
+
+                case QuickToggleIconShape.SectionBand:
+                {
+                    // 건물 전체를 뜻하는 상자 윤곽 + 그 안에서 지금 잘라 보는 한 켜만 채운 띠
+                    // ("층별 단면상자" 버튼의 기본 아이콘, 2026-09-04). 처음엔 가로 막대 3개로 그렸는데
+                    // 작업세트의 Lines(가로 3줄)와 구분이 안 돼서, 바깥 윤곽을 두른 형태로 다시 그렸다
+                    // - 렌더링해서 눈으로 확인 후 고친 것이다.
+                    Rectangle outline = new Rectangle
+                    {
+                        Width = 18, Height = 15, Stroke = brush, StrokeThickness = 1.6,
+                    };
+                    canvas.Children.Add(outline);
+                    Canvas.SetLeft(outline, 1);
+                    Canvas.SetTop(outline, 0.5);
+
+                    Rectangle band = new Rectangle { Width = 18, Height = 5.5, Fill = brush };
+                    canvas.Children.Add(band);
+                    Canvas.SetLeft(band, 1);
+                    Canvas.SetTop(band, 5.5);
                     break;
                 }
 

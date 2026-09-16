@@ -422,6 +422,16 @@ namespace WallSplitter
                 return;
             }
 
+            // "층별 단면상자"도 즉시 1회 실행형이다(2026-09-04) - 고른 두 레벨 높이로 단면상자를 맞춘
+            // 전용 3D 뷰를 만들어 전환한다. 뷰 생성·전환 모두 유효한 API 컨텍스트가 필요하므로 ExternalEvent로 넘긴다.
+            if (cfg.Category == QuickToggleCategory.LevelSectionBox)
+            {
+                if (App.QuickToggleHandler == null || App.QuickToggleEvent == null) return;
+                App.QuickToggleHandler.PendingLevelSectionBox = cfg;
+                App.QuickToggleEvent.Raise();
+                return;
+            }
+
             // 기능 버튼도 on/off 토글이 아니라 즉시 1회 실행이라 DetermineState/PendingTurnOn 경로를
             // 타지 않는다 - 클릭 즉시 ExternalEvent로 QuickToggleService.RunCommand를 요청한다.
             if (cfg.Category == QuickToggleCategory.CommandLauncher)

@@ -51,6 +51,9 @@ namespace WallSplitter
         // 버튼 설정 자체(어느 명령을 실행할지)만 있으면 되므로 cfg 참조를 그대로 담는다.
         internal QuickToggleButtonConfig? PendingCommandLaunch { get; set; }
 
+        // "층별 단면상자" 버튼 클릭 요청 (2026-09-04) - 위와 같은 방식으로 같은 ExternalEvent를 재사용한다.
+        internal QuickToggleButtonConfig? PendingLevelSectionBox { get; set; }
+
         // "링크된 모델" 팝업에서 보낸 개별/전체 링크 표시 요청 (2026-09-02 추가).
         internal LinkedModelApplyRequest? PendingLinkedModelApply { get; set; }
 
@@ -91,6 +94,22 @@ namespace WallSplitter
                 LinkedModelApplyRequest linkRequest = PendingLinkedModelApply;
                 PendingLinkedModelApply = null;
                 ExecuteLinkedModelApply(app, linkRequest);
+                return;
+            }
+
+            if (PendingLevelSectionBox != null)
+            {
+                QuickToggleButtonConfig boxCfg = PendingLevelSectionBox;
+                PendingLevelSectionBox = null;
+                if (!QuickToggleService.ApplyLevelSectionBox(app, boxCfg, out string boxFailure))
+                {
+                    TaskDialog.Show("커스텀 버튼",
+                        $"'{boxCfg.Name}' 단면상자를 만들지 못했습니다.\n\n{boxFailure}");
+                }
+                else
+                {
+                    QuickToggleToolbar.Instance?.RefreshState();
+                }
                 return;
             }
 

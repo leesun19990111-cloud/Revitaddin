@@ -39,6 +39,8 @@ namespace WallSplitter
         private readonly List<View> _viewTemplates;
         private readonly List<ParameterFilterElement> _filters;
         private readonly List<Workset> _worksets;
+        // "층별 단면상자" 버튼이 고를 레벨 - 높이 순으로 정렬해 목록에 그대로 쓴다.
+        private readonly List<Level> _levels;
         private readonly bool _isWorkshared;
 
         // 색상 버튼의 카테고리 트리 - 각 최상위 카테고리를 펼쳤는지 여부(카테고리 Id 기준). 이 창을
@@ -70,6 +72,8 @@ namespace WallSplitter
                 "지정해 둔 작업세트들의 표시를 한 번에 켜고 끕니다."),
             (QuickToggleCategory.ColorTool, "색상",
                 "고른 모델 카테고리의 색과 투명도를 패널에서 즉시 조절합니다."),
+            (QuickToggleCategory.LevelSectionBox, "층별 단면상자",
+                "고른 두 레벨 사이만 잘라 보는 3D 뷰를 만들어 그 뷰로 이동합니다."),
             (QuickToggleCategory.CommandLauncher, "기능",
                 "재료 지정·NAMER·동기화 같은 기능을 클릭 한 번으로 실행합니다."),
         };
@@ -108,6 +112,13 @@ namespace WallSplitter
             _worksets = _isWorkshared
                 ? new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).OrderBy(w => w.Name).ToList()
                 : new List<Workset>();
+
+            // 아래에서 위로 정렬 - 사람이 층을 고르는 순서 그대로다(이름 가나다순은 "10층"이 "2층"보다
+            // 앞에 오는 등 실제 층 순서와 어긋난다).
+            _levels = new FilteredElementCollector(doc)
+                .OfClass(typeof(Level)).Cast<Level>()
+                .OrderBy(l => l.Elevation)
+                .ToList();
 
             AddBlueprintCornerMarks(PreviewCard, new Thickness(12, 10, 12, 10));
             BuildAddChooser();
@@ -161,6 +172,12 @@ namespace WallSplitter
                 case QuickToggleCategory.ColorTool:
                     return cfg.ColorButtonCategories.Count == 0 ? ButtonReadiness.NoTarget : ButtonReadiness.Ready;
 
+                case QuickToggleCategory.LevelSectionBox:
+                    if (string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)) return ButtonReadiness.NoTarget;
+                    return _levels.Any(l => l.Name == cfg.LevelBottomName) && _levels.Any(l => l.Name == cfg.LevelTopName)
+                        ? ButtonReadiness.Ready
+                        : ButtonReadiness.NotInProject;
+
                 case QuickToggleCategory.CommandLauncher:
                     return string.IsNullOrEmpty(cfg.CommandId) ? ButtonReadiness.NoTarget : ButtonReadiness.Ready;
 
@@ -191,6 +208,9 @@ namespace WallSplitter
                 QuickToggleCategory.ColorTool => cfg.ColorButtonCategories.Count == 0
                     ? "대상 미지정"
                     : "카테고리 " + cfg.ColorButtonCategories.Count + "개",
+                QuickToggleCategory.LevelSectionBox => string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)
+                    ? "레벨 미지정"
+                    : cfg.LevelBottomName + " ~ " + cfg.LevelTopName,
                 QuickToggleCategory.CommandLauncher => string.IsNullOrEmpty(cfg.CommandId)
                     ? "기능 미지정"
                     : SunnyToolsCommands.DisplayLabelFor(cfg.CommandKind, cfg.CommandId, _revitLanguage, cfg.CommandLabel),
@@ -700,6 +720,7 @@ namespace WallSplitter
             QuickToggleCategory.ColorTool => "색상",
             QuickToggleCategory.CommandLauncher => "기능",
             QuickToggleCategory.LinkedAll => "링크된 요소",
+            QuickToggleCategory.LevelSectionBox => "층별 단면상자",
             QuickToggleCategory.LinkedCad => "링크된 도면",
             QuickToggleCategory.LinkedModel => "링크된 모델",
             _ => "",
@@ -1075,6 +1096,10 @@ namespace WallSplitter
                 case QuickToggleCategory.ColorTool:
                     BuildColorToolPicker(cfg, EditHeaderHost, EditPanelHost);
                     break;
+                case QuickToggleCategory.LevelSectionBox:
+                    BuildLevelRangePicker(cfg, EditHeaderHost, EditPanelHost);
+                    break;
+
                 case QuickToggleCategory.CommandLauncher:
                     BuildCommandPicker(cfg, EditHeaderHost, EditPanelHost);
                     break;
@@ -1097,6 +1122,7 @@ namespace WallSplitter
             QuickToggleCategory.Workset => "대상 작업세트",
             QuickToggleCategory.ColorTool => "대상 모델 카테고리",
             QuickToggleCategory.CommandLauncher => "실행할 기능",
+            QuickToggleCategory.LevelSectionBox => "잘라 볼 레벨 두 개",
             _ => "대상",
         };
 
@@ -1107,6 +1133,7 @@ namespace WallSplitter
             QuickToggleCategory.Workset => "여러 개 선택 - 모두 함께 켜지고 꺼집니다",
             QuickToggleCategory.ColorTool => "여러 개 선택 가능",
             QuickToggleCategory.CommandLauncher => "하나만 고를 수 있습니다",
+            QuickToggleCategory.LevelSectionBox => "아래·위 각각 하나씩",
             _ => "미리 고를 대상이 없습니다",
         };
 
@@ -1462,6 +1489,91 @@ namespace WallSplitter
         };
 
         // ===== ③ 대상: 링크 버튼 (고를 대상이 없음) =====
+
+        // ===== ③ 대상: "층별 단면상자"의 레벨 두 개 (2026-09-04) =====
+        //
+        // 아래 레벨과 위 레벨을 각각 라디오로 하나씩 고른다. 검색칸은 두지 않았다 - 레벨은 보통 수십 개
+        // 이하라 다 보이고, 무엇보다 "아래에서 위로" 늘어선 순서 자체가 고르는 데 필요한 정보라
+        // 검색으로 걸러내면 오히려 층 감각이 사라진다.
+        private void BuildLevelRangePicker(QuickToggleButtonConfig cfg,
+            System.Windows.Controls.Panel headerHost, System.Windows.Controls.Panel scrollHost)
+        {
+            headerHost.Children.Add(CreateNote(
+                "고른 두 레벨 사이만 남기고 잘라 보는 3D 뷰를 만들어 그 뷰로 이동합니다. 같은 조합으로 다시 누르면 " +
+                "이미 만들어 둔 뷰를 재사용하고 범위만 다시 맞춥니다. 가로 범위는 모델 전체를 감싸도록 매번 다시 계산합니다."));
+
+            if (_levels.Count < 2)
+            {
+                scrollHost.Children.Add(new TextBlock
+                {
+                    Text = "이 문서에는 레벨이 2개 미만이라 층 범위를 고를 수 없습니다.",
+                    Foreground = Theme.WarningText,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(26, 0, 0, 0),
+                });
+                return;
+            }
+
+            TextBlock summary = new TextBlock
+            {
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(26, 0, 0, 8),
+            };
+            headerHost.Children.Add(summary);
+
+            _refreshTargetSummary = () =>
+            {
+                bool both = !string.IsNullOrEmpty(cfg.LevelBottomName) && !string.IsNullOrEmpty(cfg.LevelTopName);
+                summary.Text = both
+                    ? $"현재 선택: {cfg.LevelBottomName} ~ {cfg.LevelTopName}"
+                    : "현재 선택: (아래·위 레벨을 각각 골라 주세요)";
+            };
+            _refreshTargetSummary();
+
+            StackPanel host = CreateResultsHost();
+            scrollHost.Children.Add(host);
+
+            host.Children.Add(BuildLevelColumn(cfg, bottom: true));
+            host.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 10, 0, 10) });
+            host.Children.Add(BuildLevelColumn(cfg, bottom: false));
+        }
+
+        private UIElement BuildLevelColumn(QuickToggleButtonConfig cfg, bool bottom)
+        {
+            StackPanel column = new StackPanel();
+            column.Children.Add(new TextBlock
+            {
+                Text = bottom ? "아래 레벨" : "위 레벨",
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(0, 0, 0, 4),
+            });
+
+            // 위에서 아래로 읽는 게 층 목록의 감각에 맞아, 높이 내림차순으로 보여준다
+            // (_levels 자체는 낮은 곳부터 정렬돼 있다).
+            for (int i = _levels.Count - 1; i >= 0; i--)
+            {
+                Level level = _levels[i];
+                string name = level.Name;
+                RadioButton radio = new RadioButton
+                {
+                    Content = name,
+                    GroupName = (bottom ? "lvlb_" : "lvlt_") + cfg.Id,
+                    IsChecked = bottom ? cfg.LevelBottomName == name : cfg.LevelTopName == name,
+                    Margin = new Thickness(0, 3, 0, 3),
+                };
+                radio.Checked += (s, e) =>
+                {
+                    if (bottom) cfg.LevelBottomName = name;
+                    else cfg.LevelTopName = name;
+                    OnTargetChanged();
+                };
+                column.Children.Add(radio);
+            }
+
+            return column;
+        }
 
         private void BuildLinkedInfo(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {
