@@ -200,10 +200,16 @@ namespace WallSplitter
             _rows.Clear();
             _lastStates.Clear();
 
-            WrapPanel? smallToolGroup = null;
+            // 작은 버튼의 세로 위치는 목록 순서와 cfg.SecondRow가 정한다 - 예전처럼 WrapPanel이 알아서
+            // 채우지 않는다(2026-09-06 사용자 요청: "자동정렬하지 말고 그리드에 맞춰 넣을 수 있게").
+            List<bool> startsColumn = QuickToggleButtonStyle.ComputeColumnStarts(_cachedSettings.Buttons);
+            StackPanel? smallColumn = null;
+            bool previousWasSmall = false;
+            int index = -1;
 
             foreach (QuickToggleButtonConfig cfg in _cachedSettings.Buttons)
             {
+                index++;
                 QuickToggleButtonState state = QuickToggleService.DetermineState(view, cfg);
                 _lastStates[cfg.Id] = state;
                 (Brush background, Brush borderBrush, Brush foreground) = VisualsFor(state, cfg);
@@ -285,24 +291,33 @@ namespace WallSplitter
 
                 if (IsSmallToolButton(cfg))
                 {
-                    if (smallToolGroup == null)
+                    if (startsColumn[index] || smallColumn == null)
                     {
-                        // 이 그룹 앞에 이미 다른 버튼이 있으면 구분선을 하나 넣어 "여기부터는 다른 종류의
-                        // 버튼"이라는 걸 시각적으로도 표시한다(RightControlsPanel 앞의 구분선과 같은 패턴).
-                        if (ButtonsPanel.Children.Count > 0)
+                        // 작은 버튼 구간이 시작되는 지점에만 구분선을 하나 넣는다(칸마다 넣으면 지저분하다) -
+                        // "여기부터는 다른 종류의 버튼"이라는 표시(RightControlsPanel 앞의 구분선과 같은 패턴).
+                        if (!previousWasSmall && ButtonsPanel.Children.Count > 0)
                             ButtonsPanel.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 2, 4, 2), Background = Theme.Border });
 
-                        smallToolGroup = new WrapPanel { Orientation = Orientation.Vertical, Height = SmallToolGroupHeightDip };
-                        ButtonsPanel.Children.Add(smallToolGroup);
+                        // 칸 하나 = 세로 StackPanel(높이 고정). WrapPanel이 아니므로 넘치는 버튼을 옆 칸으로
+                        // 흘려보내지 않는다 - 아래 줄을 비워 둔 채 윗줄만 쓰는 칸도 그대로 유지된다.
+                        smallColumn = new StackPanel
+                        {
+                            Orientation = Orientation.Vertical,
+                            Height = SmallToolGroupHeightDip,
+                            VerticalAlignment = VerticalAlignment.Top,
+                        };
+                        ButtonsPanel.Children.Add(smallColumn);
                     }
-                    smallToolGroup.Children.Add(button);
+                    smallColumn.Children.Add(button);
+                    previousWasSmall = true;
                 }
                 else
                 {
-                    // 큰 버튼이 끼어들면 작은 버튼 그룹은 거기서 끊는다 - 2026-09-05부터 버튼마다 크기를
-                    // 고를 수 있어서 "작은-큰-작은" 순서도 가능한데, 그룹을 계속 재사용하면 뒤쪽 작은
-                    // 버튼이 앞 그룹으로 빨려 들어가 설정 창의 순서와 툴바의 순서가 어긋난다.
-                    smallToolGroup = null;
+                    // 큰 버튼이 끼어들면 작은 버튼 칸은 거기서 끊는다 - 2026-09-05부터 버튼마다 크기를
+                    // 고를 수 있어서 "작은-큰-작은" 순서도 가능한데, 칸을 계속 재사용하면 뒤쪽 작은
+                    // 버튼이 앞 칸으로 빨려 들어가 설정 창의 순서와 툴바의 순서가 어긋난다.
+                    smallColumn = null;
+                    previousWasSmall = false;
                     ButtonsPanel.Children.Add(button);
                 }
 

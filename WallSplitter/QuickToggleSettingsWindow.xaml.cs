@@ -57,6 +57,7 @@ namespace WallSplitter
         private System.Windows.Point _dragOrigin;
         private bool _dragActive;                       // 최소 드래그 거리를 넘겨 실제로 끌기 시작했는가
         private int _dropIndex = -1;
+        private bool _dropSecondRow;                    // 놓을 자리가 "칸의 아래 줄"인가 (2026-09-06 그리드)
 
         // "② 모양"(아이콘/켜짐 색)은 기본으로 접어 두고 세로 공간을 "③ 대상"에 몰아준다 - 2026-07-27의
         // "이름/아이콘/색상 부분이 너무 커서 아래 대상 선택 부분이 작아 보인다"는 피드백을 구조 자체로
@@ -340,6 +341,9 @@ namespace WallSplitter
         {
             PreviewPanel.Children.Clear();
             _previewItems.Clear();
+            // 목록이 바뀐 뒤(추가·삭제·크기 변경·순서 변경) 저장된 줄 배치가 실제 배치와 어긋날 수 있다 -
+            // 다시 그리기 직전에 한 곳에서 맞춘다(idempotent라 매번 불러도 안전하다).
+            QuickToggleButtonStyle.NormalizeRows(_settings.Buttons);
             ClearDropIndicator();
 
             StackPanel buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4) };
@@ -356,27 +360,37 @@ namespace WallSplitter
             }
             else
             {
-                WrapPanel? smallToolGroup = null;
-                foreach (QuickToggleButtonConfig cfg in _settings.Buttons)
+                // 배치 규칙은 실제 툴바(RebuildButtons)와 **똑같아야 한다** - 두 곳이 어긋나면 미리보기가
+                // 거짓말을 한다. 그래서 칸 나누기 판정은 공용 ComputeColumnStarts 하나만 쓴다.
+                List<bool> startsColumn = QuickToggleButtonStyle.ComputeColumnStarts(_settings.Buttons);
+                StackPanel? smallColumn = null;
+                bool previousWasSmall = false;
+                for (int i = 0; i < _settings.Buttons.Count; i++)
                 {
+                    QuickToggleButtonConfig cfg = _settings.Buttons[i];
                     UIElement item = CreatePreviewButton(cfg);
                     if (!IsSmallToolButton(cfg))
                     {
-                        // 큰 버튼이 끼어들면 작은 버튼 그룹을 끊는다 - 실제 툴바(RebuildButtons)와 같은
-                        // 규칙이어야 미리보기와 실제 순서가 어긋나지 않는다.
-                        smallToolGroup = null;
+                        smallColumn = null;
+                        previousWasSmall = false;
                         buttons.Children.Add(item);
                         continue;
                     }
 
-                    if (smallToolGroup == null)
+                    if (startsColumn[i] || smallColumn == null)
                     {
-                        if (buttons.Children.Count > 0)
+                        if (!previousWasSmall && buttons.Children.Count > 0)
                             buttons.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 2, 4, 2), Background = Theme.Border });
-                        smallToolGroup = new WrapPanel { Orientation = Orientation.Vertical, Height = SmallToolGroupHeightDip };
-                        buttons.Children.Add(smallToolGroup);
+                        smallColumn = new StackPanel
+                        {
+                            Orientation = Orientation.Vertical,
+                            Height = SmallToolGroupHeightDip,
+                            VerticalAlignment = VerticalAlignment.Top,
+                        };
+                        buttons.Children.Add(smallColumn);
                     }
-                    smallToolGroup.Children.Add(item);
+                    smallColumn.Children.Add(item);
+                    previousWasSmall = true;
                 }
             }
 
@@ -560,8 +574,36 @@ namespace WallSplitter
 
             // 자동 스크롤로 내용이 움직였을 수 있으니 커서 위치를 다시 읽는다 - 스크롤된 뒤의 좌표로
             // 계산해야 표시선이 커서를 따라온다(PreviewDragHost는 스크롤되는 내용 쪽이라 같이 움직인다).
-            _dropIndex = ComputeDropIndex(e.GetPosition(PreviewDragHost));
-            ShowDropIndicator(_dropIndex);
+            System.Windows.Point cursor = e.GetPosition(PreviewDragHost);
+            _dropIndex = ComputeDropIndex(cursor);
+            _dropSecondRow = ComputeDropSecondRow(cursor, _dropIndex);
+            ShowDropIndicator(_dropIndex, _dropSecondRow);
+        }
+
+        // 작은 버튼을 **어느 줄에** 놓을지. 커서 바로 앞 항목이 "칸의 윗줄"인 작은 버튼이고 커서가 그
+        // 버튼보다 아래에 있으면, 사용자는 그 칸의 아래 줄을 노린 것이다(2026-09-06 그리드 배치).
+        // 그 외에는 전부 새 칸의 윗줄이다 - 자동으로 짝지어 주지 않는다.
+        private bool ComputeDropSecondRow(System.Windows.Point cursor, int index)
+        {
+            if (_dragCfg == null || !QuickToggleButtonStyle.IsSmall(_dragCfg)) return false;
+            if (index <= 0 || index > _previewItems.Count) return false;
+
+            (QuickToggleButtonConfig prevCfg, FrameworkElement prevElement) = _previewItems[index - 1];
+            if (!QuickToggleButtonStyle.IsSmall(prevCfg)) return false;
+            if (ReferenceEquals(prevCfg, _dragCfg)) return false;   // 자기 자신 아래로는 갈 수 없다
+
+            // 앞 항목이 이미 어떤 칸의 "아래 줄"이면 그 칸은 꽉 찬 것이다 - 그 아래에는 못 들어간다.
+            if (!StartsColumnOf(index - 1)) return false;
+
+            Rect prevRect = PreviewRect(prevElement);
+            return !prevRect.IsEmpty && cursor.Y > prevRect.Top + prevRect.Height / 2;
+        }
+
+        // 지금 그려진 배치에서 i번째 버튼이 칸을 시작하는지(= 윗줄인지).
+        private bool StartsColumnOf(int i)
+        {
+            List<bool> startsColumn = QuickToggleButtonStyle.ComputeColumnStarts(_settings.Buttons);
+            return i >= 0 && i < startsColumn.Count && startsColumn[i];
         }
 
         // 버튼이 많아 툴바가 길어지면 화면 밖의 자리로도 끌어다 놓을 수 있어야 한다 - 커서가 미리보기의
@@ -602,8 +644,9 @@ namespace WallSplitter
 
             QuickToggleButtonConfig? cfg = _dragCfg;
             int target = _dropIndex;
+            bool secondRow = _dropSecondRow;
             CancelDrag();
-            if (cfg != null && target >= 0) DropPreviewButton(cfg, target);
+            if (cfg != null && target >= 0) DropPreviewButton(cfg, target, secondRow);
         }
 
         // 캡처가 다른 곳으로 넘어가면(예: 창이 비활성화) 드래그를 조용히 취소한다 - 표시선과 흐려진
@@ -642,6 +685,7 @@ namespace WallSplitter
             _dragElement = null;
             _dragActive = false;
             _dropIndex = -1;
+            _dropSecondRow = false;
         }
 
         // 미리보기에 그려진 버튼의 화면 사각형(PreviewDragHost 좌표계). 아직 레이아웃이 잡히지 않았거나
@@ -677,10 +721,32 @@ namespace WallSplitter
             return index;
         }
 
-        private void ShowDropIndicator(int index)
+        private void ShowDropIndicator(int index, bool secondRow)
         {
             PreviewDropCanvas.Children.Clear();
             if (_previewItems.Count == 0) return;
+
+            // 아래 줄을 노린 경우에는 "이 버튼 밑에 들어간다"는 뜻이므로, 그 버튼의 아래 모서리에
+            // 가로선을 긋는다(그 자리는 지금 비어 있을 수도 있다).
+            if (secondRow && index > 0 && index <= _previewItems.Count)
+            {
+                Rect above = PreviewRect(_previewItems[index - 1].Element);
+                if (!above.IsEmpty)
+                {
+                    Border underline = new Border
+                    {
+                        Background = Theme.TextPrimary,
+                        BorderBrush = Brushes.White,
+                        BorderThickness = new Thickness(1),
+                        Width = above.Width,
+                        Height = 5,
+                    };
+                    Canvas.SetLeft(underline, above.Left);
+                    Canvas.SetTop(underline, above.Bottom - 2.5);
+                    PreviewDropCanvas.Children.Add(underline);
+                    return;
+                }
+            }
 
             // 표시선은 강조색(스틸블루)이 아니라 **어두운 선 + 흰 테두리**다 - 강조색으로 그렸더니 같은
             // 스틸블루로 칠해진 버튼(실행형 버튼의 기본색) 위에서는 선이 통째로 묻혀 보이지 않았다
@@ -741,11 +807,15 @@ namespace WallSplitter
         //    (예전 그룹 머리글의 ▲▼가 하던 일 - 화살표를 없앴으므로 이 경로가 그 대체다).
         //  - 고리가 끊긴 버튼은 혼자 움직이되, 다른 묶인 덩어리 한가운데로는 들어가지 않는다
         //    (들어가면 "묶인 종류는 항상 연속된 한 덩어리"라는 전제가 깨진다).
-        private void DropPreviewButton(QuickToggleButtonConfig cfg, int dropIndex)
+        private void DropPreviewButton(QuickToggleButtonConfig cfg, int dropIndex, bool secondRow)
         {
             List<QuickToggleButtonConfig> list = _settings.Buttons;
             int from = list.IndexOf(cfg);
             if (from < 0) return;
+
+            // 어느 줄에 놓였는지를 먼저 기록한다 - 아래에서 순서를 바꾼 뒤 NormalizeRows가 실제 배치와
+            // 맞춰 주므로, 놓을 수 없는 자리였다면(앞 칸이 꽉 찼다든지) 저절로 윗줄로 정리된다.
+            cfg.SecondRow = secondRow;
 
             (int runStart, int runCount) = RunAt(from);
             bool linked = _settings.IsLinked(cfg.Category);
@@ -771,6 +841,9 @@ namespace WallSplitter
 
             // 안전망 - 위 규칙대로면 이미 조건을 만족하지만, 묶인 종류가 흩어지는 일만은 없어야 한다.
             _settings.NormalizeGrouping();
+            // 순서가 바뀌면 "아래 줄"이 성립하지 않게 된 버튼이 생길 수 있다(앞이 큰 버튼이 되었거나
+            // 앞 칸이 꽉 찼거나) - 저장값을 실제 배치와 맞춰 둔다.
+            QuickToggleButtonStyle.NormalizeRows(_settings.Buttons);
             RefreshButtonList();
             RefreshPreviewStrip();
         }

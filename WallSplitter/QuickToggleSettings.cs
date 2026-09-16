@@ -113,6 +113,15 @@ namespace WallSplitter
         // 판정은 항상 QuickToggleButtonStyle.IsSmall(cfg)로 할 것(툴바/설정 창이 같은 규칙을 봐야 한다).
         public bool? SmallButton { get; set; }
 
+        // 2026-09-06, 사용자 요청 - "작은 것들끼리 좌로 정렬되어서 필터랑 링크랑 색상 버튼들이 다 뒤섞이게
+        // 되는데, 자동정렬하지 말고 그리드에 맞춰 넣을 수 있게 만들어줬으면 해."
+        // true면 이 작은 버튼은 **바로 앞 칸의 아래 줄**에 들어간다. false면 자기가 새 칸을 시작한다
+        // (윗줄). 즉 목록 순서가 가로 위치를, 이 값이 세로 위치를 정한다 - 예전처럼 WrapPanel이 알아서
+        // 채우지 않으므로, 아래 줄을 비워 둔 채 윗줄에만 버튼을 두는 것도 된다.
+        // 배치 판정은 반드시 QuickToggleButtonStyle.ComputeColumnStarts로 할 것(앞이 큰 버튼이거나 앞
+        // 칸이 이미 꽉 찼으면 이 값이 true여도 아래 줄에 들어갈 수 없다 - 그 조정을 거기서 한다).
+        public bool SecondRow { get; set; }
+
         // 2026-07-29, "색상 버튼" 전용 필드 - 이 버튼이 색상/투명도를 적용할 모델 카테고리 목록.
         // (2026-09-02 프리셋 삭제 전까지는 프리셋의 카테고리별 V/G 재정의를 담는 CategoryOverrides
         // 필드도 같은 타입을 공유했다 - 그 필드가 사라지면서 타입도 색상 버튼 전용으로 줄였다.)
@@ -196,6 +205,73 @@ namespace WallSplitter
 
         public static bool IsSmall(QuickToggleButtonConfig cfg) =>
             cfg.SmallButton ?? (cfg.Category == QuickToggleCategory.ColorTool);
+
+        // ===== 작은 버튼의 2단 그리드 배치 (2026-09-06) =====
+        //
+        // 사용자 요청: "작은 것들끼리 좌로 정렬되어서 필터랑 링크랑 색상 버튼들이 다 뒤섞이게 되는데,
+        // **자동정렬하지 말고 그리드에 맞춰 넣을 수 있게** 만들어줬으면 해." 예전에는 연속된 작은 버튼을
+        // 세로 `WrapPanel`에 넣어 **알아서** 위→아래→다음 칸 순으로 채웠다. 그래서 어떤 버튼끼리 한 칸을
+        // 쓰게 될지를 사용자가 정할 수 없었고, 종류가 다른 버튼들이 한 칸에 섞여 들어갔다.
+        //
+        // 이제는 목록 순서가 **가로 위치**를, `cfg.SecondRow`가 **세로 위치**를 정한다. 자동 채움은 없다.
+        // 이 함수가 그 규칙의 단 하나뿐인 구현이다 - 툴바와 설정 창 미리보기가 이것을 함께 쓴다.
+        //
+        // 돌려주는 값: 버튼마다 "이 버튼이 새 칸을 시작하는가". false면 바로 앞 칸의 아래 줄에 들어간다.
+        //  - 큰 버튼은 언제나 칸을 끊는다(자기 자신이 한 칸을 통째로 쓴다).
+        //  - `SecondRow`가 true여도 **직전에 윗줄 하나만 있는 칸이 열려 있을 때만** 아래 줄로 간다.
+        //    (앞이 큰 버튼이거나 앞 칸이 이미 두 개면 새 칸을 시작한다 - 저장값이 어떻든 배치는 항상 성립한다.)
+        public static List<bool> ComputeColumnStarts(IReadOnlyList<QuickToggleButtonConfig> buttons)
+        {
+            List<bool> startsColumn = new List<bool>(buttons.Count);
+            int openColumnItems = 0;   // 지금 열려 있는 칸에 들어간 작은 버튼 개수(0이면 열린 칸 없음)
+
+            foreach (QuickToggleButtonConfig cfg in buttons)
+            {
+                if (!IsSmall(cfg))
+                {
+                    startsColumn.Add(true);
+                    openColumnItems = 0;
+                    continue;
+                }
+
+                if (cfg.SecondRow && openColumnItems == 1)
+                {
+                    startsColumn.Add(false);
+                    openColumnItems = 2;
+                }
+                else
+                {
+                    startsColumn.Add(true);
+                    openColumnItems = 1;
+                }
+            }
+
+            return startsColumn;
+        }
+
+        // 저장된 `SecondRow`를 실제 배치와 일치시킨다 - 배치가 불가능했던 값(예: 앞 칸이 이미 꽉 참)을
+        // 그대로 두면 다음에 앞쪽 버튼이 바뀌었을 때 갑자기 아래 줄로 빨려 들어가는 등 예측 불가가 된다.
+        // 목록을 건드린 뒤(추가/삭제/순서 변경/크기 변경)에는 항상 이걸 부를 것.
+        public static void NormalizeRows(List<QuickToggleButtonConfig> buttons)
+        {
+            List<bool> startsColumn = ComputeColumnStarts(buttons);
+            for (int i = 0; i < buttons.Count; i++)
+                buttons[i].SecondRow = !startsColumn[i];
+        }
+
+        // 예전 설정 파일(자동 채움 시절)을 지금 모델로 옮긴다 - 그때 화면에 보이던 모습(연속된 작은 버튼이
+        // 두 개씩 한 칸)을 그대로 재현하도록 짝수 번째마다 아래 줄로 표시한다. 이걸 안 하면 업그레이드하는
+        // 순간 쌓여 있던 작은 버튼들이 전부 각자 칸으로 흩어져 툴바가 갑자기 넓어진다.
+        public static void MigrateAutoPackedRows(List<QuickToggleButtonConfig> buttons)
+        {
+            int openColumnItems = 0;
+            foreach (QuickToggleButtonConfig cfg in buttons)
+            {
+                if (!IsSmall(cfg)) { openColumnItems = 0; cfg.SecondRow = false; continue; }
+                if (openColumnItems == 1) { cfg.SecondRow = true; openColumnItems = 2; }
+                else { cfg.SecondRow = false; openColumnItems = 1; }
+            }
+        }
     }
 
     // "색상 버튼"이 색상/투명도를 적용할 카테고리 한 줄. ElementId는 문서마다 달라 이식(내보내기/
@@ -242,6 +318,12 @@ namespace WallSplitter
         // 전역으로 바뀌기 전(2026-09-03 이전) 이 설정이 어느 프로젝트 것이었는지 - 마이그레이션 흔적으로만
         // 남긴다. 지금은 아무 데서도 읽지 않는다.
         public string ProjectPath { get; set; } = "";
+
+        // 배치 모델의 판(version). 0 = 2026-09-06 이전 파일(작은 버튼을 WrapPanel이 자동으로 채우던 시절).
+        // 0이면 Load에서 그때 보이던 모습대로 SecondRow를 채워 넣고 1로 올린다 - "값이 하나도 없으면
+        // 옛 파일"처럼 추측하지 않고 명시적인 판 번호로 판단해야, 사용자가 일부러 전부 윗줄로 둔 설정을
+        // 마이그레이션이 다시 헤집지 않는다.
+        public int LayoutVersion { get; set; }
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -317,6 +399,15 @@ namespace WallSplitter
                 loaded.UnlinkedCategories ??= new List<QuickToggleCategory>();
                 loaded.Buttons.RemoveAll(b => IsRemovedCategory(b.Category));
                 loaded.NormalizeGrouping();
+
+                // 자동 채움 시절(판 0)에 만든 설정은 그때 보이던 2단 모습 그대로 옮겨 온다 - 안 그러면
+                // 업그레이드하는 순간 쌓여 있던 작은 버튼들이 전부 각자 칸으로 흩어진다.
+                if (loaded.LayoutVersion < 1)
+                {
+                    QuickToggleButtonStyle.MigrateAutoPackedRows(loaded.Buttons);
+                    loaded.LayoutVersion = 1;
+                }
+                QuickToggleButtonStyle.NormalizeRows(loaded.Buttons);
                 return loaded;
             }
             catch
@@ -329,6 +420,10 @@ namespace WallSplitter
         public void Save()
         {
             NormalizeGrouping();
+            // 저장하는 쪽은 언제나 새 배치 모델이다 - 판 번호를 올려 둬야 다음에 읽을 때 마이그레이션이
+            // 다시 돌아 사용자가 정해 둔 줄 배치를 자동 채움으로 덮어쓰지 않는다.
+            QuickToggleButtonStyle.NormalizeRows(Buttons);
+            LayoutVersion = 1;
             Directory.CreateDirectory(RootDir);
             string json = JsonSerializer.Serialize(this, JsonOptions);
             File.WriteAllText(PathFile, json, Encoding.UTF8);
