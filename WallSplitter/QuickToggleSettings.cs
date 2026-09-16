@@ -174,6 +174,26 @@ namespace WallSplitter
         // 2026-09-05, 사용자 요청 - "각 버튼들의 크기를 큰버튼과 작은버튼으로 선택해서 변경할 수 있으면".
         // 예전엔 색상 버튼만 무조건 작은 버튼이었는데, 이제 버튼마다 고를 수 있다.
         // cfg.SmallButton이 null이면 예전과 똑같은 기본값(색상 버튼만 작게)을 쓴다 - 기존 설정 파일 호환.
+        // 작은 버튼 묶음(세로 WrapPanel)의 높이와, 그 안에 들어가는 버튼 하나의 높이.
+        //
+        // CONFIRMED LIVE BUG (2026-09-06, 사용자 실측: "이름이 조금 긴 버튼은 2단이 안 되는 것 같아"):
+        // 예전에는 작은 버튼의 높이를 라벨이 정하게 뒀는데, 라벨은 폭 46dip 안에서 줄바꿈되므로 이름이
+        // 길수록 버튼이 세로로 길어졌다(실측: "방화구획" 23.3dip, "설비작업세트" 36.6dip). 그래서 이름이
+        // 조금만 길어도 두 개의 합이 묶음 높이 64를 넘겨 버렸고, WrapPanel은 넘치는 버튼을 **다음 칸**으로
+        // 보내므로 2단이 되지 않고 옆으로 나란히 섰다 - "색상 버튼만 2단이 된다"의 정체가 이것이다.
+        // 고정: 버튼 하나의 높이를 **묶음 높이의 정확히 절반으로 고정**한다. 그러면 이름 길이와 무관하게
+        // 항상 두 개가 한 칸에 들어간다. 라벨은 최대 두 줄까지만 보이고 넘치면 말줄임(…)으로 잘린다.
+        // 두 값의 비율(2:1)이 이 기능의 전부이므로 한쪽만 바꾸지 말 것.
+        public const double SmallToolGroupHeightDip = 64;
+        public const double SmallToolButtonHeightDip = SmallToolGroupHeightDip / 2;
+
+        // 작은 버튼 라벨의 줄 높이/최대 높이 - 줄 높이를 명시해야(기본 글꼴 줄간격에 맡기지 않아야)
+        // 두 줄이 위 높이 안에 확실히 들어간다. 미리보기 쪽은 선택 표시용 2px 테두리만큼 안쪽이 좁으므로
+        // 여유가 빠듯한데, 이 값들이면 툴바와 미리보기 양쪽에서 똑같이 두 줄이 보인다.
+        public const double SmallToolLabelLineHeight = 12;
+        public const double SmallToolLabelMaxHeight = 24;
+        public const double SmallToolLabelWidth = 46;
+
         public static bool IsSmall(QuickToggleButtonConfig cfg) =>
             cfg.SmallButton ?? (cfg.Category == QuickToggleCategory.ColorTool);
     }

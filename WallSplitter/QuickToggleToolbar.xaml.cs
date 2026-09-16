@@ -189,7 +189,7 @@ namespace WallSplitter
         // 높이(2줄 분량)에 맞춰 위아래로 채우다 꽉 차면 다음 칸으로 넘어가는 묶음으로 모아둔다 - Revit
         // 리본의 "작은" 버튼들이 패널 안에서 2~3단으로 쌓이는 것과 같은 방식(2026-07-30 요청, "색상버튼이
         // 작게 한줄로 들어가 있어, 버튼들이 두줄로 나열되게 만들어줘").
-        private const double SmallToolGroupHeightDip = 64;
+        private const double SmallToolGroupHeightDip = QuickToggleButtonStyle.SmallToolGroupHeightDip;
 
         // 2026-09-05부터 버튼마다 큰/작은을 고를 수 있다 - 판정은 QuickToggleButtonStyle이 한 곳에서 한다.
         private static bool IsSmallToolButton(QuickToggleButtonConfig cfg) => QuickToggleButtonStyle.IsSmall(cfg);
@@ -227,12 +227,18 @@ namespace WallSplitter
                         FontSize = 10,
                         TextWrapping = TextWrapping.Wrap,
                         TextAlignment = TextAlignment.Left,
-                        Width = 46,
+                        // 이름이 길어도 버튼이 세로로 늘어나면 안 된다(2단이 깨진다) - 두 줄까지만
+                        // 보이고 넘치면 말줄임으로 자른다. 전체 이름은 툴팁에서 볼 수 있다.
+                        LineHeight = QuickToggleButtonStyle.SmallToolLabelLineHeight,
+                        LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                        MaxHeight = QuickToggleButtonStyle.SmallToolLabelMaxHeight,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        Width = QuickToggleButtonStyle.SmallToolLabelWidth,
                         Foreground = foreground,
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(4, 0, 0, 0),
                     };
-                    StackPanel horizontal = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 2, 6, 2), VerticalAlignment = VerticalAlignment.Center };
+                    StackPanel horizontal = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
                     horizontal.Children.Add(smallIconBox);
                     horizontal.Children.Add(label);
                     content = horizontal;
@@ -272,6 +278,9 @@ namespace WallSplitter
                     ToolTip = ToolTipFor(cfg, state),
                     Tag = cfg,
                 };
+                // 작은 버튼은 높이를 묶음 높이의 정확히 절반으로 **고정**한다 - 라벨 길이에 따라 높이가
+                // 달라지면 두 개가 64에 못 들어가 2단이 깨진다(QuickToggleButtonStyle의 주석 참고).
+                if (IsSmallToolButton(cfg)) button.Height = QuickToggleButtonStyle.SmallToolButtonHeightDip;
                 button.Click += ToggleButton_Click;
 
                 if (IsSmallToolButton(cfg))

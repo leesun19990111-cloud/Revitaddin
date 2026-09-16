@@ -325,8 +325,8 @@ namespace WallSplitter
         // (툴바와 미리보기가 어긋나면 안 되므로).
         private static bool IsSmallToolButton(QuickToggleButtonConfig cfg) => QuickToggleButtonStyle.IsSmall(cfg);
 
-        // 색상 버튼 묶음의 높이(대략 작은 버튼 2개) - QuickToggleToolbar.SmallToolGroupHeightDip과 같은 값.
-        private const double SmallToolGroupHeightDip = 64;
+        // 작은 버튼 묶음의 높이 - 툴바와 어긋나면 안 되므로 QuickToggleButtonStyle에서 가져온다.
+        private const double SmallToolGroupHeightDip = QuickToggleButtonStyle.SmallToolGroupHeightDip;
 
         // 실제 툴바 창(QuickToggleToolbar.xaml)의 구조를 통째로 흉내 낸다:
         //   [드래그 그립 28px] [ButtonsPanel] [구분선 + 뷰 저장 + 되돌리기]
@@ -448,7 +448,7 @@ namespace WallSplitter
                 StackPanel horizontal = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Margin = new Thickness(6, 2, 6, 2),
+                    Margin = new Thickness(6, 0, 6, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                 };
                 horizontal.Children.Add(new Viewbox { Width = 16, Height = 13, Child = icon, VerticalAlignment = VerticalAlignment.Center });
@@ -457,7 +457,13 @@ namespace WallSplitter
                     Text = cfg.Name,
                     FontSize = 10,
                     TextWrapping = TextWrapping.Wrap,
-                    Width = 46,
+                    // 툴바와 같은 규칙: 이름이 길어도 두 줄까지만 보이고 버튼 높이는 고정이다
+                    // (그러지 않으면 2단으로 쌓이지 않는다 - QuickToggleButtonStyle의 주석 참고).
+                    LineHeight = QuickToggleButtonStyle.SmallToolLabelLineHeight,
+                    LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                    MaxHeight = QuickToggleButtonStyle.SmallToolLabelMaxHeight,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Width = QuickToggleButtonStyle.SmallToolLabelWidth,
                     Foreground = foreground,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(4, 0, 0, 0),
@@ -504,6 +510,10 @@ namespace WallSplitter
                 BorderBrush = ReferenceEquals(cfg, _selected) ? Theme.Accent : Brushes.Transparent,
                 Child = button,
             };
+            // 미리보기에서도 작은 버튼 한 칸의 높이는 묶음 높이의 절반으로 고정한다 - 여기서 높이를
+            // 자유롭게 두면 이름이 긴 버튼에서 미리보기만 2단이 깨져 "실제와 다른 미리보기"가 된다.
+            // 높이는 선택 표시용 2px 테두리를 **포함한** 값이다(툴바에는 그 테두리가 없다).
+            if (IsSmallToolButton(cfg)) wrapper.Height = QuickToggleButtonStyle.SmallToolButtonHeightDip;
 
             // 누를 때는 "후보"로만 기억해 둔다 - 여기서 바로 캡처해 버리면 그냥 클릭(편집 대상 선택)까지
             // 드래그로 먹혀서 Click이 안 난다. 최소 드래그 거리를 넘겼을 때만 PreviewDragHost_MouseMove가
