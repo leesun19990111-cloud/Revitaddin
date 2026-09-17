@@ -134,66 +134,96 @@ namespace WallSplitter
             catch { return "링크"; }
         }
 
-        // ===== 중심선 계산 (순수 계산 - 일부러 Revit 타입을 쓰지 않는다) =====
+        // ===== 중심선 계산 =====
         //
-        // 벽의 위치선(Location Line)은 유형마다 다르다. "중심선에 맞춰서"라는 요청을 정확히 지키려면,
-        // 위치선이 마감면/코어면인 벽은 그만큼 옮겨서 진짜 중심선을 써야 한다.
+        // CONFIRMED LIVE BUG (2026-09-17, v79 실측: "벽체의 중간이 아니라 마감면 또는 마감면 반대편 끝면에
+        // 구분선이 생성된다"):
         //
-        // 좌표 약속: 벽 **외부면에서 안쪽으로** 잰 거리를 d라 하자(외부면 d=0, 내부면 d=W).
-        // 중심선은 d=W/2에 있다. Wall.Orientation은 **외부를 향한 법선**이므로, 위치선에서 중심선으로
-        // 가려면 그 법선 방향으로 (d - W/2)만큼 옮기면 된다(음수면 안쪽으로).
+        // 처음에는 위치선 파라미터(`WALL_KEY_REF_PARAM`)와 벽 두께로 "위치선에서 중심선까지의 거리"를
+        // **계산**했다. 열거형 값(WallCenterline=0 … CoreInterior=5)은 참조 어셈블리에서 실측해 맞았는데도
+        // 결과가 벽 두께의 절반만큼 어긋났다 - `LocationCurve`가 그 파라미터가 가리키는 면에 있다는 전제
+        // 자체가 실제 모델에서 성립하지 않았던 것이다(그래서 보정을 하면 중심이 아니라 반대쪽 면에 닿는다).
         //
-        // 이 계산을 Revit 타입 없이 떼어 둔 이유는 하네스에서 직접 돌려 검증하기 위해서다
-        // (층별 단면상자의 RejectOutliersAndUnion과 같은 이유).
-        internal static double CenterlineShift(double totalWidth, double widthBeforeCore, double coreWidth, int locationLine)
-        {
-            double d = locationLine switch
-            {
-                0 => totalWidth / 2,                        // WallCenterline
-                1 => widthBeforeCore + coreWidth / 2,       // CoreCenterline
-                2 => 0,                                     // FinishFaceExterior
-                3 => totalWidth,                            // FinishFaceInterior
-                4 => widthBeforeCore,                       // CoreExterior
-                5 => widthBeforeCore + coreWidth,           // CoreInterior
-                _ => totalWidth / 2,                        // 모르는 값이면 중심선으로 간주(옮기지 않음)
-            };
-            return d - totalWidth / 2;
-        }
+        // 고정: **가정을 버리고 벽의 실제 기하에서 중심면을 잰다.** 벽 솔리드에서 벽면(법선이 Orientation과
+        // 나란한 평면)들을 모아 가장 바깥/안쪽 오프셋을 찾고, 그 한가운데가 중심면이다. 위치선이 어디에
+        // 있든 그 중심면까지의 차이만큼 옮기면 된다 - **위치선의 의미를 몰라도 항상 맞는다.**
+        // 잴 수 없으면(곡선 벽 등 평면 벽면이 없을 때) **아예 옮기지 않는다** - 틀린 방향으로 옮기는 것보다
+        // 위치선 그대로 두는 편이 안전하다. 그 개수는 결과 창에 보고한다.
+        //
+        // **위치선 파라미터로 계산하는 방식으로 되돌리지 말 것.**
 
-        // 벽 하나의 위치선 → 중심선. 실패하면 위치선을 그대로 돌려준다(그리지 못하는 것보다 낫다).
-        private static Curve ToCenterline(Wall wall, Curve locationCurve)
+        // 순수 계산 두 개 - Revit 타입을 일부러 쓰지 않아 하네스에서 직접 돌려 검증할 수 있다
+        // (층별 단면상자의 RejectOutliersAndUnion과 같은 이유).
+        internal static double CenterShiftFromFaces(double minOffset, double maxOffset, double locationOffset) =>
+            (minOffset + maxOffset) / 2 - locationOffset;
+
+        // 찾은 벽면 두 장의 간격이 벽 두께와 같아야 진짜 양쪽 벽면을 잡은 것이다 - 다르면 재는 데 실패한
+        // 것으로 보고 옮기지 않는다(개구부 주변 면 등을 잘못 잡았을 때의 방어).
+        internal static bool FaceSpanMatchesWidth(double minOffset, double maxOffset, double width) =>
+            Math.Abs((maxOffset - minOffset) - width) <= 0.01;   // 약 3mm
+
+        // 벽 하나의 위치선 → 중심선. 잴 수 없으면 null을 돌려준다(호출부가 위치선 그대로 쓴다).
+        private static double? MeasuredCenterShift(Wall wall, Curve locationCurve)
         {
             try
             {
-                Parameter? p = wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM);
-                int locationLine = p?.AsInteger() ?? 0;
-                if (locationLine == 0) return locationCurve;   // 이미 중심선 - 가장 흔한 경우
+                XYZ normal = wall.Orientation;
+                if (normal == null || normal.IsZeroLength()) return null;
+                normal = normal.Normalize();
 
-                double totalWidth = wall.Width;
-                double widthBeforeCore = 0;
-                double coreWidth = totalWidth;
-
-                CompoundStructure? cs = wall.WallType?.GetCompoundStructure();
-                if (cs != null)
+                Options options = new Options
                 {
-                    IList<CompoundStructureLayer> layers = cs.GetLayers();
-                    int firstCore = cs.GetFirstCoreLayerIndex();
-                    int lastCore = cs.GetLastCoreLayerIndex();
-                    if (layers.Count > 0 && firstCore >= 0 && lastCore >= firstCore)
+                    ComputeReferences = false,
+                    IncludeNonVisibleObjects = false,
+                    DetailLevel = ViewDetailLevel.Medium,
+                };
+                GeometryElement? geometry = wall.get_Geometry(options);
+                if (geometry == null) return null;
+
+                double min = double.MaxValue, max = double.MinValue;
+                foreach (GeometryObject obj in geometry)
+                {
+                    if (obj is not Solid solid || solid.Faces.Size == 0) continue;
+                    foreach (Face face in solid.Faces)
                     {
-                        widthBeforeCore = layers.Take(firstCore).Sum(l => l.Width);
-                        coreWidth = layers.Skip(firstCore).Take(lastCore - firstCore + 1).Sum(l => l.Width);
+                        // 벽면 = 법선이 Orientation과 나란한 평면. 끝면(법선이 벽 진행 방향)과 위/아랫면
+                        // (법선이 Z)은 내적이 0에 가까워 저절로 걸러진다.
+                        if (face is not PlanarFace planar) continue;
+                        if (Math.Abs(planar.FaceNormal.DotProduct(normal)) < 0.999) continue;
+
+                        double offset = planar.Origin.DotProduct(normal);
+                        if (offset < min) min = offset;
+                        if (offset > max) max = offset;
                     }
                 }
 
-                double shift = CenterlineShift(totalWidth, widthBeforeCore, coreWidth, locationLine);
-                if (Math.Abs(shift) < 1e-9) return locationCurve;
+                if (min > max) return null;                                  // 평면 벽면을 못 찾음
+                if (!FaceSpanMatchesWidth(min, max, wall.Width)) return null; // 엉뚱한 면을 잡음
 
-                XYZ normal = wall.Orientation;   // 외부를 향한 법선(벽을 뒤집으면 이 값도 뒤집힌다)
-                return locationCurve.CreateTransformed(Transform.CreateTranslation(normal * shift));
+                double locationOffset = locationCurve.Evaluate(0.5, true).DotProduct(normal);
+                return CenterShiftFromFaces(min, max, locationOffset);
             }
             catch
             {
+                return null;
+            }
+        }
+
+        // 위치선을 중심선으로 옮긴 곡선. 잴 수 없었으면 위치선을 그대로 돌려주고 measured=false로 알린다.
+        private static Curve ToCenterline(Wall wall, Curve locationCurve, out bool measured)
+        {
+            double? shift = MeasuredCenterShift(wall, locationCurve);
+            measured = shift.HasValue;
+            if (!measured || Math.Abs(shift!.Value) < 1e-9) return locationCurve;
+
+            try
+            {
+                XYZ normal = wall.Orientation.Normalize();
+                return locationCurve.CreateTransformed(Transform.CreateTranslation(normal * shift.Value));
+            }
+            catch
+            {
+                measured = false;
                 return locationCurve;
             }
         }
@@ -204,6 +234,10 @@ namespace WallSplitter
         {
             public int Created { get; set; }
             public int SkippedWalls { get; set; }
+
+            // 중심면을 재지 못해 위치선을 그대로 쓴 벽 - 그런 벽은 구분선이 중심에서 벗어날 수 있으므로
+            // 결과 창에서 알려 준다(조용히 넘어가면 "왜 여기만 어긋나지?"가 된다).
+            public int UnmeasuredWalls { get; set; }
             public List<string> LevelsWithoutPlanView { get; } = new List<string>();
             public List<string> Notes { get; } = new List<string>();
         }
@@ -238,7 +272,8 @@ namespace WallSplitter
                 {
                     if (!typeNames.Contains(WallTypeName(wall))) continue;
                     if (BaseLevelId(wall) != level.Id) continue;
-                    Curve? curve = CenterlineOnLevel(wall, level.Elevation, null);
+                    Curve? curve = CenterlineOnLevel(wall, level.Elevation, null, out bool measured);
+                    if (!measured) result.UnmeasuredWalls++;
                     if (curve != null) curves.Add(curve); else result.SkippedWalls++;
                 }
 
@@ -249,7 +284,8 @@ namespace WallSplitter
                     {
                         if (!typeNames.Contains(WallTypeName(wall))) continue;
                         if (!LinkWallIsOnLevel(linkDoc, wall, transform, level)) continue;
-                        Curve? curve = CenterlineOnLevel(wall, level.Elevation, transform);
+                        Curve? curve = CenterlineOnLevel(wall, level.Elevation, transform, out bool measured);
+                        if (!measured) result.UnmeasuredWalls++;
                         if (curve != null) curves.Add(curve); else result.SkippedWalls++;
                     }
                 }
@@ -262,15 +298,18 @@ namespace WallSplitter
         }
 
         // 벽의 중심선을 레벨 높이에 눕힌 곡선. 링크 벽이면 마지막에 링크 변환까지 적용한다.
-        private static Curve? CenterlineOnLevel(Wall wall, double levelElevation, Transform? linkTransform)
+        private static Curve? CenterlineOnLevel(Wall wall, double levelElevation, Transform? linkTransform, out bool measured)
         {
+            // 예외로 빠져나가는 길에서도 out이 정해져 있어야 한다 - 곡선을 아예 못 만든 벽은 "중심면을
+            // 재지 못한 벽"으로 세지 않는다(그건 SkippedWalls로 따로 보고된다).
+            measured = true;
             try
             {
                 if (wall.Location is not LocationCurve location || location.Curve == null) return null;
 
                 // 중심선 보정은 **링크 문서 좌표계에서** 한다 - 그래야 Wall.Orientation과 곡선의 좌표계가
                 // 서로 맞는다. 호스트 좌표로 옮기는 것은 그 다음 한 번에 처리한다.
-                Curve curve = ToCenterline(wall, location.Curve);
+                Curve curve = ToCenterline(wall, location.Curve, out measured);
                 if (linkTransform != null) curve = curve.CreateTransformed(linkTransform);
 
                 // 룸 구분선은 레벨의 스케치 평면 위에 있어야 한다 - 벽의 베이스 간격띄우기 때문에 곡선이

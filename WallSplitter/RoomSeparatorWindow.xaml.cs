@@ -194,6 +194,8 @@ namespace WallSplitter
         {
             List<string> lines = new List<string> { "룸 구분선 " + result.Created + "개를 만들었습니다." };
 
+            if (result.UnmeasuredWalls > 0)
+                lines.Add("벽 " + result.UnmeasuredWalls + "개는 중심면을 재지 못해 벽의 위치선 그대로 그렸습니다(곡선 벽 등). 그 선들은 벽 중심에서 벗어나 있을 수 있습니다.");
             if (result.SkippedWalls > 0)
                 lines.Add("건너뛴 벽 " + result.SkippedWalls + "개 (위치선을 읽을 수 없거나 구분선으로 만들 수 없는 모양).");
             if (result.LevelsWithoutPlanView.Count > 0)
