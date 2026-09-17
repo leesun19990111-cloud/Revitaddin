@@ -24,6 +24,7 @@ namespace WallSplitter
         private const string PatternPanelName = "패턴";
         private const string QuickTogglePanelName = "커스텀 버튼";
         private const string WarningPickPanelName = "경고Pick";
+        private const string RoomSeparatorPanelName = "룸 구분선";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -205,6 +206,22 @@ namespace WallSplitter
                 warningPickButton.ToolTip = "현재 문서의 경고에 걸린 요소를 모아 보여주고, 고르면 그 요소가 있는 뷰로 이동하면서 바로 선택됩니다.\nRevit 기본 경고창의 '표시'와 달리 요소를 직접 찾아 클릭할 필요가 없습니다. 창을 열어 둔 채로 모델을 계속 조작할 수 있습니다.";
                 warningPickButton.LargeImage = CreateWarningIcon(32);
                 warningPickButton.Image = CreateWarningIcon(16);
+            }
+
+            RibbonPanel roomSeparatorPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == RoomSeparatorPanelName)
+                ?? application.CreateRibbonPanel(TabName, RoomSeparatorPanelName);
+
+            PushButtonData roomSeparatorButtonData = new PushButtonData(
+                "WallSplitter_RoomSeparator",
+                "룸\n구분선",
+                assemblyPath,
+                typeof(RoomSeparatorCommand).FullName);
+
+            if (roomSeparatorPanel.AddItem(roomSeparatorButtonData) is PushButton roomSeparatorButton)
+            {
+                roomSeparatorButton.ToolTip = "고른 벽 유형의 벽 중심선을 따라 룸 구분선을 자동으로 만듭니다.\n링크된 모델의 벽도 대상으로 삼을 수 있고, 벽의 위치선이 마감면·코어면이어도 벽 두께를 계산해 실제 중심선에 맞춥니다. 레벨은 여러 개를 한 번에 고를 수 있습니다.";
+                roomSeparatorButton.LargeImage = CreateRoomSeparatorIcon(32);
+                roomSeparatorButton.Image = CreateRoomSeparatorIcon(16);
             }
 
             // 리본을 다 만든 뒤 한 번 훑어 "명령 클래스 → Revit 명령 id" 표를 채운다 - 커스텀 "기능 버튼"이
@@ -546,6 +563,52 @@ namespace WallSplitter
                 barPen.Freeze();
                 drawing.DrawLine(barPen, new System.Windows.Point(size / 2.0, size * 0.42), new System.Windows.Point(size / 2.0, size * 0.66));
                 drawing.DrawEllipse(mark, null, new System.Windows.Point(size / 2.0, size * 0.78), barWidth / 2.0, barWidth / 2.0);
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // "룸 구분선" 아이콘 - 벽 두 겹(회색 띠) 사이를 지나는 강조색 중심선. 이 기능이 하는 일(벽의
+        // 중심선에 구분선을 넣는다)을 그대로 그린 것이다. 다른 리본 아이콘들처럼 PNG 리소스가 아니라
+        // 코드로 그린다(이 프로젝트의 관례 - 도형이 단순하고 해상도별로 깨지지 않는다).
+        private static BitmapSource CreateRoomSeparatorIcon(int size)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var wall = new SolidColorBrush(Color.FromRgb(0xB7, 0xB7, 0xBA));
+                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
+                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                wall.Freeze();
+                accent.Freeze();
+                outline.Freeze();
+
+                double margin = Math.Max(1.5, size * 0.09);
+                double bandHeight = Math.Max(2.0, size * 0.22);
+                double centerY = size / 2.0;
+                var outlinePen = new Pen(outline, Math.Max(0.8, size / 24.0));
+                outlinePen.Freeze();
+
+                // 벽 두 겹 - 가운데를 비워 두고 위아래로 하나씩.
+                drawing.DrawRectangle(wall, outlinePen, new Rect(
+                    margin, centerY - bandHeight - size * 0.06, size - margin * 2, bandHeight));
+                drawing.DrawRectangle(wall, outlinePen, new Rect(
+                    margin, centerY + size * 0.06, size - margin * 2, bandHeight));
+
+                // 그 사이를 지나는 중심선(파선) - 룸 구분선이 실제로 그려지는 자리.
+                var centerPen = new Pen(accent, Math.Max(1.2, size / 9.0))
+                {
+                    StartLineCap = PenLineCap.Round,
+                    EndLineCap = PenLineCap.Round,
+                    DashStyle = new DashStyle(new double[] { 2.2, 1.4 }, 0),
+                };
+                centerPen.Freeze();
+                drawing.DrawLine(centerPen,
+                    new System.Windows.Point(margin * 0.6, centerY),
+                    new System.Windows.Point(size - margin * 0.6, centerY));
             }
 
             var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
