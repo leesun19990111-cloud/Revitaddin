@@ -238,6 +238,9 @@ namespace WallSplitter
             // 중심면을 재지 못해 위치선을 그대로 쓴 벽 - 그런 벽은 구분선이 중심에서 벗어날 수 있으므로
             // 결과 창에서 알려 준다(조용히 넘어가면 "왜 여기만 어긋나지?"가 된다).
             public int UnmeasuredWalls { get; set; }
+
+            // 호(곡선) 벽 - 모서리 정리 대상이 아니라 원래 곡선 그대로 만든 것.
+            public int CurvedWalls { get; set; }
             public List<string> LevelsWithoutPlanView { get; } = new List<string>();
             public List<string> Notes { get; } = new List<string>();
         }
@@ -291,10 +294,66 @@ namespace WallSplitter
                 }
 
                 if (curves.Count == 0) continue;
+
+                // 벽처럼 모서리에서 만나게 하고, 같은 선상의 조각은 한 줄로 합친다(2026-09-17 요청).
+                curves = CleanupCurves(curves, level.Elevation, result);
+                if (curves.Count == 0) continue;
+
                 result.Created += CreateLines(doc, view, level, curves, result);
             }
 
             return result;
+        }
+
+        // 모서리를 맞추고 같은 선상을 합칠 때, 끝점을 옮겨도 되는 최대 거리(피트).
+        // 벽이 만나는 지점에서 중심선이 못 미치거나 지나치는 양은 상대 벽 두께의 절반이므로, 아주 두꺼운
+        // 벽(약 1.2m)까지 감안해도 2ft면 넉넉하다. 더 키우면 멀리 떨어진 남의 벽선에 붙을 위험이 커진다.
+        private const double CornerReachFeet = 2.0;
+
+        // 직선만 골라 정리하고(호 등은 손대지 않고 그대로 통과), 정리된 결과를 다시 Revit 곡선으로 만든다.
+        private static List<Curve> CleanupCurves(List<Curve> curves, double elevation, RoomSeparatorResult result)
+        {
+            List<RoomSeparatorGeometry.Seg> segments = new List<RoomSeparatorGeometry.Seg>();
+            List<Curve> untouched = new List<Curve>();
+
+            foreach (Curve curve in curves)
+            {
+                if (curve is Line line)
+                {
+                    XYZ a = line.GetEndPoint(0), b = line.GetEndPoint(1);
+                    segments.Add(new RoomSeparatorGeometry.Seg(a.X, a.Y, b.X, b.Y));
+                }
+                else
+                {
+                    // 호로 된 벽은 "서로 다른 두 방향의 직선을 만나게 한다"는 규칙이 그대로 적용되지 않는다 -
+                    // 잘못 손대느니 원래 곡선을 그대로 쓴다. 그런 게 있었다는 것만 결과로 알린다.
+                    untouched.Add(curve);
+                }
+            }
+
+            if (untouched.Count > 0) result.CurvedWalls += untouched.Count;
+            if (segments.Count == 0) return untouched;
+
+            List<RoomSeparatorGeometry.Seg> cleaned =
+                RoomSeparatorGeometry.Cleanup(segments, CornerReachFeet);
+
+            List<Curve> output = new List<Curve>(cleaned.Count + untouched.Count);
+            foreach (RoomSeparatorGeometry.Seg s in cleaned)
+            {
+                try
+                {
+                    XYZ a = new XYZ(s.X0, s.Y0, elevation);
+                    XYZ b = new XYZ(s.X1, s.Y1, elevation);
+                    if (a.DistanceTo(b) < 1e-6) continue;   // Revit이 거부하는 길이 0 선
+                    output.Add(Line.CreateBound(a, b));
+                }
+                catch
+                {
+                    result.SkippedWalls++;
+                }
+            }
+            output.AddRange(untouched);
+            return output;
         }
 
         // 벽의 중심선을 레벨 높이에 눕힌 곡선. 링크 벽이면 마지막에 링크 변환까지 적용한다.

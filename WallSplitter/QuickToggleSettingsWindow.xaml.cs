@@ -1857,13 +1857,125 @@ namespace WallSplitter
 
         private static StackPanel CreateResultsHost() => new StackPanel { Margin = new Thickness(26, 0, 0, 0) };
 
-        private static TextBlock CreateNote(string text) => new TextBlock
+        // "③ 대상" 위에 붙는 설명.
+        //
+        // 2026-09-17 실측 피드백: *"단면상자 기능에 '3.잘라 볼 레벨 두 개' 밑에 설명이 너무 많아서 아래에
+        // 레벨을 선택하는 영역이 너무 작아 굉장히 불편하다. 다른 기능에도 저런 부분 있으면 불편하지 않도록
+        // 개선해 달라."* 설명이 네 줄씩 자리를 차지하는 바람에 정작 고르는 목록이 쪼그라들어 있었다.
+        //
+        // 고정: **긴 설명은 한 줄 요약 + "자세히"로 접어 둔다.** 이 함수 하나만 고치면 이 창의 모든 설명
+        // (층 범위·색상 카테고리·기능 검색)에 한꺼번에 적용된다 - 그래서 각 기능마다 따로 손대지 않았다.
+        // 짧은 설명은 접을 이유가 없으므로 예전처럼 그냥 보여준다.
+        //
+        // 펼침 상태는 창이 열려 있는 동안 공유한다 - 설명을 보고 싶은 사람은 한 번만 펼치면 다른 버튼을
+        // 골라도 계속 펼쳐져 있고, 평소에는 목록이 넓게 보인다.
+        private bool _notesExpanded;
+
+        private UIElement CreateNote(string text)
         {
-            Text = text,
-            Foreground = Theme.TextSecondary,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(26, 0, 0, 8),
-        };
+            SplitNote(text, out string summary, out string rest);
+
+            if (string.IsNullOrEmpty(rest))
+            {
+                return new TextBlock
+                {
+                    Text = text,
+                    Foreground = Theme.TextSecondary,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(26, 0, 0, 8),
+                };
+            }
+
+            StackPanel host = new StackPanel { Margin = new Thickness(26, 0, 0, 8) };
+
+            WpfGrid header = new WpfGrid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            TextBlock line = new TextBlock
+            {
+                Text = summary,
+                Foreground = Theme.TextSecondary,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            WpfGrid.SetColumn(line, 0);
+            header.Children.Add(line);
+
+            TextBlock toggleText = new TextBlock
+            {
+                Margin = new Thickness(5, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+            };
+            Border toggleGlyphHost = new Border { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
+            StackPanel toggleContent = new StackPanel { Orientation = Orientation.Horizontal };
+            toggleContent.Children.Add(toggleGlyphHost);
+            toggleContent.Children.Add(toggleText);
+            Button toggle = new Button
+            {
+                Content = toggleContent,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(6, 0, 0, 0),
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            WpfGrid.SetColumn(toggle, 1);
+            header.Children.Add(toggle);
+
+            TextBlock full = new TextBlock
+            {
+                Text = text,
+                Foreground = Theme.TextSecondary,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+
+            host.Children.Add(header);
+            host.Children.Add(full);
+
+            void Render()
+            {
+                toggleGlyphHost.Child = CreateExpandGlyph(_notesExpanded);
+                toggleText.Text = _notesExpanded ? "접기" : "자세히";
+                full.Visibility = _notesExpanded ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+                // 펼쳤을 때는 같은 내용이 두 번 보이지 않도록 요약 줄을 감춘다.
+                line.Visibility = _notesExpanded ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+            }
+
+            toggle.Click += (s, e) =>
+            {
+                _notesExpanded = !_notesExpanded;
+                // 지금 화면에 떠 있는 설명 전부가 같이 열리고 닫혀야 한다 - 편집 영역을 다시 그린다.
+                if (_selected != null) SelectButton(_selected);
+            };
+
+            Render();
+            return host;
+        }
+
+        // 첫 문장(또는 첫 줄)만 요약으로 쓰고 나머지는 접는다. 나머지가 얼마 안 되면 접을 가치가 없다.
+        private static void SplitNote(string text, out string summary, out string rest)
+        {
+            summary = text;
+            rest = "";
+            if (string.IsNullOrEmpty(text)) return;
+
+            int cut = text.IndexOf('\n');
+            if (cut < 0)
+            {
+                int period = text.IndexOf(". ", StringComparison.Ordinal);
+                int korean = text.IndexOf("다. ", StringComparison.Ordinal);
+                if (korean >= 0) cut = korean + 2;
+                else if (period >= 0) cut = period + 1;
+            }
+
+            if (cut <= 0 || cut >= text.Length - 10) return;   // 접어도 얻는 게 없다
+            summary = text.Substring(0, cut).Trim();
+            rest = text.Substring(cut).Trim();
+        }
 
         private static TextBlock CreateEmptyResult(string text) => new TextBlock
         {
