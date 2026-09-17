@@ -24,7 +24,7 @@ namespace WallSplitter
         private const string PatternPanelName = "패턴";
         private const string QuickTogglePanelName = "커스텀 버튼";
         private const string WarningPickPanelName = "경고Pick";
-        private const string RoomSeparatorPanelName = "룸 구분선";
+        private const string RoomSeparatorPanelName = "룸 경계";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -222,6 +222,19 @@ namespace WallSplitter
                 roomSeparatorButton.ToolTip = "고른 벽 유형의 벽 중심선을 따라 룸 구분선을 자동으로 만듭니다.\n링크된 모델의 벽도 대상으로 삼을 수 있고, 벽의 위치선이 마감면·코어면이어도 벽 두께를 계산해 실제 중심선에 맞춥니다. 레벨은 여러 개를 한 번에 고를 수 있습니다.";
                 roomSeparatorButton.LargeImage = CreateRoomSeparatorIcon(32);
                 roomSeparatorButton.Image = CreateRoomSeparatorIcon(16);
+            }
+
+            PushButtonData roomBoundingButtonData = new PushButtonData(
+                "WallSplitter_RoomBounding",
+                "룸경계\nON/OFF",
+                assemblyPath,
+                typeof(RoomBoundingCommand).FullName);
+
+            if (roomSeparatorPanel.AddItem(roomBoundingButtonData) is PushButton roomBoundingButton)
+            {
+                roomBoundingButton.ToolTip = "벽·바닥·지붕·기초처럼 방의 경계를 만드는 요소들의 '룸 경계'(Room Bounding) 속성을 카테고리 단위로 한 번에 켜고 끕니다.\n목록은 모델을 훑어 룸 경계 속성을 실제로 가진 카테고리만 모으므로, 버전에 따라 늘어나는 카테고리도 그대로 나옵니다. RVT 링크가 방 경계를 만드는지도 여기서 끄고 켤 수 있습니다.";
+                roomBoundingButton.LargeImage = CreateRoomBoundingIcon(32);
+                roomBoundingButton.Image = CreateRoomBoundingIcon(16);
             }
 
             // 리본을 다 만든 뒤 한 번 훑어 "명령 클래스 → Revit 명령 id" 표를 채운다 - 커스텀 "기능 버튼"이
@@ -609,6 +622,52 @@ namespace WallSplitter
                 drawing.DrawLine(centerPen,
                     new System.Windows.Point(margin * 0.6, centerY),
                     new System.Windows.Point(size - margin * 0.6, centerY));
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // "룸경계 ON/OFF" 아이콘 - 방을 둘러싼 경계(사각 테두리) 중 한 변만 점선으로 끊어 둔 모양.
+        // "경계를 켜고 끄는 것"이 이 기능이라는 걸 그대로 그렸다(룸 구분선 아이콘과 한 눈에 구분되도록
+        // 그쪽은 가로 띠 두 개, 이쪽은 닫힌 테두리로 대비를 줬다).
+        private static BitmapSource CreateRoomBoundingIcon(int size)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var fill = new SolidColorBrush(Color.FromRgb(0xE9, 0xE9, 0xEA));
+                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
+                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                fill.Freeze();
+                accent.Freeze();
+                outline.Freeze();
+
+                double margin = Math.Max(2.0, size * 0.14);
+                double thickness = Math.Max(1.4, size / 10.0);
+                var solidPen = new Pen(outline, thickness);
+                solidPen.Freeze();
+
+                // 방 바탕
+                drawing.DrawRectangle(fill, null, new Rect(margin, margin, size - margin * 2, size - margin * 2));
+
+                double left = margin, right = size - margin, top = margin, bottom = size - margin;
+                // 세 변은 실선(경계 켜짐)
+                drawing.DrawLine(solidPen, new System.Windows.Point(left, top), new System.Windows.Point(right, top));
+                drawing.DrawLine(solidPen, new System.Windows.Point(right, top), new System.Windows.Point(right, bottom));
+                drawing.DrawLine(solidPen, new System.Windows.Point(right, bottom), new System.Windows.Point(left, bottom));
+
+                // 왼쪽 한 변만 점선 + 강조색(경계 꺼짐) - "여기만 껐다"는 대비
+                var dashedPen = new Pen(accent, thickness)
+                {
+                    DashStyle = new DashStyle(new double[] { 1.6, 1.4 }, 0),
+                    StartLineCap = PenLineCap.Round,
+                    EndLineCap = PenLineCap.Round,
+                };
+                dashedPen.Freeze();
+                drawing.DrawLine(dashedPen, new System.Windows.Point(left, bottom), new System.Windows.Point(left, top));
             }
 
             var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);

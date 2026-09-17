@@ -1,0 +1,90 @@
+<Window x:Class="WallSplitter.RoomBoundingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="룸 경계 ON/OFF"
+        Height="640" Width="620" MinHeight="480" MinWidth="520"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip">
+    <!-- 테마는 이 창의 Resources에만 로컬로 병합한다 - Application 리소스에 병합하면 Revit 리본/다른
+         애드인 UI까지 우리 스타일이 번져 텍스트가 하얗게 되는 라이브 버그가 있었다(NamerWindow.xaml 참고). -->
+    <Window.Resources>
+        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== 제목 ===== -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="룸 경계 ON/OFF" FontSize="19" FontWeight="Bold"/>
+            <TextBlock Margin="0,3,0,0" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="벽·바닥·지붕·기초처럼 방의 경계를 만드는 요소들의 '룸 경계'(Room Bounding) 속성을 카테고리 단위로 한 번에 켜고 끕니다. 목록은 이 모델을 훑어 룸 경계 속성을 실제로 가진 카테고리만 모은 것이라, 버전에 따라 늘어나는 카테고리도 그대로 나옵니다."/>
+        </StackPanel>
+
+        <!-- ===== 목록 머리 ===== -->
+        <Grid Grid.Row="1" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="카테고리" FontWeight="Bold" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" x:Name="CountText" Margin="10,0,0,0" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"/>
+            <Button Grid.Column="2" x:Name="SelectAllButton" Content="전체 선택" Padding="10,3" Margin="0,0,6,0"
+                    Click="SelectAllButton_Click"/>
+            <Button Grid.Column="3" x:Name="ClearAllButton" Content="전체 해제" Padding="10,3"
+                    Click="ClearAllButton_Click"/>
+        </Grid>
+
+        <!-- ===== 카테고리 목록 ===== -->
+        <Border Grid.Row="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                CornerRadius="3" Background="{DynamicResource SurfaceBrush}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="CategoryListPanel" Margin="2"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ===== 안내 ===== -->
+        <Border Grid.Row="3" Margin="0,12,0,0" Padding="12" CornerRadius="3"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Text="'RVT 링크'가 목록에 있으면, 그 링크가 이 모델의 방 경계를 만드는지를 링크 단위로 끄고 켤 수 있습니다(링크 안의 요소를 바꾸는 것이 아니라 링크 인스턴스의 속성입니다)."/>
+                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Text="'변경 불가'로 세어진 요소는 그 요소에서 룸 경계 속성이 읽기 전용이라 건드리지 않고 넘어갑니다. 한 번의 실행은 트랜잭션 하나라 Revit의 실행 취소(Ctrl+Z)로 한 번에 되돌릴 수 있습니다."/>
+                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource WarningTextBrush}"
+                           Text="룸 경계를 끄면 그 요소로 나뉘어 있던 방이 합쳐지거나 면적이 달라집니다. 되돌릴 수 있지만, 방 면적을 쓰는 일람표·태그가 함께 바뀐다는 점을 염두에 두세요."/>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 푸터 ===== -->
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="닫기" Padding="20,6" Margin="0,0,8,0" Click="CloseButton_Click" IsCancel="True"/>
+                <Button x:Name="TurnOffButton" Content="룸 경계 끄기" Padding="16,6" Margin="0,0,8,0"
+                        Click="TurnOffButton_Click"/>
+                <Button x:Name="TurnOnButton" Content="룸 경계 켜기" Padding="16,6" Click="TurnOnButton_Click"
+                        Style="{StaticResource PrimaryButtonStyle}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -70,6 +70,7 @@ namespace WallSplitter
             ("패턴 타공 복원", typeof(PatternPunchRestoreCommand).FullName!),
             ("경고Pick", typeof(WarningPickCommand).FullName!),
             ("룸 구분선", typeof(RoomSeparatorCommand).FullName!),
+            ("룸경계 ON/OFF", typeof(RoomBoundingCommand).FullName!),
             ("커스텀 버튼 설정", typeof(QuickToggleSettingsCommand).FullName!),
             ("커스텀 버튼 표시/숨김 전환", typeof(QuickToggleVisibilityToggleCommand).FullName!),
         };
