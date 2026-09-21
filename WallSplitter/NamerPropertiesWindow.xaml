@@ -1,0 +1,66 @@
+<Window x:Class="WallSplitter.NamerPropertiesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="특성"
+        Height="660" Width="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+    <!-- 테마는 이 창의 Resources에만 병합한다 - Application.Resources에 넣으면 Revit 리본과 다른
+         애드인 UI까지 물들이는 라이브 버그가 있었다 (NamerWindow.xaml의 같은 주석 참고). -->
+    <Window.Resources>
+        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+    </Window.Resources>
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="4"
+                Background="{DynamicResource SurfaceBrush}" Padding="10,8" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock x:Name="HeaderText" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="SubHeaderText" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="1" Margin="0,0,0,10">
+            <TextBlock Text="이름" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBox x:Name="NameBox" VerticalContentAlignment="Center" Padding="4,3"/>
+            <TextBlock Text="이름은 NAMER에서 '최종 적용'을 눌러야 모델에 저장됩니다."
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <StackPanel x:Name="MaterialPanel" Grid.Row="2" Margin="0,0,0,10" Visibility="Collapsed">
+            <TextBlock Text="재료 클래스" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBox x:Name="MaterialClassBox" VerticalContentAlignment="Center" Padding="4,3"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,6">
+            <TextBlock Text="특성 검색:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox x:Name="ParamFilterBox" Width="200" VerticalContentAlignment="Center" TextChanged="ParamFilterBox_TextChanged"/>
+            <TextBlock x:Name="ParamCountText" VerticalAlignment="Center" Margin="12,0,0,0"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
+        <Border Grid.Row="4" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="4">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="ParamsPanel" Margin="8"/>
+            </ScrollViewer>
+        </Border>
+
+        <TextBlock x:Name="NoteText" Grid.Row="5" Foreground="{DynamicResource TextSecondaryBrush}"
+                   TextWrapping="Wrap" Margin="0,8,0,0"/>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="취소" Padding="18,5" Margin="0,0,8,0" Click="CancelButton_Click" IsCancel="True"/>
+            <Button Content="확인 (특성은 즉시 반영)" Padding="18,5" Click="OkButton_Click" FontWeight="Bold"
+                    Style="{StaticResource PrimaryButtonStyle}"/>
+        </StackPanel>
+    </Grid>
+</Window>

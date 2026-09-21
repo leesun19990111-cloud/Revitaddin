@@ -6,6 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Autodesk.Revit.DB;
+// Autodesk.Revit.DB.Grid(데이텀 그리드)와 이름이 겹치므로 WPF 쪽은 항상 별칭으로 쓴다
+// (Visibility/Control/Color/Binding과 같은 종류의 충돌 - 루트 CLAUDE.md 참고).
+using WpfGrid = System.Windows.Controls.Grid;
 
 namespace WallSplitter
 {
@@ -21,7 +24,12 @@ namespace WallSplitter
             public ElementId ElementId = ElementId.InvalidElementId;
             public string OriginalName = "";
             public CheckBox CheckBox = null!;
+            // 기존 이름 칸은 TextBlock 하나가 아니라 Grid다 - 그 안에 이름 TextBlock과, 마우스를 올렸을
+            // 때만 오른쪽 끝에 나타나는 '특성' 버튼, 그리고 더블클릭 시의 인라인 편집칸이 겹쳐 놓인다.
+            public WpfGrid OldNameHost = null!;
             public TextBlock OldNameText = null!;
+            public Button PropsButton = null!;
+            public TextBox? Editor;
             public TextBlock NewNameText = null!;
         }
 
@@ -81,7 +89,7 @@ namespace WallSplitter
         {
             foreach (RenameRow row in _rows)
             {
-                row.OldNameText.Width = OldNameColumn.ActualWidth;
+                row.OldNameHost.Width = OldNameColumn.ActualWidth;
                 row.NewNameText.Width = NewNameColumn.ActualWidth;
             }
         }
@@ -365,8 +373,17 @@ namespace WallSplitter
             RenderRows();
         }
 
-        private void RenderRows()
+        private void RenderRows() => RenderRows(false);
+
+        // preserveView: 지금까지 "더 보기"로 펼쳐 둔 분량과 스크롤 위치를 그대로 되살린다. 그냥 다시
+        // 그리면 _renderedCount가 0으로 돌아가 첫 페이지만 남으므로, 한참 아래까지 펼쳐 놓고 작업하던
+        // 사용자가 "적용"을 누를 때마다 "더 보기"를 처음부터 다시 눌러 내려가야 했다(2026-09-21 사용자
+        // 보고). 카테고리/필터가 바뀌는 경우는 목록 자체가 달라지므로 되살리지 않는 게 맞다.
+        private void RenderRows(bool preserveView)
         {
+            int previouslyRendered = preserveView ? _renderedCount : 0;
+            double previousOffset = preserveView && ItemsScroll != null ? ItemsScroll.VerticalOffset : 0;
+
             ItemsPanel.Children.Clear();
             _rows.Clear();
             _renderedCount = 0;
@@ -411,7 +428,26 @@ namespace WallSplitter
             _checkedIds.RemoveWhere(id => categoryIds.Contains(id) && !visibleIds.Contains(id));
 
             RenderMoreRows();
+
+            // 펼쳐 둔 만큼 다시 펼친다. 필터가 좁아져 항목 수가 줄었으면 남은 만큼에서 멈춘다.
+            while (_renderedCount < previouslyRendered && _renderedCount < _filteredElements.Count)
+                RenderMoreRows();
+
+            RestoreScrollOffset(preserveView, previousOffset);
             UpdatePendingChangesText();
+        }
+
+        // 스크롤 가능 범위(ExtentHeight)는 행을 다시 배치한 뒤에야 정해지므로 UpdateLayout이 먼저다.
+        // 그래도 ScrollViewer가 배치 직후 오프셋을 잘라내는 경우가 있어, 레이아웃이 완전히 끝난 뒤
+        // (DispatcherPriority.Loaded) 한 번 더 같은 값을 써 준다.
+        private void RestoreScrollOffset(bool preserveView, double offset)
+        {
+            if (!preserveView || offset <= 0 || ItemsScroll == null) return;
+
+            ItemsScroll.UpdateLayout();
+            ItemsScroll.ScrollToVerticalOffset(offset);
+            Dispatcher.BeginInvoke(new Action(() => ItemsScroll.ScrollToVerticalOffset(offset)),
+                System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         // 이름이 길면 "..."으로 잘리는 문제(TextTrimming) 때문에, 행의 이름 TextBlock 너비를 위쪽 헤더 Grid의
@@ -426,7 +462,7 @@ namespace WallSplitter
             UpdateLayout();
             foreach (RenameRow row in _rows)
             {
-                row.OldNameText.Width = OldNameColumn.ActualWidth;
+                row.OldNameHost.Width = OldNameColumn.ActualWidth;
                 row.NewNameText.Width = NewNameColumn.ActualWidth;
             }
         }
@@ -473,15 +509,50 @@ namespace WallSplitter
                 row.CheckBox = checkBox;
                 rowPanel.Children.Add(checkBox);
 
+                // 기존 이름 칸: 이름 TextBlock 위에 '특성' 버튼을 겹쳐 놓는다. 버튼은 평소 Hidden이라
+                // 이름이 칸 너비를 다 쓰고, 마우스를 올렸을 때만 오른쪽 끝에 나타나 이름의 꼬리를 덮는다
+                // (자리를 미리 비워 두면 안 그래도 좁은 이름 칸이 항상 그만큼 줄어든다).
+                var oldNameHost = new WpfGrid
+                {
+                    Width = OldNameColumn.ActualWidth,
+                    Background = Brushes.Transparent, // 배경이 null이면 글자 없는 빈 곳에서 더블클릭이 안 잡힌다
+                };
+                oldNameHost.MouseLeftButtonDown += OldNameHost_MouseLeftButtonDown;
+                oldNameHost.Tag = row;
+                row.OldNameHost = oldNameHost;
+
                 var oldNameText = new TextBlock
                 {
                     Text = oldName,
-                    Width = OldNameColumn.ActualWidth,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 row.OldNameText = oldNameText;
-                rowPanel.Children.Add(oldNameText);
+                oldNameHost.Children.Add(oldNameText);
+
+                var propsButton = new Button
+                {
+                    Content = "특성",
+                    FontSize = 10,
+                    Padding = new Thickness(6, 0, 6, 0),
+                    MinWidth = 0,
+                    MinHeight = 0,
+                    Height = 18,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Visibility = System.Windows.Visibility.Hidden,
+                    ToolTip = "이 항목의 상세 정보를 열어 보고 수정합니다",
+                    Tag = row,
+                };
+                propsButton.Click += PropsButton_Click;
+                row.PropsButton = propsButton;
+                oldNameHost.Children.Add(propsButton);
+
+                // 행 위에 마우스가 있을 때만 '특성' 버튼을 드러낸다.
+                rowPanel.MouseEnter += (_, _) => propsButton.Visibility = System.Windows.Visibility.Visible;
+                rowPanel.MouseLeave += (_, _) => propsButton.Visibility = System.Windows.Visibility.Hidden;
+
+                rowPanel.Children.Add(oldNameHost);
 
                 rowPanel.Children.Add(new TextBlock
                 {
@@ -602,6 +673,106 @@ namespace WallSplitter
             return null;
         }
 
+        // ===================== 이름 하나만 직접 고치기 / 특성 창 =====================
+
+        // 기존 이름 칸을 더블클릭하면 그 항목 하나만 바로 고칠 수 있게 한다 (2026-09-21 사용자 요청).
+        // 작업 모드(치환/삽입/...)를 거치지 않는 수동 편집이라 체크 여부와 무관하게 동작한다.
+        private void OldNameHost_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ClickCount != 2) return; // 한 번 클릭은 그대로 행으로 흘려보내 체크/드래그가 되게 둔다
+            if (sender is not FrameworkElement fe || fe.Tag is not RenameRow row) return;
+
+            // 더블클릭의 첫 번째 클릭은 이미 rowPanel의 핸들러를 타고 체크 상태를 한 번 뒤집어 놓았다
+            // (두 번째 클릭은 여기서 Handled로 막는다). 이름을 고치려던 것뿐이므로 되돌려 준다.
+            EndDrag();
+            row.CheckBox.IsChecked = row.CheckBox.IsChecked != true;
+
+            BeginInlineEdit(row);
+            e.Handled = true;
+        }
+
+        private void BeginInlineEdit(RenameRow row)
+        {
+            if (row.Editor != null) return;
+
+            var box = new TextBox
+            {
+                Text = row.OriginalName,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(2, 0, 2, 0),
+            };
+            row.Editor = box;
+
+            // 이름 TextBlock과 '특성' 버튼을 숨기고 같은 자리에 편집칸을 올린다 (셋 다 같은 Grid 칸).
+            row.OldNameText.Visibility = System.Windows.Visibility.Collapsed;
+            row.PropsButton.Visibility = System.Windows.Visibility.Collapsed;
+            row.OldNameHost.Children.Add(box);
+
+            box.KeyDown += (_, args) =>
+            {
+                if (args.Key == Key.Enter) { EndInlineEdit(row, commit: true); args.Handled = true; }
+                else if (args.Key == Key.Escape) { EndInlineEdit(row, commit: false); args.Handled = true; }
+            };
+            // 다른 곳을 클릭해서 편집을 떠나는 것도 확정으로 본다(Revit 이름 편집과 같은 감각).
+            box.LostKeyboardFocus += (_, _) => EndInlineEdit(row, commit: true);
+
+            // 방금 트리에 넣은 컨트롤은 아직 포커스를 받을 수 없어, 배치가 끝난 뒤(Loaded)에 잡는다.
+            box.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
+        }
+
+        private void EndInlineEdit(RenameRow row, bool commit)
+        {
+            TextBox? box = row.Editor;
+            if (box == null) return;
+            // 편집칸을 트리에서 떼는 순간 LostKeyboardFocus가 또 들어오므로, 먼저 비워 재진입을 막는다.
+            row.Editor = null;
+
+            string text = (box.Text ?? "").Trim();
+            row.OldNameHost.Children.Remove(box);
+            row.OldNameText.Visibility = System.Windows.Visibility.Visible;
+            row.PropsButton.Visibility = row.OldNameHost.IsMouseOver
+                ? System.Windows.Visibility.Visible
+                : System.Windows.Visibility.Hidden;
+
+            if (commit) ApplyManualName(row, text);
+        }
+
+        // 수동으로 정한 이름을 작업 중 이름에 반영한다 - ApplyButton_Click과 같은 규칙으로
+        // "이 요소가 세션 중 처음 바뀌는 순간"에만 진짜 원래 이름을 기록한다. 목록을 다시 그리지 않으므로
+        // 펼쳐 둔 분량과 스크롤 위치가 그대로 유지된다.
+        private void ApplyManualName(RenameRow row, string newName)
+        {
+            if (newName.Length == 0 || newName == row.OriginalName) return;
+
+            Element? el = _doc.GetElement(row.ElementId);
+            if (el == null) return;
+
+            if (!_trueOriginalNames.ContainsKey(row.ElementId))
+                _trueOriginalNames[row.ElementId] = el.Name ?? "";
+            _workingNames[row.ElementId] = newName;
+
+            row.OriginalName = newName;
+            row.OldNameText.Text = newName;
+            UpdateRowPreview(row);
+            UpdatePendingChangesText();
+        }
+
+        private void PropsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement fe || fe.Tag is not RenameRow row) return;
+
+            Element? el = _doc.GetElement(row.ElementId);
+            if (el == null)
+            {
+                MessageBox.Show("이 항목이 모델에서 사라졌습니다.", "NAMER", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var window = new NamerPropertiesWindow(_doc, el, _category, row.OriginalName) { Owner = this };
+            if (window.ShowDialog() != true) return;
+            if (window.NewName != null) ApplyManualName(row, window.NewName);
+        }
+
         private void RefreshPreview()
         {
             foreach (RenameRow row in _rows) UpdateRowPreview(row);
@@ -662,7 +833,7 @@ namespace WallSplitter
             // 입력칸을 비워서, 이미 적용된 작업이 입력값 그대로 남아있다가 실수로(또는 다음 적용 때) 한 번 더
             // 적용되는 일이 없도록 한다. 모든 모드가 빈 입력값에서는 이름을 바꾸지 않으므로(ComputeNewName 참고) 안전하다.
             ClearModeInputs();
-            RenderRows();
+            RenderRows(preserveView: true);
             UpdatePendingChangesText();
         }
 

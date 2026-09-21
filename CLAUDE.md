@@ -24,7 +24,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 |---|---|---|
 | 벽체 분리 / 바닥 분리, 유형 이름 규칙 | `Class1.cs`, `SplitFloorCommand.cs`, `NamingSettings.cs`, `SettingsWindow.*` | `docs/wall-floor-split/CLAUDE.md` |
 | 리본/앱 시작 (탭·패널·아이콘·매니페스트) | `App.cs`, `WallSplitter.addin`, `Resources/icon*.png` | `docs/app-shell/CLAUDE.md` |
-| NAMER (이름 일괄 변경) | `NamerWindow.*`, `NamerCommand.cs` | `docs/namer/CLAUDE.md` |
+| NAMER (이름 일괄 변경, 개별 이름 수정, 특성 창) | `NamerWindow.*`, `NamerCommand.cs`, `NamerPropertiesWindow.*` | `docs/namer/CLAUDE.md` |
 | 재료 지정/삭제/클래스·설명 변경 | `MaterialAssignWindow.*`, `MaterialAssignCommand.cs`, `MaterialSlotFinder.cs` | `docs/material-assign/CLAUDE.md` |
 | 모델간 변경 반영 | `ModelSyncWindow.*`, `ModelSyncCommand.cs`, `ChangeLog.cs`, `ChangeReplayEngine.cs` | `docs/model-sync/CLAUDE.md` |
 | 패턴 스튜디오 (Revit/PAT 채우기 패턴 편집) | `Pattern*.cs`, `PatternStudioWindow.*`, `PatFileService.cs` | `docs/pattern-studio/CLAUDE.md` |

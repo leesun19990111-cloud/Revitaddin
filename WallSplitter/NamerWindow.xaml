@@ -56,7 +56,8 @@
             </ComboBox>
             <Button x:Name="SelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="SelectAllButton_Click"/>
             <Button x:Name="SelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="SelectNoneButton_Click"/>
-            <TextBlock Text="(목록에서 드래그하면 여러 항목을 한 번에 체크/해제할 수 있습니다)" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0"/>
+            <TextBlock Text="(드래그: 여러 항목 체크/해제 · 이름 더블클릭: 그 항목만 바로 수정 · 이름 위에 마우스를 올리면 오른쪽에 '특성' 버튼)"
+                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,6">
@@ -122,7 +123,7 @@
                     <TextBlock Grid.Column="2" Text="변경 후 이름" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                 </Grid>
 
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="ItemsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel x:Name="ItemsPanel" Margin="4"
                                 MouseMove="ItemsPanel_MouseMove"
                                 MouseLeftButtonUp="ItemsPanel_MouseLeftButtonUp"
