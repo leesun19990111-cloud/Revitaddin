@@ -40,9 +40,15 @@ namespace WallSplitter
         // ExternalEvent를 거치고, 이 창 자체는 DialogResult를 쓰지 않는다(모드리스 창에서 설정하면 예외).
         public static NamerWindow? Instance { get; private set; }
 
+        // **UIApplication을 여기에 저장하지 말 것 (2026-09-21 확인된 치명적 크래시).**
+        // ExternalCommandData.Application(UIApplication)은 그 명령이 실행되는 동안에만 유효하다.
+        // v84에서 이걸 필드에 담아 두고 창이 닫힐 때 `_uiApp.Application.DocumentClosing -= ...`을
+        // 호출했는데, 명령이 끝난 지 한참 뒤라 여기서 관리 예외가 났고 WPF Closed 핸들러의 예외는
+        // 아무도 잡지 않아 그대로 Revit 네이티브로 넘어가 "복구 불가능한 오류"가 됐다(저널 기록:
+        // Registering DocumentClosing 두 번, Unregistering은 한 번도 없음, ExceptionCode=0xe0434352).
+        // Revit이 필요한 일은 전부 ExternalEvent가 **그때그때 넘겨주는** UIApplication으로 한다.
         // Autodesk.Revit.UI에도 Button이 있어(리본 버튼) using으로 통째로 끌어오면 WPF Button과 충돌한다 -
         // 이 파일에서는 Revit UI 타입을 전부 전체 이름으로 쓴다.
-        private readonly Autodesk.Revit.UI.UIApplication _uiApp;
         private readonly NamerExternalEventHandler _handler;
         private readonly Autodesk.Revit.UI.ExternalEvent _event;
         private Document _doc;
@@ -76,25 +82,26 @@ namespace WallSplitter
         private int _renderedCount;
         private Button? _loadMoreButton;
 
-        internal NamerWindow(Autodesk.Revit.UI.UIApplication uiApp, Document doc, List<ElementId> preSelectedIds)
+        internal NamerWindow(Document doc, List<ElementId> preSelectedIds)
         {
             InitializeComponent();
             Instance = this;
-            _uiApp = uiApp;
             _doc = doc;
             _preSelectedIds = new HashSet<ElementId>(preSelectedIds);
 
             _handler = new NamerExternalEventHandler { TargetDocument = doc };
             _event = Autodesk.Revit.UI.ExternalEvent.Create(_handler);
 
-            // 모드리스라 목록이 살아 있는 동안 사용자가 그 문서를 닫아 버릴 수 있다. _categoryElements가
-            // 들고 있는 Element는 그 순간 전부 무효가 되어, 필터에 한 글자만 쳐도 el.Name에서 예외가 나
-            // Revit 충돌 대화상자가 뜬다 - 문서가 닫히면 창도 같이 닫는다.
-            _uiApp.Application.DocumentClosing += Application_DocumentClosing;
+            // 문서가 닫힐 때 이 창도 닫아야 하지만(아래 CloseForDocument 참고) **여기서 Revit 이벤트를
+            // 구독하지 않는다** - 구독/해지 모두 세션 내내 유효한 객체로 해야 하고, 이 창이 들고 있는
+            // 것은 명령 실행 중에만 유효한 것뿐이기 때문이다. App.OnStartup이 ControlledApplication에
+            // 이미 붙여 둔 DocumentClosing 핸들러가 대신 CloseForDocument를 불러 준다.
             Closed += (_, _) =>
             {
-                _uiApp.Application.DocumentClosing -= Application_DocumentClosing;
-                if (Instance == this) Instance = null;
+                // WPF 이벤트 핸들러에서 예외가 새어 나가면 Revit이 통째로 죽는다(위 UIApplication
+                // 주석의 그 사고) - 닫는 길목은 무슨 일이 있어도 조용히 끝나야 한다.
+                try { if (Instance == this) Instance = null; }
+                catch { /* 창을 닫는 중이라 사용자에게 알릴 것이 없다 */ }
             };
 
             // 인라인 편집 중에 창 어디를 클릭하든 편집에서 빠져나오게 한다. 터널링(Preview) 이벤트라
@@ -115,9 +122,29 @@ namespace WallSplitter
             Loaded += NamerWindow_Loaded;
         }
 
-        private void Application_DocumentClosing(object? sender, Autodesk.Revit.DB.Events.DocumentClosingEventArgs e)
+        // **모드리스 창의 WPF 이벤트 핸들러에서 예외가 새어 나가면 Revit이 그대로 죽는다.**
+        // 모달일 때는 ShowDialog가 IExternalCommand.Execute 프레임 안에서 돌아, 예외가 Revit의 명령
+        // 래퍼까지 올라가 "애드인 오류" 대화상자로 끝났다. 모드리스에는 우리 핸들러와 Revit 네이티브
+        // 메시지 루프 사이에 관리 프레임이 하나도 없어서, 같은 예외가 0xe0434352 치명적 오류가 된다
+        // (2026-09-21 실제 발생). 그래서 Revit을 건드리거나 창을 닫는 길목은 전부 이걸로 감싼다.
+        private void Guard(string what, Action action)
         {
-            if (DocKey(e.Document) != DocKey(_doc)) return;
+            try
+            {
+                action();
+            }
+            catch (System.Exception ex)
+            {
+                ShowStatus($"{what} 중 문제가 생겼습니다: {ex.GetBaseException().Message}");
+            }
+        }
+
+        // App.cs의 DocumentClosing 핸들러(OnStartup에서 ControlledApplication에 등록된 것)가 호출한다.
+        // 모드리스라 목록이 살아 있는 동안 사용자가 그 문서를 닫아 버릴 수 있는데, _categoryElements가
+        // 들고 있는 Element는 그 순간 전부 무효가 되어 필터에 한 글자만 쳐도 el.Name에서 예외가 난다.
+        internal void CloseForDocument(Document closing)
+        {
+            if (DocKey(closing) != DocKey(_doc)) return;
             Close();
         }
 
@@ -125,14 +152,14 @@ namespace WallSplitter
         // 경로(저장 안 된 문서는 제목)를 식별자로 쓴다(경고Pick에서 확인된 라이브 버그와 같은 이유).
         private static string DocKey(Document doc) => string.IsNullOrEmpty(doc.PathName) ? doc.Title : doc.PathName;
 
-        private void NamerWindow_Loaded(object sender, RoutedEventArgs e)
+        private void NamerWindow_Loaded(object sender, RoutedEventArgs e) => Guard("창 표시", () =>
         {
             foreach (RenameRow row in _rows)
             {
                 row.OldNameHost.Width = OldNameColumn.ActualWidth;
                 row.NewNameText.Width = NewNameColumn.ActualWidth;
             }
-        }
+        });
 
         private static NamerCategory DetectInitialCategory(Document doc, List<ElementId> ids)
         {
@@ -168,7 +195,8 @@ namespace WallSplitter
 
         // ===================== 대상 분류 =====================
 
-        private void CategoryRadio_Checked(object sender, RoutedEventArgs e)
+        // Revit 문서를 훑는다(CollectCandidates) - 모드리스 창에서 여기서 예외가 새면 Revit이 죽는다.
+        private void CategoryRadio_Checked(object sender, RoutedEventArgs e) => Guard("대상 목록 불러오기", () =>
         {
             if (CategoryViewRadio == null) return; // InitializeComponent 도중 발생하는 초기 Checked 이벤트 방지
 
@@ -183,7 +211,7 @@ namespace WallSplitter
                 NamerCategory.Material;
 
             LoadCategory(category);
-        }
+        });
 
         private void LoadCategory(NamerCategory category)
         {
@@ -410,16 +438,16 @@ namespace WallSplitter
 
         // ===================== 목록 렌더링 =====================
 
-        private void FilterBox_TextChanged(object sender, TextChangedEventArgs e) => RenderRows();
+        private void FilterBox_TextChanged(object sender, TextChangedEventArgs e) => Guard("필터", () => RenderRows());
 
         // ComboBoxItem의 SelectedIndex="0" 기본값도 RadioButton의 IsChecked="True"처럼 InitializeComponent
         // 도중 SelectionChanged를 먼저 발생시킨다 - 이 시점엔 Row4의 ItemsPanel이 아직 연결 전이라
         // RenderRows()가 바로 NullReferenceException을 낸다(ModeRadio_Checked의 ReplacePanel 가드와 동일한 이유).
-        private void FilterModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void FilterModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) => Guard("필터", () =>
         {
             if (ItemsPanel == null) return;
             RenderRows();
-        }
+        });
 
         private void RenderRows() => RenderRows(false);
 
@@ -763,10 +791,19 @@ namespace WallSplitter
         // 그대로 일어나야 "아무 데나 클릭하면 빠져나온다"가 자연스럽게 느껴진다.
         private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
-            RenameRow? editing = _editingRow;
-            if (editing?.Editor == null) return;
-            if (IsInsideEditor(e.OriginalSource as DependencyObject, editing.Editor)) return;
-            EndInlineEdit(editing, commit: true);
+            // WPF 핸들러의 예외는 Revit 네이티브로 넘어가 "복구 불가능한 오류"가 된다 - 창의 모든
+            // 입력 길목은 예외를 밖으로 내보내지 않는다(App.cs의 Revit 이벤트 핸들러와 같은 방침).
+            try
+            {
+                RenameRow? editing = _editingRow;
+                if (editing?.Editor == null) return;
+                if (IsInsideEditor(e.OriginalSource as DependencyObject, editing.Editor)) return;
+                EndInlineEdit(editing, commit: true);
+            }
+            catch (System.Exception ex)
+            {
+                ShowStatus("이름 편집을 마치지 못했습니다: " + ex.Message);
+            }
         }
 
         private static bool IsInsideEditor(DependencyObject? source, TextBox editor)
@@ -785,7 +822,9 @@ namespace WallSplitter
         // Revit 쪽(창 바깥)을 클릭해 이 창이 비활성화될 때도 편집을 끝낸다 - 모드리스라 흔한 상황이다.
         private void NamerWindow_Deactivated(object? sender, EventArgs e)
         {
-            if (_editingRow != null) EndInlineEdit(_editingRow, commit: true);
+            // 창이 닫힐 때도 Deactivated가 난다 - 여기서 예외가 새면 그대로 Revit이 죽는다.
+            try { if (_editingRow != null) EndInlineEdit(_editingRow, commit: true); }
+            catch { /* 창을 떠나는 중이라 사용자에게 알릴 것이 없다 */ }
         }
 
         private void BeginInlineEdit(RenameRow row)
@@ -861,7 +900,7 @@ namespace WallSplitter
         // '특성' 버튼 - **Revit 기본 창을 여는 것이 기본 동작**이다(2026-09-21 사용자 요청으로 이 창을
         // 모드리스로 바꾼 이유가 바로 이것). 어떤 기본 창을 어떻게 여는지는 NamerNativeProperties 참고.
         // 기본 창으로 갈 수 없는 경우(유형을 쓰는 부재가 모델에 하나도 없을 때)에만 자체 특성 창으로 간다.
-        private void PropsButton_Click(object sender, RoutedEventArgs e)
+        private void PropsButton_Click(object sender, RoutedEventArgs e) => Guard("특성 창 열기", () =>
         {
             if (sender is not FrameworkElement fe || fe.Tag is not RenameRow row) return;
 
@@ -874,7 +913,7 @@ namespace WallSplitter
             };
             ShowStatus("Revit 기본 창을 여는 중...");
             _event.Raise();
-        }
+        });
 
         // 기본 창 요청을 보낸 행 - ExternalEvent가 끝난 뒤 자체 특성 창으로 넘어갈 때 어느 행이었는지
         // 알아야 새 이름을 그 행에 돌려줄 수 있다.
@@ -933,7 +972,7 @@ namespace WallSplitter
 
         // 체크된 항목의 작업 중 이름(_workingNames)만 갱신한다. Revit 모델은 전혀 건드리지 않으므로,
         // 다른 카테고리로 옮겨가거나 다른 작업 모드를 골라 계속 이어서 적용할 수 있다.
-        private void ApplyButton_Click(object sender, RoutedEventArgs e)
+        private void ApplyButton_Click(object sender, RoutedEventArgs e) => Guard("적용", () =>
         {
             int changedCount = 0;
             foreach (Element el in _categoryElements)
@@ -962,7 +1001,7 @@ namespace WallSplitter
             ClearModeInputs();
             RenderRows(preserveView: true);
             UpdatePendingChangesText();
-        }
+        });
 
         private void ClearModeInputs()
         {
@@ -979,7 +1018,7 @@ namespace WallSplitter
         // 중요: 이 메서드는 절대로 ComputeNewName을 호출하지 않는다 — 입력칸에 아직 "적용"하지 않은 값이 남아있더라도
         // 그 작업이 여기서 몰래 한 번 더 실행되는 일은 구조적으로 불가능하다. 이미 _workingNames에 누적된(=지난 "적용"
         // 클릭들로 확정된) 이름만 그대로 모델에 옮겨 쓴다.
-        private void FinalApplyButton_Click(object sender, RoutedEventArgs e)
+        private void FinalApplyButton_Click(object sender, RoutedEventArgs e) => Guard("최종 적용", () =>
         {
             var result = new List<(ElementId, string)>();
             foreach (KeyValuePair<ElementId, string> kvp in _workingNames)
@@ -1003,7 +1042,7 @@ namespace WallSplitter
             _handler.PendingMergeDuplicateMaterials = DuplicateMergeRadio?.IsChecked == true;
             ShowStatus($"{result.Count}개 이름을 모델에 반영하는 중...");
             _event.Raise();
-        }
+        });
 
         // NamerExternalEventHandler가 이름 변경을 끝낸 뒤 호출한다. Revit API 스레드에서 바로 불리지만
         // Revit은 WPF와 같은 단일 STA 스레드를 쓰므로 Dispatcher 없이 UI를 갱신해도 안전하다
@@ -1033,9 +1072,7 @@ namespace WallSplitter
         {
             bool sameDocument = DocKey(doc) == DocKey(_doc);
 
-            _uiApp.Application.DocumentClosing -= Application_DocumentClosing;
             _doc = doc;
-            _uiApp.Application.DocumentClosing += Application_DocumentClosing;
             _handler.TargetDocument = doc;
             _preSelectedIds = new HashSet<ElementId>(preSelectedIds);
 
@@ -1058,7 +1095,7 @@ namespace WallSplitter
             if (StatusText != null) StatusText.Text = text;
         }
 
-        private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+        private void CloseButton_Click(object sender, RoutedEventArgs e) => Guard("닫기", Close);
 
         // "최종 적용"이 실제로 반영할 개수와 정확히 같은 기준(이름이 실제로 바뀌었는지)으로 센다 - 체크 여부는
         // FinalApplyButton_Click과 마찬가지로 더 이상 보지 않는다.

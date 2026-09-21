@@ -132,3 +132,47 @@ A batch-rename tool for Views/Sheets/Families/Types/Materials, added 2026-07-10.
 - **라이브 확인이 필요한 부분(하네스로는 확인 불가)**: `PostCommand(TypeProperties)`가 우리가
   프로그램적으로 넣은 선택을 기준으로 실제로 유형 특성 창을 여는지, `uidoc.ActiveView = view`가
   ExternalEvent 안에서 모든 뷰 종류에 대해 동작하는지. 둘 다 Revit 없이는 검증할 수 없다.
+
+### CONFIRMED FATAL CRASH (2026-09-21, v84 → v85에서 수정): UIApplication을 창에 저장하지 말 것
+
+**증상**: NAMER를 열었다가 **그냥 닫기만 해도** Revit이 "복구 불가능한 오류가 발생했습니다"를 띄우고
+종료됐다(최종 적용 여부와 무관 — 처음 제보는 "최종 적용 후"였지만 저널상 이름 변경 트랜잭션은
+`Transaction Successful`로 정상 커밋됐고, 크래시는 항상 창을 닫는 순간이었다).
+
+**근본 원인**: v84가 `ExternalCommandData.Application`(`UIApplication`)을 `_uiApp` 필드에 저장해 두고,
+창의 `Closed` 핸들러에서 `_uiApp.Application.DocumentClosing -= ...`을 호출했다. **`UIApplication`은 그
+명령(`IExternalCommand.Execute`)이 실행되는 동안에만 유효하다** — 창이 닫히는 시점은 그보다 한참 뒤라
+여기서 관리 예외가 났다.
+
+**왜 그게 "치명적 오류"까지 갔나** — 모달일 때는 `ShowDialog()`가 `Execute` 프레임 안에서 돌기 때문에
+WPF 핸들러의 예외가 Revit의 명령 래퍼까지 올라가 "애드인 오류" 대화상자로 끝났다. **모드리스에는 우리
+핸들러와 Revit 네이티브 메시지 루프 사이에 관리 프레임이 하나도 없어서**, 같은 예외가 그대로 네이티브로
+넘어가 `ExceptionCode=0xe0434352`(CLR 예외) 치명적 오류가 된다. 모드리스로 바꾸면서 같이 들어온 위험이다.
+
+**저널이 남긴 결정적 증거**(`%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit 2026\Journals\journal.*.txt`):
+`API_SUCCESS { Registering DocumentClosing event by application WallSplitter }`가 **두 번**(하나는
+`App.OnStartup`, 하나는 NAMER 창 생성자), 그런데 `Unregistering ... WallSplitter`는 **한 번도 없이**
+바로 `Exception occurred / ExceptionCode=0xe0434352`가 찍혔다 — 해지가 예외로 끝났다는 뜻이다.
+**앞으로도 Revit 크래시는 추측하지 말고 이 저널부터 볼 것**(Windows 이벤트 로그에는 안 남는다 — Revit이
+자체 크래시 보호로 예외를 잡아 프로세스 미처리 예외로 올라가지 않기 때문이다).
+
+**고친 방식** (되돌리지 말 것):
+- `NamerWindow`는 **`UIApplication`을 필드로도, 생성자 인자로도 받지 않는다.** Revit이 필요한 일은 전부
+  `ExternalEvent`가 **그때그때 넘겨주는** `UIApplication`으로 한다(그건 호출 시점에 유효하다).
+- 문서가 닫힐 때 창을 닫는 일은 `App.OnStartup`이 `ControlledApplication`에 이미 등록해 둔
+  `OnDocumentClosing`이 `NamerWindow.Instance?.CloseForDocument(e.Document)`를 불러서 한다.
+  **문서 이벤트 구독은 반드시 `OnStartup`의 `ControlledApplication`에서만 한다** — 세션 내내 유효한
+  객체로 구독/해지해야 하고, 창 수명에 맞춘 구독/해지는 바로 이 사고를 만든다.
+- 모드리스 창에서 Revit을 건드리거나 창을 닫는 WPF 핸들러는 전부 `Guard(...)`로 감싼다
+  (`NamerWindow_Loaded`, `CategoryRadio_Checked`, `FilterBox_TextChanged`,
+  `FilterModeCombo_SelectionChanged`, `PropsButton_Click`, `ApplyButton_Click`,
+  `FinalApplyButton_Click`, `CloseButton_Click`, `Window_PreviewMouseDown`, `NamerWindow_Deactivated`,
+  `Closed`). 실패하면 상태 줄에 알리고 끝난다 — **절대 예외를 밖으로 내보내지 않는다.**
+  `Application.Current.DispatcherUnhandledException`으로 한 방에 막는 방법은 일부러 쓰지 않았다:
+  `Application.Current`는 Revit·다른 애드인과 공유하는 객체라(테마 병합 사고와 같은 이유) 거기서
+  `Handled = true`를 하면 **남의 예외까지 삼킨다.**
+- 재발 방지 테스트(`scratchpad/NamerProbe/CrashRegressionTests.cs`)가 빌드된 5개 연도 DLL을
+  `MetadataLoadContext`로 읽어 ① `UIApplication` 타입 필드가 없는지 ② 생성자가 그걸 받지 않는지
+  ③ 창이 직접 문서 이벤트를 구독하던 메서드가 없는지 ④ `CloseForDocument`/`App.OnDocumentClosing`이
+  남아 있는지 확인한다. **크래시가 나던 v84 빌드에 대고 돌리면 5개 연도 전부 FAIL로 잡히는 것까지
+  확인했다**(대조군) — 테스트가 헛돌지 않는다는 증거다.

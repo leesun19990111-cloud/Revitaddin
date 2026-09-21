@@ -26,7 +26,7 @@ namespace WallSplitter
 
             if (NamerWindow.Instance == null)
             {
-                NamerWindow window = new NamerWindow(uiApp, doc, preSelected);
+                NamerWindow window = new NamerWindow(doc, preSelected);
                 new WindowInteropHelper(window) { Owner = uiApp.MainWindowHandle };
                 window.Show();
             }

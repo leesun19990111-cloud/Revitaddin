@@ -255,7 +255,7 @@ namespace WallSplitter
             QuickToggleEvent = ExternalEvent.Create(QuickToggleHandler);
 
             application.ViewActivated += OnQuickToggleViewActivated;
-            application.ControlledApplication.DocumentClosing += OnQuickToggleDocumentClosing;
+            application.ControlledApplication.DocumentClosing += OnDocumentClosing;
             application.Idling += OnQuickToggleIdling;
 
             // 경고Pick 창이 열려 있는 동안 경고가 생기거나 사라지면 새로고침을 누르지 않아도 목록이 따라
@@ -308,10 +308,20 @@ namespace WallSplitter
 
         // 문서가 닫히는 중에는 일단 숨겨둔다 - 다른 문서가 곧이어 활성화되면 뒤따르는 ViewActivated에서
         // 다시 올바른 상태로 보이게 된다.
-        private static void OnQuickToggleDocumentClosing(object? sender, DocumentClosingEventArgs e)
+        // 문서가 닫힐 때 알아야 하는 기능들을 여기서 한꺼번에 처리한다. **문서 이벤트 구독은 반드시
+        // 여기(OnStartup의 ControlledApplication)에서만 한다** - 명령 실행 중에만 유효한
+        // UIApplication으로 구독/해지하면 나중에 해지할 때 예외가 나고, 그 예외가 Revit을 통째로
+        // 죽인다(2026-09-21 NAMER v84에서 실제로 발생, docs/namer/CLAUDE.md 참고).
+        // 기능별로 try를 따로 두는 이유는 하나가 실패해도 나머지는 처리되게 하기 위해서다.
+        private static void OnDocumentClosing(object? sender, DocumentClosingEventArgs e)
         {
             try { QuickToggleToolbar.Instance?.HideForNoDocument(); }
             catch { /* 문서를 닫는 중이라 실패해도 사용자에게 알릴 것이 없다. */ }
+
+            // NAMER는 모드리스라 목록이 살아 있는 동안 그 문서가 닫힐 수 있다 - 들고 있던 Element가
+            // 전부 무효가 되므로 창을 같이 닫는다.
+            try { NamerWindow.Instance?.CloseForDocument(e.Document); }
+            catch { /* 위와 같은 이유 */ }
         }
 
         // Idling은 유휴 상태마다 매우 자주 발생한다 - 여기서는 디스크 재로드 없이(RefreshState/

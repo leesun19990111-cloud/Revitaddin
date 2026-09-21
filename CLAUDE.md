@@ -15,6 +15,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 - **UI 문자열/코드 주석은 한국어**로 유지 — 기존 파일과 일관성.
 - **새 설치 프로그램 산출물 → 이전 버전 아카이브**: `SunnyToolsInstaller_out_vN`을 새로 만들면, 이전 버전 폴더를 `Old_Versions/`로 옮기고 최신 것만 루트에 남긴다.
 - **기능/동작 변경 시 `README.md`도 함께 갱신** — README는 사용자/GitHub용 짧은 요약, `docs/`는 상세 엔지니어링 로그. 상세 이력을 README에 옮기지 말 것.
+- **모드리스 창에서 `UIApplication`을 보관하지 말고, WPF 핸들러의 예외를 밖으로 내보내지 말 것** (2026-09-21 확인된 Revit 강제 종료). `ExternalCommandData.Application`(`UIApplication`)은 그 명령이 실행되는 동안에만 유효하다 — 창 필드에 저장해 두고 나중에(예: `Closed`에서) 쓰면 관리 예외가 나고, **모드리스 창에는 우리 핸들러와 Revit 네이티브 루프 사이에 관리 프레임이 없어** 그 예외가 곧바로 "복구 불가능한 오류"(`0xe0434352`)가 된다. Revit이 필요한 일은 `ExternalEvent`가 그때그때 넘겨주는 `UIApplication`으로 하고, 문서 이벤트 구독은 `App.OnStartup`의 `ControlledApplication`에서만 한다. Revit 크래시를 조사할 때는 추측하지 말고 `%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit <year>\Journals\journal.*.txt`를 먼저 볼 것(Windows 이벤트 로그에는 안 남는다). 자세한 사후 분석: `docs/namer/CLAUDE.md`.
 - WPF 코드비하인드에서 `Autodesk.Revit.DB`와 `System.Windows`를 같이 쓰면 `Visibility`/`Grid`/`Control`/`Color`/`Binding`/`Line`/`Point` 등의 이름이 겹친다 — 완전한 이름 또는 별칭(`using X = ...`)으로 항상 구분할 것 (사례: `docs/design-system/CLAUDE.md`).
 - `SplitWallCommand`의 3단계 트랜잭션 구조(Tx1 → 프로파일 스코프 → Tx2)를 하나로 합치지 말 것 — `SketchEditScope`는 열린 트랜잭션 중엔 `Start()`할 수 없다 (자세한 이유: `docs/wall-floor-split/CLAUDE.md`).
 
