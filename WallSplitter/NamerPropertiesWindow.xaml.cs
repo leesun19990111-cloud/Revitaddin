@@ -8,21 +8,19 @@ using WpfGrid = System.Windows.Controls.Grid;
 
 namespace WallSplitter
 {
-    // NAMER 목록의 행에서 "특성" 버튼을 눌렀을 때 뜨는 상세 정보 창 (2026-09-21 사용자 요청).
+    // NAMER의 '특성' 버튼이 **Revit 기본 창을 열 수 없을 때만** 뜨는 대체 창.
     //
-    // **왜 Revit 기본 창을 그대로 띄우지 않는가** — 사용자는 "가능하면 레빗에서 제공해주는 창 자체를"
-    // 원했고, 실제로 가능한지 5개 연도 참조 어셈블리로 실측했다. 결론은 "이 용도로는 불가능"이다:
-    //   1) Revit 기본 대화상자를 여는 유일한 공개 수단은 UIApplication.PostCommand(RevitCommandId)인데,
-    //      이름 그대로 "지금 실행 중인 명령이 끝난 뒤(Idle)"에 실행된다. NamerWindow는 ShowDialog()로
-    //      NamerCommand.Execute 안에서 모달로 떠 있으므로 창이 떠 있는 동안에는 절대 실행되지 않는다.
-    //      즉 기본 창을 열려면 NAMER를 먼저 닫아야 하고, 그러면 쌓아 둔 작업 중 이름이 전부 사라진다.
-    //   2) 설령 닫더라도 쓸 만한 PostableCommand가 없다. 5개 연도 교집합을 전부 뽑아 보면
-    //      TypeProperties / Materials / ManageViewTemplates 정도인데, TypeProperties는 "현재 선택된
-    //      부재"의 유형을 여는 명령이라 유형·뷰·시트처럼 Selection에 넣을 수 없는 요소에는 쓸 수 없고,
-    //      Materials / ManageViewTemplates는 특정 항목이 아니라 그냥 브라우저를 여는 명령이라
-    //      "선택한 이름을 지닌 것의 상세 정보"라는 요청 자체를 만족시키지 못한다.
-    // 그래서 Revit의 유형 특성 대화상자/특성 팔레트가 보여 주는 것과 같은 내용(파라미터 목록)을 직접
-    // 만들어 보여 주고 편집까지 되게 했다. 이 판단을 뒤집으려면 위 두 가지가 먼저 달라져야 한다.
+    // 2026-09-21 처음 만들 때는 이게 유일한 수단이었다 - 그때 NAMER는 모달이라 PostCommand로 Revit
+    // 기본 창을 여는 것이 구조적으로 불가능했기 때문이다. 같은 날 사용자가 *"오히려 새로 만든게 더
+    // 어렵고 보기가 힘들어. 네이머를 띄워두어도 다른작업이 병행가능한 창으로 변경해서라도 특성버튼을
+    // 누르면 레빗 자체의 유형편집이나 특성창을 띄울 수 있도록"* 이라고 해서 NAMER를 모드리스로 바꿨고,
+    // 이제 기본 동작은 Revit 기본 창이다(NamerNativeProperties 참고). 이 창이 남아 있는 이유는 단
+    // 하나, **유형/패밀리를 쓰는 부재가 모델에 하나도 없으면 Revit 유형 특성 창을 열 방법이 정말로
+    // 없기 때문**이다(그 명령은 "선택된 부재"를 기준으로 동작하는데 유형 자체는 선택할 수 없다).
+    // 그 경우에도 아무것도 못 보는 것보다는 낫기에 남겨 두었다 - 기본 경로로 되돌리지 말 것.
+    //
+    // 이 창은 **ExternalEvent 안에서 띄운다**(NamerWindow.ShowFallbackProperties). 그 안은 유효한 API
+    // 컨텍스트라 아래 Transaction이 그대로 동작한다 - 모드리스 창에서 직접 띄우면 트랜잭션을 못 연다.
     //
     // 반영 시점이 둘로 나뉘는 점에 주의:
     //   - **이름**은 모델에 바로 쓰지 않고 NAMER의 작업 중 이름(_workingNames)으로 돌려준다. NAMER의
@@ -55,18 +53,22 @@ namespace WallSplitter
         private readonly List<ParamGroup> _groups = new();
         private readonly List<ParamRow> _rows = new();
         private string _originalMaterialClass = "";
+        private readonly string? _fallbackReason;
 
         // '확인'으로 확정된 새 이름. NamerWindow가 이걸 받아 작업 중 이름에만 반영한다(모델에는 안 씀).
         public string? NewName { get; private set; }
 
         // internal: NamerCategory가 internal이라 생성자도 같은 수준이어야 한다(CS0051).
-        internal NamerPropertiesWindow(Document doc, Element element, NamerWindow.NamerCategory category, string workingName)
+        // fallbackReason: Revit 기본 창을 못 열어서 이 창으로 넘어온 이유(있으면 머리말에 그대로 보여준다).
+        internal NamerPropertiesWindow(Document doc, Element element, NamerWindow.NamerCategory category,
+            string workingName, string? fallbackReason = null)
         {
             InitializeComponent();
             _doc = doc;
             _element = element;
             _category = category;
             _modelName = element.Name ?? "";
+            _fallbackReason = fallbackReason;
 
             NameBox.Text = workingName;
             BuildHeader(workingName);
@@ -135,6 +137,11 @@ namespace WallSplitter
 
             if (workingName != _modelName)
                 parts.Add("모델에 저장된 이름: \"" + _modelName + "\" (NAMER에서 아직 최종 적용 전)");
+
+            // Revit 기본 창으로 못 간 이유가 있으면 맨 앞에 붙인다 - 사용자는 기본 창을 기대하고 눌렀으므로
+            // "왜 이 창이 떴는지"를 설명하지 않으면 그냥 고장으로 보인다.
+            if (!string.IsNullOrWhiteSpace(_fallbackReason))
+                parts.Insert(0, _fallbackReason!.Replace("\n", " "));
 
             SubHeaderText.Text = string.Join("   ·   ", parts);
         }

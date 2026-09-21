@@ -8,24 +8,58 @@ using Autodesk.Revit.UI;
 
 namespace WallSplitter
 {
+    // 2026-09-21부터 NAMER 창은 **모드리스**다 - 사용자가 NAMER를 띄워 둔 채로 Revit에서 다른 작업을
+    // 계속할 수 있어야 하고, 무엇보다 '특성' 버튼이 Revit 기본 창을 띄우려면 모드리스여야 한다
+    // (이유는 NamerExternalEventHandler의 설명 참고). 따라서 이 Execute는 창만 띄우고 곧바로 반환하며,
+    // 실제 이름 변경 트랜잭션은 NamerExternalEventHandler가 ApplyRenames를 불러 처리한다.
+    // ReadOnly가 아니라 Manual로 두는 것은 이 커맨드 자체가 트랜잭션을 열지 않기 때문이다.
     [Transaction(TransactionMode.Manual)]
     public class NamerCommand : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            UIDocument uiDoc = commandData.Application.ActiveUIDocument;
+            UIApplication uiApp = commandData.Application;
+            UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
 
             List<ElementId> preSelected = uiDoc.Selection.GetElementIds().ToList();
 
-            NamerWindow window = new NamerWindow(doc, preSelected);
-            new WindowInteropHelper(window) { Owner = commandData.Application.MainWindowHandle };
-            bool? dialogResult = window.ShowDialog();
-            if (dialogResult != true || window.Result == null || window.Result.Count == 0)
-                return Result.Cancelled;
+            if (NamerWindow.Instance == null)
+            {
+                NamerWindow window = new NamerWindow(uiApp, doc, preSelected);
+                new WindowInteropHelper(window) { Owner = uiApp.MainWindowHandle };
+                window.Show();
+            }
+            else
+            {
+                // 이미 열려 있으면 그 창을 재사용한다 - 그 사이 다른 문서로 전환했거나 선택이 달라졌을
+                // 수 있으므로 대상 문서와 미리 선택을 항상 최신으로 갱신한다(경고Pick과 같은 방침).
+                NamerWindow.Instance.UpdateDocumentAndSelection(doc, preSelected);
+                NamerWindow.Instance.Show();
+                NamerWindow.Instance.Activate();
+            }
 
-            var failed = new List<string>();
-            var merged = new List<string>();
+            return Result.Succeeded;
+        }
+
+        // 이름 변경 한 번의 결과 - 모드리스 창이 결과를 보여 주려면 되돌려 받아야 한다.
+        internal sealed class RenameResult
+        {
+            public TransactionStatus Status;
+            public int Renamed;
+            public List<string> Failed = new List<string>();
+            public List<string> Merged = new List<string>();
+        }
+
+        // NamerWindow가 "최종 적용"으로 확정한 (요소, 새 이름) 목록을 실제 모델에 쓴다.
+        // internal static: 모드리스 전환 전에는 Execute 안에 있던 코드 그대로이며, 이제는
+        // NamerExternalEventHandler가 유효한 API 컨텍스트에서 호출한다.
+        internal static RenameResult ApplyRenames(Document doc, List<(ElementId Id, string NewName)> renames,
+            bool mergeDuplicateMaterials)
+        {
+            var result = new RenameResult();
+            var failed = result.Failed;
+            var merged = result.Merged;
             var pendingLogEntries = new List<ChangeLogEntry>();
             TransactionStatus status;
 
@@ -33,7 +67,7 @@ namespace WallSplitter
             {
                 tx.Start();
 
-                foreach ((ElementId id, string newName) in window.Result)
+                foreach ((ElementId id, string newName) in renames)
                 {
                     Element? el = doc.GetElement(id);
                     if (el == null) continue;
@@ -44,10 +78,12 @@ namespace WallSplitter
                     if (el is Material material)
                     {
                         int failedBefore = failed.Count;
-                        RenameMaterial(doc, material, oldName, newName, window.MergeDuplicateMaterials, failed, merged);
+                        RenameMaterial(doc, material, oldName, newName, mergeDuplicateMaterials, failed, merged);
                         // RenameMaterial의 시그니처를 그대로 두기 위해(성공 여부를 별도로 안 돌려줌), 이 호출로
                         // failed에 새로 추가된 게 없으면 성공한 것으로 판단한다.
                         if (failed.Count == failedBefore)
+                        {
+                            result.Renamed++;
                             pendingLogEntries.Add(new ChangeLogEntry
                             {
                                 Timestamp = DateTime.Now,
@@ -56,14 +92,16 @@ namespace WallSplitter
                                 Category = NamerWindow.NamerCategory.Material,
                                 Key = oldName,
                                 NewValue = newName,
-                                MergeDuplicateMaterials = window.MergeDuplicateMaterials,
+                                MergeDuplicateMaterials = mergeDuplicateMaterials,
                             });
+                        }
                         continue;
                     }
 
                     try
                     {
                         el.Name = newName;
+                        result.Renamed++;
                         pendingLogEntries.Add(new ChangeLogEntry
                         {
                             Timestamp = DateTime.Now,
@@ -87,10 +125,12 @@ namespace WallSplitter
                 status = tx.Commit();
             }
 
+            result.Status = status;
+
             if (status != TransactionStatus.Committed)
             {
                 TaskDialog.Show("NAMER", $"이름 변경이 모델에 반영되지 않았습니다 (트랜잭션 롤백: {status}).");
-                return Result.Failed;
+                return result;
             }
 
             // 커밋이 실제로 성공한 뒤에만 기록한다 - 롤백되면 pendingLogEntries 전부가 "실제로는 일어나지
@@ -111,7 +151,7 @@ namespace WallSplitter
                 TaskDialog.Show("NAMER", $"{failed.Count}개 항목의 이름을 바꾸지 못했습니다 (이름 중복 등):\n" + detail);
             }
 
-            return Result.Succeeded;
+            return result;
         }
 
         // window.Result((ElementId, NewName)만 담음)는 카테고리 정보를 따로 들고 있지 않으므로, 커밋된 뒤

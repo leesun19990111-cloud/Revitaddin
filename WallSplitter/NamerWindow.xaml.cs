@@ -33,8 +33,20 @@ namespace WallSplitter
             public TextBlock NewNameText = null!;
         }
 
-        private readonly Document _doc;
-        private readonly HashSet<ElementId> _preSelectedIds;
+        // 2026-09-21부터 이 창은 **모드리스**다 - NAMER를 띄워 둔 채로 Revit에서 계속 작업할 수 있고,
+        // '특성' 버튼이 Revit 기본 창을 띄울 수 있게 하려면 반드시 모드리스여야 한다
+        // (PostCommand는 "지금 명령이 끝난 뒤"에 실행되므로 모달인 동안에는 영영 실행되지 않는다 —
+        // 자세한 설명은 NamerExternalEventHandler 참고). 그래서 모델을 건드리는 일은 전부
+        // ExternalEvent를 거치고, 이 창 자체는 DialogResult를 쓰지 않는다(모드리스 창에서 설정하면 예외).
+        public static NamerWindow? Instance { get; private set; }
+
+        // Autodesk.Revit.UI에도 Button이 있어(리본 버튼) using으로 통째로 끌어오면 WPF Button과 충돌한다 -
+        // 이 파일에서는 Revit UI 타입을 전부 전체 이름으로 쓴다.
+        private readonly Autodesk.Revit.UI.UIApplication _uiApp;
+        private readonly NamerExternalEventHandler _handler;
+        private readonly Autodesk.Revit.UI.ExternalEvent _event;
+        private Document _doc;
+        private HashSet<ElementId> _preSelectedIds;
         private readonly HashSet<ElementId> _checkedIds = new();
         private readonly HashSet<NamerCategory> _categoriesInitialized = new();
 
@@ -56,22 +68,40 @@ namespace WallSplitter
 
         // 목록을 통째로 렌더링하는 대신 페이지 단위로 나눠 그린다 (아래 RenderMoreRows 설명 참고).
         private const int PageSize = 200;
+
+        // 인라인 편집칸의 높이(=기존 이름 칸이 항상 확보하는 높이). 편집을 열고 닫을 때 행 높이가
+        // 달라지지 않게 하려는 값이다 - 위 oldNameHost.MinHeight 주석 참고.
+        private const double InlineEditHeight = 20;
         private List<Element> _filteredElements = new();
         private int _renderedCount;
         private Button? _loadMoreButton;
 
-        public List<(ElementId Id, string NewName)>? Result { get; private set; }
-
-        // 재료 이름 변경 시 새 이름이 이미 다른 재료가 쓰고 있으면 어떻게 할지 - true면 그 기존 재료로
-        // 병합(사용처를 옮기고 원래 재료는 삭제), false면 숫자를 붙여 별개 재료로 저장. NamerCommand가
-        // 커밋 시점에 실제 충돌 여부를 판단하므로, 여기서는 사용자가 마지막으로 고른 정책만 전달한다.
-        public bool MergeDuplicateMaterials { get; private set; } = true;
-
-        public NamerWindow(Document doc, List<ElementId> preSelectedIds)
+        internal NamerWindow(Autodesk.Revit.UI.UIApplication uiApp, Document doc, List<ElementId> preSelectedIds)
         {
             InitializeComponent();
+            Instance = this;
+            _uiApp = uiApp;
             _doc = doc;
             _preSelectedIds = new HashSet<ElementId>(preSelectedIds);
+
+            _handler = new NamerExternalEventHandler { TargetDocument = doc };
+            _event = Autodesk.Revit.UI.ExternalEvent.Create(_handler);
+
+            // 모드리스라 목록이 살아 있는 동안 사용자가 그 문서를 닫아 버릴 수 있다. _categoryElements가
+            // 들고 있는 Element는 그 순간 전부 무효가 되어, 필터에 한 글자만 쳐도 el.Name에서 예외가 나
+            // Revit 충돌 대화상자가 뜬다 - 문서가 닫히면 창도 같이 닫는다.
+            _uiApp.Application.DocumentClosing += Application_DocumentClosing;
+            Closed += (_, _) =>
+            {
+                _uiApp.Application.DocumentClosing -= Application_DocumentClosing;
+                if (Instance == this) Instance = null;
+            };
+
+            // 인라인 편집 중에 창 어디를 클릭하든 편집에서 빠져나오게 한다. 터널링(Preview) 이벤트라
+            // 클릭 대상이 그 일을 처리하기 **전에** 먼저 들어오고, handledEventsToo로 붙여 두면 버튼처럼
+            // 이벤트를 소비하는 컨트롤을 클릭해도 놓치지 않는다.
+            AddHandler(PreviewMouseDownEvent, new MouseButtonEventHandler(Window_PreviewMouseDown), true);
+            Deactivated += NamerWindow_Deactivated;
 
             NamerCategory initial = DetectInitialCategory(doc, preSelectedIds);
             SetCategoryRadio(initial);
@@ -84,6 +114,16 @@ namespace WallSplitter
             // 창이 실제로 표시된 뒤(Loaded) 이미 그려진 행들의 너비를 한 번 다시 써서 고친다.
             Loaded += NamerWindow_Loaded;
         }
+
+        private void Application_DocumentClosing(object? sender, Autodesk.Revit.DB.Events.DocumentClosingEventArgs e)
+        {
+            if (DocKey(e.Document) != DocKey(_doc)) return;
+            Close();
+        }
+
+        // Document는 API 래퍼 객체라 같은 열린 문서라도 조회 시점이 다르면 참조가 다를 수 있다 -
+        // 경로(저장 안 된 문서는 제목)를 식별자로 쓴다(경고Pick에서 확인된 라이브 버그와 같은 이유).
+        private static string DocKey(Document doc) => string.IsNullOrEmpty(doc.PathName) ? doc.Title : doc.PathName;
 
         private void NamerWindow_Loaded(object sender, RoutedEventArgs e)
         {
@@ -351,7 +391,15 @@ namespace WallSplitter
         }
 
         private string WorkingNameOf(Element el) =>
-            _workingNames.TryGetValue(el.Id, out string? name) ? name : (el.Name ?? "");
+            _workingNames.TryGetValue(el.Id, out string? name) ? name : SafeNameOf(el);
+
+        // 모드리스라 목록을 만든 뒤에도 요소가 삭제되거나 문서가 닫힐 수 있다 - 그때 el.Name은 예외를
+        // 던지고, WPF 이벤트 핸들러에서 새어 나간 예외는 곧바로 Revit 충돌 대화상자가 된다.
+        private static string SafeNameOf(Element el)
+        {
+            try { return el.IsValidObject ? (el.Name ?? "") : ""; }
+            catch { return ""; }
+        }
 
         private static int ClampInt(int value, int min, int max)
         {
@@ -515,6 +563,11 @@ namespace WallSplitter
                 var oldNameHost = new WpfGrid
                 {
                     Width = OldNameColumn.ActualWidth,
+                    // 인라인 편집칸은 이름 TextBlock보다 키가 크다 - 높이를 미리 확보해 두지 않으면 편집을
+                    // 열고 닫을 때마다 그 행이 늘었다 줄고, 아래 행들이 전부 몇 픽셀씩 밀린다. 그 상태에서
+                    // 다른 행을 클릭하면(편집이 닫히며 레이아웃이 되돌아가므로) **겨눈 행이 아니라 옆 행이
+                    // 눌린다** - 하네스에서 실제로 잡힌 문제다. 항상 편집칸 높이만큼 잡아 둬 흔들리지 않게 한다.
+                    MinHeight = InlineEditHeight,
                     Background = Brushes.Transparent, // 배경이 null이면 글자 없는 빈 곳에서 더블클릭이 안 잡힌다
                 };
                 oldNameHost.MouseLeftButtonDown += OldNameHost_MouseLeftButtonDown;
@@ -541,9 +594,15 @@ namespace WallSplitter
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center,
                     Visibility = System.Windows.Visibility.Hidden,
-                    ToolTip = "이 항목의 상세 정보를 열어 보고 수정합니다",
+                    ToolTip = "Revit 기본 창(유형 특성 / 특성 팔레트 등)으로 이 항목을 엽니다",
                     Tag = row,
+                    // 이름 글자 위에 겹쳐 놓는 버튼이라 **배경이 불투명해야 한다** - 기본 버튼 배경은
+                    // 반투명/연한 색이어서 뒤의 이름이 비쳐 보이고 버튼이 글자에 묻혔다(사용자 지적).
+                    // 강조색(스틸 블루) + 흰 글자인 PrimaryButtonStyle을 그대로 써서 확실히 덮고,
+                    // 동시에 "누를 수 있는 것"으로 바로 읽히게 한다.
+                    Style = (Style)FindResource("PrimaryButtonStyle"),
                 };
+                // Grid에서는 나중에 추가된 자식이 위에 그려진다 - 이름 TextBlock 뒤에 추가해 항상 위에 온다.
                 propsButton.Click += PropsButton_Click;
                 row.PropsButton = propsButton;
                 oldNameHost.Children.Add(propsButton);
@@ -691,6 +750,44 @@ namespace WallSplitter
             e.Handled = true;
         }
 
+        // 지금 인라인 편집 중인 행 - 창 어디를 클릭하든 편집에서 빠져나오게 하려면(아래
+        // Window_PreviewMouseDown) "편집 중인가"를 한 곳에서 알아야 한다.
+        private RenameRow? _editingRow;
+
+        // 편집칸 밖을 클릭하면 어디든 편집을 끝낸다 (2026-09-21 사용자 요청:
+        // *"입력칸에서 벗어나오려면 엔터, 빈공간클릭을 해야하는데, 다른 어느부분을 클릭해도 벗어나올 수
+        // 있도록"*). LostKeyboardFocus만으로는 부족하다 - 목록의 행(StackPanel)이나 라벨(TextBlock)처럼
+        // **키보드 포커스를 가져가지 않는 요소**를 클릭하면 포커스가 편집칸에 그대로 남아 편집이 안 닫힌다.
+        // 그래서 창 전체의 터널링 이벤트(PreviewMouseDown)에서 직접 판단한다.
+        // 이벤트를 Handled로 막지 않는 것이 중요하다 - 클릭한 곳이 원래 하려던 일(체크 토글, 버튼 누름)도
+        // 그대로 일어나야 "아무 데나 클릭하면 빠져나온다"가 자연스럽게 느껴진다.
+        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            RenameRow? editing = _editingRow;
+            if (editing?.Editor == null) return;
+            if (IsInsideEditor(e.OriginalSource as DependencyObject, editing.Editor)) return;
+            EndInlineEdit(editing, commit: true);
+        }
+
+        private static bool IsInsideEditor(DependencyObject? source, TextBox editor)
+        {
+            DependencyObject? current = source;
+            while (current != null)
+            {
+                if (ReferenceEquals(current, editor)) return true;
+                current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : null;
+            }
+            return false;
+        }
+
+        // Revit 쪽(창 바깥)을 클릭해 이 창이 비활성화될 때도 편집을 끝낸다 - 모드리스라 흔한 상황이다.
+        private void NamerWindow_Deactivated(object? sender, EventArgs e)
+        {
+            if (_editingRow != null) EndInlineEdit(_editingRow, commit: true);
+        }
+
         private void BeginInlineEdit(RenameRow row)
         {
             if (row.Editor != null) return;
@@ -700,8 +797,10 @@ namespace WallSplitter
                 Text = row.OriginalName,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(2, 0, 2, 0),
+                Height = InlineEditHeight,   // 행 높이가 흔들리지 않도록 호스트가 확보해 둔 높이와 맞춘다
             };
             row.Editor = box;
+            _editingRow = row;
 
             // 이름 TextBlock과 '특성' 버튼을 숨기고 같은 자리에 편집칸을 올린다 (셋 다 같은 Grid 칸).
             row.OldNameText.Visibility = System.Windows.Visibility.Collapsed;
@@ -724,8 +823,10 @@ namespace WallSplitter
         {
             TextBox? box = row.Editor;
             if (box == null) return;
-            // 편집칸을 트리에서 떼는 순간 LostKeyboardFocus가 또 들어오므로, 먼저 비워 재진입을 막는다.
+            // 편집칸을 트리에서 떼는 순간 LostKeyboardFocus가 또 들어오므로, 먼저 비워 재진입을 막는다
+            // (창 전체의 PreviewMouseDown/Deactivated도 같은 경로로 들어오므로 가드는 하나로 충분하다).
             row.Editor = null;
+            if (_editingRow == row) _editingRow = null;
 
             string text = (box.Text ?? "").Trim();
             row.OldNameHost.Children.Remove(box);
@@ -748,7 +849,7 @@ namespace WallSplitter
             if (el == null) return;
 
             if (!_trueOriginalNames.ContainsKey(row.ElementId))
-                _trueOriginalNames[row.ElementId] = el.Name ?? "";
+                _trueOriginalNames[row.ElementId] = SafeNameOf(el);
             _workingNames[row.ElementId] = newName;
 
             row.OriginalName = newName;
@@ -757,20 +858,46 @@ namespace WallSplitter
             UpdatePendingChangesText();
         }
 
+        // '특성' 버튼 - **Revit 기본 창을 여는 것이 기본 동작**이다(2026-09-21 사용자 요청으로 이 창을
+        // 모드리스로 바꾼 이유가 바로 이것). 어떤 기본 창을 어떻게 여는지는 NamerNativeProperties 참고.
+        // 기본 창으로 갈 수 없는 경우(유형을 쓰는 부재가 모델에 하나도 없을 때)에만 자체 특성 창으로 간다.
         private void PropsButton_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement fe || fe.Tag is not RenameRow row) return;
 
-            Element? el = _doc.GetElement(row.ElementId);
+            _propsRow = row;
+            _handler.PendingProperties = new NamerExternalEventHandler.PropertyRequest
+            {
+                Category = _category,
+                Id = row.ElementId,
+                Name = row.OriginalName,
+            };
+            ShowStatus("Revit 기본 창을 여는 중...");
+            _event.Raise();
+        }
+
+        // 기본 창 요청을 보낸 행 - ExternalEvent가 끝난 뒤 자체 특성 창으로 넘어갈 때 어느 행이었는지
+        // 알아야 새 이름을 그 행에 돌려줄 수 있다.
+        private RenameRow? _propsRow;
+
+        // 기본 창을 열 수 없을 때 NamerExternalEventHandler가 호출한다. **이 호출은 ExternalEvent 안,
+        // 즉 유효한 API 컨텍스트에서 일어나므로** 자체 특성 창이 자기 Transaction을 그대로 열 수 있다.
+        internal void ShowFallbackProperties(Document doc, NamerExternalEventHandler.PropertyRequest request, string? reason)
+        {
+            Element? el = doc.GetElement(request.Id);
             if (el == null)
             {
-                MessageBox.Show("이 항목이 모델에서 사라졌습니다.", "NAMER", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowStatus("이 항목을 모델에서 더 이상 찾을 수 없습니다.");
                 return;
             }
 
-            var window = new NamerPropertiesWindow(_doc, el, _category, row.OriginalName) { Owner = this };
-            if (window.ShowDialog() != true) return;
-            if (window.NewName != null) ApplyManualName(row, window.NewName);
+            var window = new NamerPropertiesWindow(doc, el, request.Category, request.Name, reason) { Owner = this };
+            bool? ok = window.ShowDialog();
+            ShowStatus(reason ?? "");
+
+            if (ok != true || window.NewName == null) return;
+            RenameRow? row = _propsRow;
+            if (row != null && row.ElementId == request.Id) ApplyManualName(row, window.NewName);
         }
 
         private void RefreshPreview()
@@ -819,7 +946,7 @@ namespace WallSplitter
                 // 이 요소가 세션 중 처음으로 실제 바뀌는 순간에만 "진짜 원래 이름"을 기록한다
                 // (이미 한 번 바뀐 적이 있으면 current는 그 이전 작업 결과이므로 덮어쓰면 안 됨).
                 if (!_trueOriginalNames.ContainsKey(el.Id))
-                    _trueOriginalNames[el.Id] = el.Name ?? "";
+                    _trueOriginalNames[el.Id] = SafeNameOf(el);
                 _workingNames[el.Id] = newName;
                 changedCount++;
             }
@@ -870,17 +997,68 @@ namespace WallSplitter
                 return;
             }
 
-            MergeDuplicateMaterials = DuplicateMergeRadio?.IsChecked == true;
-            Result = result;
-            DialogResult = true;
-            Close();
+            // 모드리스라 여기서 바로 Transaction을 열 수 없다 - 요청만 넣고 Revit이 유효한 컨텍스트에서
+            // 처리한 뒤 OnRenamesApplied로 결과를 돌려준다. 창은 닫지 않는다(모드리스의 요점).
+            _handler.PendingRenames = result;
+            _handler.PendingMergeDuplicateMaterials = DuplicateMergeRadio?.IsChecked == true;
+            ShowStatus($"{result.Count}개 이름을 모델에 반영하는 중...");
+            _event.Raise();
         }
 
-        private void CancelButton_Click(object sender, RoutedEventArgs e)
+        // NamerExternalEventHandler가 이름 변경을 끝낸 뒤 호출한다. Revit API 스레드에서 바로 불리지만
+        // Revit은 WPF와 같은 단일 STA 스레드를 쓰므로 Dispatcher 없이 UI를 갱신해도 안전하다
+        // (경고Pick의 ApplyRefreshedTypeGroups와 같은 전제).
+        internal void OnRenamesApplied(NamerCommand.RenameResult result)
         {
-            DialogResult = false;
-            Close();
+            if (result.Status != TransactionStatus.Committed)
+            {
+                ShowStatus("이름 변경이 모델에 반영되지 않았습니다 (롤백). 작업 중 이름은 그대로 남아 있습니다.");
+                return;
+            }
+
+            // 모델이 이제 새 이름을 갖고 있으므로 작업 중 이름은 역할을 다했다 - 남겨 두면 "아직 반영되지
+            // 않은 변경"으로 계속 세어져 사용자가 또 최종 적용을 누르게 된다. 체크 상태는 유지한다.
+            _trueOriginalNames.Clear();
+            _workingNames.Clear();
+            _categoryElements = CollectCandidates(_doc, _category);
+            RenderRows(preserveView: true);
+            UpdatePendingChangesText();
+
+            string detail = result.Failed.Count > 0 ? $" (실패 {result.Failed.Count}개)" : "";
+            ShowStatus($"{result.Renamed}개 이름을 모델에 반영했습니다{detail}. 되돌리려면 Revit에서 Ctrl+Z.");
         }
+
+        // NamerCommand가 이미 열려 있는 창을 재사용할 때 호출 - 그 사이 다른 문서로 갈아탔을 수 있다.
+        internal void UpdateDocumentAndSelection(Document doc, List<ElementId> preSelectedIds)
+        {
+            bool sameDocument = DocKey(doc) == DocKey(_doc);
+
+            _uiApp.Application.DocumentClosing -= Application_DocumentClosing;
+            _doc = doc;
+            _uiApp.Application.DocumentClosing += Application_DocumentClosing;
+            _handler.TargetDocument = doc;
+            _preSelectedIds = new HashSet<ElementId>(preSelectedIds);
+
+            if (!sameDocument)
+            {
+                // ElementId는 문서마다 독립적이라, 다른 문서로 갈아탔으면 지금까지 모아 둔 체크/작업 중
+                // 이름은 전부 엉뚱한 요소를 가리키게 된다 - 그대로 두면 최종 적용이 남의 요소를 바꾼다.
+                _checkedIds.Clear();
+                _trueOriginalNames.Clear();
+                _workingNames.Clear();
+                _categoriesInitialized.Clear();
+                ShowStatus("다른 문서로 바뀌어 작업 중이던 내용을 비웠습니다.");
+            }
+
+            LoadCategory(DetectInitialCategory(doc, preSelectedIds));
+        }
+
+        internal void ShowStatus(string text)
+        {
+            if (StatusText != null) StatusText.Text = text;
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
         // "최종 적용"이 실제로 반영할 개수와 정확히 같은 기준(이름이 실제로 바뀌었는지)으로 센다 - 체크 여부는
         // FinalApplyButton_Click과 마찬가지로 더 이상 보지 않는다.

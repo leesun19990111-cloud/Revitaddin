@@ -2,7 +2,9 @@
 
 `NamerWindow.xaml(.cs)`/`NamerCommand.cs`/`NamerPropertiesWindow.xaml(.cs)`를 건드리기 전에 이 문서를 읽을 것.
 
-A batch-rename tool for Views/Sheets/Families/Types/Materials, added 2026-07-10. `NamerWindow` is **modal** (`ShowDialog()`), not modeless — a one-shot batch operation doesn't need live two-way sync, so `NamerCommand.Execute` can just run a `Transaction` directly after the dialog returns (still inside the valid API context, since `ShowDialog()` blocks synchronously within `Execute`) with **no `ExternalEvent` needed at all**. This is deliberately the simpler architecture; don't "upgrade" it to a modeless pattern unless a real requirement (e.g. live preview against concurrent Revit edits) demands it.
+**주의: 아래 문단의 "modal" 설명은 2026-09-21에 뒤집혔다 - 이 문서 맨 아래 "모드리스 전환" 절을 먼저 볼 것.**
+
+A batch-rename tool for Views/Sheets/Families/Types/Materials, added 2026-07-10. `NamerWindow` was **modal** (`ShowDialog()`), not modeless — a one-shot batch operation doesn't need live two-way sync, so `NamerCommand.Execute` can just run a `Transaction` directly after the dialog returns (still inside the valid API context, since `ShowDialog()` blocks synchronously within `Execute`) with **no `ExternalEvent` needed at all**. This is deliberately the simpler architecture; don't "upgrade" it to a modeless pattern unless a real requirement (e.g. live preview against concurrent Revit edits) demands it.
 
 - **Item list**: deliberately built the same way as `SettingsWindow`'s token list — a `StackPanel` of manually-constructed rows (`CheckBox` + old-name `TextBlock` + new-name `TextBlock`), *not* `ListBox`/`DataGrid`/`ListView`. **Resizable name columns** (added 2026-07-16, on request — long 유형/패밀리 names were truncated with "..." and couldn't be widened): a header `Grid` above `ItemsPanel` has two named `ColumnDefinition`s (`OldNameColumn`/`NewNameColumn`) with a named `GridSplitter` (`NameColumnSplitter`) between them; since rows are plain `StackPanel`s with no column concept of their own, each row's name/new-name `TextBlock` gets its `Width` copied from the matching column's `ActualWidth` at render time, then kept in sync by `NameColumnSplitter_DragDelta` (fires continuously while dragging) calling `UpdateLayout()` then re-writing every already-rendered row's `Width`. **Two other approaches were tried and live-tested broken first**: a plain `ElementName`+`ActualWidth` `Binding` never updated the rows at all when the splitter moved (only `System.Windows.Data.Binding` compiles — `Binding` alone is ambiguous with `Autodesk.Revit.DB.Binding`, same class of collision as the `Visibility`/`Grid`/`Control`/`Color` gotchas above); `DependencyPropertyDescriptor.FromProperty(ColumnDefinition.ActualWidthProperty, ...)` doesn't even compile in this WPF version (no such public static field) — `ActualWidth` changes on `ColumnDefinition`/`RowDefinition` are a known WPF blind spot for ordinary change-notification mechanisms, hence going straight to the splitter's own `DragDelta` instead.
 - **Filter mode combo** (`FilterModeCombo`, added 2026-07-13): the filter textbox alone only ever meant substring-contains; a `ComboBox` next to it (포함됨/포함하지 않음/일치함/일치하지 않음, `SelectedIndex` 0–3) now also supports contains-negated and exact-match(-negated), all case-insensitive via `WorkingNameOf(el)` compared/matched against the filter text in `RenderRows()`. An empty filter textbox always shows everything regardless of mode (including the "않음" modes) — a blank search has no criterion to negate, so treating it as "exclude everything" would be actively wrong. `FilterModeCombo_SelectionChanged` guards on `ItemsPanel == null` for the same reason `ModeRadio_Checked` guards on `ReplacePanel == null`: the ComboBox's XAML-default `SelectedIndex="0"` fires `SelectionChanged` synchronously during `InitializeComponent`, before Row 4's `ItemsPanel` field is connected, so calling `RenderRows()` unguarded there would NRE. **`~로 시작하는`/`~로 끝나는`** (added 2026-07-16, on request): indices 4/5, `string.StartsWith`/`EndsWith` with the same `CurrentCultureIgnoreCase` comparison as the other four modes — added identically to all three filter-mode combos in this codebase (NAMER's `FilterModeCombo`, and 재료 지정's `FilterModeCombo`/`DelFilterModeCombo` in `MaterialAssignWindow`, see `docs/material-assign/CLAUDE.md`), since all three share the exact same 4-mode `switch` shape that this just extends to 6.
@@ -42,3 +44,91 @@ A batch-rename tool for Views/Sheets/Families/Types/Materials, added 2026-07-10.
 - **'적용' 후에도 펼쳐 둔 분량과 스크롤 위치를 유지한다** (2026-09-21, 요청: *"스크롤을 실컷 내린상태에서 뭔가 변경하고 적용을 하게되면 다시 가장 윗부분으로 올라가져서…"* → 이어서 *"스크롤이 올라간다기보다는 더보기를 다시눌러서 내려가야하는 불편함"*): `RenderRows(preserveView: true)`가 다시 그리기 **전에** `_renderedCount`와 `ItemsScroll.VerticalOffset`을 붙잡아 두었다가, 첫 페이지를 그린 뒤 그만큼 `RenderMoreRows()`를 반복하고 오프셋을 되돌린다. 예전에는 `ApplyButton_Click`이 평범한 `RenderRows()`를 불러 `_renderedCount`가 0으로 돌아갔고, 수천 개짜리 "유형"에서 한참 펼쳐 놓고 작업하던 사용자가 **적용할 때마다 '더 보기'를 처음부터 다시 눌러 내려가야 했다.** 카테고리/필터가 바뀔 때는 목록 자체가 달라지므로 복원하지 않는 게 맞다(그래서 기본값은 `false`). 스크롤 복원은 `UpdateLayout()`으로 `ExtentHeight`를 확정한 뒤 `ScrollToVerticalOffset`을 부르고, `ScrollViewer`가 배치 직후 오프셋을 잘라내는 경우가 있어 `DispatcherPriority.Loaded`에서 한 번 더 같은 값을 쓴다.
 - **검증 하네스** (`scratchpad/NamerPreview`): `NamerWindow`는 Revit `Document` 없이는 생성조차 안 되므로(`CollectCandidates`가 바로 문서를 훑는다), 행 구성/인라인 편집/페이지 복원 코드를 **그대로 옮긴** `RowsWindow`를 만들어 `SetCursorPos`+`mouse_event` 진짜 마우스 입력으로 확인한다(커스텀 버튼 드래그에서 라우팅 문제를 두 번 놓친 뒤 세운 방침). 확인 항목: 호버 시에만 버튼이 보이는지, 한 번 클릭은 체크만 바꾸는지, 더블클릭이 편집을 열고 **체크를 원상복구**하는지, 편집칸이 포커스를 받고 전체 선택되는지, Enter 확정/Esc 취소, '특성' 버튼 클릭이 행 핸들러를 아예 안 부르는지, 그리고 '더 보기' 두 번(600개) + 스크롤 뒤 `RenderRows(preserveView: true)`가 600개와 오프셋을 유지하는지(**`preserveView: false` 대조군이 실제로 200개로 되돌아가는 것까지 확인해 테스트가 헛돌지 않게 했다**). 특성 창은 XAML을 그대로 복제해 가짜 파라미터로 채운 뒤 `RenderTargetBitmap`으로 렌더해 레이아웃만 눈으로 확인했다.
   - 하네스에서 겪은 함정: 진짜 마우스 입력은 Win32 메시지 큐를 거쳐 들어오므로 **호출 직후에 바로 단언하면 타이밍에 따라 결과가 달라진다**(확인 한 줄을 넣고 빼는 것만으로 통과/실패가 뒤집혔다). 지금은 `Settle(ms)`로 계속 펌프하고 단언도 `Eventually`로 최대 1초까지 기다린다. 또 커서를 한 번에 목표 지점으로 옮기고 곧바로 누르면 `WM_MOUSEMOVE`가 처리되기 전에 누름이 먼저 들어와 엉뚱한 요소에 붙으므로, 옆으로 한 번 들렀다가 목표로 간다.
+
+## 2026-09-21: 모드리스 전환 + '특성' 버튼이 Revit 기본 창을 연다
+
+**이 문서 맨 위의 "NamerWindow is modal (ShowDialog())" 설명은 이제 옛날 이야기다.** 같은 날 사용자
+요청으로 뒤집혔다: *"오히려 새로 만든게 더 어렵고 보기가 힘들어. 지금 NAMER가 모달창이라면, 네이머를
+띄워두어도 다른작업이 병행가능한 창으로 변경해서라도 특성버튼을 누르면 레빗 자체의 유형편집이나
+특성창을 띄울 수 있도록 했으면 좋겠어."*
+
+- **왜 모드리스여야만 했는가**: Revit 기본 대화상자를 여는 유일한 공개 수단인 `UIApplication.PostCommand`는
+  이름 그대로 **"지금 실행 중인 명령이 끝난 뒤(Idle)"** 에 실행된다. 모달 창은 `IExternalCommand.Execute`
+  안에서 블록하고 있으므로 그 Idle이 오지 않고, 기본 창은 **영영 열리지 않는다**. 즉 "모달을 유지하면서
+  기본 창을 연다"는 선택지가 애초에 없다 — 모드리스 전환은 취향이 아니라 이 기능의 전제조건이다.
+  (문서 맨 위의 "모드리스로 '업그레이드'하지 말 것"이라는 옛 규칙이 요구한 "진짜 필요"가 바로 이것이다.)
+- **구조**: `NamerCommand.Execute`는 창만 띄우고 즉시 반환한다(`NamerWindow.Instance`로 단일 인스턴스
+  유지, 이미 열려 있으면 `UpdateDocumentAndSelection`으로 재사용 — 경고Pick과 같은 방침). 모델을 건드리는
+  일은 전부 `NamerExternalEventHandler`를 거친다. 예전에 `Execute` 안에 있던 이름 변경 루프는
+  `NamerCommand.ApplyRenames`로 그대로 옮겼을 뿐 내용은 바뀌지 않았다(**커스텀 `IFailuresPreprocessor`를
+  붙이지 않는다는 규칙도 그대로 — 666회 재처리 롤백 이력 참고**).
+- **모드리스가 되면서 반드시 달라져야 했던 것들**:
+  - `DialogResult`를 쓰면 안 된다(모드리스 창에서 설정하면 예외). "취소" 버튼은 **"닫기"** 가 되었고
+    `IsCancel`도 뗐다 — Esc 한 번에 쌓아 둔 작업 중 이름이 통째로 날아가면 안 되기 때문이다.
+  - "최종 적용"이 더 이상 창을 닫지 않는다. 요청만 넣고, 커밋이 끝나면 핸들러가 `OnRenamesApplied`로
+    결과를 돌려준다. 거기서 `_trueOriginalNames`/`_workingNames`를 **비우고** 목록을 다시 읽는다 —
+    모델이 이미 새 이름을 갖고 있으므로 안 비우면 "아직 반영 안 된 변경"으로 계속 세어져 사용자가 또
+    최종 적용을 누르게 된다. 체크 상태는 유지한다.
+  - 결과를 대화상자로 막고 알릴 수 없으므로 창 아래 **상태 줄**(`StatusText`)을 추가했다.
+  - **문서가 닫히면 창도 닫는다**(`Application.DocumentClosing`). `_categoryElements`가 들고 있는
+    `Element`는 그 순간 전부 무효가 되어, 필터에 한 글자만 쳐도 `el.Name`에서 예외가 나고 그게 WPF
+    이벤트 핸들러에서 새어 나가면 곧바로 Revit 충돌 대화상자가 된다. 안전망으로 `SafeNameOf`
+    (`IsValidObject` 확인 + try/catch)도 함께 둔다.
+  - 다른 문서로 갈아탄 채 다시 실행하면 체크/작업 중 이름을 **전부 비운다** — `ElementId`는 문서마다
+    독립적이라 그대로 두면 최종 적용이 남의 요소를 바꾼다. 핸들러도 매 요청마다 `DocKey`(경로, 없으면
+    제목)로 대상 문서를 확인한다(`Document`를 `ReferenceEquals`로 비교하지 말 것 — 경고Pick에서 확인된
+    라이브 버그).
+- **'특성' 버튼이 카테고리마다 어디로 가는가** (`NamerNativeProperties`). 2023~2027 `PostableCommand`
+  교집합을 전부 뽑아 확인한 결과가 아래 표이며, **정확히 그 항목을 열 수 있는 것과 없는 것이 갈린다**:
+
+  | 카테고리 | 방법 | 그 항목을 콕 집어 여는가 |
+  |---|---|---|
+  | 뷰/시트/범례/일람표 | 그 뷰를 활성화하고 **선택을 비운다** → 특성 팔레트가 그 뷰의 특성을 보여준다 | O |
+  | 유형 | 그 유형을 쓰는 부재 하나를 선택하고 `PostableCommand.TypeProperties` | O |
+  | 패밀리 | 그 패밀리의 유형 중 배치된 것 하나로 위와 동일 | O |
+  | 뷰 템플릿 | `PostableCommand.ManageViewTemplates` | X (목록에서 직접 고름) |
+  | 재료 | `PostableCommand.Materials` (재료 탐색기) | X (목록에서 직접 고름) |
+
+  - 뷰를 열 때 **선택을 반드시 비우는 것이 중요하다** — 뭔가 선택돼 있으면 특성 팔레트가 그 선택 요소의
+    특성을 보여줘서, 정작 열려던 뷰의 특성이 안 보인다.
+  - 유형/패밀리는 **그 유형을 쓰는 부재가 모델에 하나도 없으면 열 수 없다** — Revit의 유형 특성 명령이
+    "선택된 부재"를 기준으로 동작하는데 유형 자체는 `Selection`에 넣을 수 없기 때문이다. 이때만
+    `NamerPropertiesWindow`(자체 창)로 넘어가며, **그 창은 ExternalEvent 안에서 띄운다** — 그 안은 유효한
+    API 컨텍스트라 자체 `Transaction`이 그대로 동작한다(모드리스 창에서 직접 띄우면 트랜잭션을 못 연다).
+  - 부재를 찾을 때는 **활성 뷰에 보이는 것을 먼저** 찾는다(화면에 없는 요소를 선택해 두면 창을 닫은 뒤
+    "뭐가 선택된 거지?"가 된다). 로드된 패밀리는 `FamilyInstanceFilter`로, 나머지는 유형의 카테고리로 먼저
+    좁힌 뒤 훑는다 — 카테고리로 안 좁히면 큰 모델에서 문서 전체 부재를 훑게 된다.
+  - **이 버튼을 누르면 Revit의 현재 선택과 활성 뷰가 바뀐다.** 기본 창을 여는 대가이며 상태 줄에 그렇게
+    적어 둔다. 되돌릴 방법은 없다(명령이 선택을 읽는 시점이 우리 코드가 끝난 뒤다).
+  - `PlanFor(category)`는 **Revit 타입을 전혀 쓰지 않는 순수 함수로 떼어 놓았다** — 하네스에서 리플렉션으로
+    8개 카테고리를 전부 돌려 표를 고정한다. 한 칸만 잘못 이어져도(예: 뷰 템플릿이 `ActivateView`로 가면
+    "이 항목은 뷰가 아닙니다"로 끝난다) 라이브에서야 드러나는 종류의 실수다. **카테고리를 새로 추가하면
+    이 표와 그 테스트도 같이 늘릴 것** (테스트가 카테고리 개수까지 확인한다).
+- **'특성' 버튼은 `PrimaryButtonStyle`(강조색 배경 + 흰 글자)을 쓴다** (사용자 지적: *"특성버튼에 색을
+  넣어주고, 특성버튼이 이름보다 항상 위를 덮고 있어서 버튼이 이름에 묻히지 않도록"*). 이 버튼은 이름
+  글자 **위에 겹쳐** 놓이므로(자리를 미리 비우면 좁은 이름 칸이 항상 34dip 줄어든다) 배경이 불투명해야
+  한다 — 기본 버튼 배경은 연해서 뒤의 이름이 비쳐 보였다. `Grid`는 나중에 추가한 자식이 위에 그려지므로
+  이름 `TextBlock` **뒤에** 추가해야 한다(순서를 바꾸면 다시 글자에 묻힌다).
+- **편집 중 아무 데나 클릭하면 편집에서 빠져나온다** (사용자 요청: *"입력칸에서 벗어나오려면 엔터,
+  빈공간클릭을 해야하는데, 다른 어느부분을 클릭해도 벗어나올 수 있도록"*). `LostKeyboardFocus`만으로는
+  부족했다 — 목록의 행(`StackPanel`)이나 라벨(`TextBlock`)처럼 **키보드 포커스를 가져가지 않는 요소**를
+  클릭하면 포커스가 편집칸에 그대로 남아 편집이 안 닫힌다. 창 전체의 터널링 이벤트
+  (`PreviewMouseDown`, `handledEventsToo: true`)에서 편집칸 밖이면 확정한다. **이벤트를 `Handled`로 막지
+  않는 것이 중요하다** — 클릭한 곳이 원래 하려던 일(체크 토글, 버튼 누름)도 그대로 일어나야 "아무 데나
+  클릭하면 빠져나온다"가 자연스럽다. 창이 비활성화될 때(`Deactivated`)도 확정한다(모드리스라 Revit 쪽을
+  클릭하는 일이 흔하다).
+- **기존 이름 칸은 항상 편집칸 높이(`InlineEditHeight`)를 확보한다**(`oldNameHost.MinHeight`). 편집칸은
+  이름 `TextBlock`보다 키가 커서, 높이를 미리 잡아 두지 않으면 편집을 열고 닫을 때마다 그 행이 늘었다
+  줄고 **아래 행들이 전부 몇 픽셀씩 밀린다**. 그 상태에서 다른 행을 클릭하면 편집이 닫히며 레이아웃이
+  되돌아가 **겨눈 행이 아니라 옆 행이 눌린다** — 하네스의 행 위치 검증에서 실제로 잡힌 문제다.
+- **하네스**(`scratchpad/NamerPreview`)도 위 변경을 그대로 반영해 두었고, 다음을 진짜 마우스 입력으로
+  확인한다: 아무 데나 클릭해 편집에서 빠져나오는지(+ 이 처리를 끄면 실제로 안 닫히는 **대조군**),
+  편집을 열고 닫아도 아래 행의 화면 위치가 그대로인지, 나머지 기존 항목 전부. 합성 입력의 함정 두 가지를
+  새로 기록한다 — ① 같은 자리를 연달아 누르면 Windows가 **더블클릭으로 묶어 버려** 단일 클릭 테스트가
+  깨진다(시스템 더블클릭 시간을 넘겨 떼어 놓을 것), ② 반대로 더블클릭의 네 입력 사이에서 디스패처를
+  펌프하면 간격이 들쭉날쭉해져 **단일 클릭 두 번**이 되기도 한다(펌프하지 말고 연달아 넣을 것). 그래도
+  배달이 어긋날 수 있어 `LastHostClickCount`로 **배달 여부만** 확인해 최대 세 번 다시 친다(검증 대상이
+  아니라 입력 도착만 보므로 테스트가 무의미해지지 않으며, 실패한 시도가 뒤집어 놓은 체크는 되돌린다).
+- **라이브 확인이 필요한 부분(하네스로는 확인 불가)**: `PostCommand(TypeProperties)`가 우리가
+  프로그램적으로 넣은 선택을 기준으로 실제로 유형 특성 창을 여는지, `uidoc.ActiveView = view`가
+  ExternalEvent 안에서 모든 뷰 종류에 대해 동작하는지. 둘 다 Revit 없이는 검증할 수 없다.
