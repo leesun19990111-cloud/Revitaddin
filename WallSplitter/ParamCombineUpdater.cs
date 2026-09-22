@@ -99,7 +99,7 @@ namespace WallSplitter
 
         public UpdaterId GetUpdaterId() => _id;
 
-        public string GetUpdaterName() => "Sunny Tools 자동 결합";
+        public string GetUpdaterName() => "Sunny Tools 매개변수 조합";
 
         // ===== 등록/트리거 =====
 

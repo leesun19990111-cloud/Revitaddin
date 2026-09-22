@@ -25,19 +25,19 @@ namespace WallSplitter
 
             if (ruleCount == 0)
             {
-                TaskDialog.Show("자동 결합", "적용할 규칙이 없습니다.\n'자동 결합' 버튼을 눌러 소스 매개변수와 대상 매개변수를 먼저 정해주세요.");
+                TaskDialog.Show("매개변수 조합", "적용할 규칙이 없습니다.\n'매개변수 조합' 버튼을 눌러 소스 매개변수와 대상 매개변수를 먼저 정해주세요.");
                 return Result.Succeeded;
             }
 
             CombineRunResult result;
-            using (Transaction tx = new Transaction(doc, "자동 결합 - 전체 갱신"))
+            using (Transaction tx = new Transaction(doc, "매개변수 조합 - 전체 갱신"))
             {
                 tx.Start();
                 result = ParamCombineEngine.RunAll(doc, settings);
                 tx.Commit();
             }
 
-            TaskDialog.Show("자동 결합", result.Summary());
+            TaskDialog.Show("매개변수 조합", result.Summary());
             return Result.Succeeded;
         }
     }

@@ -370,6 +370,22 @@ namespace WallSplitter
             return result.OrderBy(c => c.Value, StringComparer.CurrentCulture).ToList();
         }
 
+        // 설정 창이 "예시"와 매개변수 목록을 만들 때 기준으로 삼는 표본 요소 하나.
+        internal static Element? SampleElement(RevitDocument doc, int categoryId)
+        {
+            try
+            {
+                return new FilteredElementCollector(doc)
+                    .WherePasses(new ElementCategoryFilter(new ElementId(categoryId)))
+                    .WhereElementIsNotElementType()
+                    .FirstElement();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         // 그 카테고리에서 고를 수 있는 매개변수 이름들. 실제 요소 하나를 표본으로 훑는 방법(내장 매개변수까지
         // 전부 나온다)과 프로젝트에 바인딩된 공유/프로젝트 매개변수를 훑는 방법(요소가 아직 하나도 없어도
         // 나온다)을 합친다.

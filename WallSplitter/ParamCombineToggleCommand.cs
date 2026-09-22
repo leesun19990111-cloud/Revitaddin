@@ -23,7 +23,7 @@ namespace WallSplitter
 
             if (!settings.AutoUpdate)
             {
-                TaskDialog.Show("자동 결합", "실시간 자동 반영을 껐습니다.\n규칙은 그대로 남아 있고, '전체 갱신' 버튼으로는 언제든 한 번에 적용할 수 있습니다.");
+                TaskDialog.Show("매개변수 조합", "실시간 자동 반영을 껐습니다.\n규칙은 그대로 남아 있고, '전체 갱신' 버튼으로는 언제든 한 번에 적용할 수 있습니다.");
                 return Result.Succeeded;
             }
 
@@ -32,19 +32,19 @@ namespace WallSplitter
             RevitDocument? doc = uiapp.ActiveUIDocument?.Document;
             if (doc == null)
             {
-                TaskDialog.Show("자동 결합", "실시간 자동 반영을 켰습니다.\n문서를 열면 그 문서부터 바로 적용됩니다.");
+                TaskDialog.Show("매개변수 조합", "실시간 자동 반영을 켰습니다.\n문서를 열면 그 문서부터 바로 적용됩니다.");
                 return Result.Succeeded;
             }
 
             CombineRunResult result;
-            using (Transaction tx = new Transaction(doc, "자동 결합 - 전체 갱신"))
+            using (Transaction tx = new Transaction(doc, "매개변수 조합 - 전체 갱신"))
             {
                 tx.Start();
                 result = ParamCombineEngine.RunAll(doc, settings);
                 tx.Commit();
             }
 
-            TaskDialog.Show("자동 결합",
+            TaskDialog.Show("매개변수 조합",
                 "실시간 자동 반영을 켰습니다. 이제 소스 매개변수를 고치면 결과가 즉시 따라 바뀝니다.\n\n" +
                 "현재 모델 기준으로 한 번 맞춘 결과: " + result.Summary());
             return Result.Succeeded;

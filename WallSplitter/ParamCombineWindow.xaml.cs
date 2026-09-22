@@ -16,7 +16,7 @@ using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace WallSplitter
 {
-    // "자동 결합" 설정 창. Revit 조회/계산은 전부 ParamCombineEngine이 하고, 여기서는 규칙을 편집하고
+    // "매개변수 조합" 설정 창. Revit 조회/계산은 전부 ParamCombineEngine이 하고, 여기서는 규칙을 편집하고
     // 지금 모델에 적용하면 어떻게 되는지를 보여주기만 한다(RoomBoundingWindow와 같은 구조).
     public partial class ParamCombineWindow : Window
     {
@@ -30,6 +30,12 @@ namespace WallSplitter
 
         private List<KeyValuePair<int, string>> _categories = new List<KeyValuePair<int, string>>();
         private List<string> _parameterNames = new List<string>();
+
+        // 각 줄의 "예시"를 계산할 때 기준으로 삼는 표본 요소(카테고리가 바뀔 때만 다시 고른다).
+        private Element? _sampleElement;
+
+        // 줄마다 자기 "예시" 칸을 다시 채우는 함수. 값이 바뀔 때 RefreshPreview가 한꺼번에 호출한다.
+        private readonly List<Action> _rowExampleUpdaters = new List<Action>();
 
         // 코드로 컨트롤을 채우는 동안 발생하는 SelectionChanged/TextChanged를 "사용자 입력"으로 오인하지 않기 위한 표시.
         private bool _loading;
@@ -113,6 +119,7 @@ namespace WallSplitter
         private void ReloadParameterNames()
         {
             _parameterNames = ParamCombineEngine.ParameterNames(_doc, _rule!.CategoryId);
+            _sampleElement = ParamCombineEngine.SampleElement(_doc, _rule.CategoryId);
         }
 
         private void FillTargetCombo()
@@ -128,23 +135,26 @@ namespace WallSplitter
 
         // ===== 소스 목록 =====
 
+        // 모든 열을 고정 폭으로 잡는다. 예전에는 일부를 Auto로 뒀는데, 줄마다 별도의 Grid라서
+        // 머리글(글자)과 내용(체크박스/버튼)의 Auto 폭이 서로 달라져 열이 어긋나 보였다(2026-09-22 사용자 제보).
+        // 첫 칸만 Star로 남는 폭을 가져가므로, 고정 폭이 같으면 Star 폭도 모든 줄에서 같아진다.
+        private static readonly double[] SourceColumnWidths = { 0, 54, 62, 66, 52, 56, 116, 30, 30, 30 };
+
         private static void AddSourceColumns(WpfGrid grid)
         {
-            double[] widths = { 0, 54, 46, 64, 0, 56, 0, 0, 0 };
-            foreach (double width in widths)
+            foreach (double width in SourceColumnWidths)
             {
                 grid.ColumnDefinitions.Add(new ColumnDefinition
                 {
-                    Width = width > 0 ? new GridLength(width) : GridLength.Auto,
+                    Width = width > 0 ? new GridLength(width) : new GridLength(1, GridUnitType.Star),
                 });
             }
-            // 첫 칸(매개변수 이름)만 남는 폭을 전부 가져간다.
-            grid.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
         }
 
         private void BuildSourceList()
         {
             SourceListPanel.Children.Clear();
+            _rowExampleUpdaters.Clear();
             if (_rule == null) return;
 
             SourceListPanel.Children.Add(BuildSourceHeader());
@@ -179,7 +189,10 @@ namespace WallSplitter
                     FontWeight = FontWeights.Bold,
                     Foreground = Theme.TextSecondary,
                     VerticalAlignment = VerticalAlignment.Center,
+                    // 내용(가운데 정렬된 입력칸)과 머리글이 같은 축에 오게 한다.
+                    TextAlignment = column == 0 ? TextAlignment.Left : TextAlignment.Center,
                     Margin = new Thickness(column == 0 ? 0 : 4, 0, 4, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
                     ToolTip = tooltip,
                 };
                 WpfGrid.SetColumn(block, column);
@@ -187,11 +200,12 @@ namespace WallSplitter
             }
 
             Label(0, "매개변수", "Revit에 실제로 있는 매개변수 이름만 고를 수 있습니다.");
-            Label(1, "자리수", "0이면 자리수를 맞추지 않고 값을 그대로 씁니다.");
-            Label(2, "채움", "자리수가 모자랄 때 채워 넣을 한 글자(보통 0).");
-            Label(3, "채울 위치", "앞 = 값 앞에 채움(숫자용), 뒤 = 값 뒤에 채움(코드용).");
-            Label(4, "자르기", "값이 자리수보다 길 때 잘라낼지 여부.");
+            Label(1, "자리수", "결과에서 이 값이 차지할 글자 수. 0이면 자리수를 맞추지 않고 값을 그대로 씁니다.");
+            Label(2, "채울 문자", "값이 자리수보다 짧을 때 빈 자리를 메울 한 글자입니다. 보통 0을 씁니다(층 1 → 01). 비워 두면 채우지 않습니다.");
+            Label(3, "채울 위치", "앞 = 값 앞을 메움(숫자용, 1 → 01). 뒤 = 값 뒤를 메움(코드용, A → A0).");
+            Label(4, "자르기", "값이 자리수보다 길 때 잘라낼지 여부. 꺼두면 길어진 채로 그대로 둡니다.");
             Label(5, "구분자", "이 값 다음에 끼워 넣을 문자(마지막 줄의 것은 쓰이지 않습니다).");
+            Label(6, "예시", "지금 설정으로 이 모델의 실제 값이 어떻게 바뀌는지 보여줍니다.");
 
             return new Border
             {
@@ -206,6 +220,20 @@ namespace WallSplitter
         {
             WpfGrid grid = new WpfGrid();
             AddSourceColumns(grid);
+
+            // 이 줄의 "예시" 칸. 아래 입력들이 바뀔 때마다 RefreshPreview가 한꺼번에 다시 계산한다.
+            TextBlock exampleBlock = new TextBlock
+            {
+                FontSize = 11,
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                Foreground = Theme.TextSecondary,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(4, 0, 4, 0),
+            };
+            _rowExampleUpdaters.Add(() => exampleBlock.Text = ExampleFor(field));
+            exampleBlock.Text = ExampleFor(field);
 
             // 매개변수 이름 - 오타를 막기 위해 모델에 실제로 있는 이름 중에서만 고르게 한다
             // (ChatGPT 대화에서도 "한 글자까지 동일해야 한다"가 이 기능의 첫 번째 함정으로 지적됐다).
@@ -239,6 +267,7 @@ namespace WallSplitter
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(4, 0, 4, 0),
                 TextAlignment = TextAlignment.Center,
+                ToolTip = "결과에서 이 값이 차지할 글자 수. 0이면 값 길이를 그대로 씁니다.",
             };
             widthBox.TextChanged += (s, e) =>
             {
@@ -258,6 +287,7 @@ namespace WallSplitter
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(4, 0, 4, 0),
                 TextAlignment = TextAlignment.Center,
+                ToolTip = "값이 자리수보다 짧을 때 빈 자리를 메울 한 글자. 보통 0입니다(층 1 → 01). 비워 두면 채우지 않습니다.",
             };
             padBox.TextChanged += (s, e) =>
             {
@@ -274,6 +304,7 @@ namespace WallSplitter
                 MinHeight = 24,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(4, 0, 4, 0),
+                ToolTip = "앞 = 값 앞을 메움(숫자용, 1 → 01). 뒤 = 값 뒤를 메움(코드용, A → A0).",
             };
             sideCombo.Items.Add("앞");
             sideCombo.Items.Add("뒤");
@@ -292,7 +323,9 @@ namespace WallSplitter
             {
                 IsChecked = field.Truncate,
                 VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(4, 0, 4, 0),
+                ToolTip = "값이 자리수보다 길 때 잘라냅니다. 꺼두면 길어진 채로 그대로 둡니다.",
             };
             truncateCheck.Checked += (s, e) => { if (!_loading) { field.Truncate = true; MarkDirty(); RefreshPreview(); } };
             truncateCheck.Unchecked += (s, e) => { if (!_loading) { field.Truncate = false; MarkDirty(); RefreshPreview(); } };
@@ -309,6 +342,7 @@ namespace WallSplitter
                 TextAlignment = TextAlignment.Center,
                 // 마지막 줄의 구분자는 결과에 쓰이지 않으므로 비활성화해 "왜 안 붙지?"를 미리 없앤다.
                 IsEnabled = index < _rule!.Sources.Count - 1,
+                ToolTip = "이 값 다음에 끼워 넣을 문자(예: -). 마지막 줄에서는 쓰이지 않습니다.",
             };
             separatorBox.TextChanged += (s, e) =>
             {
@@ -320,19 +354,22 @@ namespace WallSplitter
             WpfGrid.SetColumn(separatorBox, 5);
             grid.Children.Add(separatorBox);
 
+            WpfGrid.SetColumn(exampleBlock, 6);
+            grid.Children.Add(exampleBlock);
+
             Button upButton = SmallButton("▲", "한 칸 위로");
             upButton.IsEnabled = index > 0;
             upButton.Click += (s, e) => MoveSource(index, -1);
-            WpfGrid.SetColumn(upButton, 6);
+            WpfGrid.SetColumn(upButton, 7);
             grid.Children.Add(upButton);
 
             Button downButton = SmallButton("▼", "한 칸 아래로");
             downButton.IsEnabled = index < _rule.Sources.Count - 1;
             downButton.Click += (s, e) => MoveSource(index, 1);
-            WpfGrid.SetColumn(downButton, 7);
+            WpfGrid.SetColumn(downButton, 8);
             grid.Children.Add(downButton);
 
-            Button deleteButton = SmallButton("✕", "이 매개변수를 결합에서 뺍니다");
+            Button deleteButton = SmallButton("✕", "이 매개변수를 조합에서 뺍니다");
             deleteButton.Foreground = Theme.DangerText;
             deleteButton.Click += (s, e) =>
             {
@@ -341,7 +378,7 @@ namespace WallSplitter
                 BuildSourceList();
                 RefreshPreview();
             };
-            WpfGrid.SetColumn(deleteButton, 8);
+            WpfGrid.SetColumn(deleteButton, 9);
             grid.Children.Add(deleteButton);
 
             return new Border
@@ -351,6 +388,21 @@ namespace WallSplitter
                 Padding = new Thickness(8, 5, 8, 5),
                 Child = grid,
             };
+        }
+
+        // "1 → 01" 처럼 이 줄의 자리수 설정이 실제로 무엇을 하는지 한눈에 보여준다.
+        // 모델에서 읽을 값이 있으면 그 값을, 없으면 규칙만이라도 알 수 있게 임시 값을 쓴다.
+        private string ExampleFor(CombineSourceField field)
+        {
+            string raw = _sampleElement != null && !string.IsNullOrWhiteSpace(field.ParameterName)
+                ? ParamCombineEngine.ReadValue(_sampleElement, field.ParameterName)
+                : "";
+
+            bool sampled = !string.IsNullOrEmpty(raw);
+            if (!sampled) raw = "1";
+
+            string result = ParamCombineEngine.ApplyWidth(raw, field);
+            return (sampled ? "" : "예) ") + raw + " → " + result;
         }
 
         private static Button SmallButton(string text, string tooltip) => new Button
@@ -388,6 +440,8 @@ namespace WallSplitter
         private void RefreshPreview()
         {
             if (_rule == null) return;
+
+            foreach (Action update in _rowExampleUpdaters) update();
 
             FormatText.Text = DescribeFormat(_rule);
 
@@ -645,7 +699,7 @@ namespace WallSplitter
 
             MessageBoxResult answer = MessageBox.Show(
                 "규칙 '" + _rule.Name + "'을 삭제할까요?\n이미 모델에 기입된 값은 그대로 남습니다.",
-                "자동 결합", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+                "매개변수 조합", MessageBoxButton.OKCancel, MessageBoxImage.Question);
             if (answer != MessageBoxResult.OK) return;
 
             int index = _settings.Rules.IndexOf(_rule);
@@ -659,7 +713,7 @@ namespace WallSplitter
             if (!SaveSettings()) return;
 
             CombineRunResult result;
-            using (Transaction tx = new Transaction(_doc, "자동 결합 - 전체 적용"))
+            using (Transaction tx = new Transaction(_doc, "매개변수 조합 - 전체 적용"))
             {
                 tx.Start();
                 result = ParamCombineEngine.RunAll(_doc, _settings);
@@ -674,7 +728,7 @@ namespace WallSplitter
         {
             if (_rule != null && _rule.Sources.Any(s => string.IsNullOrWhiteSpace(s.ParameterName)))
             {
-                MessageBox.Show("매개변수를 고르지 않은 줄이 있습니다.", "자동 결합", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("매개변수를 고르지 않은 줄이 있습니다.", "매개변수 조합", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
@@ -685,7 +739,7 @@ namespace WallSplitter
                 {
                     MessageBox.Show("규칙 '" + rule.Name + "'에서 결과 매개변수(" + rule.TargetParameterName +
                                     ")를 합칠 매개변수로도 쓰고 있습니다. 둘은 서로 달라야 합니다.",
-                        "자동 결합", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        "매개변수 조합", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
             }
@@ -719,7 +773,7 @@ namespace WallSplitter
             {
                 MessageBoxResult answer = MessageBox.Show(
                     "저장하지 않은 변경이 있습니다. 저장할까요?",
-                    "자동 결합", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                    "매개변수 조합", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
 
                 if (answer == MessageBoxResult.Cancel) { e.Cancel = true; return; }
                 if (answer == MessageBoxResult.Yes && !SaveSettings()) { e.Cancel = true; return; }

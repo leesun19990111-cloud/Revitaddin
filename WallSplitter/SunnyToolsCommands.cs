@@ -71,9 +71,9 @@ namespace WallSplitter
             ("경고Pick", typeof(WarningPickCommand).FullName!),
             ("룸 구분선", typeof(RoomSeparatorCommand).FullName!),
             ("룸경계 ON/OFF", typeof(RoomBoundingCommand).FullName!),
-            ("자동 결합", typeof(ParamCombineCommand).FullName!),
-            ("자동 결합 실시간 ON/OFF", typeof(ParamCombineToggleCommand).FullName!),
-            ("자동 결합 전체 갱신", typeof(ParamCombineRefreshCommand).FullName!),
+            ("매개변수 조합", typeof(ParamCombineCommand).FullName!),
+            ("매개변수 조합 실시간 ON/OFF", typeof(ParamCombineToggleCommand).FullName!),
+            ("매개변수 조합 전체 갱신", typeof(ParamCombineRefreshCommand).FullName!),
             ("커스텀 버튼 설정", typeof(QuickToggleSettingsCommand).FullName!),
             ("커스텀 버튼 표시/숨김 전환", typeof(QuickToggleVisibilityToggleCommand).FullName!),
         };

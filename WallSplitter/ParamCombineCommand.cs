@@ -5,7 +5,7 @@ using RevitDocument = Autodesk.Revit.DB.Document;
 
 namespace WallSplitter
 {
-    // 리본 "자동 결합" 버튼. 창은 모달이고, 트랜잭션은 창이 "지금 전체 적용"을 누른 시점에 직접 연다
+    // 리본 "매개변수 조합" 버튼. 창은 모달이고, 트랜잭션은 창이 "지금 전체 적용"을 누른 시점에 직접 연다
     // (RoomBoundingCommand와 같은 구조) - 그냥 닫으면 모델은 그대로다.
     [Transaction(TransactionMode.Manual)]
     public class ParamCombineCommand : IExternalCommand

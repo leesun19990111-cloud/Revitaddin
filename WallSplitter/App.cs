@@ -25,7 +25,7 @@ namespace WallSplitter
         private const string QuickTogglePanelName = "커스텀 버튼";
         private const string WarningPickPanelName = "경고Pick";
         private const string RoomSeparatorPanelName = "룸 경계";
-        private const string ParamCombinePanelName = "자동 결합";
+        private const string ParamCombinePanelName = "매개변수 조합";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -34,7 +34,7 @@ namespace WallSplitter
         // 빠른 토글 툴바 "표시/숨김" 리본 버튼의 표시 텍스트 갱신용 (QuickToggleVisibilityToggleCommand가 클릭 후 호출).
         private static readonly List<PushButton> _quickToggleVisibilityButtons = new List<PushButton>();
 
-        // "자동 결합" 패널의 실시간 ON/OFF 토글 버튼 참조 (위 두 토글과 같은 이유 - 이미 만들어진 리본
+        // "매개변수 조합" 패널의 실시간 ON/OFF 토글 버튼 참조 (위 두 토글과 같은 이유 - 이미 만들어진 리본
         // 항목의 라벨/아이콘은 이 참조로만 나중에 갱신할 수 있다).
         private static readonly List<PushButton> _paramCombineToggleButtons = new List<PushButton>();
 
@@ -247,7 +247,7 @@ namespace WallSplitter
 
             PushButtonData paramCombineButtonData = new PushButtonData(
                 "WallSplitter_ParamCombine",
-                "자동\n결합",
+                "매개변수\n조합",
                 assemblyPath,
                 typeof(ParamCombineCommand).FullName);
 
@@ -286,7 +286,7 @@ namespace WallSplitter
             // Idling(초당 여러 번)보다 훨씬 적합하다 - 경고는 모델이 바뀔 때만 달라지기 때문이다.
             application.ControlledApplication.DocumentChanged += OnWarningPickDocumentChanged;
 
-            // "자동 결합"의 실시간 반영은 DocumentChanged가 아니라 Revit의 Dynamic Model Update(IUpdater)로
+            // "매개변수 조합"의 실시간 반영은 DocumentChanged가 아니라 Revit의 Dynamic Model Update(IUpdater)로
             // 한다 - DocumentChanged는 트랜잭션이 **끝난 뒤** 알려주는 읽기 전용 알림이라 거기서 모델을 고칠 수
             // 없지만, IUpdater는 사용자의 그 트랜잭션 **안에서** 불려 결과 매개변수를 같이 고칠 수 있다.
             // 그래서 Ctrl+Z 한 번이면 소스 값과 결과 값이 함께 되돌아간다(ParamCombineUpdater 주석 참고).
@@ -500,7 +500,7 @@ namespace WallSplitter
 
         private static string QuickToggleVisibilityLabel(bool visible) => visible ? "켜짐" : "꺼짐";
 
-        // "자동 결합" 패널: 큰 "자동 결합"(설정 창) 버튼 옆에 작은 "실시간 ON/OFF" + "전체 갱신"을 쌓는다
+        // "매개변수 조합" 패널: 큰 "매개변수 조합"(설정 창) 버튼 옆에 작은 "실시간 ON/OFF" + "전체 갱신"을 쌓는다
         // - AddSettingsStack/AddQuickToggleStack과 같은 패턴.
         private static void AddParamCombineStack(RibbonPanel targetPanel, string assemblyPath)
         {
@@ -784,7 +784,7 @@ namespace WallSplitter
             return bitmap;
         }
 
-        // "자동 결합" 아이콘: 왼쪽의 짧은 조각 여러 개가 화살표를 지나 오른쪽의 긴 막대 하나로 합쳐지는 그림
+        // "매개변수 조합" 아이콘: 왼쪽의 짧은 조각 여러 개가 화살표를 지나 오른쪽의 긴 막대 하나로 합쳐지는 그림
         // - "여러 매개변수 → 하나의 값"이라는 이 기능의 전부를 16px에서도 읽히게 단순화한 것이다.
         private static BitmapSource CreateParamCombineIcon(int size)
         {
