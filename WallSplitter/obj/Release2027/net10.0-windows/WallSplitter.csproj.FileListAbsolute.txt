@@ -86,3 +86,7 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitte
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2027\net10.0-windows\RoomSeparatorWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2027\net10.0-windows\RoomBoundingWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2027\net10.0-windows\RoomBoundingWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2027\net10.0-windows\NamerPropertiesWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2027\net10.0-windows\ParamCombineWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2027\net10.0-windows\NamerPropertiesWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2027\net10.0-windows\ParamCombineWindow.g.cs

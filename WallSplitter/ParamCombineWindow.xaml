@@ -1,0 +1,152 @@
+<Window x:Class="WallSplitter.ParamCombineWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="자동 결합"
+        Height="820" Width="800" MinHeight="620" MinWidth="700"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip">
+    <!-- 테마는 이 창의 Resources에만 로컬로 병합한다 - Application 리소스에 병합하면 Revit 리본/다른
+         애드인 UI까지 우리 스타일이 번진다(NamerWindow.xaml 참고). -->
+    <Window.Resources>
+        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== 제목 ===== -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="자동 결합" FontSize="19" FontWeight="Bold"/>
+            <TextBlock Margin="0,3,0,0" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="여러 매개변수의 값을 정해진 자리수로 채워 하나로 합친 뒤, 결과 매개변수에 실제 값으로 써넣습니다. 일람표의 '결합된 매개변수'와 달리 요소 자체에 저장되는 진짜 데이터이며, '실시간'을 켜두면 소스 값을 고치는 순간 결과도 같이 바뀝니다."/>
+        </StackPanel>
+
+        <!-- ===== 규칙 선택 ===== -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="규칙" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" x:Name="RuleCombo" MinHeight="26"
+                      SelectionChanged="RuleCombo_SelectionChanged"/>
+            <CheckBox Grid.Column="2" x:Name="RuleEnabledCheck" Content="사용" VerticalAlignment="Center"
+                      Margin="10,0,10,0" Checked="RuleEnabledCheck_Changed" Unchecked="RuleEnabledCheck_Changed"/>
+            <Button Grid.Column="3" Content="규칙 추가" Padding="10,3" Margin="0,0,6,0" Click="AddRuleButton_Click"/>
+            <Button Grid.Column="4" x:Name="DeleteRuleButton" Content="규칙 삭제" Padding="10,3"
+                    Style="{StaticResource DangerButtonStyle}" Click="DeleteRuleButton_Click"/>
+        </Grid>
+
+        <!-- ===== 이름 / 카테고리 / 대상 매개변수 ===== -->
+        <Border Grid.Row="2" Padding="12" CornerRadius="3" Margin="0,0,0,12"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="규칙 이름" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                <TextBox Grid.Row="0" Grid.Column="1" x:Name="RuleNameBox" Margin="0,0,16,6" MinHeight="26"
+                         TextChanged="RuleNameBox_TextChanged"/>
+
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="대상 카테고리" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                <ComboBox Grid.Row="0" Grid.Column="3" x:Name="CategoryCombo" Margin="0,0,0,6" MinHeight="26"
+                          IsTextSearchEnabled="True" SelectionChanged="CategoryCombo_SelectionChanged"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="결과를 쓸 매개변수" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="TargetCombo" Margin="0,0,16,0" MinHeight="26"
+                          IsTextSearchEnabled="True" SelectionChanged="TargetCombo_SelectionChanged"/>
+
+                <CheckBox Grid.Row="1" Grid.Column="3" x:Name="SkipEmptyCheck" VerticalAlignment="Center"
+                          Content="소스가 하나라도 비면 쓰지 않음"
+                          Checked="SkipEmptyCheck_Changed" Unchecked="SkipEmptyCheck_Changed"/>
+            </Grid>
+        </Border>
+
+        <!-- ===== 소스 목록 머리 ===== -->
+        <Grid Grid.Row="3" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                       Text="합칠 매개변수 (위에서 아래 순서대로 이어붙입니다)" FontWeight="Bold"/>
+            <Button Grid.Column="1" Content="매개변수 추가" Padding="10,3" Click="AddSourceButton_Click"/>
+        </Grid>
+
+        <!-- ===== 소스 목록 ===== -->
+        <Border Grid.Row="4" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                CornerRadius="3" Background="{DynamicResource SurfaceBrush}" MinHeight="120">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="SourceListPanel" Margin="2"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ===== 결과 형식 ===== -->
+        <Border Grid.Row="5" Margin="0,10,0,0" Padding="10,8" CornerRadius="3"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+            <StackPanel>
+                <TextBlock x:Name="FormatText" TextWrapping="Wrap" FontFamily="Consolas"/>
+                <TextBlock x:Name="ProjectionText" Margin="0,4,0,0" TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 현재 모델 미리보기 ===== -->
+        <Border Grid.Row="6" Margin="0,10,0,0" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                CornerRadius="3" Background="{DynamicResource SurfaceBrush}" Height="170">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="PreviewListPanel" Margin="2"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ===== 안내 ===== -->
+        <TextBlock Grid.Row="7" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11"
+                   Foreground="{DynamicResource TextSecondaryBrush}"
+                   Text="결과 매개변수는 그 요소의 '인스턴스' 매개변수이면서 '문자' 형식이어야 합니다(공유 매개변수든 프로젝트 매개변수든 상관없습니다). 없으면 Revit에서 먼저 만들어 해당 카테고리에 붙여주세요 - 애드인이 공유 매개변수 파일을 대신 고치지는 않습니다."/>
+
+        <!-- ===== 푸터 ===== -->
+        <Grid Grid.Row="8" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <CheckBox Grid.Column="0" x:Name="AutoUpdateCheck" VerticalAlignment="Center"
+                      Content="실시간 자동 반영 (값을 고치는 즉시 결과도 바뀜)"
+                      Checked="AutoUpdateCheck_Changed" Unchecked="AutoUpdateCheck_Changed"/>
+            <TextBlock Grid.Column="1" x:Name="StatusText" Margin="12,0,12,0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button Content="닫기" Padding="18,6" Margin="0,0,8,0" Click="CloseButton_Click" IsCancel="True"/>
+                <Button Content="저장" Padding="18,6" Margin="0,0,8,0" Click="SaveButton_Click"/>
+                <Button x:Name="ApplyNowButton" Content="저장 후 전체 적용" Padding="14,6"
+                        Style="{StaticResource PrimaryButtonStyle}" Click="ApplyNowButton_Click"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

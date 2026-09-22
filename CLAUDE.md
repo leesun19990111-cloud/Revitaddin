@@ -17,6 +17,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 - **기능/동작 변경 시 `README.md`도 함께 갱신** — README는 사용자/GitHub용 짧은 요약, `docs/`는 상세 엔지니어링 로그. 상세 이력을 README에 옮기지 말 것.
 - **모드리스 창에서 `UIApplication`을 보관하지 말고, WPF 핸들러의 예외를 밖으로 내보내지 말 것** (2026-09-21 확인된 Revit 강제 종료). `ExternalCommandData.Application`(`UIApplication`)은 그 명령이 실행되는 동안에만 유효하다 — 창 필드에 저장해 두고 나중에(예: `Closed`에서) 쓰면 관리 예외가 나고, **모드리스 창에는 우리 핸들러와 Revit 네이티브 루프 사이에 관리 프레임이 없어** 그 예외가 곧바로 "복구 불가능한 오류"(`0xe0434352`)가 된다. Revit이 필요한 일은 `ExternalEvent`가 그때그때 넘겨주는 `UIApplication`으로 하고, 문서 이벤트 구독은 `App.OnStartup`의 `ControlledApplication`에서만 한다. Revit 크래시를 조사할 때는 추측하지 말고 `%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit <year>\Journals\journal.*.txt`를 먼저 볼 것(Windows 이벤트 로그에는 안 남는다). 자세한 사후 분석: `docs/namer/CLAUDE.md`.
 - WPF 코드비하인드에서 `Autodesk.Revit.DB`와 `System.Windows`를 같이 쓰면 `Visibility`/`Grid`/`Control`/`Color`/`Binding`/`Line`/`Point` 등의 이름이 겹친다 — 완전한 이름 또는 별칭(`using X = ...`)으로 항상 구분할 것 (사례: `docs/design-system/CLAUDE.md`).
+- **`IUpdater.Execute` 안에서 트랜잭션을 열지 말고, 예외를 밖으로 내보내지 말 것** (`ParamCombineUpdater`). 업데이터는 사용자의 트랜잭션 **안에서** 불리므로 이미 트랜잭션이 열려 있고, 거기서 예외가 새면 Revit이 업데이터를 꺼버린다. 무한 루프 방지는 "값이 같으면 아무것도 쓰지 않는다"(`ParamCombineEngine.Apply`)가 본질이며 재진입 플래그만 믿지 말 것. 자세한 내용: `docs/param-combine/CLAUDE.md`.
 - `SplitWallCommand`의 3단계 트랜잭션 구조(Tx1 → 프로파일 스코프 → Tx2)를 하나로 합치지 말 것 — `SketchEditScope`는 열린 트랜잭션 중엔 `Start()`할 수 없다 (자세한 이유: `docs/wall-floor-split/CLAUDE.md`).
 
 ## 작업 영역별 문서 (작업 전 필독)
@@ -32,6 +33,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 커스텀 버튼 (구 "빠른 토글" — 뷰템플릿/필터/작업세트, 뷰 저장·되돌리기) | `QuickToggle*.cs`, `QuickToggleToolbar.*`, `QuickToggleSettingsWindow.*` | `docs/quick-toggle/CLAUDE.md` |
 | 경고Pick (경고에 걸린 요소를 골라 뷰 이동+선택) | `WarningPick*.cs` | `docs/warning-pick/CLAUDE.md` |
 | 룸 구분선 자동 생성 / 룸 경계 ON·OFF | `RoomSeparator*.cs`, `RoomBounding*.cs` | `docs/room-separator/CLAUDE.md` |
+| 자동 결합 (여러 매개변수를 합쳐 하나에 자동 기입 — **IUpdater**) | `ParamCombine*.cs` | `docs/param-combine/CLAUDE.md` |
 | 화면 디자인 (Industry 테마, 아이콘) | `Resources/Theme.xaml`, `Theme.cs` | `docs/design-system/CLAUDE.md` |
 | 멀티 버전 빌드 (2023–2027 Configuration/TFM 매핑) | `WallSplitter.csproj` | `docs/build-system/CLAUDE.md` |
 | 설치 프로그램 (배포) | `SunnyToolsInstaller/` | `docs/installer/CLAUDE.md` |

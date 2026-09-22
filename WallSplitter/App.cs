@@ -25,6 +25,7 @@ namespace WallSplitter
         private const string QuickTogglePanelName = "커스텀 버튼";
         private const string WarningPickPanelName = "경고Pick";
         private const string RoomSeparatorPanelName = "룸 경계";
+        private const string ParamCombinePanelName = "자동 결합";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -32,6 +33,10 @@ namespace WallSplitter
 
         // 빠른 토글 툴바 "표시/숨김" 리본 버튼의 표시 텍스트 갱신용 (QuickToggleVisibilityToggleCommand가 클릭 후 호출).
         private static readonly List<PushButton> _quickToggleVisibilityButtons = new List<PushButton>();
+
+        // "자동 결합" 패널의 실시간 ON/OFF 토글 버튼 참조 (위 두 토글과 같은 이유 - 이미 만들어진 리본
+        // 항목의 라벨/아이콘은 이 참조로만 나중에 갱신할 수 있다).
+        private static readonly List<PushButton> _paramCombineToggleButtons = new List<PushButton>();
 
         // 빠른 토글 커스텀 툴바(QuickToggleToolbar)는 세션 내내 떠 있는 모드리스 창이라, 버튼 클릭 시점에
         // Revit API 컨텍스트가 열려있지 않다 - ExternalEvent로 요청을 넣어 Revit이 다음 기회에 실행하게 한다
@@ -237,6 +242,24 @@ namespace WallSplitter
                 roomBoundingButton.Image = CreateRoomBoundingIcon(16);
             }
 
+            RibbonPanel paramCombinePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == ParamCombinePanelName)
+                ?? application.CreateRibbonPanel(TabName, ParamCombinePanelName);
+
+            PushButtonData paramCombineButtonData = new PushButtonData(
+                "WallSplitter_ParamCombine",
+                "자동\n결합",
+                assemblyPath,
+                typeof(ParamCombineCommand).FullName);
+
+            if (paramCombinePanel.AddItem(paramCombineButtonData) is PushButton paramCombineButton)
+            {
+                paramCombineButton.ToolTip = "여러 매개변수(예: 용도+지상지하+층+번호)를 정해진 자리수로 채워 하나로 합친 뒤, 결과 매개변수(예: 실번호)에 실제 값으로 써넣습니다.\n일람표의 '결합된 매개변수'와 달리 요소 자체에 저장되는 진짜 데이터이고, 실시간을 켜두면 소스 값을 고치는 순간 결과도 같이 바뀝니다(Dynamo처럼 다시 Run할 필요가 없습니다).";
+                paramCombineButton.LargeImage = CreateParamCombineIcon(32);
+                paramCombineButton.Image = CreateParamCombineIcon(16);
+            }
+
+            AddParamCombineStack(paramCombinePanel, assemblyPath);
+
             // 리본을 다 만든 뒤 한 번 훑어 "명령 클래스 → Revit 명령 id" 표를 채운다 - 커스텀 "기능 버튼"이
             // 이 id로 PostCommand한다(왜 클래스 이름으로는 안 되는지는 SunnyToolsCommands.RibbonCommandIds의
             // CONFIRMED LIVE BUG 주석 참고). 새 리본 버튼을 추가해도 여기서 자동으로 잡히므로 별도 표를
@@ -263,6 +286,14 @@ namespace WallSplitter
             // Idling(초당 여러 번)보다 훨씬 적합하다 - 경고는 모델이 바뀔 때만 달라지기 때문이다.
             application.ControlledApplication.DocumentChanged += OnWarningPickDocumentChanged;
 
+            // "자동 결합"의 실시간 반영은 DocumentChanged가 아니라 Revit의 Dynamic Model Update(IUpdater)로
+            // 한다 - DocumentChanged는 트랜잭션이 **끝난 뒤** 알려주는 읽기 전용 알림이라 거기서 모델을 고칠 수
+            // 없지만, IUpdater는 사용자의 그 트랜잭션 **안에서** 불려 결과 매개변수를 같이 고칠 수 있다.
+            // 그래서 Ctrl+Z 한 번이면 소스 값과 결과 값이 함께 되돌아간다(ParamCombineUpdater 주석 참고).
+            ParamCombineUpdater.Register(application.ActiveAddInId);
+            application.ControlledApplication.DocumentOpened += OnParamCombineDocumentOpened;
+            application.ControlledApplication.DocumentCreated += OnParamCombineDocumentCreated;
+
             return Result.Succeeded;
         }
 
@@ -280,7 +311,30 @@ namespace WallSplitter
 
         public Result OnShutdown(UIControlledApplication application)
         {
+            // 업데이터는 Revit 세션 전체에 등록되는 것이라 애드인이 내려갈 때 같이 풀어준다.
+            ParamCombineUpdater.Unregister();
             return Result.Succeeded;
+        }
+
+        // IUpdater의 "트리거"(어떤 문서의 어떤 카테고리를 감시할지)는 문서 단위라, 문서가 열리거나 새로
+        // 만들어질 때마다 현재 설정대로 다시 붙여야 한다. 문서 이벤트 구독을 여기(OnStartup의
+        // ControlledApplication)에서만 하는 이유는 아래 OnDocumentClosing 주석과 같다.
+        private static void OnParamCombineDocumentOpened(object? sender, DocumentOpenedEventArgs e)
+        {
+            try { ParamCombineUpdater.RefreshTriggers(e.Document); }
+            catch
+            {
+                // 무시 - 자동 반영만 못 붙을 뿐, 리본의 "전체 갱신"은 그대로 동작한다.
+            }
+        }
+
+        private static void OnParamCombineDocumentCreated(object? sender, DocumentCreatedEventArgs e)
+        {
+            try { ParamCombineUpdater.RefreshTriggers(e.Document); }
+            catch
+            {
+                // 위와 같은 이유
+            }
         }
 
         // 뷰 전환 시 즉시 툴바 상태(아이콘 색/버튼 목록)를 갱신한다. 설정이 문서(프로젝트 파일)별로
@@ -445,6 +499,50 @@ namespace WallSplitter
         }
 
         private static string QuickToggleVisibilityLabel(bool visible) => visible ? "켜짐" : "꺼짐";
+
+        // "자동 결합" 패널: 큰 "자동 결합"(설정 창) 버튼 옆에 작은 "실시간 ON/OFF" + "전체 갱신"을 쌓는다
+        // - AddSettingsStack/AddQuickToggleStack과 같은 패턴.
+        private static void AddParamCombineStack(RibbonPanel targetPanel, string assemblyPath)
+        {
+            bool autoUpdate = ParamCombineSettings.Current.AutoUpdate;
+
+            PushButtonData toggleButtonData = new PushButtonData(
+                "WallSplitter_ParamCombineToggle",
+                ParamCombineToggleLabel(autoUpdate),
+                assemblyPath,
+                typeof(ParamCombineToggleCommand).FullName)
+            {
+                ToolTip = "소스 매개변수를 고치는 즉시 결과 매개변수가 따라 바뀌게 할지 전환합니다.\n끄면 규칙은 그대로 남고 자동 반영만 멈춥니다(전체 갱신 버튼은 계속 쓸 수 있습니다).",
+                Image = LoadIcon(ToggleIconResource(autoUpdate)),
+            };
+
+            PushButtonData refreshButtonData = new PushButtonData(
+                "WallSplitter_ParamCombineRefresh",
+                "전체 갱신",
+                assemblyPath,
+                typeof(ParamCombineRefreshCommand).FullName)
+            {
+                ToolTip = "현재 문서의 대상 요소 전체에 규칙을 한 번에 적용합니다.\n애드인을 쓰기 전부터 있던 요소를 처음 맞출 때, 또는 실시간을 꺼둔 채로 쓸 때 사용합니다(Dynamo Player의 Run에 해당).",
+                Image = LoadIcon("WallSplitter.Resources.icon_sync16.png"),
+            };
+
+            IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(toggleButtonData, refreshButtonData);
+            foreach (RibbonItem stacked in stackedItems) RegisterRibbonCommandId(targetPanel, stacked);
+            if (stackedItems.Count == 2 && stackedItems[0] is PushButton toggleButton)
+                _paramCombineToggleButtons.Add(toggleButton);
+        }
+
+        private static string ParamCombineToggleLabel(bool autoUpdate) => autoUpdate ? "실시간 켜짐" : "실시간 꺼짐";
+
+        // ParamCombineToggleCommand/ParamCombineCommand가 설정을 바꾼 직후 호출해 리본 버튼 표시를 맞춘다.
+        internal static void UpdateParamCombineToggleLabel(bool autoUpdate)
+        {
+            foreach (PushButton toggleButton in _paramCombineToggleButtons)
+            {
+                toggleButton.ItemText = ParamCombineToggleLabel(autoUpdate);
+                toggleButton.Image = LoadIcon(ToggleIconResource(autoUpdate));
+            }
+        }
 
         // QuickToggleVisibilityToggleCommand/OnQuickToggleViewActivated가 설정 변경 직후 호출해
         // 리본 버튼 텍스트를 현재 활성 문서(프로젝트 파일) 기준으로 갱신한다.
@@ -678,6 +776,63 @@ namespace WallSplitter
                 };
                 dashedPen.Freeze();
                 drawing.DrawLine(dashedPen, new System.Windows.Point(left, bottom), new System.Windows.Point(left, top));
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // "자동 결합" 아이콘: 왼쪽의 짧은 조각 여러 개가 화살표를 지나 오른쪽의 긴 막대 하나로 합쳐지는 그림
+        // - "여러 매개변수 → 하나의 값"이라는 이 기능의 전부를 16px에서도 읽히게 단순화한 것이다.
+        private static BitmapSource CreateParamCombineIcon(int size)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
+                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                var fill = new SolidColorBrush(Color.FromRgb(0xE9, 0xE9, 0xEA));
+                accent.Freeze();
+                outline.Freeze();
+                fill.Freeze();
+
+                double margin = Math.Max(1.5, size * 0.10);
+                double pieceWidth = size * 0.26;
+                double gap = Math.Max(1.0, size * 0.075);
+                double pieceHeight = (size - margin * 2 - gap * 2) / 3.0;
+                double stroke = Math.Max(1.0, size / 16.0);
+
+                var piecePen = new Pen(outline, stroke);
+                piecePen.Freeze();
+
+                // 왼쪽: 합쳐질 조각 3개
+                for (int i = 0; i < 3; i++)
+                {
+                    double top = margin + i * (pieceHeight + gap);
+                    drawing.DrawRectangle(fill, piecePen, new Rect(margin, top, pieceWidth, pieceHeight));
+                }
+
+                // 가운데: 합쳐지는 방향을 가리키는 화살표
+                double arrowLeft = margin + pieceWidth + gap;
+                double arrowRight = arrowLeft + size * 0.18;
+                double middle = size / 2.0;
+                var arrowPen = new Pen(accent, stroke * 1.3)
+                {
+                    StartLineCap = PenLineCap.Round,
+                    EndLineCap = PenLineCap.Round,
+                };
+                arrowPen.Freeze();
+                drawing.DrawLine(arrowPen, new System.Windows.Point(arrowLeft, middle), new System.Windows.Point(arrowRight, middle));
+                drawing.DrawLine(arrowPen, new System.Windows.Point(arrowRight - size * 0.08, middle - size * 0.08), new System.Windows.Point(arrowRight, middle));
+                drawing.DrawLine(arrowPen, new System.Windows.Point(arrowRight - size * 0.08, middle + size * 0.08), new System.Windows.Point(arrowRight, middle));
+
+                // 오른쪽: 합쳐진 결과 한 덩어리 (강조색으로 채워 결과임을 드러낸다)
+                double resultLeft = arrowRight + gap;
+                double resultWidth = size - margin - resultLeft;
+                double resultHeight = pieceHeight * 3 + gap * 2;
+                drawing.DrawRectangle(accent, piecePen, new Rect(resultLeft, margin, Math.Max(2.0, resultWidth), resultHeight));
             }
 
             var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
