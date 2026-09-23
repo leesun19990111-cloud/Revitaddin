@@ -1,7 +1,7 @@
 <Window x:Class="WallSplitter.BatchJoinWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="일괄결합"
+        Title="일괄 결합금지/허용"
         Height="700" Width="660" MinHeight="540" MinWidth="560"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip">
@@ -24,7 +24,7 @@
 
         <!-- ===== 제목 ===== -->
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
-            <TextBlock Text="일괄결합" FontSize="19" FontWeight="Bold"/>
+            <TextBlock Text="일괄 결합금지/허용" FontSize="19" FontWeight="Bold"/>
             <TextBlock Margin="0,3,0,0" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextSecondaryBrush}"
                        Text="벽·보·가새의 끝이 맞닿은 다른 부재와 결합되는 것을 한 번에 금지하거나 다시 허용합니다. Revit에서는 부재 끝을 하나씩 오른쪽 클릭해 '결합 허용 안 함'을 걸어야 하지만, 여기서는 고른 요소 전부나 고른 유형의 모든 인스턴스에 한 번에 겁니다."/>

@@ -1,7 +1,26 @@
-# 일괄결합 (BatchJoin)
+# 일괄 결합금지/허용 (BatchJoin)
 
 `BatchJoinService.cs` / `BatchJoinWindow.xaml(.cs)` / `BatchJoinCommand.cs` /
 `BatchJoinSelectionCommands.cs`를 건드리기 전에 이 문서를 읽을 것.
+
+## 이름
+
+**화면에 보이는 이름은 "일괄 결합금지/허용"이고, 코드의 이름은 `BatchJoin*`이다** — 일부러 다르다.
+
+2026-09-23 처음 낼 때는 화면 이름도 "일괄결합"이었는데, 낸 직후 사용자가 *"일괄결합이라는 게 또 보면
+헷갈리는 단어 같다, 일괄 결합금지/허용 이런 식으로 하면 알기 쉬울 것 같다"*고 해서 바꿨다. 실제로
+"일괄결합"은 Revit의 **결합(Join Geometry)** 을 한꺼번에 건다는 뜻으로 읽히는데, 이 기능이 하는 일은
+정반대에 가까운 **끝단 결합 금지**다. 지금 이름은 동작(금지/허용)을 제목에 드러내 그 오해를 막는다.
+
+- 리본 패널 `일괄 결합금지/허용` / 큰 버튼 `결합 금지·허용`(두 줄) / 작은 버튼 `선택 금지`·`선택 허용`.
+- 창 제목과 `TaskDialog` 제목도 `일괄 결합금지/허용`. 실행취소 목록에 보이는 트랜잭션 이름은
+  `일괄 결합금지` / `일괄 결합허용`.
+- `SunnyToolsCommands.All`의 커스텀 버튼 목록 이름은 `일괄 결합금지/허용`,
+  `일괄 결합금지 - 선택 요소`, `일괄 결합허용 - 선택 요소`.
+- **클래스·파일 이름(`BatchJoinCommand` 등)은 바꾸지 않았다.** 커스텀 "기능 버튼"은 설정 파일에
+  `IExternalCommand` 클래스의 **FullName**으로 저장되므로(`SunnyToolsCommands` 주석 참고), 클래스
+  이름을 바꾸면 사용자가 이미 만들어 둔 버튼이 조용히 깨진다. 리본 패널/버튼 이름 쪽은 `App.OnStartup`이
+  리본을 다 만든 뒤 실제 `RibbonPanel`/`PushButton`에서 읽어 명령 id를 채우므로 바꿔도 안전하다.
 
 ## 무엇을 하는 기능인가
 
@@ -55,7 +74,7 @@ Revit은 같은 개념을 **서로 다른 유틸리티 두 개**로 나눠 놨�
 
 - `BatchJoinService` — Revit 조회/변경 **전부**. 창에는 Revit 조회 코드를 두지 않는다는 관례를 따른다.
 - `BatchJoinWindow` — 고르는 일만 한다. 대상(지금 선택 / 유형), 적용할 끝(양쪽·시작·끝), 금지/허용.
-- `BatchJoinCommand` — 큰 리본 버튼. `TransactionMode.Manual`, 모달. 창을 그냥 닫으면 아무것도 바뀌지 않는다.
+- `BatchJoinCommand` — 큰 리본 버튼(`결합 금지·허용`). `TransactionMode.Manual`, 모달. 창을 그냥 닫으면 아무것도 바뀌지 않는다.
 - `BatchJoinSelectionCommands` — 작은 스택 버튼 두 개(`선택 금지` / `선택 허용`). **창을 열지 않고** 지금
   선택한 요소의 **양쪽 끝**을 바로 처리한다. "여러 개 골라놓고 바로 건다"가 가장 잦은 작업이라 클릭 한
   번으로 끝내기 위한 것. 두 명령은 `BatchJoinSelectionRunner.Run(…, allow)` 하나를 공유한다.

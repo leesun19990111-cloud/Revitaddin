@@ -22,7 +22,7 @@ namespace WallSplitter
         private const string WarningPickPanelName = "경고Pick";
         private const string RoomSeparatorPanelName = "룸 경계";
         private const string ParamCombinePanelName = "매개변수 조합";
-        private const string BatchJoinPanelName = "일괄결합";
+        private const string BatchJoinPanelName = "일괄 결합금지/허용";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -262,7 +262,7 @@ namespace WallSplitter
 
             PushButtonData batchJoinButtonData = new PushButtonData(
                 "WallSplitter_BatchJoin",
-                "일괄\n결합",
+                "결합\n금지·허용",
                 assemblyPath,
                 typeof(BatchJoinCommand).FullName);
 
@@ -542,7 +542,7 @@ namespace WallSplitter
                 _paramCombineToggleButtons.Add(toggleButton);
         }
 
-        // "일괄결합" 패널: 큰 "일괄결합"(창) 버튼 옆에 작은 "선택 금지"/"선택 허용"을 쌓는다 - 창을 열지 않고
+        // "일괄 결합금지/허용" 패널: 큰 "결합 금지·허용"(창) 버튼 옆에 작은 "선택 금지"/"선택 허용"을 쌓는다 - 창을 열지 않고
         // 지금 선택한 요소의 양쪽 끝을 바로 처리하는, 가장 잦은 작업을 클릭 한 번으로 끝내기 위한 것이다.
         private static void AddBatchJoinStack(RibbonPanel targetPanel, string assemblyPath)
         {
@@ -552,7 +552,7 @@ namespace WallSplitter
                 assemblyPath,
                 typeof(BatchJoinDisallowSelectionCommand).FullName)
             {
-                ToolTip = "지금 선택한 벽·보·가새의 양쪽 끝을 바로 '결합 허용 안 함'으로 만듭니다(창을 열지 않습니다).\n한쪽 끝만 걸거나 유형 단위로 걸려면 큰 '일괄결합' 버튼으로 창을 여세요.",
+                ToolTip = "지금 선택한 벽·보·가새의 양쪽 끝을 바로 '결합 허용 안 함'으로 만듭니다(창을 열지 않습니다).\n한쪽 끝만 걸거나 유형 단위로 걸려면 큰 '결합 금지·허용' 버튼으로 창을 여세요.",
                 Image = RibbonIcons.BatchJoin(16, true),
             };
 

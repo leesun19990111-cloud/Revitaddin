@@ -13,7 +13,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 - **작업 전 필독**: 아래 "작업 영역별 문서" 표에서 건드리려는 파일/기능을 찾아, 그 문서를 먼저 읽고 나서 작업할 것. 각 문서에는 그 기능의 라이브 버그 이력, 근본 원인, "재테스트 없이 되돌리지 말 것" 경고가 들어있다 — 이 루트 파일에는 없다.
 - **배포는 반드시 설치 프로그램으로만** (`docs/installer/CLAUDE.md`): `SunnyToolsInstaller`를 퍼블리시해서 배포한다. Debug/Release DLL을 사용자의 실제 Revit Addins 폴더(`%APPDATA%\Autodesk\Revit\Addins\<year>\`)에 직접 복사하지 않는다.
 - **UI 문자열/코드 주석은 한국어**로 유지 — 기존 파일과 일관성.
-- **새 설치 프로그램 산출물 → 이전 버전 아카이브**: `SunnyToolsInstaller_out_vN`을 새로 만들면, 이전 버전 폴더를 `Old_Versions/`로 옮기고 최신 것만 루트에 남긴다.
+- **새 설치 프로그램 산출물 → 이전 버전 아카이브**: `SunnyToolsInstaller_out_vN`을 새로 만들면, 이전 버전 폴더를 `Old_Versions/`로 옮기고 최신 것만 루트에 남긴다. **루트 zip 이름에는 버전을 붙인다**(2026-09-23 사용자 지시) — 빌드 번호를 세 자리로 0 채운 뒤 점으로 끊은 형식으로, v90이면 `SunnyTools_Installer_v.0.9.0.zip`이다. 이전 버전 zip도 폴더와 같이 `Old_Versions/`로 옮긴다(자세한 규칙: `docs/installer/CLAUDE.md`).
 - **기능/동작 변경 시 `README.md`도 함께 갱신** — README는 사용자/GitHub용 짧은 요약, `docs/`는 상세 엔지니어링 로그. 상세 이력을 README에 옮기지 말 것.
 - **모드리스 창에서 `UIApplication`을 보관하지 말고, WPF 핸들러의 예외를 밖으로 내보내지 말 것** (2026-09-21 확인된 Revit 강제 종료). `ExternalCommandData.Application`(`UIApplication`)은 그 명령이 실행되는 동안에만 유효하다 — 창 필드에 저장해 두고 나중에(예: `Closed`에서) 쓰면 관리 예외가 나고, **모드리스 창에는 우리 핸들러와 Revit 네이티브 루프 사이에 관리 프레임이 없어** 그 예외가 곧바로 "복구 불가능한 오류"(`0xe0434352`)가 된다. Revit이 필요한 일은 `ExternalEvent`가 그때그때 넘겨주는 `UIApplication`으로 하고, 문서 이벤트 구독은 `App.OnStartup`의 `ControlledApplication`에서만 한다. Revit 크래시를 조사할 때는 추측하지 말고 `%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit <year>\Journals\journal.*.txt`를 먼저 볼 것(Windows 이벤트 로그에는 안 남는다). 자세한 사후 분석: `docs/namer/CLAUDE.md`.
 - WPF 코드비하인드에서 `Autodesk.Revit.DB`와 `System.Windows`를 같이 쓰면 `Visibility`/`Grid`/`Control`/`Color`/`Binding`/`Line`/`Point` 등의 이름이 겹친다 — 완전한 이름 또는 별칭(`using X = ...`)으로 항상 구분할 것 (사례: `docs/design-system/CLAUDE.md`).
@@ -34,7 +34,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 경고Pick (경고에 걸린 요소를 골라 뷰 이동+선택) | `WarningPick*.cs` | `docs/warning-pick/CLAUDE.md` |
 | 룸 구분선 자동 생성 / 룸 경계 ON·OFF | `RoomSeparator*.cs`, `RoomBounding*.cs` | `docs/room-separator/CLAUDE.md` |
 | 매개변수 조합 (여러 매개변수를 합쳐 하나에 자동 기입 — **IUpdater**) | `ParamCombine*.cs` | `docs/param-combine/CLAUDE.md` |
-| 일괄결합 (벽·보 끝단 "결합 허용 안 함"을 일괄 적용) | `BatchJoin*.cs` | `docs/batch-join/CLAUDE.md` |
+| 일괄 결합금지/허용 (벽·보 끝단 "결합 허용 안 함"을 일괄 적용) | `BatchJoin*.cs` | `docs/batch-join/CLAUDE.md` |
 | 화면 디자인 (Industry 테마, 리본 아이콘) | `Resources/Theme.xaml`, `Theme.cs`, `RibbonIcons.cs` | `docs/design-system/CLAUDE.md` |
 | 멀티 버전 빌드 (2023–2027 Configuration/TFM 매핑) | `WallSplitter.csproj` | `docs/build-system/CLAUDE.md` |
 | 설치 프로그램 (배포) | `SunnyToolsInstaller/` | `docs/installer/CLAUDE.md` |

@@ -7,7 +7,7 @@ using RevitDocument = Autodesk.Revit.DB.Document;
 
 namespace WallSplitter
 {
-    // 리본 "일괄결합" 버튼. 창이 모달이고 트랜잭션은 창이 "결합 금지/허용"을 누른 시점에 직접 열기 때문에
+    // 리본 "결합 금지·허용" 버튼. 창이 모달이고 트랜잭션은 창이 "결합 금지/허용"을 누른 시점에 직접 열기 때문에
     // Manual이다 - 그냥 닫으면 아무것도 바뀌지 않는다(RoomBoundingCommand와 같은 구조).
     [Transaction(TransactionMode.Manual)]
     public class BatchJoinCommand : IExternalCommand

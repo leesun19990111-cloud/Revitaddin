@@ -12,7 +12,7 @@ using WpfGrid = System.Windows.Controls.Grid;
 
 namespace WallSplitter
 {
-    // "일괄결합" 창. Revit 조회/변경은 전부 BatchJoinService가 한다(RoomBoundingWindow와 같은 구조).
+    // "일괄 결합금지/허용" 창. Revit 조회/변경은 전부 BatchJoinService가 한다(RoomBoundingWindow와 같은 구조).
     public partial class BatchJoinWindow : Window
     {
         private readonly RevitDocument _doc;
@@ -248,7 +248,7 @@ namespace WallSplitter
             }
 
             BatchJoinService.ApplyResult result;
-            using (Transaction tx = new Transaction(_doc, allow ? "일괄결합 - 결합 허용" : "일괄결합 - 결합 금지"))
+            using (Transaction tx = new Transaction(_doc, allow ? "일괄 결합허용" : "일괄 결합금지"))
             {
                 tx.Start();
                 result = BatchJoinService.Apply(targets, EndChoice(), allow);

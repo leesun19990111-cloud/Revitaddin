@@ -6,7 +6,7 @@ using Autodesk.Revit.DB.Structure;
 
 namespace WallSplitter
 {
-    // "일괄결합"의 Revit 쪽 로직 전부. 창(BatchJoinWindow)은 고르는 일만 한다(RoomBoundingService와 같은 구조).
+    // "일괄 결합금지/허용"의 Revit 쪽 로직 전부. 창(BatchJoinWindow)은 고르는 일만 한다(RoomBoundingService와 같은 구조).
     //
     // **무엇을 하는 기능인가** (2026-09-23 사용자 요청): "부재의 끝에 결합되는 요소와의 결합을 일괄적으로
     // 금지 또는 허용". Revit에서 벽/보의 끝을 하나씩만 오른쪽 클릭해 걸 수 있는 "결합 허용 안 함"
