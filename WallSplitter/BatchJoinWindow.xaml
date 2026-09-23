@@ -1,0 +1,117 @@
+<Window x:Class="WallSplitter.BatchJoinWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="일괄결합"
+        Height="700" Width="660" MinHeight="540" MinWidth="560"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip">
+    <!-- 테마는 이 창의 Resources에만 로컬로 병합한다 - Application 리소스에 병합하면 Revit 리본/다른
+         애드인 UI까지 우리 스타일이 번진다(NamerWindow.xaml 참고). -->
+    <Window.Resources>
+        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== 제목 ===== -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="일괄결합" FontSize="19" FontWeight="Bold"/>
+            <TextBlock Margin="0,3,0,0" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="벽·보·가새의 끝이 맞닿은 다른 부재와 결합되는 것을 한 번에 금지하거나 다시 허용합니다. Revit에서는 부재 끝을 하나씩 오른쪽 클릭해 '결합 허용 안 함'을 걸어야 하지만, 여기서는 고른 요소 전부나 고른 유형의 모든 인스턴스에 한 번에 겁니다."/>
+        </StackPanel>
+
+        <!-- ===== 대상 고르기 ===== -->
+        <Border Grid.Row="1" Padding="12" CornerRadius="3" Margin="0,0,0,10"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+            <StackPanel>
+                <TextBlock Text="대상" FontWeight="Bold" Margin="0,0,0,6"/>
+                <RadioButton x:Name="SelectionModeRadio" GroupName="Scope" Margin="0,0,0,4" HorizontalAlignment="Left"
+                             Checked="ScopeRadio_Changed"/>
+                <RadioButton x:Name="TypeModeRadio" GroupName="Scope" HorizontalAlignment="Left" Content="유형으로 고르기 (아래 목록에서 고른 유형의 모든 인스턴스)"
+                             Checked="ScopeRadio_Changed"/>
+                <CheckBox x:Name="ActiveViewOnlyCheck" Margin="20,6,0,0" HorizontalAlignment="Left"
+                          Content="현재 뷰에 보이는 요소만"
+                          Checked="ActiveViewOnlyCheck_Changed" Unchecked="ActiveViewOnlyCheck_Changed"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 유형 목록 머리 ===== -->
+        <Grid Grid.Row="2" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="유형" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBox Grid.Column="1" x:Name="FilterBox" MinHeight="26" Margin="0,0,8,0"
+                     TextChanged="FilterBox_TextChanged"
+                     ToolTip="유형 이름이나 분류(벽 · 구조 프레임)로 걸러냅니다."/>
+            <Button Grid.Column="2" x:Name="SelectAllButton" Content="전체 선택" Padding="10,3" Margin="0,0,6,0"
+                    Click="SelectAllButton_Click"/>
+            <Button Grid.Column="3" x:Name="ClearAllButton" Content="전체 해제" Padding="10,3"
+                    Click="ClearAllButton_Click"/>
+        </Grid>
+
+        <!-- ===== 유형 목록 ===== -->
+        <Border Grid.Row="3" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                CornerRadius="3" Background="{DynamicResource SurfaceBrush}" MinHeight="120">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="TypeListPanel" Margin="2"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ===== 어느 끝에 적용할지 ===== -->
+        <Border Grid.Row="4" Margin="0,10,0,0" Padding="12" CornerRadius="3"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+            <StackPanel>
+                <TextBlock Text="적용할 끝" FontWeight="Bold" Margin="0,0,0,6"/>
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="BothEndsRadio" GroupName="Ends" Content="양쪽 끝" IsChecked="True"
+                                 Margin="0,0,16,0" Checked="EndRadio_Changed"/>
+                    <RadioButton x:Name="StartEndRadio" GroupName="Ends" Content="시작점 쪽 끝만"
+                                 Margin="0,0,16,0" Checked="EndRadio_Changed"/>
+                    <RadioButton x:Name="EndEndRadio" GroupName="Ends" Content="끝점 쪽 끝만"
+                                 Checked="EndRadio_Changed"/>
+                </StackPanel>
+                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Text="'시작점/끝점'은 그 부재를 그릴 때의 방향 기준입니다. 어느 쪽이 시작인지 눈으로 구분하기 어렵다면 양쪽 끝을 쓰세요."/>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 안내 ===== -->
+        <TextBlock Grid.Row="5" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11"
+                   Foreground="{DynamicResource TextSecondaryBrush}"
+                   Text="결합을 금지하면 그 끝에서 벽이 서로 파고들지 않고 각자 끊어져 보이고, 다시 허용하면 Revit이 원래대로 결합합니다. 한 번의 실행은 트랜잭션 하나라 Revit의 실행 취소(Ctrl+Z)로 한 번에 되돌릴 수 있습니다. 스택 벽의 하위 벽처럼 Revit이 거부하는 요소는 '바꾸지 못한 끝'으로 세어 알려줍니다."/>
+
+        <!-- ===== 푸터 ===== -->
+        <Grid Grid.Row="6" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" x:Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="닫기" Padding="20,6" Margin="0,0,8,0" Click="CloseButton_Click" IsCancel="True"/>
+                <Button x:Name="AllowButton" Content="결합 허용" Padding="16,6" Margin="0,0,8,0"
+                        Click="AllowButton_Click"/>
+                <Button x:Name="DisallowButton" Content="결합 금지" Padding="16,6" Click="DisallowButton_Click"
+                        Style="{StaticResource PrimaryButtonStyle}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -103,3 +103,5 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitte
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\ParamCombineWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\NamerPropertiesWindow.g.cs
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\ParamCombineWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\BatchJoinWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Release2024\net48\BatchJoinWindow.g.cs

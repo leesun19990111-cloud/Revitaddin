@@ -82,3 +82,13 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitte
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ref\WallSplitter.dll
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\LinkedModelPopupWindow.baml
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\LinkedModelPopupWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\BatchJoinWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\NamerPropertiesWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ParamCombineWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\RoomBoundingWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\RoomSeparatorWindow.baml
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\BatchJoinWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\NamerPropertiesWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\ParamCombineWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\RoomBoundingWindow.g.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\WallSplitter\obj\Debug2026\net8.0-windows\RoomSeparatorWindow.g.cs

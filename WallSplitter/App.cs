@@ -26,6 +26,7 @@ namespace WallSplitter
         private const string WarningPickPanelName = "경고Pick";
         private const string RoomSeparatorPanelName = "룸 경계";
         private const string ParamCombinePanelName = "매개변수 조합";
+        private const string BatchJoinPanelName = "일괄결합";
 
         // "단일/복수" 토글 버튼의 표시 텍스트를 ToggleTypeAssignmentPersistenceCommand가 클릭 후 갱신하기 위한 참조.
         // 벽체 분리/바닥 분리 패널 양쪽에 각각 하나씩 올라가므로(설정은 완전히 공유) 두 버튼 모두 갱신해야 한다.
@@ -259,6 +260,24 @@ namespace WallSplitter
             }
 
             AddParamCombineStack(paramCombinePanel, assemblyPath);
+
+            RibbonPanel batchJoinPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == BatchJoinPanelName)
+                ?? application.CreateRibbonPanel(TabName, BatchJoinPanelName);
+
+            PushButtonData batchJoinButtonData = new PushButtonData(
+                "WallSplitter_BatchJoin",
+                "일괄\n결합",
+                assemblyPath,
+                typeof(BatchJoinCommand).FullName);
+
+            if (batchJoinPanel.AddItem(batchJoinButtonData) is PushButton batchJoinButton)
+            {
+                batchJoinButton.ToolTip = "벽·보·가새의 끝이 맞닿은 부재와 결합되는 것을 한 번에 금지하거나 다시 허용합니다.\nRevit에서는 부재 끝을 하나씩 오른쪽 클릭해 '결합 허용 안 함'을 걸어야 하지만, 여기서는 고른 요소 전부나 고른 유형의 모든 인스턴스에 한 번에 겁니다. 양쪽 끝/한쪽 끝을 골라 적용할 수 있습니다.";
+                batchJoinButton.LargeImage = CreateBatchJoinIcon(32, true);
+                batchJoinButton.Image = CreateBatchJoinIcon(16, true);
+            }
+
+            AddBatchJoinStack(batchJoinPanel, assemblyPath);
 
             // 리본을 다 만든 뒤 한 번 훑어 "명령 클래스 → Revit 명령 id" 표를 채운다 - 커스텀 "기능 버튼"이
             // 이 id로 PostCommand한다(왜 클래스 이름으로는 안 되는지는 SunnyToolsCommands.RibbonCommandIds의
@@ -530,6 +549,34 @@ namespace WallSplitter
             foreach (RibbonItem stacked in stackedItems) RegisterRibbonCommandId(targetPanel, stacked);
             if (stackedItems.Count == 2 && stackedItems[0] is PushButton toggleButton)
                 _paramCombineToggleButtons.Add(toggleButton);
+        }
+
+        // "일괄결합" 패널: 큰 "일괄결합"(창) 버튼 옆에 작은 "선택 금지"/"선택 허용"을 쌓는다 - 창을 열지 않고
+        // 지금 선택한 요소의 양쪽 끝을 바로 처리하는, 가장 잦은 작업을 클릭 한 번으로 끝내기 위한 것이다.
+        private static void AddBatchJoinStack(RibbonPanel targetPanel, string assemblyPath)
+        {
+            PushButtonData disallowButtonData = new PushButtonData(
+                "WallSplitter_BatchJoinDisallowSelection",
+                "선택 금지",
+                assemblyPath,
+                typeof(BatchJoinDisallowSelectionCommand).FullName)
+            {
+                ToolTip = "지금 선택한 벽·보·가새의 양쪽 끝을 바로 '결합 허용 안 함'으로 만듭니다(창을 열지 않습니다).\n한쪽 끝만 걸거나 유형 단위로 걸려면 큰 '일괄결합' 버튼으로 창을 여세요.",
+                Image = CreateBatchJoinIcon(16, true),
+            };
+
+            PushButtonData allowButtonData = new PushButtonData(
+                "WallSplitter_BatchJoinAllowSelection",
+                "선택 허용",
+                assemblyPath,
+                typeof(BatchJoinAllowSelectionCommand).FullName)
+            {
+                ToolTip = "지금 선택한 벽·보·가새의 양쪽 끝 결합을 다시 허용합니다(창을 열지 않습니다).\nRevit이 원래대로 맞닿은 부재와 결합합니다.",
+                Image = CreateBatchJoinIcon(16, false),
+            };
+
+            IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(disallowButtonData, allowButtonData);
+            foreach (RibbonItem stacked in stackedItems) RegisterRibbonCommandId(targetPanel, stacked);
         }
 
         private static string ParamCombineToggleLabel(bool autoUpdate) => autoUpdate ? "실시간 켜짐" : "실시간 꺼짐";
@@ -833,6 +880,65 @@ namespace WallSplitter
                 double resultWidth = size - margin - resultLeft;
                 double resultHeight = pieceHeight * 3 + gap * 2;
                 drawing.DrawRectangle(accent, piecePen, new Rect(resultLeft, margin, Math.Max(2.0, resultWidth), resultHeight));
+            }
+
+            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        // "일괄결합" 아이콘: T자로 만나는 두 부재. disallow면 세로 부재가 가로 부재에 닿지 않고 틈을 두고
+        // 끊긴 채 끝면(강조색)이 막혀 있고, 허용이면 맞닿아 한 덩어리로 이어진다 - 리본에서 "금지/허용"
+        // 두 버튼을 아이콘만 보고도 구분할 수 있게 같은 그림의 두 상태로 그린다.
+        private static BitmapSource CreateBatchJoinIcon(int size, bool disallow)
+        {
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen())
+            {
+                var fill = new SolidColorBrush(Color.FromRgb(0xE9, 0xE9, 0xEA));
+                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
+                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
+                fill.Freeze();
+                accent.Freeze();
+                outline.Freeze();
+
+                double margin = Math.Max(1.5, size * 0.09);
+                double thickness = Math.Max(2.0, size * 0.2);
+                var pen = new Pen(outline, Math.Max(1.0, size / 16.0));
+                pen.Freeze();
+
+                // 가로 부재(아래) - 끝까지 이어진다
+                double horizontalTop = size - margin - thickness;
+                drawing.DrawRectangle(fill, pen, new Rect(margin, horizontalTop, size - margin * 2, thickness));
+
+                // 세로 부재(위에서 내려옴) - 금지면 가로 부재에 닿지 않는다
+                double gap = disallow ? Math.Max(1.5, size * 0.14) : 0;
+                double left = size * 0.5 - thickness / 2;
+                double bottom = horizontalTop - gap;
+                drawing.DrawRectangle(fill, pen, new Rect(left, margin, thickness, Math.Max(2.0, bottom - margin)));
+
+                var accentPen = new Pen(accent, Math.Max(1.4, size / 9.0))
+                {
+                    StartLineCap = PenLineCap.Round,
+                    EndLineCap = PenLineCap.Round,
+                };
+                accentPen.Freeze();
+
+                if (disallow)
+                {
+                    // 끊긴 끝면을 강조색으로 막아 "여기서 결합하지 않는다"를 드러낸다
+                    drawing.DrawLine(accentPen,
+                        new System.Windows.Point(left - size * 0.06, bottom),
+                        new System.Windows.Point(left + thickness + size * 0.06, bottom));
+                }
+                else
+                {
+                    // 맞닿은 지점을 강조색으로 이어 "결합됨"을 드러낸다
+                    drawing.DrawLine(accentPen,
+                        new System.Windows.Point(left - size * 0.06, horizontalTop),
+                        new System.Windows.Point(left + thickness + size * 0.06, horizontalTop));
+                }
             }
 
             var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);

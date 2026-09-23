@@ -240,6 +240,11 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Padding" Value="6,0,0,0"/>
+        <!-- 아래 템플릿이 Background를 그대로 칠하는데, CheckBox의 WPF 기본 Background는 불투명한 밝은
+             회색이라 카드(SurfaceBrush) 위에 올리면 라벨 뒤에 흰 띠가 생긴다(2026-09-23 일괄결합 창
+             렌더 확인에서 발견). Transparent로 두어도 StackPanel이 그 영역을 그대로 hit-test하므로
+             라벨 클릭은 계속 동작한다 - 이 Setter를 지우지 말 것. -->
+        <Setter Property="Background" Value="Transparent"/>
         <!-- BaseButtonStyle과 같은 이유로 기본 포커스 사각형을 꺼둔다 - 이걸 빼먹으면 내용(Content)이 없는
              체크박스(경고Pick처럼 라벨 없이 체크박스만 쓰는 경우)에서 WPF 기본 포커스 표시가 체크박스
              옆 빈 공간까지 번져 이상한 흰 막대처럼 보이는 라이브 버그가 있었다(2026-08-25 확인). -->

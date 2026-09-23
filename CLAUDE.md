@@ -34,6 +34,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 경고Pick (경고에 걸린 요소를 골라 뷰 이동+선택) | `WarningPick*.cs` | `docs/warning-pick/CLAUDE.md` |
 | 룸 구분선 자동 생성 / 룸 경계 ON·OFF | `RoomSeparator*.cs`, `RoomBounding*.cs` | `docs/room-separator/CLAUDE.md` |
 | 매개변수 조합 (여러 매개변수를 합쳐 하나에 자동 기입 — **IUpdater**) | `ParamCombine*.cs` | `docs/param-combine/CLAUDE.md` |
+| 일괄결합 (벽·보 끝단 "결합 허용 안 함"을 일괄 적용) | `BatchJoin*.cs` | `docs/batch-join/CLAUDE.md` |
 | 화면 디자인 (Industry 테마, 아이콘) | `Resources/Theme.xaml`, `Theme.cs` | `docs/design-system/CLAUDE.md` |
 | 멀티 버전 빌드 (2023–2027 Configuration/TFM 매핑) | `WallSplitter.csproj` | `docs/build-system/CLAUDE.md` |
 | 설치 프로그램 (배포) | `SunnyToolsInstaller/` | `docs/installer/CLAUDE.md` |
