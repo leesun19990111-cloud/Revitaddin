@@ -1,10 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
@@ -73,8 +69,8 @@ namespace WallSplitter
             if (panel.AddItem(buttonData) is PushButton button)
             {
                 button.ToolTip = "복합 벽을 레이어별 단일 벽으로 분리합니다.\n미리 벽을 선택해 둔 상태로 누르면 그 벽들을 바로 분리하고, 아무것도 선택하지 않은 상태로 누르면 벽을 직접 고를 수 있습니다.";
-                button.LargeImage = LoadIcon("WallSplitter.Resources.icon32.png");
-                button.Image = LoadIcon("WallSplitter.Resources.icon16.png");
+                button.LargeImage = RibbonIcons.SplitWall(32);
+                button.Image = RibbonIcons.SplitWall(16);
             }
 
             // "설정"/"단일·복수" 토글은 완전히 공유되는 하나의 설정이지만, 벽체 분리 패널에서만 접근할 수 있으면
@@ -94,8 +90,8 @@ namespace WallSplitter
             if (floorPanel.AddItem(floorButtonData) is PushButton floorButton)
             {
                 floorButton.ToolTip = "복합 바닥을 레이어별 단일 바닥으로 분리합니다 (벽체 분리와 이름/유형 지정 방식을 공유합니다).\n미리 바닥을 선택해 둔 상태로 누르면 그 바닥들을 바로 분리하고, 아무것도 선택하지 않은 상태로 누르면 바닥을 직접 고를 수 있습니다.";
-                floorButton.LargeImage = LoadIcon("WallSplitter.Resources.icon_floor32.png");
-                floorButton.Image = LoadIcon("WallSplitter.Resources.icon_floor16.png");
+                floorButton.LargeImage = RibbonIcons.SplitFloor(32);
+                floorButton.Image = RibbonIcons.SplitFloor(16);
             }
 
             AddSettingsStack(floorPanel, assemblyPath, "_Floor", currentSettings);
@@ -112,8 +108,8 @@ namespace WallSplitter
             if (namerPanel.AddItem(namerButtonData) is PushButton namerButton)
             {
                 namerButton.ToolTip = "뷰/시트/패밀리/유형의 이름을 한 번에 바꿉니다 (문자열 치환, 위치에 삽입, 구분자 기준 자리바꾸기).\n미리 요소를 선택해 둔 상태로 누르면 해당 항목이 먼저 체크되어 있습니다.";
-                namerButton.LargeImage = LoadIcon("WallSplitter.Resources.icon_namer32.png");
-                namerButton.Image = LoadIcon("WallSplitter.Resources.icon_namer16.png");
+                namerButton.LargeImage = RibbonIcons.Namer(32);
+                namerButton.Image = RibbonIcons.Namer(16);
             }
 
             RibbonPanel materialPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == MaterialPanelName)
@@ -128,8 +124,8 @@ namespace WallSplitter
             if (materialPanel.AddItem(materialButtonData) is PushButton materialButton)
             {
                 materialButton.ToolTip = "여러 유형을 한 번에 선택해서 재료를 일괄 지정합니다.\n벽/바닥/지붕/천장은 두께가 있는 레이어마다, 그 외 유형은 재료 파라미터마다 각각 지정할 수 있습니다(하나의 유형이 재료를 여러 개 동시에 쓰면 슬롯별로 행이 나뉘어 보입니다).\n미리 유형(또는 그 유형의 인스턴스)을 선택해 둔 상태로 누르면 해당 유형의 모든 슬롯이 먼저 체크되어 있습니다.";
-                materialButton.LargeImage = LoadIcon("WallSplitter.Resources.icon_material32.png");
-                materialButton.Image = LoadIcon("WallSplitter.Resources.icon_material16.png");
+                materialButton.LargeImage = RibbonIcons.MaterialAssign(32);
+                materialButton.Image = RibbonIcons.MaterialAssign(16);
             }
 
             RibbonPanel modelSyncPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == ModelSyncPanelName)
@@ -144,8 +140,8 @@ namespace WallSplitter
             if (modelSyncPanel.AddItem(modelSyncButtonData) is PushButton modelSyncButton)
             {
                 modelSyncButton.ToolTip = "NAMER/재료 지정에서 최종 적용한 변경사항을 다른 중앙모델에도 그대로 재현합니다.\n이름이 같은 대상을 자동으로 찾아 적용하고, 모호하면 직접 고르는 창이 뜹니다.\n파일로 내보내/가져오거나, 같은 세션에 열려 있는 다른 문서에 바로 적용할 수 있습니다.";
-                modelSyncButton.LargeImage = LoadIcon("WallSplitter.Resources.icon_sync32.png");
-                modelSyncButton.Image = LoadIcon("WallSplitter.Resources.icon_sync16.png");
+                modelSyncButton.LargeImage = RibbonIcons.ModelSync(32);
+                modelSyncButton.Image = RibbonIcons.ModelSync(16);
             }
 
             RibbonPanel patternPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == PatternPanelName)
@@ -160,8 +156,8 @@ namespace WallSplitter
             if (patternPanel.AddItem(patternButtonData) is PushButton patternButton)
             {
                 patternButton.ToolTip = "기존 Revit 채우기 패턴이나 PAT 파일을 불러와 전체/선군별 회전, 스케일, 폭·높이, 간격을 자유롭게 조절하고 새 패턴으로 저장합니다.";
-                patternButton.LargeImage = CreatePatternIcon(32);
-                patternButton.Image = CreatePatternIcon(16);
+                patternButton.LargeImage = RibbonIcons.PatternStudio(32);
+                patternButton.Image = RibbonIcons.PatternStudio(16);
             }
 
             PushButtonData captureButtonData = new PushButtonData(
@@ -171,7 +167,7 @@ namespace WallSplitter
                 typeof(ModelLinePatternCaptureCommand).FullName)
             {
                 ToolTip = "현재 평면·입면·단면에서 모델선 또는 상세선으로 그린 한 단위를 패턴으로 가져옵니다. 첫 모서리→첫 변 끝→둘째 변 끝을 ㄱ자 순서로 지정해 직사각형 범위를 만들며 Revit 기본 스냅 표식을 그대로 사용합니다.",
-                Image = CreatePatternIcon(16),
+                Image = RibbonIcons.ModelLineCapture(16),
             };
             PushButtonData punchButtonData = new PushButtonData(
                 "WallSplitter_PatternPunch",
@@ -180,7 +176,7 @@ namespace WallSplitter
                 typeof(PatternPunchCommand).FullName)
             {
                 ToolTip = "패턴이 표시된 벽·바닥·천장·커튼패널 면을 고르고, 패턴의 폐영역 하나를 선택해 같은 영역을 전체 반복 타공합니다. 경계에 걸린 타공은 호스트 경계에 맞춰 잘립니다.",
-                Image = CreatePatternIcon(16),
+                Image = RibbonIcons.PatternPunch(16, true),
             };
             PushButtonData restorePunchButtonData = new PushButtonData(
                 "WallSplitter_PatternPunchRestore",
@@ -189,7 +185,7 @@ namespace WallSplitter
                 typeof(PatternPunchRestoreCommand).FullName)
             {
                 ToolTip = "선택한 호스트에서 Sunny Tools로 실행한 가장 최근 패턴 타공 1회를 안전하게 복원합니다. 타공 뒤 프로파일이 달라졌으면 자동 덮어쓰기를 중단합니다.",
-                Image = LoadIcon(ToggleIconResource(false)),
+                Image = RibbonIcons.PatternPunch(16, false),
             };
             foreach (RibbonItem patternStacked in patternPanel.AddStackedItems(captureButtonData, punchButtonData, restorePunchButtonData))
                 RegisterRibbonCommandId(patternPanel, patternStacked);
@@ -210,8 +206,8 @@ namespace WallSplitter
             if (warningPickPanel.AddItem(warningPickButtonData) is PushButton warningPickButton)
             {
                 warningPickButton.ToolTip = "현재 문서의 경고에 걸린 요소를 모아 보여주고, 고르면 그 요소가 있는 뷰로 이동하면서 바로 선택됩니다.\nRevit 기본 경고창의 '표시'와 달리 요소를 직접 찾아 클릭할 필요가 없습니다. 창을 열어 둔 채로 모델을 계속 조작할 수 있습니다.";
-                warningPickButton.LargeImage = CreateWarningIcon(32);
-                warningPickButton.Image = CreateWarningIcon(16);
+                warningPickButton.LargeImage = RibbonIcons.WarningPick(32);
+                warningPickButton.Image = RibbonIcons.WarningPick(16);
             }
 
             RibbonPanel roomSeparatorPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == RoomSeparatorPanelName)
@@ -226,8 +222,8 @@ namespace WallSplitter
             if (roomSeparatorPanel.AddItem(roomSeparatorButtonData) is PushButton roomSeparatorButton)
             {
                 roomSeparatorButton.ToolTip = "고른 벽 유형의 벽 중심선을 따라 룸 구분선을 자동으로 만듭니다.\n링크된 모델의 벽도 대상으로 삼을 수 있고, 벽의 위치선이 마감면·코어면이어도 벽 두께를 계산해 실제 중심선에 맞춥니다. 레벨은 여러 개를 한 번에 고를 수 있습니다.";
-                roomSeparatorButton.LargeImage = CreateRoomSeparatorIcon(32);
-                roomSeparatorButton.Image = CreateRoomSeparatorIcon(16);
+                roomSeparatorButton.LargeImage = RibbonIcons.RoomSeparator(32);
+                roomSeparatorButton.Image = RibbonIcons.RoomSeparator(16);
             }
 
             PushButtonData roomBoundingButtonData = new PushButtonData(
@@ -239,8 +235,8 @@ namespace WallSplitter
             if (roomSeparatorPanel.AddItem(roomBoundingButtonData) is PushButton roomBoundingButton)
             {
                 roomBoundingButton.ToolTip = "벽·바닥·지붕·기초처럼 방의 경계를 만드는 요소들의 '룸 경계'(Room Bounding) 속성을 카테고리 단위로 한 번에 켜고 끕니다.\n목록은 모델을 훑어 룸 경계 속성을 실제로 가진 카테고리만 모으므로, 버전에 따라 늘어나는 카테고리도 그대로 나옵니다. RVT 링크가 방 경계를 만드는지도 여기서 끄고 켤 수 있습니다.";
-                roomBoundingButton.LargeImage = CreateRoomBoundingIcon(32);
-                roomBoundingButton.Image = CreateRoomBoundingIcon(16);
+                roomBoundingButton.LargeImage = RibbonIcons.RoomBounding(32);
+                roomBoundingButton.Image = RibbonIcons.RoomBounding(16);
             }
 
             RibbonPanel paramCombinePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == ParamCombinePanelName)
@@ -255,8 +251,8 @@ namespace WallSplitter
             if (paramCombinePanel.AddItem(paramCombineButtonData) is PushButton paramCombineButton)
             {
                 paramCombineButton.ToolTip = "여러 매개변수(예: 용도+지상지하+층+번호)를 정해진 자리수로 채워 하나로 합친 뒤, 결과 매개변수(예: 실번호)에 실제 값으로 써넣습니다.\n일람표의 '결합된 매개변수'와 달리 요소 자체에 저장되는 진짜 데이터이고, 실시간을 켜두면 소스 값을 고치는 순간 결과도 같이 바뀝니다(Dynamo처럼 다시 Run할 필요가 없습니다).";
-                paramCombineButton.LargeImage = CreateParamCombineIcon(32);
-                paramCombineButton.Image = CreateParamCombineIcon(16);
+                paramCombineButton.LargeImage = RibbonIcons.ParamCombine(32);
+                paramCombineButton.Image = RibbonIcons.ParamCombine(16);
             }
 
             AddParamCombineStack(paramCombinePanel, assemblyPath);
@@ -273,8 +269,8 @@ namespace WallSplitter
             if (batchJoinPanel.AddItem(batchJoinButtonData) is PushButton batchJoinButton)
             {
                 batchJoinButton.ToolTip = "벽·보·가새의 끝이 맞닿은 부재와 결합되는 것을 한 번에 금지하거나 다시 허용합니다.\nRevit에서는 부재 끝을 하나씩 오른쪽 클릭해 '결합 허용 안 함'을 걸어야 하지만, 여기서는 고른 요소 전부나 고른 유형의 모든 인스턴스에 한 번에 겁니다. 양쪽 끝/한쪽 끝을 골라 적용할 수 있습니다.";
-                batchJoinButton.LargeImage = CreateBatchJoinIcon(32, true);
-                batchJoinButton.Image = CreateBatchJoinIcon(16, true);
+                batchJoinButton.LargeImage = RibbonIcons.BatchJoin(32, true);
+                batchJoinButton.Image = RibbonIcons.BatchJoin(16, true);
             }
 
             AddBatchJoinStack(batchJoinPanel, assemblyPath);
@@ -458,7 +454,7 @@ namespace WallSplitter
                 typeof(SettingsCommand).FullName)
             {
                 ToolTip = "단일 벽/바닥 유형 이름 형식/지정 방식을 설정합니다 (벽체 분리·바닥 분리가 공유). 한 번 저장하면 계속 적용됩니다.",
-                Image = LoadIcon("WallSplitter.Resources.icon_settings16.png"),
+                Image = RibbonIcons.Settings(16),
             };
 
             PushButtonData toggleButtonData = new PushButtonData(
@@ -468,7 +464,7 @@ namespace WallSplitter
                 typeof(ToggleTypeAssignmentPersistenceCommand).FullName)
             {
                 ToolTip = "'유형 직접 지정' 모드에서, 지정한 유형을 다음 벽/바닥에도 이어서 적용할지(복수) 매번 새로 지정할지(단일) 전환합니다 (벽체 분리·바닥 분리가 공유).",
-                Image = LoadIcon(ToggleIconResource(currentSettings.TypeAssignmentPersistence == TypeAssignmentPersistence.Multiple)),
+                Image = RibbonIcons.Toggle(16, currentSettings.TypeAssignmentPersistence == TypeAssignmentPersistence.Multiple),
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(settingsButtonData, toggleButtonData);
@@ -479,11 +475,6 @@ namespace WallSplitter
 
         private static string ToggleLabel(TypeAssignmentPersistence mode) =>
             mode == TypeAssignmentPersistence.Multiple ? "복수" : "단일";
-
-        // "단일/복수", "표시/숨김" 두 토글 버튼이 공유하는 켜짐/꺼짐 스위치 아이콘 - 지금까지는 텍스트
-        // 라벨만 바뀌고 아이콘은 고정이었는데, 상태를 아이콘으로도 보여달라는 요청(2026-07-27)으로 추가.
-        private static string ToggleIconResource(bool on) =>
-            on ? "WallSplitter.Resources.icon_toggle_on16.png" : "WallSplitter.Resources.icon_toggle_off16.png";
 
         // "빠른 토글" 패널에 "빠른 토글 설정"(뷰템플릿/필터/작업세트 버튼 등록) + "표시/숨김"
         // (커스텀 툴바를 껐다 켬) 두 버튼을 스택으로 붙인다 - AddSettingsStack과 같은 패턴.
@@ -496,7 +487,7 @@ namespace WallSplitter
                 typeof(QuickToggleSettingsCommand).FullName)
             {
                 ToolTip = "현재 뷰에서 원클릭으로 켜고 끌 뷰템플릿/필터/작업세트 버튼을 등록합니다.\n등록한 버튼은 Revit 창 상단에 별도 툴바로 나타나며, 같은 종류라도 이름을 다르게 지정해 여러 개 추가할 수 있습니다.",
-                Image = LoadIcon("WallSplitter.Resources.icon_quicktoggle16.png"),
+                Image = RibbonIcons.QuickToggle(16),
             };
 
             PushButtonData toggleButtonData = new PushButtonData(
@@ -508,7 +499,7 @@ namespace WallSplitter
                 ToolTip = "커스텀 버튼 툴바를 현재 프로젝트 파일에서 표시하거나 숨깁니다.",
                 // 문서가 열리기 전이라 실제 프로젝트별 표시 상태를 아직 몰라 일단 "켜짐" 아이콘으로 시작하고,
                 // ViewActivated에서 UpdateQuickToggleVisibilityLabel이 실제 상태로 바로잡는다(라벨과 동일한 방식).
-                Image = LoadIcon(ToggleIconResource(true)),
+                Image = RibbonIcons.Toggle(16, true),
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(settingsButtonData, toggleButtonData);
@@ -532,7 +523,7 @@ namespace WallSplitter
                 typeof(ParamCombineToggleCommand).FullName)
             {
                 ToolTip = "소스 매개변수를 고치는 즉시 결과 매개변수가 따라 바뀌게 할지 전환합니다.\n끄면 규칙은 그대로 남고 자동 반영만 멈춥니다(전체 갱신 버튼은 계속 쓸 수 있습니다).",
-                Image = LoadIcon(ToggleIconResource(autoUpdate)),
+                Image = RibbonIcons.Toggle(16, autoUpdate),
             };
 
             PushButtonData refreshButtonData = new PushButtonData(
@@ -542,7 +533,7 @@ namespace WallSplitter
                 typeof(ParamCombineRefreshCommand).FullName)
             {
                 ToolTip = "현재 문서의 대상 요소 전체에 규칙을 한 번에 적용합니다.\n애드인을 쓰기 전부터 있던 요소를 처음 맞출 때, 또는 실시간을 꺼둔 채로 쓸 때 사용합니다(Dynamo Player의 Run에 해당).",
-                Image = LoadIcon("WallSplitter.Resources.icon_sync16.png"),
+                Image = RibbonIcons.Refresh(16),
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(toggleButtonData, refreshButtonData);
@@ -562,7 +553,7 @@ namespace WallSplitter
                 typeof(BatchJoinDisallowSelectionCommand).FullName)
             {
                 ToolTip = "지금 선택한 벽·보·가새의 양쪽 끝을 바로 '결합 허용 안 함'으로 만듭니다(창을 열지 않습니다).\n한쪽 끝만 걸거나 유형 단위로 걸려면 큰 '일괄결합' 버튼으로 창을 여세요.",
-                Image = CreateBatchJoinIcon(16, true),
+                Image = RibbonIcons.BatchJoin(16, true),
             };
 
             PushButtonData allowButtonData = new PushButtonData(
@@ -572,7 +563,7 @@ namespace WallSplitter
                 typeof(BatchJoinAllowSelectionCommand).FullName)
             {
                 ToolTip = "지금 선택한 벽·보·가새의 양쪽 끝 결합을 다시 허용합니다(창을 열지 않습니다).\nRevit이 원래대로 맞닿은 부재와 결합합니다.",
-                Image = CreateBatchJoinIcon(16, false),
+                Image = RibbonIcons.BatchJoin(16, false),
             };
 
             IList<RibbonItem> stackedItems = targetPanel.AddStackedItems(disallowButtonData, allowButtonData);
@@ -587,7 +578,7 @@ namespace WallSplitter
             foreach (PushButton toggleButton in _paramCombineToggleButtons)
             {
                 toggleButton.ItemText = ParamCombineToggleLabel(autoUpdate);
-                toggleButton.Image = LoadIcon(ToggleIconResource(autoUpdate));
+                toggleButton.Image = RibbonIcons.Toggle(16, autoUpdate);
             }
         }
 
@@ -598,7 +589,7 @@ namespace WallSplitter
             foreach (PushButton button in _quickToggleVisibilityButtons)
             {
                 button.ItemText = QuickToggleVisibilityLabel(visible);
-                button.Image = LoadIcon(ToggleIconResource(visible));
+                button.Image = RibbonIcons.Toggle(16, visible);
             }
         }
 
@@ -609,7 +600,7 @@ namespace WallSplitter
             foreach (PushButton toggleButton in _typeAssignmentToggleButtons)
             {
                 toggleButton.ItemText = ToggleLabel(mode);
-                toggleButton.Image = LoadIcon(ToggleIconResource(mode == TypeAssignmentPersistence.Multiple));
+                toggleButton.Image = RibbonIcons.Toggle(16, mode == TypeAssignmentPersistence.Multiple);
             }
         }
 
@@ -646,305 +637,6 @@ namespace WallSplitter
             {
                 _ = new WpfApplication { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
             }
-        }
-
-        // 리소스로 포함된 PNG 아이콘을 리본 버튼용 BitmapSource로 로드한다.
-        private static BitmapSource? LoadIcon(string resourceName)
-        {
-            Assembly assembly = Assembly.GetExecutingAssembly();
-            using Stream? stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream == null) return null;
-
-            BitmapImage bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            return bitmap;
-        }
-
-        // 패턴 스튜디오 아이콘은 별도 바이너리 리소스 없이 크기에 맞춰 선명하게 그린다.
-        // 리본의 16/32px 양쪽에서 반복 해치와 회전을 직관적으로 보여 주는 도면형 아이콘이다.
-        private static BitmapSource CreatePatternIcon(int size)
-        {
-            var visual = new DrawingVisual();
-            using (DrawingContext drawing = visual.RenderOpen())
-            {
-                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
-                var border = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
-                var accentPen = new Pen(accent, Math.Max(1.1, size / 13.0));
-                var borderPen = new Pen(border, Math.Max(0.8, size / 28.0));
-                accent.Freeze();
-                border.Freeze();
-                accentPen.Freeze();
-                borderPen.Freeze();
-
-                double margin = Math.Max(1.5, size * 0.09);
-                var bounds = new Rect(margin, margin, size - margin * 2.0, size - margin * 2.0);
-                drawing.PushClip(new RectangleGeometry(bounds));
-                double interval = Math.Max(4.0, size / 4.7);
-                for (double offset = -size; offset <= size * 2.0; offset += interval)
-                    drawing.DrawLine(accentPen, new System.Windows.Point(offset, size), new System.Windows.Point(offset + size, 0));
-                for (double offset = -size; offset <= size * 2.0; offset += interval * 1.65)
-                    drawing.DrawLine(borderPen, new System.Windows.Point(offset, 0), new System.Windows.Point(offset + size, size));
-                drawing.Pop();
-                drawing.DrawRectangle(null, borderPen, bounds);
-            }
-
-            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(visual);
-            bitmap.Freeze();
-            return bitmap;
-        }
-
-        // "경고Pick" 아이콘도 패턴 스튜디오와 같은 이유로 별도 PNG 없이 그린다 - 익숙한 느낌표 삼각형 표지판.
-        private static BitmapSource CreateWarningIcon(int size)
-        {
-            var visual = new DrawingVisual();
-            using (DrawingContext drawing = visual.RenderOpen())
-            {
-                var fill = new SolidColorBrush(Color.FromRgb(0xE0, 0xA5, 0x3D));
-                var mark = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
-                fill.Freeze();
-                mark.Freeze();
-                var borderPen = new Pen(mark, Math.Max(1.0, size / 16.0));
-                borderPen.Freeze();
-
-                double margin = Math.Max(1.5, size * 0.08);
-                var top = new System.Windows.Point(size / 2.0, margin);
-                var right = new System.Windows.Point(size - margin, size - margin);
-                var left = new System.Windows.Point(margin, size - margin);
-
-                var triangle = new StreamGeometry();
-                using (StreamGeometryContext ctx = triangle.Open())
-                {
-                    ctx.BeginFigure(top, true, true);
-                    ctx.LineTo(right, true, true);
-                    ctx.LineTo(left, true, true);
-                }
-                triangle.Freeze();
-                drawing.DrawGeometry(fill, borderPen, triangle);
-
-                double barWidth = Math.Max(1.2, size / 10.0);
-                var barPen = new Pen(mark, barWidth) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
-                barPen.Freeze();
-                drawing.DrawLine(barPen, new System.Windows.Point(size / 2.0, size * 0.42), new System.Windows.Point(size / 2.0, size * 0.66));
-                drawing.DrawEllipse(mark, null, new System.Windows.Point(size / 2.0, size * 0.78), barWidth / 2.0, barWidth / 2.0);
-            }
-
-            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(visual);
-            bitmap.Freeze();
-            return bitmap;
-        }
-
-        // "룸 구분선" 아이콘 - 벽 두 겹(회색 띠) 사이를 지나는 강조색 중심선. 이 기능이 하는 일(벽의
-        // 중심선에 구분선을 넣는다)을 그대로 그린 것이다. 다른 리본 아이콘들처럼 PNG 리소스가 아니라
-        // 코드로 그린다(이 프로젝트의 관례 - 도형이 단순하고 해상도별로 깨지지 않는다).
-        private static BitmapSource CreateRoomSeparatorIcon(int size)
-        {
-            var visual = new DrawingVisual();
-            using (DrawingContext drawing = visual.RenderOpen())
-            {
-                var wall = new SolidColorBrush(Color.FromRgb(0xB7, 0xB7, 0xBA));
-                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
-                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
-                wall.Freeze();
-                accent.Freeze();
-                outline.Freeze();
-
-                double margin = Math.Max(1.5, size * 0.09);
-                double bandHeight = Math.Max(2.0, size * 0.22);
-                double centerY = size / 2.0;
-                var outlinePen = new Pen(outline, Math.Max(0.8, size / 24.0));
-                outlinePen.Freeze();
-
-                // 벽 두 겹 - 가운데를 비워 두고 위아래로 하나씩.
-                drawing.DrawRectangle(wall, outlinePen, new Rect(
-                    margin, centerY - bandHeight - size * 0.06, size - margin * 2, bandHeight));
-                drawing.DrawRectangle(wall, outlinePen, new Rect(
-                    margin, centerY + size * 0.06, size - margin * 2, bandHeight));
-
-                // 그 사이를 지나는 중심선(파선) - 룸 구분선이 실제로 그려지는 자리.
-                var centerPen = new Pen(accent, Math.Max(1.2, size / 9.0))
-                {
-                    StartLineCap = PenLineCap.Round,
-                    EndLineCap = PenLineCap.Round,
-                    DashStyle = new DashStyle(new double[] { 2.2, 1.4 }, 0),
-                };
-                centerPen.Freeze();
-                drawing.DrawLine(centerPen,
-                    new System.Windows.Point(margin * 0.6, centerY),
-                    new System.Windows.Point(size - margin * 0.6, centerY));
-            }
-
-            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(visual);
-            bitmap.Freeze();
-            return bitmap;
-        }
-
-        // "룸경계 ON/OFF" 아이콘 - 방을 둘러싼 경계(사각 테두리) 중 한 변만 점선으로 끊어 둔 모양.
-        // "경계를 켜고 끄는 것"이 이 기능이라는 걸 그대로 그렸다(룸 구분선 아이콘과 한 눈에 구분되도록
-        // 그쪽은 가로 띠 두 개, 이쪽은 닫힌 테두리로 대비를 줬다).
-        private static BitmapSource CreateRoomBoundingIcon(int size)
-        {
-            var visual = new DrawingVisual();
-            using (DrawingContext drawing = visual.RenderOpen())
-            {
-                var fill = new SolidColorBrush(Color.FromRgb(0xE9, 0xE9, 0xEA));
-                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
-                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
-                fill.Freeze();
-                accent.Freeze();
-                outline.Freeze();
-
-                double margin = Math.Max(2.0, size * 0.14);
-                double thickness = Math.Max(1.4, size / 10.0);
-                var solidPen = new Pen(outline, thickness);
-                solidPen.Freeze();
-
-                // 방 바탕
-                drawing.DrawRectangle(fill, null, new Rect(margin, margin, size - margin * 2, size - margin * 2));
-
-                double left = margin, right = size - margin, top = margin, bottom = size - margin;
-                // 세 변은 실선(경계 켜짐)
-                drawing.DrawLine(solidPen, new System.Windows.Point(left, top), new System.Windows.Point(right, top));
-                drawing.DrawLine(solidPen, new System.Windows.Point(right, top), new System.Windows.Point(right, bottom));
-                drawing.DrawLine(solidPen, new System.Windows.Point(right, bottom), new System.Windows.Point(left, bottom));
-
-                // 왼쪽 한 변만 점선 + 강조색(경계 꺼짐) - "여기만 껐다"는 대비
-                var dashedPen = new Pen(accent, thickness)
-                {
-                    DashStyle = new DashStyle(new double[] { 1.6, 1.4 }, 0),
-                    StartLineCap = PenLineCap.Round,
-                    EndLineCap = PenLineCap.Round,
-                };
-                dashedPen.Freeze();
-                drawing.DrawLine(dashedPen, new System.Windows.Point(left, bottom), new System.Windows.Point(left, top));
-            }
-
-            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(visual);
-            bitmap.Freeze();
-            return bitmap;
-        }
-
-        // "매개변수 조합" 아이콘: 왼쪽의 짧은 조각 여러 개가 화살표를 지나 오른쪽의 긴 막대 하나로 합쳐지는 그림
-        // - "여러 매개변수 → 하나의 값"이라는 이 기능의 전부를 16px에서도 읽히게 단순화한 것이다.
-        private static BitmapSource CreateParamCombineIcon(int size)
-        {
-            var visual = new DrawingVisual();
-            using (DrawingContext drawing = visual.RenderOpen())
-            {
-                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
-                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
-                var fill = new SolidColorBrush(Color.FromRgb(0xE9, 0xE9, 0xEA));
-                accent.Freeze();
-                outline.Freeze();
-                fill.Freeze();
-
-                double margin = Math.Max(1.5, size * 0.10);
-                double pieceWidth = size * 0.26;
-                double gap = Math.Max(1.0, size * 0.075);
-                double pieceHeight = (size - margin * 2 - gap * 2) / 3.0;
-                double stroke = Math.Max(1.0, size / 16.0);
-
-                var piecePen = new Pen(outline, stroke);
-                piecePen.Freeze();
-
-                // 왼쪽: 합쳐질 조각 3개
-                for (int i = 0; i < 3; i++)
-                {
-                    double top = margin + i * (pieceHeight + gap);
-                    drawing.DrawRectangle(fill, piecePen, new Rect(margin, top, pieceWidth, pieceHeight));
-                }
-
-                // 가운데: 합쳐지는 방향을 가리키는 화살표
-                double arrowLeft = margin + pieceWidth + gap;
-                double arrowRight = arrowLeft + size * 0.18;
-                double middle = size / 2.0;
-                var arrowPen = new Pen(accent, stroke * 1.3)
-                {
-                    StartLineCap = PenLineCap.Round,
-                    EndLineCap = PenLineCap.Round,
-                };
-                arrowPen.Freeze();
-                drawing.DrawLine(arrowPen, new System.Windows.Point(arrowLeft, middle), new System.Windows.Point(arrowRight, middle));
-                drawing.DrawLine(arrowPen, new System.Windows.Point(arrowRight - size * 0.08, middle - size * 0.08), new System.Windows.Point(arrowRight, middle));
-                drawing.DrawLine(arrowPen, new System.Windows.Point(arrowRight - size * 0.08, middle + size * 0.08), new System.Windows.Point(arrowRight, middle));
-
-                // 오른쪽: 합쳐진 결과 한 덩어리 (강조색으로 채워 결과임을 드러낸다)
-                double resultLeft = arrowRight + gap;
-                double resultWidth = size - margin - resultLeft;
-                double resultHeight = pieceHeight * 3 + gap * 2;
-                drawing.DrawRectangle(accent, piecePen, new Rect(resultLeft, margin, Math.Max(2.0, resultWidth), resultHeight));
-            }
-
-            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(visual);
-            bitmap.Freeze();
-            return bitmap;
-        }
-
-        // "일괄결합" 아이콘: T자로 만나는 두 부재. disallow면 세로 부재가 가로 부재에 닿지 않고 틈을 두고
-        // 끊긴 채 끝면(강조색)이 막혀 있고, 허용이면 맞닿아 한 덩어리로 이어진다 - 리본에서 "금지/허용"
-        // 두 버튼을 아이콘만 보고도 구분할 수 있게 같은 그림의 두 상태로 그린다.
-        private static BitmapSource CreateBatchJoinIcon(int size, bool disallow)
-        {
-            var visual = new DrawingVisual();
-            using (DrawingContext drawing = visual.RenderOpen())
-            {
-                var fill = new SolidColorBrush(Color.FromRgb(0xE9, 0xE9, 0xEA));
-                var accent = new SolidColorBrush(Color.FromRgb(0x59, 0x80, 0xA6));
-                var outline = new SolidColorBrush(Color.FromRgb(0x1D, 0x1F, 0x20));
-                fill.Freeze();
-                accent.Freeze();
-                outline.Freeze();
-
-                double margin = Math.Max(1.5, size * 0.09);
-                double thickness = Math.Max(2.0, size * 0.2);
-                var pen = new Pen(outline, Math.Max(1.0, size / 16.0));
-                pen.Freeze();
-
-                // 가로 부재(아래) - 끝까지 이어진다
-                double horizontalTop = size - margin - thickness;
-                drawing.DrawRectangle(fill, pen, new Rect(margin, horizontalTop, size - margin * 2, thickness));
-
-                // 세로 부재(위에서 내려옴) - 금지면 가로 부재에 닿지 않는다
-                double gap = disallow ? Math.Max(1.5, size * 0.14) : 0;
-                double left = size * 0.5 - thickness / 2;
-                double bottom = horizontalTop - gap;
-                drawing.DrawRectangle(fill, pen, new Rect(left, margin, thickness, Math.Max(2.0, bottom - margin)));
-
-                var accentPen = new Pen(accent, Math.Max(1.4, size / 9.0))
-                {
-                    StartLineCap = PenLineCap.Round,
-                    EndLineCap = PenLineCap.Round,
-                };
-                accentPen.Freeze();
-
-                if (disallow)
-                {
-                    // 끊긴 끝면을 강조색으로 막아 "여기서 결합하지 않는다"를 드러낸다
-                    drawing.DrawLine(accentPen,
-                        new System.Windows.Point(left - size * 0.06, bottom),
-                        new System.Windows.Point(left + thickness + size * 0.06, bottom));
-                }
-                else
-                {
-                    // 맞닿은 지점을 강조색으로 이어 "결합됨"을 드러낸다
-                    drawing.DrawLine(accentPen,
-                        new System.Windows.Point(left - size * 0.06, horizontalTop),
-                        new System.Windows.Point(left + thickness + size * 0.06, horizontalTop));
-                }
-            }
-
-            var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(visual);
-            bitmap.Freeze();
-            return bitmap;
         }
     }
 }

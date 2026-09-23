@@ -25,7 +25,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 작업/기능 | 주요 파일 | 문서 |
 |---|---|---|
 | 벽체 분리 / 바닥 분리, 유형 이름 규칙 | `Class1.cs`, `SplitFloorCommand.cs`, `NamingSettings.cs`, `SettingsWindow.*` | `docs/wall-floor-split/CLAUDE.md` |
-| 리본/앱 시작 (탭·패널·아이콘·매니페스트) | `App.cs`, `WallSplitter.addin`, `Resources/icon*.png` | `docs/app-shell/CLAUDE.md` |
+| 리본/앱 시작 (탭·패널·아이콘·매니페스트) | `App.cs`, `RibbonIcons.cs`, `WallSplitter.addin` | `docs/app-shell/CLAUDE.md` |
 | NAMER (이름 일괄 변경, 개별 이름 수정, 특성 창 — **모드리스 창**) | `NamerWindow.*`, `NamerCommand.cs`, `NamerExternalEventHandler.cs`, `NamerPropertiesWindow.*` | `docs/namer/CLAUDE.md` |
 | 재료 지정/삭제/클래스·설명 변경 | `MaterialAssignWindow.*`, `MaterialAssignCommand.cs`, `MaterialSlotFinder.cs` | `docs/material-assign/CLAUDE.md` |
 | 모델간 변경 반영 | `ModelSyncWindow.*`, `ModelSyncCommand.cs`, `ChangeLog.cs`, `ChangeReplayEngine.cs` | `docs/model-sync/CLAUDE.md` |
@@ -35,7 +35,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 룸 구분선 자동 생성 / 룸 경계 ON·OFF | `RoomSeparator*.cs`, `RoomBounding*.cs` | `docs/room-separator/CLAUDE.md` |
 | 매개변수 조합 (여러 매개변수를 합쳐 하나에 자동 기입 — **IUpdater**) | `ParamCombine*.cs` | `docs/param-combine/CLAUDE.md` |
 | 일괄결합 (벽·보 끝단 "결합 허용 안 함"을 일괄 적용) | `BatchJoin*.cs` | `docs/batch-join/CLAUDE.md` |
-| 화면 디자인 (Industry 테마, 아이콘) | `Resources/Theme.xaml`, `Theme.cs` | `docs/design-system/CLAUDE.md` |
+| 화면 디자인 (Industry 테마, 리본 아이콘) | `Resources/Theme.xaml`, `Theme.cs`, `RibbonIcons.cs` | `docs/design-system/CLAUDE.md` |
 | 멀티 버전 빌드 (2023–2027 Configuration/TFM 매핑) | `WallSplitter.csproj` | `docs/build-system/CLAUDE.md` |
 | 설치 프로그램 (배포) | `SunnyToolsInstaller/` | `docs/installer/CLAUDE.md` |
 

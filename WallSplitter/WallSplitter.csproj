@@ -97,60 +97,6 @@
     <EmbeddedResource Include="Resources\RevitCommandLabels.2027.tsv">
       <LogicalName>WallSplitter.Resources.RevitCommandLabels.2027.tsv</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon16.png">
-      <LogicalName>WallSplitter.Resources.icon16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon32.png">
-      <LogicalName>WallSplitter.Resources.icon32.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_settings16.png">
-      <LogicalName>WallSplitter.Resources.icon_settings16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_settings32.png">
-      <LogicalName>WallSplitter.Resources.icon_settings32.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_namer16.png">
-      <LogicalName>WallSplitter.Resources.icon_namer16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_namer32.png">
-      <LogicalName>WallSplitter.Resources.icon_namer32.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_toggle16.png">
-      <LogicalName>WallSplitter.Resources.icon_toggle16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_toggle32.png">
-      <LogicalName>WallSplitter.Resources.icon_toggle32.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_toggle_off16.png">
-      <LogicalName>WallSplitter.Resources.icon_toggle_off16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_toggle_on16.png">
-      <LogicalName>WallSplitter.Resources.icon_toggle_on16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_floor16.png">
-      <LogicalName>WallSplitter.Resources.icon_floor16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_floor32.png">
-      <LogicalName>WallSplitter.Resources.icon_floor32.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_material16.png">
-      <LogicalName>WallSplitter.Resources.icon_material16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_material32.png">
-      <LogicalName>WallSplitter.Resources.icon_material32.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_sync16.png">
-      <LogicalName>WallSplitter.Resources.icon_sync16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_sync32.png">
-      <LogicalName>WallSplitter.Resources.icon_sync32.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_quicktoggle16.png">
-      <LogicalName>WallSplitter.Resources.icon_quicktoggle16.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\icon_quicktoggle32.png">
-      <LogicalName>WallSplitter.Resources.icon_quicktoggle32.png</LogicalName>
-    </EmbeddedResource>
   </ItemGroup>
 
 </Project>
