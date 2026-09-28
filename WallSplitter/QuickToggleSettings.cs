@@ -50,9 +50,8 @@ namespace WallSplitter
         // Revit 모델, IFC, 지형/지형솔리드, DWF 마크업, 포인트 클라우드, 좌표 모델)를 한 번에 끄고 켠다.
         // LinkedCad/LinkedModel과 마찬가지로 설정에서 고를 대상이 없다 - 대상은 클릭할 때마다 다시 찾는다.
         LinkedAll,
-        // 2026-09-04, "두개의 레벨을 선택해서 그 선택한 레벨 사이의 3D 단면상자뷰를 만들어 볼 수 있는
-        // 기능" 요청으로 추가. 색상/기능 버튼처럼 on/off 토글이 아니라 누를 때마다 1회 적용한다 -
-        // 고른 두 레벨 높이로 단면상자를 맞춘 전용 3D 뷰를 만들어(있으면 재사용) 그 뷰로 전환한다.
+        // 2026-09-28 삭제. 예전 설정 전체가 역직렬화에 실패하지 않도록 열거 값만 유지한다.
+        // Load/가져오기에서 이 버튼만 제외한다(IsRemovedCategory).
         LevelSectionBox,
     }
 
@@ -139,24 +138,6 @@ namespace WallSplitter
         public QuickToggleCommandKind? CommandKind { get; set; }
         public string? CommandId { get; set; }
         public string? CommandLabel { get; set; }
-
-        // 2026-09-04, "층별 단면상자"(LevelSectionBox) 전용 - 단면상자의 아래/위 높이를 정하는 레벨 두 개.
-        // **이름만 저장하고 ElementId는 저장하지 않는다**: 이 설정은 PC 전역이라(아래 QuickToggleSettings
-        // 주석 참고) 저장된 ElementId가 다른 프로젝트에서는 의미가 없다. 뷰템플릿/필터처럼 "예전에 ID만
-        // 저장하던 시절"의 호환 부담이 없는 새 필드라 처음부터 이름 하나만 둔다(레벨 이름은 한 문서 안에서
-        // 유일하다). 위/아래는 저장된 그대로 쓰지 않고 실제 높이를 비교해 정렬한다 - 사용자가 반대로 골라도
-        // 동작해야 하고, 다른 프로젝트에서는 같은 이름의 레벨 높이 순서가 다를 수도 있다.
-        public string? LevelBottomName { get; set; }
-        public string? LevelTopName { get; set; }
-
-        // 2026-09-05, "다른 레빗모델을 열 때마다 레벨을 다시 지정해야 하는데, 1-2층으로 잡았으면 다른
-        // 모델에서도 자동으로 감지해서 잡아달라"는 요청으로 추가 - 버튼을 만들 때 고른 레벨의 **높이**를
-        // 같이 기억해 둔다. 다른 모델에서 이름도 다르고 층 번호도 못 읽을 때(예: "T.O. Slab", "기초")
-        // 이 높이와 가장 가까운 레벨로 맞추는 마지막 단서다(QuickToggleService.ResolveLevelRange).
-        // Revit 내부 단위(피트)로 저장한다 - 프로젝트 단위 설정과 무관하게 일정하다.
-        // 예전 설정 파일에는 이 값이 없는데(null), 그때는 이름·층 번호 매칭까지만 시도한다.
-        public double? LevelBottomElevation { get; set; }
-        public double? LevelTopElevation { get; set; }
     }
 
     // 툴바와 설정 창이 **똑같이** 따라야 하는 버튼 겉모습 규칙. 두 곳에 각각 적으면 미리보기와 실제
@@ -167,8 +148,7 @@ namespace WallSplitter
         // 돌려주므로, 예전에는 툴바에서 영영 "꺼진 모습"(투명 배경)으로만 보였다.
         public static bool IsActionButton(QuickToggleCategory category) =>
             category == QuickToggleCategory.ColorTool ||
-            category == QuickToggleCategory.CommandLauncher ||
-            category == QuickToggleCategory.LevelSectionBox;
+            category == QuickToggleCategory.CommandLauncher;
 
         // 2026-09-05, 사용자 요청 - "on/off 버튼이 아닌 버튼들은 기본적으로 색상이 칠해져 있으면 좋겠어.
         // 버튼의 켜짐색상과는 다른 색상으로." 그래서 실행형 버튼은 **항상** 이 색으로 채워지고, 기본값도
@@ -398,6 +378,7 @@ namespace WallSplitter
                 loaded.Buttons ??= new List<QuickToggleButtonConfig>();
                 loaded.UnlinkedCategories ??= new List<QuickToggleCategory>();
                 loaded.Buttons.RemoveAll(b => IsRemovedCategory(b.Category));
+                loaded.UnlinkedCategories.RemoveAll(IsRemovedCategory);
                 loaded.NormalizeGrouping();
 
                 // 자동 채움 시절(판 0)에 만든 설정은 그때 보이던 2단 모습 그대로 옮겨 온다 - 안 그러면
@@ -466,10 +447,11 @@ namespace WallSplitter
             Buttons.AddRange(result);
         }
 
-        // 2026-09-02에 삭제된 버튼 종류 - 예전 설정 파일/JSON에 남아 있어도 목록에 싣지 않는다
-        // (열거 멤버를 남겨둔 이유는 QuickToggleCategory의 주석 참고).
+        // 삭제된 버튼 종류 - 예전 설정 파일/버튼모음에 남아 있어도 목록에 싣지 않는다.
+        // 열거 값은 역직렬화 호환을 위해 유지한다(QuickToggleCategory 주석 참고).
         public static bool IsRemovedCategory(QuickToggleCategory category) =>
-            category == QuickToggleCategory.Preset || category == QuickToggleCategory.GraphicsDisplaySearch;
+            category == QuickToggleCategory.Preset || category == QuickToggleCategory.GraphicsDisplaySearch ||
+            category == QuickToggleCategory.LevelSectionBox;
 
         // 같은 카테고리 내에서 "뷰템플릿버튼1", "뷰템플릿버튼2"처럼 다음 번호를 붙인 기본 이름을 만든다.
         public string NextDefaultName(QuickToggleCategory category)
@@ -482,7 +464,6 @@ namespace WallSplitter
                 QuickToggleCategory.ColorTool => "색상버튼",
                 QuickToggleCategory.CommandLauncher => "기능버튼",
                 QuickToggleCategory.LinkedAll => "링크버튼",
-                QuickToggleCategory.LevelSectionBox => "층단면버튼",
                 QuickToggleCategory.LinkedCad => "링크도면버튼",
                 QuickToggleCategory.LinkedModel => "링크모델버튼",
                 _ => "버튼",

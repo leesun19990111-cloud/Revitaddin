@@ -1,5 +1,15 @@
 # 커스텀 버튼 (구 "빠른 토글" — 뷰템플릿/필터/작업세트 원클릭 on/off + 뷰 저장/되돌리기)
 
+## 2026-09-28 — 층별 단면상자 제거 (v91)
+
+- 사용자 요청: 커스텀 버튼에서 **층별 단면상자 기능 삭제**. 아래의 v70~v73 관련 설명은 과거 이력이며 현재 기능이 아니다.
+- 추가 카드·레벨 선택 UI·상태 판정·툴바 클릭·ExternalEvent 요청·레벨 매칭/캐시·3D 뷰 생성/범위 계산과 전용 설정 필드를 제거했다. 다른 기능의 단면상자(경고Pick 등)는 변경하지 않았다.
+- **`QuickToggleCategory.LevelSectionBox` 열거 값은 삭제하거나 순서를 바꾸지 말 것.** 문자열/숫자 JSON 호환을 위해 남기고 `IsRemovedCategory`에서 제외한다. 열거 멤버 자체를 지우면 기존 설정 전체의 역직렬화가 실패해 다른 버튼까지 사라질 수 있다.
+- 전역/옛 프로젝트 설정 로드 및 버튼모음 가져오기에서 해당 버튼만 빠진다. 삭제된 종류의 `UnlinkedCategories` 항목도 로드 시 정리한다. 다른 버튼의 이름·대상·색·크기·아이콘은 유지하고, 줄 배치는 기존 NormalizeRows 규칙을 따른다. 제거된 전용 JSON 필드는 기본 역직렬화 동작으로 무시한다.
+- `QuickToggleIconShape.SectionBand`는 다른 종류의 버튼에도 사용자가 지정할 수 있으므로 **범용 아이콘으로 유지**한다. 기존 모델에 만들어진 3D 뷰는 조회/삭제/수정하지 않는다.
+- 검증: `.codex-build/release-v91/SettingsSmoke.csproj`는 실제 QuickToggleSettings.cs를 링크하고 Revit 타입만 대역으로 치환한다. 혼합 설정·버튼모음·삭제된 버튼만 있는 설정·문자열/숫자 열거 값·타 버튼 값/순서/배치/아이콘 보존을 통과했다. 실제 사용자 설정 파일은 건드리지 않았다.
+- Revit 2023~2027 Release 빌드 오류 0개. 실제 Revit UI는 미검증: 설치 후 추가 목록에서 제거 여부와 기존 툴바의 다른 버튼 유지 여부를 확인할 것.
+
 **이름 변경 (2026-07-28)**: 사용자 요청으로 이 기능의 사용자 노출 명칭을 "빠른 토글"에서 "커스텀 버튼"으로
 바꿨다 — 리본 패널명(`App.QuickTogglePanelName`), 버튼 라벨/툴팁, 창 제목(`QuickToggleToolbar.xaml`/
 `QuickToggleSettingsWindow.xaml`의 `Title`), `TaskDialog` 제목, 트랜잭션 이름, `IExternalEventHandler.

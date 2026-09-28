@@ -39,8 +39,6 @@ namespace WallSplitter
         private readonly List<View> _viewTemplates;
         private readonly List<ParameterFilterElement> _filters;
         private readonly List<Workset> _worksets;
-        // "층별 단면상자" 버튼이 고를 레벨 - 높이 순으로 정렬해 목록에 그대로 쓴다.
-        private readonly List<Level> _levels;
         private readonly bool _isWorkshared;
 
         // 색상 버튼의 카테고리 트리 - 각 최상위 카테고리를 펼쳤는지 여부(카테고리 Id 기준). 이 창을
@@ -84,8 +82,6 @@ namespace WallSplitter
                 "지정해 둔 작업세트들의 표시를 한 번에 켜고 끕니다."),
             (QuickToggleCategory.ColorTool, "색상",
                 "고른 모델 카테고리의 색과 투명도를 패널에서 즉시 조절합니다."),
-            (QuickToggleCategory.LevelSectionBox, "층별 단면상자",
-                "고른 두 레벨 사이만 잘라 보는 3D 뷰를 만들어 그 뷰로 이동합니다."),
             (QuickToggleCategory.CommandLauncher, "기능",
                 "재료 지정·NAMER·동기화 같은 기능을 클릭 한 번으로 실행합니다."),
         };
@@ -124,15 +120,6 @@ namespace WallSplitter
             _worksets = _isWorkshared
                 ? new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).OrderBy(w => w.Name).ToList()
                 : new List<Workset>();
-
-            // 아래에서 위로 정렬 - 사람이 층을 고르는 순서 그대로다(이름 가나다순은 "10층"이 "2층"보다
-            // 앞에 오는 등 실제 층 순서와 어긋난다).
-            _levels = new FilteredElementCollector(doc)
-                .OfClass(typeof(Level)).Cast<Level>()
-                .OrderBy(l => l.Elevation)
-                .ToList();
-
-            BackfillLevelElevations();
 
             // 드래그 순서 바꾸기는 개별 버튼이 아니라 이 호스트에서 받는다 - 드래그 도중 커서가 버튼
             // 밖으로 나가도 계속 따라가야 하고(마우스 캡처 대상), 삽입 위치 계산의 좌표 기준도 여기다.
@@ -203,13 +190,6 @@ namespace WallSplitter
                 case QuickToggleCategory.ColorTool:
                     return cfg.ColorButtonCategories.Count == 0 ? ButtonReadiness.NoTarget : ButtonReadiness.Ready;
 
-                case QuickToggleCategory.LevelSectionBox:
-                    if (string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)) return ButtonReadiness.NoTarget;
-                    // 이름이 정확히 같은 레벨이 없어도 층 번호나 높이로 찾아내면 쓸 수 있는 상태다
-                    // (2026-09-05) - 그래서 목록을 직접 뒤지지 않고 툴바와 **같은 해석기**를 쓴다.
-                    // 두 곳이 서로 다른 기준으로 판단하면 "설정 창은 준비됨인데 툴바는 회색"이 된다.
-                    return LevelMatchFor(cfg) != null ? ButtonReadiness.Ready : ButtonReadiness.NotInProject;
-
                 case QuickToggleCategory.CommandLauncher:
                     return string.IsNullOrEmpty(cfg.CommandId) ? ButtonReadiness.NoTarget : ButtonReadiness.Ready;
 
@@ -220,34 +200,6 @@ namespace WallSplitter
         }
 
         private bool IsConfigured(QuickToggleButtonConfig cfg) => ReadinessOf(cfg) == ButtonReadiness.Ready;
-
-        // v72 이전에 만든 "층별 단면상자" 버튼은 레벨 이름만 있고 높이가 없다. 그런데 2026-09-05부터는
-        // **높이가 1순위**라(QuickToggleService.MatchLevel) 높이를 모르면 다른 모델에서 이름이 조금만
-        // 달라도 못 찾는다. 지금 열린 문서에 그 이름의 레벨이 실제로 있으면 그 높이를 조용히 채워 둔다 -
-        // 원래 만들었던 모델(또는 같은 이름 규칙의 모델)에서 설정 창을 한 번 열기만 하면 저절로 보강된다.
-        // 이름이 없는 레벨은 건드리지 않고, 저장은 사용자가 "저장"을 눌렀을 때만 이뤄진다(이 창의 다른
-        // 편집과 동일).
-        private void BackfillLevelElevations()
-        {
-            foreach (QuickToggleButtonConfig cfg in _settings.Buttons)
-            {
-                if (cfg.Category != QuickToggleCategory.LevelSectionBox) continue;
-
-                if (cfg.LevelBottomElevation == null && !string.IsNullOrEmpty(cfg.LevelBottomName))
-                    cfg.LevelBottomElevation = _levels.FirstOrDefault(l => l.Name == cfg.LevelBottomName)?.Elevation;
-                if (cfg.LevelTopElevation == null && !string.IsNullOrEmpty(cfg.LevelTopName))
-                    cfg.LevelTopElevation = _levels.FirstOrDefault(l => l.Name == cfg.LevelTopName)?.Elevation;
-            }
-        }
-
-        // "층별 단면상자" 버튼이 **지금 이 프로젝트에서** 실제로 쓰게 될 레벨 두 개. 툴바가 쓰는 것과
-        // 똑같은 해석기라 설정 창과 툴바의 판단이 어긋날 수 없다. 조회 실패는 조용히 null로 둔다
-        // (설정 창은 정보 표시용이고, 실제 실행 시엔 툴바가 같은 경로로 다시 판단한다).
-        private LevelRangeMatch? LevelMatchFor(QuickToggleButtonConfig cfg)
-        {
-            try { return QuickToggleService.ResolveLevelRange(_doc, cfg); }
-            catch { return null; }
-        }
 
         // 왼쪽 목록의 두 번째 줄에 쓰는 한 줄 요약 - 지금 무엇이 걸려 있는지를 목록에서 바로 보여준다.
         private string TargetSummary(QuickToggleButtonConfig cfg)
@@ -268,9 +220,6 @@ namespace WallSplitter
                 QuickToggleCategory.ColorTool => cfg.ColorButtonCategories.Count == 0
                     ? "대상 미지정"
                     : "카테고리 " + cfg.ColorButtonCategories.Count + "개",
-                QuickToggleCategory.LevelSectionBox => string.IsNullOrEmpty(cfg.LevelBottomName) || string.IsNullOrEmpty(cfg.LevelTopName)
-                    ? "레벨 미지정"
-                    : cfg.LevelBottomName + " ~ " + cfg.LevelTopName,
                 QuickToggleCategory.CommandLauncher => string.IsNullOrEmpty(cfg.CommandId)
                     ? "기능 미지정"
                     : SunnyToolsCommands.DisplayLabelFor(cfg.CommandKind, cfg.CommandId, _revitLanguage, cfg.CommandLabel),
@@ -279,7 +228,7 @@ namespace WallSplitter
         }
 
         // 2026-09-05부터 모든 버튼이 색을 쓴다 - 켜짐/꺼짐이 있는 버튼은 "켜졌을 때"의 색으로,
-        // on/off가 없는 실행형 버튼(색상/기능/층별단면상자)은 평소에도 그 색으로 칠해진다
+        // on/off가 없는 실행형 버튼(색상/기능)은 평소에도 그 색으로 칠해진다
         // (QuickToggleButtonStyle.IsActionButton / QuickToggleToolbar.VisualsFor와 같은 규칙).
         // 라벨만 "켜짐 색상"/"버튼 색상"으로 달라진다.
         private static string ColorLabelFor(QuickToggleCategory category) =>
@@ -1125,7 +1074,6 @@ namespace WallSplitter
             QuickToggleCategory.ColorTool => "색상",
             QuickToggleCategory.CommandLauncher => "기능",
             QuickToggleCategory.LinkedAll => "링크된 요소",
-            QuickToggleCategory.LevelSectionBox => "층별 단면상자",
             QuickToggleCategory.LinkedCad => "링크된 도면",
             QuickToggleCategory.LinkedModel => "링크된 모델",
             _ => "",
@@ -1430,10 +1378,6 @@ namespace WallSplitter
                 case QuickToggleCategory.ColorTool:
                     BuildColorToolPicker(cfg, EditHeaderHost, EditPanelHost);
                     break;
-                case QuickToggleCategory.LevelSectionBox:
-                    BuildLevelRangePicker(cfg, EditHeaderHost, EditPanelHost);
-                    break;
-
                 case QuickToggleCategory.CommandLauncher:
                     BuildCommandPicker(cfg, EditHeaderHost, EditPanelHost);
                     break;
@@ -1456,7 +1400,6 @@ namespace WallSplitter
             QuickToggleCategory.Workset => "대상 작업세트",
             QuickToggleCategory.ColorTool => "대상 모델 카테고리",
             QuickToggleCategory.CommandLauncher => "실행할 기능",
-            QuickToggleCategory.LevelSectionBox => "잘라 볼 레벨 두 개",
             _ => "대상",
         };
 
@@ -1467,7 +1410,6 @@ namespace WallSplitter
             QuickToggleCategory.Workset => "여러 개 선택 - 모두 함께 켜지고 꺼집니다",
             QuickToggleCategory.ColorTool => "여러 개 선택 가능",
             QuickToggleCategory.CommandLauncher => "하나만 고를 수 있습니다",
-            QuickToggleCategory.LevelSectionBox => "아래·위 각각 하나씩",
             _ => "미리 고를 대상이 없습니다",
         };
 
@@ -1985,116 +1927,6 @@ namespace WallSplitter
         };
 
         // ===== ③ 대상: 링크 버튼 (고를 대상이 없음) =====
-
-        // ===== ③ 대상: "층별 단면상자"의 레벨 두 개 (2026-09-04) =====
-        //
-        // 아래 레벨과 위 레벨을 각각 라디오로 하나씩 고른다. 검색칸은 두지 않았다 - 레벨은 보통 수십 개
-        // 이하라 다 보이고, 무엇보다 "아래에서 위로" 늘어선 순서 자체가 고르는 데 필요한 정보라
-        // 검색으로 걸러내면 오히려 층 감각이 사라진다.
-        private void BuildLevelRangePicker(QuickToggleButtonConfig cfg,
-            System.Windows.Controls.Panel headerHost, System.Windows.Controls.Panel scrollHost)
-        {
-            headerHost.Children.Add(CreateNote(
-                "고른 두 레벨 사이만 남기고 잘라 보는 3D 뷰를 만들어 그 뷰로 이동합니다. 같은 조합으로 다시 누르면 " +
-                "이미 만들어 둔 뷰를 재사용하고 범위만 다시 맞춥니다. 가로 범위는 모델 전체를 감싸도록 매번 다시 계산합니다.\n" +
-                "다른 프로젝트에서는 레벨 이름이 달라도 알아서 찾습니다 - 같은 이름이 없으면 층 번호로(\"1층\"=\"1F\"=\"Level 1\"=\"L1\", " +
-                "\"지하1층\"=\"B1\"), 그것도 안 되면 높이가 가장 가까운 레벨로 맞춥니다."));
-
-            if (_levels.Count < 2)
-            {
-                scrollHost.Children.Add(new TextBlock
-                {
-                    Text = "이 문서에는 레벨이 2개 미만이라 층 범위를 고를 수 없습니다.",
-                    Foreground = Theme.WarningText,
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(26, 0, 0, 0),
-                });
-                return;
-            }
-
-            TextBlock summary = new TextBlock
-            {
-                Foreground = Theme.TextSecondary,
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(26, 0, 0, 8),
-            };
-            headerHost.Children.Add(summary);
-
-            _refreshTargetSummary = () =>
-            {
-                bool both = !string.IsNullOrEmpty(cfg.LevelBottomName) && !string.IsNullOrEmpty(cfg.LevelTopName);
-                if (!both)
-                {
-                    summary.Text = "현재 선택: (아래·위 레벨을 각각 골라 주세요)";
-                    summary.Foreground = Theme.TextSecondary;
-                    return;
-                }
-
-                // 다른 모델에서는 이름이 달라 자동으로 찾아낸 것일 수 있으므로, 지금 이 프로젝트에서
-                // 실제로 무엇이 잡히는지를 함께 보여준다 - 안 보여주면 "왜 이 층이 나오지?"가 된다.
-                LevelRangeMatch? match = LevelMatchFor(cfg);
-                string chosen = $"현재 선택: {cfg.LevelBottomName} ~ {cfg.LevelTopName}";
-                if (match == null)
-                {
-                    summary.Text = chosen + "  →  이 프로젝트에서는 맞는 레벨을 찾지 못했습니다. 아래에서 직접 골라 주세요.";
-                    summary.Foreground = Theme.WarningText;
-                }
-                else if (match.Exact)
-                {
-                    summary.Text = chosen;
-                    summary.Foreground = Theme.TextSecondary;
-                }
-                else
-                {
-                    summary.Text = chosen + $"  →  이 프로젝트에서는 '{match.BottomName} ~ {match.TopName}'로 자동으로 맞춥니다.";
-                    summary.Foreground = Theme.TextSecondary;
-                }
-            };
-            _refreshTargetSummary();
-
-            StackPanel host = CreateResultsHost();
-            scrollHost.Children.Add(host);
-
-            host.Children.Add(BuildLevelColumn(cfg, bottom: true));
-            host.Children.Add(new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 10, 0, 10) });
-            host.Children.Add(BuildLevelColumn(cfg, bottom: false));
-        }
-
-        private UIElement BuildLevelColumn(QuickToggleButtonConfig cfg, bool bottom)
-        {
-            StackPanel column = new StackPanel();
-            column.Children.Add(new TextBlock
-            {
-                Text = bottom ? "아래 레벨" : "위 레벨",
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 4),
-            });
-
-            // 위에서 아래로 읽는 게 층 목록의 감각에 맞아, 높이 내림차순으로 보여준다
-            // (_levels 자체는 낮은 곳부터 정렬돼 있다).
-            for (int i = _levels.Count - 1; i >= 0; i--)
-            {
-                Level level = _levels[i];
-                string name = level.Name;
-                RadioButton radio = new RadioButton
-                {
-                    Content = name,
-                    GroupName = (bottom ? "lvlb_" : "lvlt_") + cfg.Id,
-                    IsChecked = bottom ? cfg.LevelBottomName == name : cfg.LevelTopName == name,
-                    Margin = new Thickness(0, 3, 0, 3),
-                };
-                radio.Checked += (s, e) =>
-                {
-                    if (bottom) { cfg.LevelBottomName = name; cfg.LevelBottomElevation = level.Elevation; }
-                    else { cfg.LevelTopName = name; cfg.LevelTopElevation = level.Elevation; }
-                    OnTargetChanged();
-                };
-                column.Children.Add(radio);
-            }
-
-            return column;
-        }
 
         private void BuildLinkedInfo(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
         {

@@ -1,5 +1,14 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v91 — 2026-09-28 층별 단면상자 제거
+
+- 커스텀 버튼의 층별 단면상자 UI·실행 구현 제거. 옛 설정/버튼모음의 해당 버튼만 제외하며 다른 버튼과 기존 모델의 3D 뷰는 보존한다. 상세: `docs/quick-toggle/CLAUDE.md` 상단.
+- 2023~2027 Release 빌드 오류 모두 0개, 경고 각각 38/53/55/40/42개. 기존 사용자의 Debug/obj 변경을 보존하기 위해 `IntermediateOutputPath=obj\iso91<year>\`, `OutputPath=bin\iso91<year>\`, `MSBuildProjectExtensionsPath=obj\iso91<year>\nuget\`로 격리했다. BaseIntermediateOutputPath는 변경하지 않았다.
+- 설치 프로그램은 `SkipWallSplitterPayloadBuild=true` 및 별도 `obj/bin\iso91\` 경로로 게시하고 위 격리 DLL들을 Payload에 복사했다. 출력→Payload의 파일 집합·SHA-256 일치, DLL 수 11/11/2/2/2(총 28), Clipper2Lib 전 연도 포함, RevitAPI 재배포 없음, net8/net10 런타임 누락 없음.
+- `.codex-build/release-v91/verify-release.cjs`로 삭제된 실행/선택/레벨 매칭 심볼 부재 및 호환 열거 값·아이콘·다른 기능 심볼 유지를 5개 DLL 모두 확인했다. 게시 폴더→ZIP 30개 파일 집합·SHA-256 전부 일치.
+- 게시 폴더 `SunnyToolsInstaller_out_v91`, ZIP `SunnyTools_Installer_v.0.9.1.zip` (35,814,111 bytes), SHA-256 `F52C2CF02EED67436F370A8EB4628F973B07F0E0CECE53D5CCC8CEB54DD3E32D`. EXE SHA-256 `25A4330A79B8C0D5F766189129A2DED68FE930F22CC6280ABA1F5ADBBB540433`.
+- v90 폴더/ZIP은 Old_Versions에 보관한다. 실제 Addins에는 직접 복사하지 않았으며 설치 프로그램 실행/라이브 Revit UI 테스트는 수행하지 않았다. Revit을 모두 종료한 뒤 ZIP을 풀어 설치할 것.
+
 `SunnyToolsInstaller/`를 건드리기 전에 이 문서를 읽을 것. **배포는 반드시 이 설치 프로그램을 퍼블리시해서 하며, Debug/Release DLL을 사용자의 실제 Revit Addins 폴더에 직접 복사하지 않는다.**
 
 `SunnyToolsInstaller/` is a self-contained console app that installs **all 5 year-builds** of `WallSplitter.dll` for end users who don't have this repo, auto-detecting which Revit version(s) they actually have. It's named/branded "Sunny Tools" (not "WallSplitter") since it installs the whole ribbon tab, not just the wall-split command — but the underlying add-in project, assembly, namespace, and Revit `.addin` `<Name>`/`FullClassName` are still `WallSplitter` internally (not renamed; only the installer's own project/output/branding changed on 2026-07-10).

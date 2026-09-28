@@ -406,7 +406,7 @@ namespace WallSplitter
         private static (Brush Background, Brush BorderBrush, Brush Foreground) VisualsFor(QuickToggleButtonState state, QuickToggleButtonConfig cfg)
         {
             // 2026-09-05, "on/off 버튼이 아닌 버튼들은 기본적으로 색상이 칠해져 있으면 좋겠어"라는 요청 -
-            // 실행형 버튼(색상/기능/층별 단면상자)은 켜짐/꺼짐이 없어 늘 Off로 판정되는 탓에 예전에는
+            // 실행형 버튼(색상/기능)은 켜짐/꺼짐이 없어 늘 Off로 판정되는 탓에 예전에는
             // 영영 투명한 "선 그림"으로만 보였다. 이제 쓸 수 있는 상태(Disabled가 아님)면 항상 채운다.
             bool fillAlways = QuickToggleButtonStyle.IsActionButton(cfg.Category)
                               && state != QuickToggleButtonState.Disabled;
@@ -457,16 +457,6 @@ namespace WallSplitter
             if (cfg.Category == QuickToggleCategory.LinkedModel)
             {
                 ShowLinkedModelPopup(cfg, button);
-                return;
-            }
-
-            // "층별 단면상자"도 즉시 1회 실행형이다(2026-09-04) - 고른 두 레벨 높이로 단면상자를 맞춘
-            // 전용 3D 뷰를 만들어 전환한다. 뷰 생성·전환 모두 유효한 API 컨텍스트가 필요하므로 ExternalEvent로 넘긴다.
-            if (cfg.Category == QuickToggleCategory.LevelSectionBox)
-            {
-                if (App.QuickToggleHandler == null || App.QuickToggleEvent == null) return;
-                App.QuickToggleHandler.PendingLevelSectionBox = cfg;
-                App.QuickToggleEvent.Raise();
                 return;
             }
 

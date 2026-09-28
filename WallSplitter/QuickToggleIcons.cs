@@ -29,7 +29,7 @@ namespace WallSplitter
         // 2026-09-04, "링크된 요소" 버튼(QuickToggleCategory.LinkedAll)의 기본 아이콘으로 추가 -
         // 특정 링크 종류가 아니라 "링크" 자체를 뜻하는 모양이 필요했다.
         Link,
-        // 2026-09-04, "층별 단면상자" 버튼(QuickToggleCategory.LevelSectionBox)의 기본 아이콘.
+        // 삭제된 층별 단면상자 버튼에서 쓰던 모양. 다른 버튼에 지정한 아이콘과 저장값은 유지한다.
         // 뷰템플릿의 Layers와 헷갈리지 않도록 "쌓인 층 중 한 켜만 채워진" 형태로 따로 그린다.
         SectionBand,
     }
@@ -51,7 +51,6 @@ namespace WallSplitter
             QuickToggleCategory.LinkedCad => QuickToggleIconShape.Sheet,
             QuickToggleCategory.LinkedModel => QuickToggleIconShape.Cube,
             QuickToggleCategory.LinkedAll => QuickToggleIconShape.Link,
-            QuickToggleCategory.LevelSectionBox => QuickToggleIconShape.SectionBand,
             _ => QuickToggleIconShape.Dot,
         };
 
