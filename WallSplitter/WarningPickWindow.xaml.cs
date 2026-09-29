@@ -82,7 +82,11 @@ namespace WallSplitter
             _handler = new WarningPickExternalEventHandler { TargetDocument = doc };
             _event = ExternalEvent.Create(_handler);
 
-            Closed += (_, _) => { if (Instance == this) Instance = null; };
+            Closed += (_, _) =>
+            {
+                _handler.PendingDelete = null;
+                if (Instance == this) Instance = null;
+            };
 
             UpdateDocumentText();
             _lastSignature = WarningPickTypeGroup.SignatureOf(_allTypeGroups);
@@ -93,6 +97,8 @@ namespace WallSplitter
         // 실행했을 수도 있으므로 대상 문서/핸들러도 함께 갱신한다.
         public void UpdateDocumentAndTypeGroups(Document doc, List<WarningPickTypeGroup> typeGroups)
         {
+            _handler.PendingDelete = null;
+            SetDeleteBusy(false);
             _doc = doc;
             _handler.TargetDocument = doc;
             _allTypeGroups = typeGroups;
@@ -101,6 +107,9 @@ namespace WallSplitter
             // (요소 ID가 문서마다 달라 그대로 두면 엉뚱한 발생 건이 펼쳐진 것처럼 보인다).
             _expandedOccurrenceKeys.Clear();
             _checkedElementIds.Clear();
+            // 문서 전환 시 RenderTypeGroups가 이전 문서의 체크를 같은 숫자 ID에 복원하지 않게 한다.
+            _elementCheckboxes.Clear();
+            _allCheckboxes.Clear();
             StatusText.Text = "";
             UpdateDocumentText();
             RenderTypeGroups(FilterTypeGroups(_allTypeGroups, FilterBox.Text));
@@ -135,6 +144,8 @@ namespace WallSplitter
         // ExternalEvent에 요청만 넣는다. 실제로 목록이 바뀌었는지는 ApplyRefreshedTypeGroups가 판단한다.
         public void RequestLiveRefresh(Document changedDoc)
         {
+            // 삭제 실행 중 커밋으로 생긴 갱신은 핸들러의 finally에서 한 번만 처리한다.
+            if (_handler.IsDeleting) return;
             if (!_handler.IsTargetDocument(changedDoc)) return;
             _refreshWasManual = false;
             _handler.PendingRefresh = true;
@@ -459,7 +470,61 @@ namespace WallSplitter
             StatusText.Text = "격리 해제 요청";
         }
 
-        private void FilterBox_TextChanged(object sender, TextChangedEventArgs e) => RenderTypeGroups(FilterTypeGroups(_allTypeGroups, FilterBox.Text));
+        private void FilterBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (GroupsPanel == null || _allTypeGroups == null) return;
+            RenderTypeGroups(FilterTypeGroups(_allTypeGroups, FilterBox.Text));
+        }
+
+        private void DeleteCheckedButton_Click(object sender, RoutedEventArgs e) => RequestDelete(false);
+
+        private void DeleteAllButton_Click(object sender, RoutedEventArgs e) => RequestDelete(true);
+
+        private void RequestDelete(bool allShown)
+        {
+            try
+            {
+                if (_handler.IsDeleting || _handler.PendingDelete != null) return;
+                List<ElementId> ids = (allShown
+                    ? _elementCheckboxes.Select(t => t.Element.ElementId)
+                    : GetCheckedElementIds()).Distinct().ToList();
+                if (ids.Count == 0)
+                {
+                    StatusText.Text = allShown ? "현재 목록에 삭제할 요소가 없습니다." : "삭제할 요소를 먼저 체크해 주세요.";
+                    return;
+                }
+                // 여기서는 모델을 만지지 않는다. 문서·대상 목록을 고정하고 API 콜백에서 확인 후 삭제한다.
+                _handler.PendingDelete = new WarningPickDeleteRequest(_doc, ids,
+                    allShown ? "전체 삭제 (현재 필터의 목록 전체, 접힌 항목 포함)" : "선택한 요소 삭제 (체크한 요소)");
+                SetDeleteBusy(true);
+                ExternalEventRequest raised = _event.Raise();
+                if (raised != ExternalEventRequest.Accepted && raised != ExternalEventRequest.Pending)
+                {
+                    _handler.PendingDelete = null;
+                    SetDeleteBusy(false);
+                    StatusText.Text = "삭제 요청을 전달하지 못했습니다. 진행 중인 Revit 명령을 끝낸 뒤 다시 시도해 주세요.";
+                    return;
+                }
+                StatusText.Text = "삭제 범위를 확인 중입니다. 확인창에서 '예'를 눌러야 삭제됩니다.";
+            }
+            catch (Exception ex)
+            {
+                _handler.PendingDelete = null;
+                SetDeleteBusy(false);
+                MessageBox.Show(this, "삭제 요청을 시작하지 못했습니다.\n\n" + ex.GetBaseException().Message,
+                    "경고Pick", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        internal bool OwnsHandler(WarningPickExternalEventHandler handler) => ReferenceEquals(_handler, handler);
+
+        internal void SetDeleteBusy(bool busy)
+        {
+            DeleteCheckedButton.IsEnabled = !busy;
+            DeleteAllButton.IsEnabled = !busy;
+        }
+
+        internal void ShowDeleteResult(string message) => StatusText.Text = message;
 
         private void RefreshButton_Click(object sender, RoutedEventArgs e)
         {

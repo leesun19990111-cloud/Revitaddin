@@ -1,5 +1,13 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v92 — 2026-09-29 경고Pick 선택/전체 요소 삭제
+
+- 하단에 별도 빨간 삭제 버튼 2개와 필수 Yes/No 확인창(기본 No)을 추가했다. 사전 롤백으로 대상·의존 요소 수를 확인하고, 동의 이후 한 트랜잭션으로 삭제한다. 전체 삭제는 현재 필터 결과의 경고 요소만 대상으로 한다. 상세 안전장치: `docs/warning-pick/CLAUDE.md` 상단.
+- 2023~2027 Release 빌드 오류 0개, 경고 각각 38/53/55/40/42개. `obj/bin/iso92<year>` 및 별도 `MSBuildProjectExtensionsPath=obj/iso92<year>/nuget/`를 사용해 기존 사용자 Debug/obj 변경을 보존했다. 설치 프로그램도 `obj/bin/iso92`에서 SkipWallSplitterPayloadBuild=true로 게시한 뒤 검증한 DLL을 Payload에 복사했다.
+- 테스트: 실제 삭제 서비스 + Revit 대역의 안전 분기 테스트, 실제 XAML/Theme의 기본·최소 크기 렌더 통과. `.codex-build/release-v92/verify-release.cjs`로 5개 DLL의 삭제 서비스/확인 경로 심볼, 출력→Payload→ZIP의 정확한 파일 집합·SHA-256 일치를 확인했다. DLL 수 11/11/2/2/2(총 28), 전 연도 Clipper2Lib 포함, RevitAPI 재배포 없음, net8/net10 런타임 누락 없음. ZIP 파일 총 30개.
+- 게시 폴더 `SunnyToolsInstaller_out_v92`, ZIP `SunnyTools_Installer_v.0.9.2.zip` (35,830,801 bytes). ZIP SHA-256 `F290D91F5FD1E97F7A0B20DA23491040798C21356C511D18318A4FA497E8E3C8`, EXE SHA-256 `C6D65F71B32730FFC8F762A3ED3F56BDEB331888B9BE5248D59E7176971B36DD`.
+- v91 폴더/ZIP은 Old_Versions에 보관한다. 실제 Addins 직접 복사/설치/사용자 모델 삭제는 수행하지 않았다. Revit을 모두 종료하고 설치 후 **복사한 테스트 모델**에서 확인 취소/허용, 의존 요소 포함 삭제, 실행 취소, 필터 범위, 잠금·소유권 제한을 라이브 검증할 것.
+
 ## v91 — 2026-09-28 층별 단면상자 제거
 
 - 커스텀 버튼의 층별 단면상자 UI·실행 구현 제거. 옛 설정/버튼모음의 해당 버튼만 제외하며 다른 버튼과 기존 모델의 3D 뷰는 보존한다. 상세: `docs/quick-toggle/CLAUDE.md` 상단.

@@ -29,6 +29,9 @@ namespace WallSplitter
 
         internal List<ElementId>? PendingSelectIds { get; set; }
 
+        internal WarningPickDeleteRequest? PendingDelete { get; set; }
+        internal bool IsDeleting { get; private set; }
+
         // "선택 항목 단면상자로 보기" / "선택 항목만 표시" 요청 - 같은 ExternalEvent를 재사용한다
         // (QuickToggleExternalEventHandler가 여러 종류의 요청을 한 이벤트로 처리하는 것과 같은 패턴).
         internal List<ElementId>? PendingSectionBoxIds { get; set; }
@@ -60,6 +63,18 @@ namespace WallSplitter
 
         private void ExecuteCore(UIApplication app)
         {
+            // 삭제는 다른 대기 요청보다 먼저 처리한다. 확인창 취소/예외 이후에도 재실행되지 않게 먼저 비운다.
+            if (PendingDelete != null)
+            {
+                WarningPickDeleteRequest request = PendingDelete;
+                PendingDelete = null;
+                PendingSelectIds = null;
+                PendingSectionBoxIds = null;
+                PendingIsolateIds = null;
+                PendingResetIsolate = false;
+                ExecuteDelete(app, request);
+                return;
+            }
             if (PendingSelectIds != null)
             {
                 List<ElementId> ids = PendingSelectIds;
@@ -267,6 +282,65 @@ namespace WallSplitter
 
             List<WarningPickTypeGroup> typeGroups = WarningPickTypeGroup.BuildTypeGroups(uidoc.Document, uidoc.Document.GetWarnings());
             WarningPickWindow.Instance?.ApplyRefreshedTypeGroups(typeGroups);
+        }
+
+        private void ExecuteDelete(UIApplication app, WarningPickDeleteRequest request)
+        {
+            WarningPickWindow? window = WarningPickWindow.Instance;
+            if (window == null || !window.OwnsHandler(this)) return;
+            IsDeleting = true;
+            string result = "삭제가 중단되었습니다.";
+            try
+            {
+                UIDocument? uidoc = app.ActiveUIDocument;
+                // 수정 가능한 TargetDocument만 보지 않고 요청 당시 문서도 함께 검사한다.
+                if (uidoc == null || !request.Document.IsValidObject ||
+                    !IsTargetDocument(uidoc.Document) || DocKey(uidoc.Document) != DocKey(request.Document) ||
+                    uidoc.Document.ProjectInformation.UniqueId != request.Document.ProjectInformation.UniqueId)
+                {
+                    result = "요청 당시 문서가 활성 문서가 아니므로 삭제하지 않았습니다.";
+                    window.ShowDocumentMismatch();
+                    return;
+                }
+
+                result = WarningPickDeleteService.Delete(uidoc.Document, request.Ids, preview =>
+                {
+                    TaskDialog dialog = new TaskDialog("경고Pick — 요소 삭제 확인")
+                    {
+                        MainIcon = TaskDialogIcon.TaskDialogIconWarning,
+                        MainInstruction = "정말 삭제하시겠습니까?",
+                        MainContent = $"문서: {uidoc.Document.Title}\n범위: {request.Scope}\n\n" +
+                            $"대상 {preview.TargetCount}개 + 함께 삭제될 의존 요소 {preview.DependentCount}개\n" +
+                            $"총 {preview.TotalCount}개 요소가 실제 모델에서 삭제됩니다.\n\n" +
+                            "경고 문구만 지우는 기능이 아닙니다. 벽에 포함된 문·창, 치수 등 연결된 요소도 함께 삭제될 수 있습니다.\n" +
+                            "진행하려면 '예', 유지하려면 '아니요'를 누르세요. 삭제 후에는 Revit 실행 취소로 되돌릴 수 있습니다.",
+                        ExpandedContent = preview.Details,
+                        CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                        DefaultButton = TaskDialogResult.No,
+                        AllowCancellation = true,
+                    };
+                    return dialog.Show() == TaskDialogResult.Yes &&
+                        WarningPickWindow.Instance == window && window.OwnsHandler(this);
+                });
+            }
+            catch (System.Exception ex)
+            {
+                result = "삭제하지 못했습니다. 삭제 트랜잭션은 취소됩니다.";
+                TaskDialog.Show("경고Pick — 삭제 실패",
+                    result + "\n잠금·그룹·소유권 등 Revit의 삭제 제한을 확인해 주세요.\n\n" + ex.GetBaseException().Message);
+            }
+            finally
+            {
+                PendingRefresh = false;
+                PendingRefreshSilent = false;
+                try { ExecuteRefresh(app, true); }
+                finally
+                {
+                    IsDeleting = false;
+                    window.SetDeleteBusy(false);
+                    window.ShowDeleteResult(result);
+                }
+            }
         }
 
         public string GetName() => "WallSplitter 경고Pick";
