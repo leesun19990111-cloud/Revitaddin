@@ -23,6 +23,8 @@ namespace WallSplitter
         {
             public ElementId ElementId = ElementId.InvalidElementId;
             public string OriginalName = "";
+            public NamerCategory Category;
+            public double HierarchyWidth;
             public CheckBox CheckBox = null!;
             // 기존 이름 칸은 TextBlock 하나가 아니라 Grid다 - 그 안에 이름 TextBlock과, 마우스를 올렸을
             // 때만 오른쪽 끝에 나타나는 '특성' 버튼, 그리고 더블클릭 시의 인라인 편집칸이 겹쳐 놓인다.
@@ -79,6 +81,37 @@ namespace WallSplitter
         // 달라지지 않게 하려는 값이다 - 위 oldNameHost.MinHeight 주석 참고.
         private const double InlineEditHeight = 20;
         private List<Element> _filteredElements = new();
+        // 검색 대상은 패밀리, 편집 대상은 그 패밀리의 모든 유형, 화면은 펼침 상태로 따로 관리한다.
+        private readonly Dictionary<ElementId, List<Element>> _familyTypes = new();
+        private readonly HashSet<ElementId> _expandedFamilies = new();
+        private List<Element> _displayElements = new();
+
+        private void RefreshFamilyTypes()
+        {
+            _familyTypes.Clear();
+            if (_category != NamerCategory.Family) return;
+            foreach (Family family in _categoryElements.OfType<Family>())
+                _familyTypes[family.Id] = family.GetFamilySymbolIds()
+                    .Select(id => _doc.GetElement(id)).Where(el => el != null && el.IsValidObject)
+                    .OrderBy(el => WorkingNameOf(el!)).Cast<Element>().ToList();
+        }
+
+        private IEnumerable<Element> WithFamilyTypes(IEnumerable<Element> parents)
+        {
+            foreach (Element parent in parents)
+            {
+                yield return parent;
+                if (_familyTypes.TryGetValue(parent.Id, out List<Element>? children))
+                    foreach (Element child in children) yield return child;
+            }
+        }
+
+        private void ToggleFamily(ElementId id) => Guard("유형 목록 펼치기", () =>
+        {
+            EndDrag();
+            if (!_expandedFamilies.Remove(id)) _expandedFamilies.Add(id);
+            RenderRows(preserveView: true);
+        });
         private int _renderedCount;
         private Button? _loadMoreButton;
 
@@ -156,7 +189,7 @@ namespace WallSplitter
         {
             foreach (RenameRow row in _rows)
             {
-                row.OldNameHost.Width = OldNameColumn.ActualWidth;
+                row.OldNameHost.Width = Math.Max(0, OldNameColumn.ActualWidth - row.HierarchyWidth);
                 row.NewNameText.Width = NewNameColumn.ActualWidth;
             }
         });
@@ -217,6 +250,10 @@ namespace WallSplitter
         {
             _category = category;
             _categoryElements = CollectCandidates(_doc, category);
+            RefreshFamilyTypes();
+            if (FamilyHierarchyHint != null)
+                FamilyHierarchyHint.Visibility = category == NamerCategory.Family
+                    ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
             // _trueOriginalNames/_workingNames는 여기서 전체를 미리 채우지 않는다 — "유형"처럼 카테고리가
             // 커지면 요소 하나하나 Name을 읽는 것 자체가(체크 여부와 무관하게 전부) 눈에 띄는 지연이었다.
             // 대신 WorkingNameOf가 항목이 없을 때 el.Name을 직접 읽는 폴백을 쓰고, 실제로 이름이 바뀌는
@@ -457,6 +494,7 @@ namespace WallSplitter
         // 보고). 카테고리/필터가 바뀌는 경우는 목록 자체가 달라지므로 되살리지 않는 게 맞다.
         private void RenderRows(bool preserveView)
         {
+            if (_editingRow != null) EndInlineEdit(_editingRow, commit: true);
             int previouslyRendered = preserveView ? _renderedCount : 0;
             double previousOffset = preserveView && ItemsScroll != null ? ItemsScroll.VerticalOffset : 0;
 
@@ -496,17 +534,28 @@ namespace WallSplitter
                 }).ToList();
             }
 
-            // 필터로 화면에서 사라진 항목은 체크 상태도 같이 지운다 — "체크됨"은 항상 필터를 거쳐 실제로
-            // 보이는 항목만을 뜻해야 하므로, 필터를 바꿔서 안 보이게 된 항목이 예전 체크 상태를 그대로 들고
-            // 있다가 최종 적용에 몰래 끼어드는 일이 없어야 한다. 다른 카테고리에서 체크된 항목은 건드리지 않는다.
-            var categoryIds = new HashSet<ElementId>(_categoryElements.Select(el => el.Id));
+            // 검색 범위에서 제외된 패밀리는 그 유형의 체크도 지운다. 단순히 접은 경우에는
+            // 검색 범위가 그대로이므로 기존 체크를 유지하고, 접힌 선택 개수를 상태 줄에 표시한다.
+            _displayElements = new List<Element>();
+            foreach (Element parent in _filteredElements)
+            {
+                _displayElements.Add(parent);
+                if (_category == NamerCategory.Family && _expandedFamilies.Contains(parent.Id)
+                    && _familyTypes.TryGetValue(parent.Id, out List<Element>? children))
+                    _displayElements.AddRange(children);
+            }
+            var allCategoryElements = _category == NamerCategory.Family
+                ? WithFamilyTypes(_categoryElements) : _categoryElements;
+            if (_category == NamerCategory.Family)
+                _filteredElements = WithFamilyTypes(_filteredElements).ToList();
+            var categoryIds = new HashSet<ElementId>(allCategoryElements.Select(el => el.Id));
             var visibleIds = new HashSet<ElementId>(_filteredElements.Select(el => el.Id));
             _checkedIds.RemoveWhere(id => categoryIds.Contains(id) && !visibleIds.Contains(id));
 
             RenderMoreRows();
 
             // 펼쳐 둔 만큼 다시 펼친다. 필터가 좁아져 항목 수가 줄었으면 남은 만큼에서 멈춘다.
-            while (_renderedCount < previouslyRendered && _renderedCount < _filteredElements.Count)
+            while (_renderedCount < previouslyRendered && _renderedCount < _displayElements.Count)
                 RenderMoreRows();
 
             RestoreScrollOffset(preserveView, previousOffset);
@@ -538,7 +587,7 @@ namespace WallSplitter
             UpdateLayout();
             foreach (RenameRow row in _rows)
             {
-                row.OldNameHost.Width = OldNameColumn.ActualWidth;
+                row.OldNameHost.Width = Math.Max(0, OldNameColumn.ActualWidth - row.HierarchyWidth);
                 row.NewNameText.Width = NewNameColumn.ActualWidth;
             }
         }
@@ -556,13 +605,20 @@ namespace WallSplitter
             }
 
             int start = _renderedCount;
-            int end = Math.Min(start + PageSize, _filteredElements.Count);
+            int end = Math.Min(start + PageSize, _displayElements.Count);
 
             for (int i = start; i < end; i++)
             {
-                Element el = _filteredElements[i];
+                Element el = _displayElements[i];
                 string oldName = WorkingNameOf(el);
-                var row = new RenameRow { ElementId = el.Id, OriginalName = oldName };
+                bool familyMode = _category == NamerCategory.Family;
+                bool familyParent = familyMode && el is Family;
+                var row = new RenameRow
+                {
+                    ElementId = el.Id, OriginalName = oldName,
+                    Category = familyMode && !familyParent ? NamerCategory.Type : _category,
+                    HierarchyWidth = familyMode ? (familyParent ? 28 : 44) : 0
+                };
 
                 var rowPanel = new StackPanel
                 {
@@ -585,12 +641,38 @@ namespace WallSplitter
                 row.CheckBox = checkBox;
                 rowPanel.Children.Add(checkBox);
 
+                if (familyMode)
+                {
+                    if (familyParent)
+                    {
+                        int count = _familyTypes.TryGetValue(el.Id, out List<Element>? types) ? types.Count : 0;
+                        var expand = new Button
+                        {
+                            Content = _expandedFamilies.Contains(el.Id) ? "▾" : "▸",
+                            Width = 24, Height = 20, MinWidth = 0, MinHeight = 0,
+                            Padding = new Thickness(0), Margin = new Thickness(0, 0, 4, 0),
+                            IsEnabled = count > 0,
+                            ToolTip = $"하위 유형 {count}개 펼치기/접기 (패밀리와 유형은 개별 선택)"
+                        };
+                        expand.Click += (_, _) => ToggleFamily(row.ElementId);
+                        rowPanel.Children.Add(expand);
+                    }
+                    else
+                    {
+                        rowPanel.Children.Add(new TextBlock
+                        {
+                            Text = "↳ 유형", Width = 44, FontSize = 10,
+                            Foreground = Theme.TextSecondary, VerticalAlignment = VerticalAlignment.Center
+                        });
+                    }
+                }
+
                 // 기존 이름 칸: 이름 TextBlock 위에 '특성' 버튼을 겹쳐 놓는다. 버튼은 평소 Hidden이라
                 // 이름이 칸 너비를 다 쓰고, 마우스를 올렸을 때만 오른쪽 끝에 나타나 이름의 꼬리를 덮는다
                 // (자리를 미리 비워 두면 안 그래도 좁은 이름 칸이 항상 그만큼 줄어든다).
                 var oldNameHost = new WpfGrid
                 {
-                    Width = OldNameColumn.ActualWidth,
+                    Width = Math.Max(0, OldNameColumn.ActualWidth - row.HierarchyWidth),
                     // 인라인 편집칸은 이름 TextBlock보다 키가 크다 - 높이를 미리 확보해 두지 않으면 편집을
                     // 열고 닫을 때마다 그 행이 늘었다 줄고, 아래 행들이 전부 몇 픽셀씩 밀린다. 그 상태에서
                     // 다른 행을 클릭하면(편집이 닫히며 레이아웃이 되돌아가므로) **겨눈 행이 아니라 옆 행이
@@ -605,6 +687,8 @@ namespace WallSplitter
                 var oldNameText = new TextBlock
                 {
                     Text = oldName,
+                    ToolTip = oldName,
+                    FontWeight = familyParent ? FontWeights.SemiBold : FontWeights.Normal,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     VerticalAlignment = VerticalAlignment.Center
                 };
@@ -665,9 +749,9 @@ namespace WallSplitter
 
             _renderedCount = end;
 
-            if (_renderedCount < _filteredElements.Count)
+            if (_renderedCount < _displayElements.Count)
             {
-                int remaining = _filteredElements.Count - _renderedCount;
+                int remaining = _displayElements.Count - _renderedCount;
                 _loadMoreButton = new Button
                 {
                     Content = $"더 보기 ({remaining}개 남음)",
@@ -675,7 +759,7 @@ namespace WallSplitter
                     Padding = new Thickness(8, 4, 8, 4),
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch
                 };
-                _loadMoreButton.Click += (_, _) => RenderMoreRows();
+                _loadMoreButton.Click += (_, _) => Guard("더 보기", RenderMoreRows);
                 ItemsPanel.Children.Add(_loadMoreButton);
             }
 
@@ -893,6 +977,7 @@ namespace WallSplitter
 
             row.OriginalName = newName;
             row.OldNameText.Text = newName;
+            row.OldNameText.ToolTip = newName;
             UpdateRowPreview(row);
             UpdatePendingChangesText();
         }
@@ -907,7 +992,7 @@ namespace WallSplitter
             _propsRow = row;
             _handler.PendingProperties = new NamerExternalEventHandler.PropertyRequest
             {
-                Category = _category,
+                Category = row.Category,
                 Id = row.ElementId,
                 Name = row.OriginalName,
             };
@@ -947,26 +1032,31 @@ namespace WallSplitter
         private void UpdateCountText()
         {
             int checkedInFiltered = _filteredElements.Count(el => _checkedIds.Contains(el.Id));
-            CountText.Text = $"{_renderedCount} / {_filteredElements.Count}개 표시 중 (전체 {_categoryElements.Count}개), 선택됨 {checkedInFiltered}개";
+            int hiddenChecked = checkedInFiltered -
+                _displayElements.Count(el => _checkedIds.Contains(el.Id));
+            CountText.Text = _category == NamerCategory.Family
+                ? $"{_renderedCount} / {_displayElements.Count}행 표시 · 검색된 패밀리 {_filteredElements.Count(el => el is Family)}개 · 선택 {checkedInFiltered}개 (접힌 유형 {hiddenChecked}개 포함)"
+                : $"{_renderedCount} / {_filteredElements.Count}개 표시 중 (전체 {_categoryElements.Count}개), 선택됨 {checkedInFiltered}개";
         }
 
-        // 필터에 걸리는 전체(_filteredElements) 기준으로 동작해야, 아직 "더 보기"로 렌더링되지 않은
-        // 항목까지 전체 선택/해제가 실제로 반영된다 (렌더링된 _rows만 기준으로 하면 페이지 밖 항목이 빠짐).
-        private void SelectAllButton_Click(object sender, RoutedEventArgs e)
+        // 화면 구조(_displayElements)와 검색 범위(_filteredElements)는 페이지 밖 항목도 포함한다.
+        // 전체 선택은 펼친 항목만, 전체 해제는 접힌 유형까지 처리한다(_rows만 쓰면 페이지 밖 항목이 빠짐).
+        private void SelectAllButton_Click(object sender, RoutedEventArgs e) => Guard("전체 선택", () =>
         {
-            foreach (Element el in _filteredElements) _checkedIds.Add(el.Id);
+            // 접힌 유형은 새로 선택하지 않는다. 더 보기 뒤의 펼쳐진 항목은 포함한다.
+            foreach (Element el in _displayElements) _checkedIds.Add(el.Id);
             foreach (RenameRow row in _rows) row.CheckBox.IsChecked = true;
             UpdateCountText();
             UpdatePendingChangesText();
-        }
+        });
 
-        private void SelectNoneButton_Click(object sender, RoutedEventArgs e)
+        private void SelectNoneButton_Click(object sender, RoutedEventArgs e) => Guard("전체 해제", () =>
         {
             foreach (Element el in _filteredElements) _checkedIds.Remove(el.Id);
             foreach (RenameRow row in _rows) row.CheckBox.IsChecked = false;
             UpdateCountText();
             UpdatePendingChangesText();
-        }
+        });
 
         // ===================== 적용(창 안에서만)/최종 적용(모델에 반영)/취소 =====================
 
@@ -975,7 +1065,7 @@ namespace WallSplitter
         private void ApplyButton_Click(object sender, RoutedEventArgs e) => Guard("적용", () =>
         {
             int changedCount = 0;
-            foreach (Element el in _categoryElements)
+            foreach (Element el in _filteredElements)
             {
                 if (!_checkedIds.Contains(el.Id)) continue;
                 string current = WorkingNameOf(el);
@@ -1060,6 +1150,7 @@ namespace WallSplitter
             _trueOriginalNames.Clear();
             _workingNames.Clear();
             _categoryElements = CollectCandidates(_doc, _category);
+            RefreshFamilyTypes();
             RenderRows(preserveView: true);
             UpdatePendingChangesText();
 
@@ -1071,6 +1162,9 @@ namespace WallSplitter
         internal void UpdateDocumentAndSelection(Document doc, List<ElementId> preSelectedIds)
         {
             bool sameDocument = DocKey(doc) == DocKey(_doc);
+
+            // 편집 중인 행의 ID는 이전 문서 소속이다. 새 문서를 대입하기 전에 끝내야 한다.
+            if (_editingRow != null) EndInlineEdit(_editingRow, commit: sameDocument);
 
             _doc = doc;
             _handler.TargetDocument = doc;
@@ -1084,6 +1178,8 @@ namespace WallSplitter
                 _trueOriginalNames.Clear();
                 _workingNames.Clear();
                 _categoriesInitialized.Clear();
+                _expandedFamilies.Clear();
+                _familyTypes.Clear();
                 ShowStatus("다른 문서로 바뀌어 작업 중이던 내용을 비웠습니다.");
             }
 

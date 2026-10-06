@@ -43,7 +43,8 @@
             <RadioButton x:Name="DuplicateSuffixRadio" Content="뒤에 숫자를 붙여 새 이름으로 저장" GroupName="DuplicateMaterial"/>
         </StackPanel>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+        <StackPanel Grid.Row="2" Margin="0,0,0,8">
+            <WrapPanel>
             <TextBlock Text="필터:" VerticalAlignment="Center" Margin="0,0,4,0"/>
             <TextBox x:Name="FilterBox" Width="220" VerticalContentAlignment="Center" TextChanged="FilterBox_TextChanged"/>
             <ComboBox x:Name="FilterModeCombo" Width="130" Margin="6,0,0,0" SelectedIndex="0" SelectionChanged="FilterModeCombo_SelectionChanged">
@@ -56,8 +57,12 @@
             </ComboBox>
             <Button x:Name="SelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="SelectAllButton_Click"/>
             <Button x:Name="SelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="SelectNoneButton_Click"/>
+            </WrapPanel>
+            <TextBlock x:Name="FamilyHierarchyHint" Visibility="Collapsed" Margin="0,5,0,0"
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                       Text="패밀리 이름으로 검색 · ▸를 눌러 모든 하위 유형 보기 · 패밀리/유형은 개별 체크&#10;전체 선택: 펼쳐진 목록 전체(더 보기 포함) · 접어도 기존 선택 유지 · 전체 해제: 접힌 유형까지 해제"/>
             <TextBlock Text="(드래그: 여러 항목 체크/해제 · 이름 더블클릭: 그 항목만 바로 수정 · 이름 위에 마우스를 올린 뒤 '특성': Revit 기본 창 열기)"
-                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0" TextWrapping="Wrap"/>
+                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,5,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,6">
@@ -134,7 +139,7 @@
 
         <StackPanel Grid.Row="6" Margin="0,6,0,0">
             <TextBlock x:Name="CountText" Foreground="{DynamicResource TextSecondaryBrush}"/>
-            <TextBlock x:Name="PendingChangesText" Foreground="{DynamicResource WarningTextBrush}" FontWeight="SemiBold" Margin="0,2,0,0"/>
+            <TextBlock x:Name="PendingChangesText" Foreground="{DynamicResource WarningTextBrush}" FontWeight="SemiBold" Margin="0,2,0,0" TextWrapping="Wrap"/>
             <!-- 모드리스라 작업 결과를 대화상자로 막고 알릴 수 없다 - 상태 줄로 그 자리에서 알려준다. -->
             <TextBlock x:Name="StatusText" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
         </StackPanel>

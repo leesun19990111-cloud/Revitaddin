@@ -1,5 +1,14 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v93 — 2026-10-06 NAMER 패밀리 하위 유형 펼치기/편집
+
+- 패밀리 이름으로 검색하면 그 패밀리의 유형을 접고 펼치며 개별 선택·일괄 변경·직접 이름 편집할 수 있다. 유형 이름이 검색어와 달라도 소속 유형은 모두 포함한다. 부모/유형 체크는 독립이며 접힌 선택 수를 표시한다. 상세 선택 규칙과 회귀 제약은 `docs/namer/CLAUDE.md` 상단.
+- 2023~2027 Release 빌드 오류 0개, 경고 각각 38/53/55/40/42개. 기존 사용자의 Debug/obj 변경을 보존하기 위해 `obj/bin/iso93<year>` 및 `MSBuildProjectExtensionsPath=obj/iso93<year>/nuget/`로 격리했다.
+- 실제 NamerWindow 코드/XAML/Theme + Revit 대역 하네스에서 245개 유형의 페이징, 6개 필터, 부모/자식 독립 선택, 접기/검색/유형 탭 이동 시 상태, 직접 편집, 특성 요청, 롤백/성공 갱신, 문서 전환 격리 등 **35개 검사** 통과. 기본 크기 화면 렌더 확인. 실제 Revit 모델/네이티브 특성 창/마우스 입력 검증을 대신하지 않는다.
+- 설치 프로그램은 `obj/bin/iso93`, `SkipWallSplitterPayloadBuild=true`로 게시한 후 격리 출력의 DLL로 Payload를 구성했다. `.codex-build/release-v93/verify-release.cjs`가 출력→Payload→ZIP 파일 집합 및 SHA-256 일치, DLL 11/11/2/2/2(총 28), Clipper2Lib 포함/RevitAPI 제외, 네이머 계층 심볼과 기존 경고Pick 안전장치를 확인했다. ZIP은 30개 파일.
+- 게시 폴더 `SunnyToolsInstaller_out_v93`, ZIP `SunnyTools_Installer_v.0.9.3.zip` (35,840,949 bytes), ZIP SHA-256 `712B571E944CBBC7671FFFD1E153062EC10B37E88D3F973385566F4D23D4EF57`, EXE SHA-256 `721B7A468EF964083B2E72506A93E1016B6F2CFC37EF670DF5CBACD58C1E455B`.
+- v92 폴더/ZIP은 Old_Versions에 보관한다. 실제 Addins 직접 복사/설치/모델 변경은 수행하지 않았다. Revit을 모두 종료한 뒤 ZIP을 풀어 설치하고, 복사한 테스트 모델에서 패밀리 검색 → 유형 펼침 → 일부 유형만 선택/변경 → 최종 적용 → Revit 실행 취소와 정확한 유형 특성 열기를 확인할 것.
+
 ## v92 — 2026-09-29 경고Pick 선택/전체 요소 삭제
 
 - 하단에 별도 빨간 삭제 버튼 2개와 필수 Yes/No 확인창(기본 No)을 추가했다. 사전 롤백으로 대상·의존 요소 수를 확인하고, 동의 이후 한 트랜잭션으로 삭제한다. 전체 삭제는 현재 필터 결과의 경고 요소만 대상으로 한다. 상세 안전장치: `docs/warning-pick/CLAUDE.md` 상단.
