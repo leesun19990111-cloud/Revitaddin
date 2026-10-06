@@ -1,5 +1,14 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v95 — 2026-10-06 재료 변경 시 구조 재료·가변 레이어 보존
+
+- 재료 지정과 NAMER 재료 병합에서 전체 레이어를 재생성하던 SetLayers를 제거했다. 기존 CompoundStructure의 SetMaterialId로 해당 재료만 바꾸어 구조 재료/가변 인덱스, 기능·우선순위·두께·코어·감싸기·데크/수직 영역을 유지한다. 상세 원인과 재발 금지 사항은 material-assign/namer 문서 상단.
+- Revit 2023~2027 격리 Release 빌드 오류 0, 경고 38/53/51/36/38개. `obj/bin/iso95<year>` 및 연도별 NuGet 경로 사용. 설치 프로그램은 `obj/bin/iso95`, SkipWallSplitterPayloadBuild=true로 게시 후 새 DLL로 Payload를 구성했다.
+- `.codex-build/release-v95` 실제 코드 연결 대역 검사 **85개(네이머 40 + 인스턴스 재료 33 + 복합 레이어 12)** 통과. LayerId와 배열 인덱스 구분, 비대상 재료·레이어 속성 보존, 구조/가변 레이어 연속 변경과 과거 SetLayers 초기화 대조군 포함. NAMER 병합은 코드 재발 검사와 컴파일로 확인했으며 실제 Revit 병합 실행 검증은 아니다.
+- `verify-release.cjs`로 5개 연도 DLL 11/11/2/2/2(총 28), Clipper2Lib 포함/RevitAPI 제외, 출력→Payload→ZIP **30개 파일**의 정확한 집합·SHA-256, 기존 기능 심볼 및 재료 변경 두 경로의 SetLayers 금지/SetMaterialId 사용을 확인했다.
+- 게시 폴더 `SunnyToolsInstaller_out_v95`, ZIP `SunnyTools_Installer_v.0.9.5.zip` (35,861,842 bytes). ZIP SHA-256 `612C3D31903681951D6FF7941F2E8BD355FCE6D10E6DA7DE483A90B09AAFA0EC`, EXE SHA-256 `62F1FECE2FA504628270F1748CFEA0F79123C9FB951485958BFF809C9EF5C65D`.
+- v94 폴더/ZIP은 Old_Versions로 보관한다. 실제 Addins 복사/설치/사용자 모델 편집은 하지 않았다. **이미 사라진 설정은 설치만으로 복원되지 않는다.** 실행 취소/백업/원래 유형과 비교해 복원할 것. Revit 종료 후 설치하고 복사 모델에서 구조 재료·가변 체크, 기능·우선순위·두께·코어가 재료 변경 및 NAMER 병합 후 유지되는지 확인해야 한다.
+
 ## v94 — 2026-10-06 하위 유형 전용 체크박스 / 유형별 인스턴스 재료
 
 - NAMER 펼친 패밀리 밑에 하위 유형만 전체 선택·해제하는 체크박스를 추가했다. 재료 지정은 인스턴스 매개변수를 유형별로 묶어 공통값 또는 `<다양함>`으로 표시하고 내부 재료명으로 검색한다. 변경은 유형 전체 인스턴스에 적용되며 최종 확인창(기본 No)과 묶음별 실패 롤백을 둔다. 상세는 namer/material-assign/model-sync 문서 상단.

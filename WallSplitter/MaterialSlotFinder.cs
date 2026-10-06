@@ -133,19 +133,10 @@ namespace WallSplitter
                 CompoundStructure? structure = hostAttrs.GetCompoundStructure();
                 if (structure == null) return false;
 
-                // CompoundStructureLayer는 불변 객체라 재료만 바꾸는 세터가 없다 - 같은 두께/기능을 유지한 채
-                // 새 CompoundStructureLayer로 그 인덱스만 교체한 목록을 SetLayers에 통째로 다시 넘겨야 한다
-                // (SplitWallCommand/SplitFloorCommand가 새 유형을 만들 때 쓰는 것과 같은 패턴).
-                IList<CompoundStructureLayer> layers = structure.GetLayers();
-                var newLayers = new List<CompoundStructureLayer>(layers.Count);
-                for (int i = 0; i < layers.Count; i++)
-                {
-                    CompoundStructureLayer layer = layers[i];
-                    newLayers.Add(i == slot.Value.LayerIndex
-                        ? new CompoundStructureLayer(layer.Width, layer.Function, newMaterialId)
-                        : layer);
-                }
-                structure.SetLayers(newLayers);
+                // SetLayers는 구조 재료/가변 레이어 등을 초기화한다. 레이어를 재생성하지 않고
+                // 재료 ID만 바꿔 기능·우선순위·두께·코어 경계·감싸기·데크/수직 복합 정보를 보존한다.
+                // LayerId가 아니라 0부터 시작하는 배열 인덱스를 전달해야 한다.
+                structure.SetMaterialId(slot.Value.LayerIndex, newMaterialId);
                 hostAttrs.SetCompoundStructure(structure);
                 return true;
             }

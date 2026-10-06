@@ -249,24 +249,20 @@ namespace WallSplitter
                     if (structure != null)
                     {
                         IList<CompoundStructureLayer> layers = structure.GetLayers();
-                        var newLayers = new List<CompoundStructureLayer>(layers.Count);
                         bool changed = false;
-                        foreach (CompoundStructureLayer layer in layers)
+                        for (int layerIndex = 0; layerIndex < layers.Count; layerIndex++)
                         {
+                            CompoundStructureLayer layer = layers[layerIndex];
                             if (layer.MaterialId == oldMaterialId)
                             {
-                                newLayers.Add(new CompoundStructureLayer(layer.Width, layer.Function, newMaterialId));
+                                // 재료 병합도 레이어 전체를 다시 만들면 구조/가변 지정이 사라진다.
+                                structure.SetMaterialId(layerIndex, newMaterialId);
                                 changed = true;
-                            }
-                            else
-                            {
-                                newLayers.Add(layer);
                             }
                         }
 
                         if (changed)
                         {
-                            structure.SetLayers(newLayers);
                             hostAttrs.SetCompoundStructure(structure);
                             count++;
                         }
