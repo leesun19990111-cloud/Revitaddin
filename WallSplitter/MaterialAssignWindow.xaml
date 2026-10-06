@@ -1,7 +1,7 @@
 <Window x:Class="WallSplitter.MaterialAssignWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="재료 지정 - 유형 재료 일괄 지정 / 재료 삭제"
+        Title="재료 지정 - 유형·인스턴스 재료 일괄 지정 / 재료 삭제"
         Height="660" Width="780"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip">
@@ -28,9 +28,9 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"
-                               Text="벽/바닥/지붕/천장처럼 레이어 구조를 가진 유형은 두께가 있는 레이어마다, 그 외 유형(문/창 등)은 재료 파라미터마다 각각 하나의 행이 됩니다. 유형이 재료를 여러 개 동시에 쓰면(레이어가 여러 개, 파라미터가 여러 개) 같은 유형 이름이 슬롯 수만큼 여러 행으로 나뉘어 보이며, 이름 뒤에 '· 레이어 2'처럼 어느 슬롯인지 표시됩니다."/>
+                               Text="유형 재료는 레이어·매개변수별로, 인스턴스 재료는 같은 유형·매개변수별로 묶어 표시합니다. 재료가 서로 다르면 &lt;다양함&gt;이며, 마우스를 올리면 재료 목록을 볼 수 있습니다.&#10;인스턴스 행을 변경하면 검색에 걸린 재료만이 아니라 그 유형의 모든 인스턴스가 함께 변경됩니다. 도면에 배치되지 않은 유형에는 인스턴스 값이 없습니다."/>
 
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                    <WrapPanel Grid.Row="1" Margin="0,0,0,8">
                         <TextBlock Text="필터 대상:" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <ComboBox x:Name="FilterTargetCombo" Width="100" SelectedIndex="0" SelectionChanged="FilterTargetCombo_SelectionChanged">
                             <ComboBoxItem Content="패밀리/유형"/>
@@ -49,7 +49,7 @@
                         <Button x:Name="SelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="SelectAllButton_Click"/>
                         <Button x:Name="SelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="SelectNoneButton_Click"/>
                         <TextBlock Text="(드래그로 여러 항목 체크/해제)" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0"/>
-                    </StackPanel>
+                    </WrapPanel>
 
                     <Border Grid.Row="2" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="6"
                             Background="{DynamicResource SurfaceBrush}" Padding="10" Margin="0,0,0,8">

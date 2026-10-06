@@ -78,6 +78,9 @@ namespace WallSplitter
         {
             switch (entry.Kind)
             {
+                case ChangeKind.MaterialInstanceAssign:
+                    summary.Skipped.Add((entry, "인스턴스 재료 변경은 다른 모델에서 대상 범위를 다시 확인해야 하므로 자동 반영하지 않습니다."));
+                    return false;
                 case ChangeKind.Rename:
                 {
                     NamerWindow.NamerCategory category = entry.Category ?? NamerWindow.NamerCategory.Type;

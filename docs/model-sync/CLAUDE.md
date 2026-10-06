@@ -1,5 +1,10 @@
 # 모델간 변경 반영 (Model Sync)
 
+## 2026-10-06 v94 — 인스턴스 재료 변경 기록의 안전한 분리
+
+- 새 `ChangeKind.MaterialInstanceAssign`를 enum 끝에 추가한다. 같은 유형의 인스턴스 재료 일괄 변경은 기존 MaterialAssign(유형 슬롯 변경)과 다르므로 같은 종류로 기록하지 않는다.
+- 기록 창에는 `인스턴스 재료 지정 (자동 반영 제외)`와 슬롯명을 표시한다. ResolveOne은 대상 요소 선택/트랜잭션 전 사유를 붙여 건너뛴다. 타 모델에 같은 이름의 유형이 있어도 해당 유형 재료를 덮어쓰지 않는다. 기존 기록 enum 값과 재생 경로는 유지한다.
+
 `ModelSyncWindow.xaml(.cs)`/`ModelSyncCommand.cs`/`ChangeLog.cs`/`ChangeReplayEngine.cs`를 건드리기 전에 이 문서를 읽을 것. NAMER/재료 지정의 변경 기록을 재생하는 기능이라, 두 문서(`docs/namer`, `docs/material-assign`)와 함께 봐야 할 때가 많다.
 
 Replicates NAMER/재료 지정 changes from one central model into another, added 2026-07-21 on request ("한 중앙모델에서 바뀐 걸 다른 중앙모델에도 같은 사례가 있으면 그대로 적용"). Own ribbon panel/button ("모델간 변경 반영"→`ModelSyncCommand`). Renamed from "모델 동기화" on 2026-07-24 (user feedback: the original name didn't intuitively convey what the feature does) — only user-facing strings/comments changed, `ModelSyncCommand`/`ModelSyncWindow`/`ModelSyncPanelName`/`ChangeReplayEngine` etc. keep their original identifiers (see `docs/design-system/CLAUDE.md`'s "화면 디자인 시스템" for the same conversation's other change).

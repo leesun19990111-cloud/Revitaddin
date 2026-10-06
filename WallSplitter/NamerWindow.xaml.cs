@@ -84,6 +84,40 @@ namespace WallSplitter
         // 검색 대상은 패밀리, 편집 대상은 그 패밀리의 모든 유형, 화면은 펼침 상태로 따로 관리한다.
         private readonly Dictionary<ElementId, List<Element>> _familyTypes = new();
         private readonly HashSet<ElementId> _expandedFamilies = new();
+        private readonly Dictionary<ElementId, CheckBox> _familyTypeChecks = new();
+        private bool _changingFamilyTypes;
+
+        private void UpdateFamilyTypeChecks()
+        {
+            if (_changingFamilyTypes) return;
+            foreach (var pair in _familyTypeChecks)
+            {
+                if (!_familyTypes.TryGetValue(pair.Key, out List<Element>? children)) continue;
+                int selected = children.Count(child => _checkedIds.Contains(child.Id));
+                pair.Value.IsChecked = selected == children.Count && children.Count > 0;
+                pair.Value.Content = $"하위 유형만 전체 선택 ({selected}/{children.Count})";
+            }
+        }
+
+        private void ToggleFamilyTypes(ElementId familyId) => Guard("하위 유형 전체 선택", () =>
+        {
+            if (!_familyTypes.TryGetValue(familyId, out List<Element>? children)) return;
+            EndDrag();
+            bool select = children.Any(child => !_checkedIds.Contains(child.Id));
+            var ids = new HashSet<ElementId>(children.Select(child => child.Id));
+            _changingFamilyTypes = true;
+            try
+            {
+                foreach (ElementId id in ids)
+                    if (select) _checkedIds.Add(id); else _checkedIds.Remove(id);
+                foreach (RenameRow row in _rows.Where(row => ids.Contains(row.ElementId)))
+                    row.CheckBox.IsChecked = select;
+            }
+            finally { _changingFamilyTypes = false; }
+            UpdateFamilyTypeChecks();
+            UpdateCountText();
+            UpdatePendingChangesText();
+        });
         private List<Element> _displayElements = new();
 
         private void RefreshFamilyTypes()
@@ -500,6 +534,7 @@ namespace WallSplitter
 
             ItemsPanel.Children.Clear();
             _rows.Clear();
+            _familyTypeChecks.Clear();
             _renderedCount = 0;
             _loadMoreButton = null;
 
@@ -636,8 +671,8 @@ namespace WallSplitter
                     Margin = new Thickness(0, 0, 8, 0),
                     IsHitTestVisible = false // 클릭/드래그는 전부 rowPanel에서 처리하고, 체크박스는 상태 표시 용도로만 쓴다
                 };
-                checkBox.Checked += (_, _) => { _checkedIds.Add(row.ElementId); UpdateRowPreview(row); UpdatePendingChangesText(); };
-                checkBox.Unchecked += (_, _) => { _checkedIds.Remove(row.ElementId); UpdateRowPreview(row); UpdatePendingChangesText(); };
+                checkBox.Checked += (_, _) => { _checkedIds.Add(row.ElementId); UpdateRowPreview(row); UpdateFamilyTypeChecks(); UpdatePendingChangesText(); };
+                checkBox.Unchecked += (_, _) => { _checkedIds.Remove(row.ElementId); UpdateRowPreview(row); UpdateFamilyTypeChecks(); UpdatePendingChangesText(); };
                 row.CheckBox = checkBox;
                 rowPanel.Children.Add(checkBox);
 
@@ -745,9 +780,23 @@ namespace WallSplitter
                 _rows.Add(row);
                 ItemsPanel.Children.Add(rowPanel);
                 UpdateRowPreview(row);
+                if (familyParent && _expandedFamilies.Contains(el.Id))
+                {
+                    // 부모 행의 체크/드래그와 분리된 컨트롤이며, 아직 렌더되지 않은 유형도 함께 선택한다.
+                    var selectTypes = new CheckBox
+                    {
+                        Margin = new Thickness(30, 2, 4, 5),
+                        ToolTip = "이 패밀리의 유형만 전체 선택/해제합니다. 패밀리 자체와 다른 패밀리는 바꾸지 않습니다."
+                    };
+                    ElementId familyId = el.Id;
+                    selectTypes.Click += (_, _) => ToggleFamilyTypes(familyId);
+                    _familyTypeChecks[familyId] = selectTypes;
+                    ItemsPanel.Children.Add(selectTypes);
+                }
             }
 
             _renderedCount = end;
+            UpdateFamilyTypeChecks();
 
             if (_renderedCount < _displayElements.Count)
             {

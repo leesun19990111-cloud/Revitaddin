@@ -30,8 +30,9 @@ namespace WallSplitter
             if (window.DeleteResult != null && window.DeleteResult.Count > 0)
                 return ExecuteDelete(doc, window.DeleteResult);
 
-            if (window.Result != null && window.Result.Count > 0)
-                return ExecuteAssign(doc, window.Result);
+            if ((window.Result?.Count ?? 0) > 0 || (window.InstanceResult?.Count ?? 0) > 0)
+                return ExecuteAssign(doc, window.Result ?? new List<(ElementId, MaterialSlot, ElementId)>(),
+                    window.InstanceResult ?? new List<MaterialInstanceAssignment>());
 
             if (window.IdentityResult != null && window.IdentityResult.Count > 0)
                 return ExecuteIdentityEdit(doc, window.IdentityResult);
@@ -116,7 +117,8 @@ namespace WallSplitter
         // 동일하게 유형 이름만 보인다.
         private static string SlotSuffix(MaterialSlot slot) => string.IsNullOrEmpty(slot.Label) ? "" : $" ({slot.Label})";
 
-        private static Result ExecuteAssign(Document doc, List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)> assignments)
+        private static Result ExecuteAssign(Document doc, List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)> assignments,
+            List<MaterialInstanceAssignment> instanceAssignments)
         {
             var failed = new List<string>();
             var pendingLogEntries = new List<ChangeLogEntry>();
@@ -159,6 +161,25 @@ namespace WallSplitter
                     {
                         failed.Add($"{type.Name}{SlotSuffix(slot)} ({ex.Message})");
                     }
+                }
+
+                foreach (MaterialInstanceAssignment assignment in instanceAssignments)
+                {
+                    string name = doc.GetElement(assignment.TypeId)?.Name ?? assignment.TypeId.ToString();
+                    if (!assignment.TryApply(doc, out List<ElementId> oldIds, out string reason))
+                    {
+                        failed.Add($"{name}{SlotSuffix(assignment.Slot)} · 인스턴스 {assignment.InstanceIds.Count}개 ({reason})");
+                        continue;
+                    }
+                    var oldNames = oldIds.Select(id => doc.GetElement(id)?.Name ?? "지정되지않음").Distinct().ToList();
+                    pendingLogEntries.Add(new ChangeLogEntry
+                    {
+                        Timestamp = DateTime.Now, SourceDocumentTitle = doc.Title,
+                        Kind = ChangeKind.MaterialInstanceAssign, Key = name,
+                        SlotLabel = assignment.Slot.Label,
+                        OldValue = oldNames.Count == 1 ? oldNames[0] : "<다양함>",
+                        NewValue = doc.GetElement(assignment.NewMaterialId)?.Name,
+                    });
                 }
 
                 // NAMER의 이름 변경 트랜잭션에서 확인된 라이브 버그(커스텀 IFailuresPreprocessor를 붙이면

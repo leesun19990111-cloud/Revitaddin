@@ -20,6 +20,7 @@ namespace WallSplitter
         MaterialAssign,     // 재료 지정: 유형 이름이 Key인 유형의 재료를 OldValue(이름)에서 NewValue(이름)로 변경
         MaterialDelete,     // 재료 지정: 이름이 Key인 재료를 삭제
         MaterialIdentityEdit, // 재료 지정: 이름이 Key인 재료의 Field(클래스/설명)를 NewValue로 변경
+        MaterialInstanceAssign, // 유형별 인스턴스 재료 지정 — 유형 슬롯으로 오인해 재생하지 않는다
     }
 
     internal enum IdentityField

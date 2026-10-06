@@ -1,5 +1,14 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v94 — 2026-10-06 하위 유형 전용 체크박스 / 유형별 인스턴스 재료
+
+- NAMER 펼친 패밀리 밑에 하위 유형만 전체 선택·해제하는 체크박스를 추가했다. 재료 지정은 인스턴스 매개변수를 유형별로 묶어 공통값 또는 `<다양함>`으로 표시하고 내부 재료명으로 검색한다. 변경은 유형 전체 인스턴스에 적용되며 최종 확인창(기본 No)과 묶음별 실패 롤백을 둔다. 상세는 namer/material-assign/model-sync 문서 상단.
+- 2023~2027 격리 Release 빌드 오류 0, 경고 38/53/51/36/38개. 출력 `obj/bin/iso94<year>`, NuGet 중간 경로도 연도별로 격리하여 기존 사용자 Debug/obj 변경을 보존했다. 설치 프로그램은 `obj/bin/iso94` 및 SkipWallSplitterPayloadBuild=true로 게시하고 검증한 DLL로 Payload를 구성했다.
+- 실제 Window/XAML/Theme/SlotFinder/InstanceAssignment를 링크한 대역 테스트 **73개(네이머 40 + 재료 33)** 통과. 245개 자식 페이징과 부모 제외, 공통/혼합 재료 검색, 동명 유형 분리, 원본값 복원 판정, 최종 대상 범위, 일부 쓰기 실패·읽기 전용·삭제·유형 변경 롤백을 검사했다. 기본 크기와 확장 크기 화면 렌더 확인.
+- `.codex-build/release-v94/verify-release.cjs`가 출력→Payload→ZIP 30개 파일의 정확한 집합과 SHA-256, DLL 11/11/2/2/2(총 28), Clipper2Lib 포함/RevitAPI 제외, 신규 기능 심볼·확인창 기본 No·모델간 자동 재생 제외를 검사했다.
+- 게시 폴더 `SunnyToolsInstaller_out_v94`, ZIP `SunnyTools_Installer_v.0.9.4.zip` (35,862,341 bytes). ZIP SHA-256 `E4C325E1D1875746CBBFC9ED6D7E5B015C32302BEEC24717D7152BE4D79BE513`, EXE SHA-256 `D614DC6C364A5AFB154D98FCEE1C82F5B353555FA7345BFB9C6A6BE5B9F7C911`.
+- v93 폴더/ZIP은 Old_Versions에 보관한다. 실제 Addins 복사/설치/사용자 모델 편집은 하지 않았다. Revit 종료 후 설치하고 복사 모델에서 인스턴스 수·그룹/소유권/수식 읽기 전용·실행 취소와 네이머 체크박스를 라이브 확인해야 한다.
+
 ## v93 — 2026-10-06 NAMER 패밀리 하위 유형 펼치기/편집
 
 - 패밀리 이름으로 검색하면 그 패밀리의 유형을 접고 펼치며 개별 선택·일괄 변경·직접 이름 편집할 수 있다. 유형 이름이 검색어와 달라도 소속 유형은 모두 포함한다. 부모/유형 체크는 독립이며 접힌 선택 수를 표시한다. 상세 선택 규칙과 회귀 제약은 `docs/namer/CLAUDE.md` 상단.

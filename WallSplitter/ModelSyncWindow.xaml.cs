@@ -143,6 +143,7 @@ namespace WallSplitter
             {
                 ChangeKind.Rename => $"이름 변경({CategoryLabel(entry.Category)})",
                 ChangeKind.MaterialAssign => "재료 지정",
+                ChangeKind.MaterialInstanceAssign => "인스턴스 재료 지정 (자동 반영 제외)",
                 ChangeKind.MaterialDelete => "재료 삭제",
                 ChangeKind.MaterialIdentityEdit => $"재료 {(entry.Field == IdentityField.MaterialClass ? "클래스" : "설명")} 변경",
                 _ => entry.Kind.ToString(),
@@ -152,6 +153,7 @@ namespace WallSplitter
             {
                 ChangeKind.MaterialDelete => $"'{entry.Key}' 삭제",
                 ChangeKind.MaterialAssign => $"'{entry.Key}' 유형: '{entry.OldValue}' → '{entry.NewValue}'",
+                ChangeKind.MaterialInstanceAssign => $"'{entry.Key}' 인스턴스 · {entry.SlotLabel}: '{entry.OldValue}' → '{entry.NewValue}'",
                 _ => $"'{entry.Key}' → '{entry.NewValue}'",
             };
 
