@@ -22,30 +22,15 @@ namespace WallSplitter
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
 
-            if (!LinkedModelEditService.Choose(uiApp, "NAMER", out RevitLinkType? link))
-                return Result.Cancelled;
-            if (link != null)
-                return LinkedModelEditService.Run(uiApp, link, "NAMER", local =>
-                {
-                    var editor = new NamerWindow(local, new List<ElementId>(), linkedModal: true);
-                    new WindowInteropHelper(editor) { Owner = uiApp.MainWindowHandle };
-                    if (editor.ShowDialog() != true || editor.LinkedRenames == null) return null;
-                    var renames = editor.LinkedRenames;
-                    bool merge = editor.LinkedMerge;
-                    return new LinkedEditPlan
-                    {
-                        Summary = $"이름 변경 {renames.Count}개\n" +
-                            string.Join("\n", renames.Take(20).Select(item => local.GetElement(item.Id)?.Name + " → " + item.NewName)) +
-                            (renames.Count > 20 ? "\n… 나머지 항목 포함" : "") +
-                            (merge ? "\n같은 이름의 재료는 기존 재료로 병합합니다." : ""),
-                        Apply = (target, logs) =>
-                        {
-                            RenameResult result = ApplyRenames(target, renames, merge, logs);
-                            return result.Status == TransactionStatus.Committed && result.Failed.Count == 0
-                                ? Result.Succeeded : Result.Failed;
-                        }
-                    };
-                });
+            if (UnifiedEditService.HasLinks(doc))
+                return UnifiedEditService.Execute(uiApp, false, () => ExecuteCurrent(uiApp));
+            return ExecuteCurrent(uiApp);
+        }
+
+        private static Result ExecuteCurrent(UIApplication uiApp)
+        {
+            UIDocument uiDoc = uiApp.ActiveUIDocument;
+            Document doc = uiDoc.Document;
 
             List<ElementId> preSelected = uiDoc.Selection.GetElementIds().ToList();
 

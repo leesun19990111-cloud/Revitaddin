@@ -1,5 +1,16 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v97 — 2026-10-13 현재+링크 통합 NAMER / 재료 지정
+
+- 파일별 선택창 대신 소속 모델 열이 있는 통합 목록을 추가했다. 현재 모델과 로드된 링크 요소를 같이 검색·편집하고, 같은 원본의 반복 배치를 중복 제거한다. 모델별 재료 명시 선택, 패밀리 하위 유형 펼침·하위 유형만 선택을 지원한다. 원본 연결/처리 제외/모달/기존 도구 유지 제약은 namer/material-assign v97 및 README 참고.
+- 최종 확인 한 번 뒤 변경된 링크를 순차 동기화하고 호스트는 마지막에 반영(자동 저장/Sync 없음). 모델 실패/링크 복원 경고 시 남은 모델을 중단하고 성공/실패/미처리를 구분한다. 여러 중앙모델의 전역 원자적 롤백은 지원하지 않는다. 조회 후 값이 바뀐 요소·재료·인스턴스 범위는 덮어쓰지 않는다.
+- v96의 새 로컬 오판 차단도 수정했다. 저장 전 BasicFileInfo.IsLocal에 의존하지 않고 열린 호스트의 실제 파일/중앙 경로를 읽기 핸들로 정규화해 비교한다. 중앙 원본/분리 문서/경로 검증 불가 상태는 계속 차단한다.
+- Revit 2023~2027 격리 Release 오류 0, 경고 38/53/51/36/38개. `obj/bin/iso97<year>` 및 연도별 NuGet 격리. 설치기는 `obj/bin/iso97`, SkipWallSplitterPayloadBuild=true로 게시한 뒤 해당 DLL로 Payload를 구성했다.
+- 실제 코드 연결 대역 검사: `.codex-build/release-v97` 기존 창/재료/레이어 91개, `link-safety-v97` 링크 안전 및 로컬 판정 40개, `unified-v97` 통합 UI/모델/서비스 44개, **총 175개 통과**. 기본/최소 크기의 통합 네이머·재료 창 렌더 확인. 대역은 Revit 엔진/실제 중앙 서버를 검증한 것이 아니다.
+- verify-release.cjs로 5개 연도 신규 통합 심볼/명령 진입점/로컬 판정 회귀 방지, 기존 안전장치, 재료 SetLayers 금지 유지, DLL 11/11/2/2/2(총 28), Clipper2Lib 포함/RevitAPI 제외, 출력→Payload→ZIP 30개 파일의 정확한 집합·SHA-256을 확인했다.
+- 게시 폴더 `SunnyToolsInstaller_out_v97`, ZIP `SunnyTools_Installer_v.0.9.7.zip` (35,962,469 bytes), SHA-256 `33524D7997D50ED55B4AD1FBACF9F9B0508A57E161B4C2B65929EF00359F1DE4`. EXE SHA-256 `A4E078ED2B84ACFBD194B403D773A7966F6E21D35688A7C8CFB5A3F8AF6FE28B`.
+- v96 폴더/ZIP은 Old_Versions로 보관한다. 실제 Addins 직접 복사/설치/사용자 모델 변경은 하지 않았다. **실제 공유 서버 동기화는 미검증**. Revit 종료 후 설치하고 `docs/namer/unified-edit-testing.md`에 따라 운영과 분리한 테스트 중앙+호스트에서 먼저 검증할 것.
+
 ## v96 — 2026-10-13 NAMER·재료 지정 링크 중앙모델 편집
 
 - 공유폴더 중앙 원본 편집에 대한 사용자 확인 후, 대상 한 파일의 새 로컬 생성·사용자별 링크 해제·별도 편집·기본 No 최종 확인·중앙 동기화·링크 복원을 구현했다. 현재 프로젝트 동작은 유지한다. 클라우드/Revit Server/중첩/미로드/개인 로컬 링크는 지원하지 않는다. 상세 수명·실패 복구는 namer/material-assign/model-sync v96 절을 함께 읽을 것.

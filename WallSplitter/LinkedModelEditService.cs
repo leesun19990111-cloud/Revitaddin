@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
 using System.Windows.Interop;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -14,6 +17,12 @@ namespace WallSplitter
     {
         internal string Summary = "";
         internal Func<Document, List<ChangeLogEntry>, Result> Apply = null!;
+    }
+
+    internal sealed class LinkedEditReport
+    {
+        internal bool Synced, HasProblems;
+        internal readonly List<string> Messages = new();
     }
 
     internal static class LinkedModelEditService
@@ -58,11 +67,41 @@ namespace WallSplitter
             catch { return "파일 경로 확인 불가"; }
         }
 
-        private static bool SamePath(string a, string b)
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, StringBuilder path, uint length, uint flags);
+
+        // 매핑 드라이브와 UNC/심볼릭 링크가 같은 파일을 가리키는 경우에도 같은 경로로 비교한다.
+        // 읽기 핸들만 사용하며 파일 내용은 수정하지 않는다. 정규화 실패는 안전하게 중단한다.
+        internal static string CanonicalPath(string path)
+        {
+            using var stream = new FileStream(Path.GetFullPath(path), FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            var buffer = new StringBuilder(32768);
+            uint length = GetFinalPathNameByHandle(stream.SafeFileHandle, buffer, (uint)buffer.Capacity, 0);
+            if (length == 0 || length >= buffer.Capacity)
+                throw new IOException("파일 경로를 확인할 수 없습니다: " + path);
+            return buffer.ToString().TrimEnd('\\');
+        }
+
+        internal static bool SamePath(string a, string b)
         {
             if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
-            return string.Equals(Path.GetFullPath(a).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'),
+            return string.Equals(CanonicalPath(a), CanonicalPath(b),
                 StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static void ValidateHostLocal(Document host)
+        {
+            if (host.IsDetached) throw new InvalidOperationException("중앙에서 분리한 문서에서는 링크 원본 편집을 시작할 수 없습니다.");
+            if (string.IsNullOrWhiteSpace(host.PathName))
+                throw new InvalidOperationException("현재 프로젝트의 로컬 파일을 먼저 저장해 주세요.");
+            ModelPath central = host.GetWorksharingCentralModelPath();
+            if (central is not FilePath)
+                throw new InvalidOperationException("현재 프로젝트도 파일 기반 중앙모델의 로컬이어야 합니다.");
+            string path = ModelPathUtils.ConvertModelPathToUserVisiblePath(central);
+            if (SamePath(host.PathName, path))
+                throw new InvalidOperationException("현재 프로젝트가 중앙 원본 경로에서 열려 있습니다. 새 로컬로 열어 주세요.\n현재: " + host.PathName + "\n중앙: " + path);
+            // 새 로컬은 첫 저장 전 BasicFileInfo.IsLocal=false일 수 있다. 이 값만으로 차단하지 않는다.
         }
 
         internal static bool Confirm(string title, string instruction, string content)
@@ -82,7 +121,7 @@ namespace WallSplitter
         }
 
         internal static Result Run(UIApplication app, RevitLinkType link, string title,
-            Func<Document, LinkedEditPlan?> prepare)
+            Func<Document, LinkedEditPlan?> prepare, LinkedEditReport? batch = null)
         {
             Document host = app.ActiveUIDocument.Document;
             Document? local = null;
@@ -113,11 +152,7 @@ namespace WallSplitter
                 }
                 if (host.IsWorkshared)
                 {
-                    if (string.IsNullOrEmpty(host.PathName))
-                        throw new InvalidOperationException("현재 프로젝트의 로컬 파일을 먼저 저장해 주세요.");
-                    using (BasicFileInfo hostInfo = BasicFileInfo.Extract(host.PathName))
-                        if (!hostInfo.IsLocal)
-                            throw new InvalidOperationException("중앙모델을 직접 연 상태입니다. 현재 프로젝트의 새 로컬에서 실행해 주세요.");
+                    ValidateHostLocal(host);
                     localUnload = true;
                 }
                 foreach (Document open in app.Application.Documents)
@@ -128,7 +163,7 @@ namespace WallSplitter
                             open.GetWorksharingCentralModelPath()), centralPath)))
                         throw new InvalidOperationException("같은 중앙모델 또는 로컬이 이미 열려 있습니다. 그 문서에서 직접 편집하거나 닫은 후 실행해 주세요.");
                 }
-                if (!Confirm(title, "링크 중앙모델 편집을 시작할까요?",
+                if (batch == null && !Confirm(title, "링크 중앙모델 편집을 시작할까요?",
                     centralPath + "\n\n전용 로컬을 만들고 편집 중 링크를 잠시 내립니다." +
                     (localUnload ? " 현재 사용자에게만 해제합니다." : "") +
                     "\n링크 해제·갱신 과정에서 현재 프로젝트의 실행 취소 기록이 지워질 수 있습니다. 필요한 작업을 먼저 저장해 주세요." +
@@ -159,7 +194,7 @@ namespace WallSplitter
 
                 LinkedEditPlan? plan = prepare(local);
                 if (plan == null) return Result.Cancelled;
-                if (!Confirm(title, "다음 변경을 중앙모델에 동기화할까요?",
+                if (batch == null && !Confirm(title, "다음 변경을 중앙모델에 동기화할까요?",
                     centralPath + "\n\n" + plan.Summary +
                     "\n\n다른 사용자가 잠근 요소는 강제로 수정하지 않습니다. 한 항목이라도 실패하면 이번 파일의 변경 전체를 취소합니다." +
                     "\n중앙모델 동기화 후에는 현재 프로젝트의 실행 취소로 되돌릴 수 없습니다."))
@@ -245,7 +280,14 @@ namespace WallSplitter
                     }
                     catch (Exception ex) { messages.Add("링크 복원 실패 — 링크 관리에서 다시 로드해 주세요: " + ex.Message); }
                 }
-                if (messages.Count > 0) TaskDialog.Show(title + " — 링크 편집 결과", string.Join("\n\n", messages));
+                if (batch != null)
+                {
+                    batch.Synced = synced;
+                    batch.HasProblems = !synced || messages.Count != 1;
+                    batch.Messages.AddRange(messages);
+                    if (messages.Count == 0) batch.Messages.Add("미처리 — 변경 없음 또는 취소");
+                }
+                else if (messages.Count > 0) TaskDialog.Show(title + " — 링크 편집 결과", string.Join("\n\n", messages));
             }
         }
     }
