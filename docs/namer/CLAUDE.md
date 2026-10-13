@@ -1,5 +1,13 @@
 # NAMER (이름 일괄 변경)
 
+## 2026-10-13 v98 — 통합 창 UI 회귀 복원 / ModelPath 형식 오판 수정
+
+- 사용자 실측: v97 통합 창에서 영역 구분/열 조절/입력 즉시 미리보기/드래그 선택이 사라짐. UnifiedEditWindow에 검색·변경 설정 테두리 구역, 헤더 GridSplitter 3개와 ActualWidth→모든 행 동기화, TextChanged 기반 미리보기, 행 캡처 드래그/Shift 범위를 복원했다. 부모·자식 체크 독립 및 하위 유형 전용 체크는 유지한다. 드래그는 시작 때 선택/해제 상태를 고정하고 빠르게 건너간 사이 행도 포함한다. 체크 변경 시 행 트리를 다시 만들지 않는다.
+- 미리보기 문자열과 UnifiedRow.Working은 분리한다. 선택한 행에만 변환을 미리 표시하고 Stage만 누적한다. 최종 적용은 미리보기 계산을 호출하지 않는다. 기존/변경 이름 더블클릭은 변경 이름 칸에 편집기를 띄우며 첫 클릭 체크 반전을 복원한다. Enter/포커스 이탈/다른 곳 클릭 확정, Esc 취소. 인라인 편집 중에는 미리보기를 편집값으로 저장하지 않는다. Render는 페이지 한도 및 스크롤을 보존한다. 창은 여전히 순수 값 기반 모달이고 기존 모드리스/네이티브 특성은 현재 모델 전용 도구로 유지한다.
+- 첨부 오류는 ValidateHostLocal의 `central is not FilePath` 분기였다. journal.0234의 파일 기반 로컬/중앙 경로 기록과 대조했다. **GetWorksharingCentralModelPath 등은 파일 기반이어도 기본 ModelPath를 반환할 수 있으므로 구체 CLR 타입을 판정에 쓰지 말 것.** IsFileBasedPath는 null/Empty/ServerPath/CloudPath 속성으로 검사하며 호스트 검증, 링크 조회/중복 제거, 원본 재개방 검증, 열린 문서 중앙 비교에 공통 적용한다. 실제 파일의 존재/읽기 핸들 정규화/중앙-로컬 다른 경로/분리 문서/버전/소유권 안전 검사는 유지한다. 공유폴더 UNC는 Revit Server가 아니다.
+- 근거: 설치 RevitAPI.xml 및 [ModelPath API](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/40a84c72-e4b8-72ac-2f71-3216c66a11b3.htm). 링크는 CreateNewLocal→편집→Save→SynchronizeWithCentral→로그→복원으로 중앙 원본에 반영한다. 로컬 저장 성공만으로 중앙 성공 처리하지 않는다. 현재 프로젝트의 기존 미저장 변경을 자동 동기화하는 기능은 추가하지 않았다.
+- `.codex-build/unified-v98` 실제 UI/서비스 + 대역 검사 60개(신규 16개: 이벤트 연결, 입력 미리보기와 작업값 분리, 열 동기화, 드래그·범위, 직접 편집, 페이지·스크롤). `link-safety-v98`은 기본 ModelPath를 반환하도록 대역을 교정해 46개, 기존 창·재료·레이어 91개, 총 197개. 기본/최소 크기 렌더 확인. 실제 OS 마우스/Revit 서버 동기화를 검증한 것은 아니다. 기존 대역이 항상 FilePath를 반환해 이번 라이브 버그를 놓쳤으므로 기본 래퍼 대조 검사를 없애지 말 것.
+
 ## 2026-10-13 v97 — 현재 모델과 모든 링크의 통합 목록
 
 - 사용자 정정: 파일별 창이 아니라 한 일람표 같은 목록에서 현재 모델과 링크 모델을 동시에 검색·선택·변경한다. v96 Choose 분기를 명령 진입점에서 제거했다. 링크가 있으면 UnifiedEditService/UnifiedEditWindow로 진입하고 없으면 기존 모드리스 창이다. 통합 창의 현재 모델 전용 도구로 기존 창에 접근한다. 기존 NAMER가 열려 있으면 미적용 작업 보호를 위해 먼저 닫도록 안내한다.

@@ -113,10 +113,10 @@ namespace WallSplitter
                 {
                     ModelPath path = link.GetExternalFileReference().GetAbsolutePath();
                     source.Path = ModelPathUtils.ConvertModelPathToUserVisiblePath(path);
-                    string identity = path is FilePath ? LinkedModelEditService.CanonicalPath(source.Path) : source.Path;
+                    string identity = LinkedModelEditService.IsFileBasedPath(path) ? LinkedModelEditService.CanonicalPath(source.Path) : source.Path;
                     if (!seen.Add(identity)) continue;
                     if (link.IsNestedLink) source.BlockReason = "중첩 링크: 직접 편집 미지원";
-                    else if (path is not FilePath) source.BlockReason = "클라우드/Revit Server 편집 미지원";
+                    else if (!LinkedModelEditService.IsFileBasedPath(path)) source.BlockReason = "비어 있는 경로 또는 클라우드/Revit Server 편집 미지원";
                     else
                     {
                         using var info = BasicFileInfo.Extract(source.Path);

@@ -90,14 +90,19 @@ namespace WallSplitter
                 StringComparison.OrdinalIgnoreCase);
         }
 
+        // Revit 조회 API는 파일 경로도 기본 ModelPath 래퍼로 반환할 수 있다.
+        // FilePath로의 형 변환 여부 대신 API의 경로 속성으로 판별한다.
+        internal static bool IsFileBasedPath(ModelPath? path) =>
+            path != null && !path.Empty && !path.ServerPath && !path.CloudPath;
+
         internal static void ValidateHostLocal(Document host)
         {
             if (host.IsDetached) throw new InvalidOperationException("중앙에서 분리한 문서에서는 링크 원본 편집을 시작할 수 없습니다.");
             if (string.IsNullOrWhiteSpace(host.PathName))
                 throw new InvalidOperationException("현재 프로젝트의 로컬 파일을 먼저 저장해 주세요.");
             ModelPath central = host.GetWorksharingCentralModelPath();
-            if (central is not FilePath)
-                throw new InvalidOperationException("현재 프로젝트도 파일 기반 중앙모델의 로컬이어야 합니다.");
+            if (!IsFileBasedPath(central))
+                throw new InvalidOperationException("현재 프로젝트의 중앙 연결이 비어 있거나 지원하지 않는 서버/클라우드 경로입니다.\n현재: " + host.PathName);
             string path = ModelPathUtils.ConvertModelPathToUserVisiblePath(central);
             if (SamePath(host.PathName, path))
                 throw new InvalidOperationException("현재 프로젝트가 중앙 원본 경로에서 열려 있습니다. 새 로컬로 열어 주세요.\n현재: " + host.PathName + "\n중앙: " + path);
@@ -138,7 +143,7 @@ namespace WallSplitter
                 if (!link.IsNotLoadedIntoMultipleOpenDocuments())
                     throw new InvalidOperationException("이 링크가 다른 열린 프로젝트에도 로드되어 있습니다. 다른 프로젝트를 닫은 후 실행해 주세요.");
                 ModelPath path = link.GetExternalFileReference().GetAbsolutePath();
-                if (path is not FilePath)
+                if (!IsFileBasedPath(path))
                     throw new InvalidOperationException("공유폴더의 중앙 RVT만 지원합니다. ACC/BIM 360 및 Revit Server는 지원하지 않습니다.");
                 centralPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(path);
                 if (!File.Exists(centralPath))
@@ -159,8 +164,8 @@ namespace WallSplitter
                 {
                     if (open.IsLinked || open.IsFamilyDocument) continue;
                     if (SamePath(open.PathName, centralPath) ||
-                        (open.IsWorkshared && SamePath(ModelPathUtils.ConvertModelPathToUserVisiblePath(
-                            open.GetWorksharingCentralModelPath()), centralPath)))
+                        (open.IsWorkshared && IsFileBasedPath(open.GetWorksharingCentralModelPath()) &&
+                            SamePath(ModelPathUtils.ConvertModelPathToUserVisiblePath(open.GetWorksharingCentralModelPath()), centralPath)))
                         throw new InvalidOperationException("같은 중앙모델 또는 로컬이 이미 열려 있습니다. 그 문서에서 직접 편집하거나 닫은 후 실행해 주세요.");
                 }
                 if (batch == null && !Confirm(title, "링크 중앙모델 편집을 시작할까요?",
@@ -189,6 +194,7 @@ namespace WallSplitter
                     local = app.Application.OpenDocumentFile(ModelPathUtils.ConvertUserVisiblePathToModelPath(localPath), options);
                 }
                 if (local.IsLinked || local.IsReadOnly || !local.IsWorkshared ||
+                    !IsFileBasedPath(local.GetWorksharingCentralModelPath()) ||
                     !SamePath(ModelPathUtils.ConvertModelPathToUserVisiblePath(local.GetWorksharingCentralModelPath()), centralPath))
                     throw new InvalidOperationException("새 로컬의 중앙모델 연결을 확인하지 못했습니다. 변경하지 않습니다.");
 

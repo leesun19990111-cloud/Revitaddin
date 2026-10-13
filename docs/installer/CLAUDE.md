@@ -1,5 +1,14 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v98 — 2026-10-13 통합 네이머 사용성 복원 / 중앙 경로 오판 수정
+
+- 통합 창에 구역 테두리, 열 너비 조절, 입력 중 선택 이름 미리보기, 드래그/Shift 다중 선택, 더블클릭 개별 편집, 적용 후 페이지/스크롤 보존을 복원했다. 공통 UI이므로 재료 지정에도 열/선택 개선이 적용된다. 미리보기와 누적 변경은 분리한다.
+- `ModelPath is FilePath` 검사를 경로 속성(Empty/ServerPath/CloudPath) 검사로 교체해 실제 파일 기반 중앙의 로컬을 거부하던 경로를 수정했다. 기존 실제 파일/중앙-로컬 경로/소유권 안전 검사와 중앙 동기화 성공 후 로그 정책은 유지한다. 상세: namer v98.
+- 실제 소스 연결 대역 검사: unified-v98 60개, link-safety-v98 46개, release-v98 기존 91개, 총 **197개 통과**. WPF 이벤트 연결 및 기본/최소 크기 렌더 확인. 실제 OS 마우스 및 Revit 공유 서버 동기화 검증을 대신하지 않는다.
+- Revit 2023~2027 `obj/bin/iso98<year>` 격리 Release 오류 0개, 경고 38/53/51/36/38개. 설치기 `obj/bin/iso98`로 게시 후 새 DLL을 Payload에 구성. DLL 11/11/2/2/2(총 28), Clipper 포함/RevitAPI 제외, 의존성 폐쇄와 원본→Payload→ZIP 30개 파일의 정확한 집합·SHA-256을 verify-release.cjs로 확인했다.
+- `SunnyToolsInstaller_out_v98`, `SunnyTools_Installer_v.0.9.8.zip` (35,972,928 bytes). ZIP SHA-256 `CF324257732A3ED7F27EFF0A8DF9DD24EC436FCF3A863E8FE7102D35D2B20044`, EXE SHA-256 `4EF53F3A5C197BA1A6BE902E370D746139C6A84EE02AAEE712ADD146BD3280F0`.
+- v97 폴더/ZIP은 Old_Versions로 보관한다. 실제 Addins 직접 복사/설치/사용자 모델 쓰기는 하지 않았다. Revit을 종료하고 설치 후 운영과 분리된 테스트 중앙에서 UI와 실제 중앙 이름 반영을 확인할 것. 현재 모델 자체의 저장/중앙 동기화는 여전히 수동이다.
+
 ## v97 — 2026-10-13 현재+링크 통합 NAMER / 재료 지정
 
 - 파일별 선택창 대신 소속 모델 열이 있는 통합 목록을 추가했다. 현재 모델과 로드된 링크 요소를 같이 검색·편집하고, 같은 원본의 반복 배치를 중복 제거한다. 모델별 재료 명시 선택, 패밀리 하위 유형 펼침·하위 유형만 선택을 지원한다. 원본 연결/처리 제외/모달/기존 도구 유지 제약은 namer/material-assign v97 및 README 참고.
