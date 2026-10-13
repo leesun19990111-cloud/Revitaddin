@@ -1,5 +1,15 @@
 # NAMER (이름 일괄 변경)
 
+## 2026-10-13 v99 — 같은 Revit에 열린 링크 원본 재사용
+
+- 사용자 명시 요청으로 v96의 “같은 중앙/로컬이 열려 있으면 차단”을 대체한다. FindOpenTarget은 Application.Documents의 비링크·비패밀리 문서를 실제 파일/중앙 경로로 찾고 중복 후보는 거부한다. 읽기 전용/편집 중/분리/비작업공유/중앙 연결 불일치 문서는 새 로컬로 우회하지 않는다. 호스트 자기 자신은 현재 모델 항목으로 유도한다. WPF에는 Document를 저장하지 않는다.
+- UnifiedEditService.Collect는 열린 원본이 있으면 그 문서의 현재 이름·재료·인스턴스 범위를 읽는다. 링크의 오래된 스냅샷 때문에 미저장 이름과 충돌하지 않도록 한다. 모델별 최종 확인에 열린 문서 경로를 넣고, 실제 반영 직전 **항상 별도 기본 No 확인**으로 기존 미저장/미동기화 작업까지 함께 동기화됨을 알린다. IsModified=false여도 저장된 미동기화 작업이 있을 수 있으므로 확인을 생략하지 않는다.
+- 재사용 분기에는 CreateNewLocal/OpenDocumentFile/Unload/Reload/Close/선행 Save가 없다. 해당 문서의 TransactionGroup으로 이번 변경만 묶고 모든 그룹 종료 후 SynchronizeWithCentral을 호출한다. 로컬은 SaveLocalBefore/After=true, 중앙 직접 열기는 false(공식 API에서 중앙에는 무시됨). RelinquishOptions(false)로 기존 사용자 소유권을 유지하며 취소/실패 cleanup에서도 전체 소유권을 반납하지 않는다. 새로 빌린 소유권도 사용자가 나중에 반환한다. 중앙 파일 덮어쓰기/SaveAs/강제 체크아웃 금지 유지.
+- 열린 원본에는 링크 해제가 필요 없어 다중 호스트 로드·호스트 중앙 직접 열기 검사를 우회할 수 있다. 원본이 없을 때의 전용 로컬 분기는 기존 제약을 유지한다. 재사용 시 링크 표시 갱신은 자동 수행하지 않고 결과창에서 별도 안내한다(다중 호스트 Reload 제약, 열린 원본 및 Undo 보호). 중앙 성공과 링크 표시 갱신은 같은 의미가 아니다.
+- 적용 중 실패는 이번 그룹만 롤백한다. 동기화 실패는 열린 문서/변경을 남기고 자동 저장 재시도·닫기·소유권 반납 없이 실제 문서 경로를 안내한다. RetainChanges는 성공 여부(Synced)와 별개다. **외부 명령의 Cancelled/Failed는 Revit 변경을 되돌리므로**, 이미 중앙 동기화했거나 열린 문서에 복구 변경을 보존할 때는 외부 명령에 Succeeded를 반환하고 실제 실패/미처리는 결과창으로 보고한다. 여러 모델 중 실패 시 남은 모델 중단은 유지한다. 로그는 중앙 성공 뒤에만 기록.
+- 공식 근거: [중앙 동기화 옵션](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/96eaf3af-971d-da6d-a857-88d6e602ffd4.htm), [외부 명령 반환과 롤백](https://help.autodesk.com/cloudhelp/2024/ENU/Revit-API/files/Revit_API_Developers_Guide/Introduction/Add_In_Integration/Revit_API_Revit_API_Developers_Guide_Introduction_Add_In_Integration_External_Commands_html.html). 실제 서버/Revit 동기화는 미검증이며 unified-edit-testing.md의 v99 항목으로 별도 테스트 중앙에서 확인해야 한다.
+- 검증: `.codex-build/link-safety-v99` 실제 공통 서비스+대역 72개(열린 로컬/중앙, 필수 확인, 다중 호스트, 취소/적용/동기화 실패, 문서·소유권 유지, 외부 명령 반환), `unified-v99` 64개(열린 원본 이름/재료 조회 포함), `release-v99` 기존 91개, 총 227개. Revit 2023~2027 오류 0개. 대역 테스트는 실제 Revit 엔진·소유권·중앙 서버 쓰기 검증을 대신하지 않는다.
+
 ## 2026-10-13 v98 — 통합 창 UI 회귀 복원 / ModelPath 형식 오판 수정
 
 - 사용자 실측: v97 통합 창에서 영역 구분/열 조절/입력 즉시 미리보기/드래그 선택이 사라짐. UnifiedEditWindow에 검색·변경 설정 테두리 구역, 헤더 GridSplitter 3개와 ActualWidth→모든 행 동기화, TextChanged 기반 미리보기, 행 캡처 드래그/Shift 범위를 복원했다. 부모·자식 체크 독립 및 하위 유형 전용 체크는 유지한다. 드래그는 시작 때 선택/해제 상태를 고정하고 빠르게 건너간 사이 행도 포함한다. 체크 변경 시 행 트리를 다시 만들지 않는다.

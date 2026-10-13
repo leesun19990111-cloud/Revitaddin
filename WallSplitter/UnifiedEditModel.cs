@@ -8,6 +8,7 @@ namespace WallSplitter
     internal sealed class UnifiedSource
     {
         internal string Key = "", Name = "", Path = "", LinkUniqueId = "", BlockReason = "";
+        internal string OpenDocumentPath = "";
         internal bool IsHost;
         internal readonly List<UnifiedRow> Rows = new();
         internal readonly Dictionary<string, string> Materials = new();

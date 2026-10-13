@@ -15,6 +15,7 @@ namespace WallSplitter
         internal static Result Execute(UIApplication app, bool materials, Func<Result> currentOnly)
         {
             string title = materials ? "재료 지정 — 통합 모델" : "NAMER — 통합 모델";
+            bool retainChanges = false;
             try
             {
                 if (NamerWindow.Instance != null)
@@ -23,7 +24,7 @@ namespace WallSplitter
                     return Result.Cancelled;
                 }
                 Document host = app.ActiveUIDocument.Document;
-                var sources = Collect(host, materials);
+                var sources = Collect(host, materials, app);
                 var window = new UnifiedEditWindow(sources, materials);
                 new WindowInteropHelper(window) { Owner = app.MainWindowHandle };
                 bool? accepted = window.ShowDialog();
@@ -35,12 +36,14 @@ namespace WallSplitter
                 string summary = string.Join("\n\n", batches.Select(b =>
                     b.Source.Name + " · " + b.Rows.Count + "개 변경" +
                     (materials ? " · 인스턴스 " + b.Rows.Where(r => r.IsInstance).SelectMany(r => r.OriginalMaterials.Keys).Distinct().Count() + "개" : "") +
-                    "\n" + b.Source.Path));
+                    "\n" + b.Source.Path +
+                    (b.Source.OpenDocumentPath.Length > 0 ? "\n열린 문서 재사용: " + b.Source.OpenDocumentPath : "")));
                 if (!LinkedModelEditService.Confirm(title, "모델별 변경 내용을 확인하고 일괄 적용할까요?",
                     summary + "\n\n링크는 원본 중앙모델에 동기화되어 다른 사용자·프로젝트에도 반영됩니다." +
                     "\n현재 모델은 마지막에 반영하며 자동 저장·중앙 동기화하지 않습니다." +
+                    "\n이미 열린 링크 원본은 해당 문서를 재사용합니다. 그 문서의 기존 작업도 함께 동기화되므로 실행 직전에 별도로 확인합니다." +
                     "\n링크 해제/복원은 실행 취소 기록을 지울 수 있습니다. 공유좌표는 저장하지 않습니다." +
-                    "\n모델 하나가 실패하면 그 모델의 적용을 취소하고 나머지는 중단합니다. 이미 동기화된 모델은 자동으로 되돌릴 수 없습니다." +
+                    "\n항목 적용 실패는 이번 모델의 변경을 취소합니다. 동기화 실패 시에는 변경을 보존하고 나머지 모델을 중단합니다. 이미 동기화된 모델은 자동으로 되돌릴 수 없습니다." +
                     "\n서버 동기화 실패는 중앙 반영 여부가 불확실할 수 있으므로 자동 재시도하지 않습니다." +
                     (!materials && window.MergeMaterials ? "\n같은 이름의 재료는 모델 안에서 병합합니다." : "")))
                     return Result.Cancelled;
@@ -65,6 +68,7 @@ namespace WallSplitter
                             if (plan.Apply(host, logs) != Result.Succeeded)
                                 throw new InvalidOperationException("현재 모델 변경 실패 — 이번 모델 전체 취소");
                             if (group.Assimilate() != TransactionStatus.Committed) throw new InvalidOperationException("현재 모델 확정 실패");
+                            retainChanges = true;
                             ChangeLog.Append(logs);
                             report.Add(batch.Source.Name + " — 반영 완료 (저장/중앙 동기화는 직접 실행)");
                         }
@@ -77,6 +81,7 @@ namespace WallSplitter
                                 throw new InvalidOperationException("링크 원본 경로가 변경되었습니다. 다시 조회하세요.");
                             var outcome = new LinkedEditReport();
                             LinkedModelEditService.Run(app, link, title, _ => plan, outcome);
+                            retainChanges |= outcome.RetainChanges;
                             report.Add(batch.Source.Name + " — " + string.Join("\n", outcome.Messages));
                             stopped = !outcome.Synced || outcome.HasProblems;
                         }
@@ -88,16 +93,17 @@ namespace WallSplitter
                     }
                 }
                 TaskDialog.Show(title + " — 처리 결과", string.Join("\n\n", report));
-                return stopped ? Result.Cancelled : Result.Succeeded;
+                // 실패/미처리는 보고서로 알린다. 이미 동기화했거나 복구용으로 남긴 변경은 Revit이 취소하지 않게 한다.
+                return stopped && !retainChanges ? Result.Cancelled : Result.Succeeded;
             }
             catch (Exception ex)
             {
                 TaskDialog.Show(title, "통합 편집을 완료하지 못했습니다.\n" + ex.GetBaseException().Message);
-                return Result.Cancelled;
+                return retainChanges ? Result.Succeeded : Result.Cancelled;
             }
         }
 
-        internal static List<UnifiedSource> Collect(Document host, bool materials)
+        internal static List<UnifiedSource> Collect(Document host, bool materials, UIApplication? app = null)
         {
             var sources = new List<UnifiedSource>();
             var current = new UnifiedSource { Key = "host", Name = "[현재] " + host.Title, IsHost = true, Path = host.PathName };
@@ -127,7 +133,16 @@ namespace WallSplitter
                         .Cast<RevitLinkInstance>().FirstOrDefault(i => i.GetTypeId() == link.Id);
                     Document? doc = instance?.GetLinkDocument();
                     if (doc == null) source.BlockReason = "미로드 링크: 요소를 조회할 수 없음";
-                    else ReadRows(source, doc, materials);
+                    else
+                    {
+                        // 링크에 남아 있는 옛 이름 대신 이미 열린 원본의 현재 작업값을 표시한다.
+                        if (source.Editable && app != null)
+                        {
+                            Document? open = LinkedModelEditService.FindOpenTarget(app, source.Path);
+                            if (open != null) { doc = open; source.OpenDocumentPath = open.PathName; }
+                        }
+                        ReadRows(source, doc, materials);
+                    }
                 }
                 catch (Exception ex) { source.BlockReason = "조회/편집 불가: " + ex.GetBaseException().Message; }
                 sources.Add(source);

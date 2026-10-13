@@ -12,7 +12,7 @@ using Autodesk.Revit.UI;
 namespace WallSplitter
 {
     // 링크 문서(GetLinkDocument)는 절대 수정하지 않는다. 사용자가 선택한 중앙모델의
-    // 새 로컬만 편집하고, 확인한 작업을 동기화한 다음 호스트 링크 상태를 복원한다.
+    // 이미 열린 원본 문서가 있으면 재사용하고, 없을 때만 새 로컬을 만든다.
     internal sealed class LinkedEditPlan
     {
         internal string Summary = "";
@@ -22,6 +22,7 @@ namespace WallSplitter
     internal sealed class LinkedEditReport
     {
         internal bool Synced, HasProblems;
+        internal bool RetainChanges;
         internal readonly List<string> Messages = new();
     }
 
@@ -95,6 +96,45 @@ namespace WallSplitter
         internal static bool IsFileBasedPath(ModelPath? path) =>
             path != null && !path.Empty && !path.ServerPath && !path.CloudPath;
 
+        // 같은 Revit 세션의 편집 가능한 문서만 찾는다. 링크의 읽기 전용 문서는 대상이 아니다.
+        internal static Document? FindOpenTarget(UIApplication app, string centralPath)
+        {
+            Document? target = null;
+            foreach (Document open in app.Application.Documents)
+            {
+                if (!open.IsValidObject || open.IsLinked || open.IsFamilyDocument) continue;
+                bool matches = SamePath(open.PathName, centralPath);
+                if (!matches && open.IsWorkshared)
+                {
+                    ModelPath central = open.GetWorksharingCentralModelPath();
+                    matches = IsFileBasedPath(central) && SamePath(
+                        ModelPathUtils.ConvertModelPathToUserVisiblePath(central), centralPath);
+                }
+                if (!matches) continue;
+                if (target != null)
+                    throw new InvalidOperationException("같은 중앙모델의 편집 문서가 여러 개 열려 있어 대상을 확정할 수 없습니다.");
+                target = open;
+            }
+            if (target != null)
+            {
+                ValidateOpenTarget(target, centralPath);
+                if (SamePath(target.PathName, app.ActiveUIDocument.Document.PathName))
+                    throw new InvalidOperationException("링크 원본이 현재 모델과 같습니다. 현재 모델 항목에서 편집해 주세요.");
+            }
+            return target;
+        }
+
+        private static void ValidateOpenTarget(Document target, string centralPath)
+        {
+            if (!target.IsValidObject || target.IsLinked || target.IsFamilyDocument || target.IsReadOnly ||
+                target.IsModifiable || target.IsDetached || !target.IsWorkshared)
+                throw new InvalidOperationException("열린 대상 모델을 편집·동기화할 수 없습니다. 읽기 전용/편집 모드/중앙 분리 여부를 확인해 주세요.");
+            ModelPath central = target.GetWorksharingCentralModelPath();
+            if (string.IsNullOrWhiteSpace(target.PathName) || !IsFileBasedPath(central) ||
+                !SamePath(ModelPathUtils.ConvertModelPathToUserVisiblePath(central), centralPath))
+                throw new InvalidOperationException("열린 대상 문서의 중앙 연결을 확인하지 못했습니다. 변경하지 않습니다.");
+        }
+
         internal static void ValidateHostLocal(Document host)
         {
             if (host.IsDetached) throw new InvalidOperationException("중앙에서 분리한 문서에서는 링크 원본 편집을 시작할 수 없습니다.");
@@ -131,6 +171,7 @@ namespace WallSplitter
             Document host = app.ActiveUIDocument.Document;
             Document? local = null;
             bool restore = false, localUnload = false, committed = false, saved = false, synced = false;
+            bool reusedOpen = false, openedCentral = false;
             string localPath = "", centralPath = "";
             var messages = new List<string>();
             var logs = new List<ChangeLogEntry>();
@@ -140,8 +181,6 @@ namespace WallSplitter
                     throw new InvalidOperationException("현재 프로젝트에서 링크 편집을 시작할 수 없습니다. 편집 모드를 종료해 주세요.");
                 if (link.IsNestedLink || !RevitLinkType.IsLoaded(host, link.Id) || link.LocallyUnloaded)
                     throw new InvalidOperationException("로드된 최상위 링크만 편집할 수 있습니다. 먼저 링크를 로드해 주세요.");
-                if (!link.IsNotLoadedIntoMultipleOpenDocuments())
-                    throw new InvalidOperationException("이 링크가 다른 열린 프로젝트에도 로드되어 있습니다. 다른 프로젝트를 닫은 후 실행해 주세요.");
                 ModelPath path = link.GetExternalFileReference().GetAbsolutePath();
                 if (!IsFileBasedPath(path))
                     throw new InvalidOperationException("공유폴더의 중앙 RVT만 지원합니다. ACC/BIM 360 및 Revit Server는 지원하지 않습니다.");
@@ -155,20 +194,25 @@ namespace WallSplitter
                     if (!info.IsSavedInCurrentVersion)
                         throw new InvalidOperationException("현재 Revit 버전으로 저장된 중앙모델만 지원합니다. 자동 업그레이드는 하지 않습니다.");
                 }
-                if (host.IsWorkshared)
+                // 열린 원본은 링크를 내리거나 새 로컬을 열 필요가 없다.
+                local = FindOpenTarget(app, centralPath);
+                reusedOpen = local != null;
+                if (reusedOpen)
                 {
-                    ValidateHostLocal(host);
-                    localUnload = true;
+                    localPath = local!.PathName;
+                    openedCentral = SamePath(localPath, centralPath);
                 }
-                foreach (Document open in app.Application.Documents)
+                else
                 {
-                    if (open.IsLinked || open.IsFamilyDocument) continue;
-                    if (SamePath(open.PathName, centralPath) ||
-                        (open.IsWorkshared && IsFileBasedPath(open.GetWorksharingCentralModelPath()) &&
-                            SamePath(ModelPathUtils.ConvertModelPathToUserVisiblePath(open.GetWorksharingCentralModelPath()), centralPath)))
-                        throw new InvalidOperationException("같은 중앙모델 또는 로컬이 이미 열려 있습니다. 그 문서에서 직접 편집하거나 닫은 후 실행해 주세요.");
+                    if (!link.IsNotLoadedIntoMultipleOpenDocuments())
+                        throw new InvalidOperationException("이 링크가 여러 열린 프로젝트에 로드되어 새 로컬을 열 수 없습니다. 대상 중앙모델의 로컬을 같은 Revit에 별도로 열고 다시 실행하거나 다른 호스트 프로젝트를 닫아 주세요.");
+                    if (host.IsWorkshared)
+                    {
+                        ValidateHostLocal(host);
+                        localUnload = true;
+                    }
                 }
-                if (batch == null && !Confirm(title, "링크 중앙모델 편집을 시작할까요?",
+                if (!reusedOpen && batch == null && !Confirm(title, "링크 중앙모델 편집을 시작할까요?",
                     centralPath + "\n\n전용 로컬을 만들고 편집 중 링크를 잠시 내립니다." +
                     (localUnload ? " 현재 사용자에게만 해제합니다." : "") +
                     "\n링크 해제·갱신 과정에서 현재 프로젝트의 실행 취소 기록이 지워질 수 있습니다. 필요한 작업을 먼저 저장해 주세요." +
@@ -176,39 +220,54 @@ namespace WallSplitter
                     "\n원본을 쓰는 다른 프로젝트에도 변경이 반영됩니다. 링크 편집 창에서는 다른 Revit 작업을 병행할 수 없습니다."))
                     return Result.Cancelled;
 
-                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "WallSplitter", "LinkedModelEdits", DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(folder);
-                localPath = Path.Combine(folder, Path.GetFileName(centralPath));
-                WorksharingUtils.CreateNewLocal(path, ModelPathUtils.ConvertUserVisiblePathToModelPath(localPath));
-                // 해제 중 예외가 나도 실제 상태를 다시 검사하여 복원을 시도한다.
-                restore = true;
-                if (localUnload) link.UnloadLocally(null); else link.Unload(null);
-                if (RevitLinkType.IsLoaded(host, link.Id))
-                    throw new InvalidOperationException("링크를 해제하지 못하여 원본 편집을 중단했습니다.");
-                using (var options = new OpenOptions())
+                if (!reusedOpen)
                 {
-                    options.DetachFromCentralOption = DetachFromCentralOption.DoNotDetach;
-                    using (var worksets = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets))
-                        options.SetOpenWorksetsConfiguration(worksets);
-                    local = app.Application.OpenDocumentFile(ModelPathUtils.ConvertUserVisiblePathToModelPath(localPath), options);
+                    string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "WallSplitter", "LinkedModelEdits", DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(folder);
+                    localPath = Path.Combine(folder, Path.GetFileName(centralPath));
+                    WorksharingUtils.CreateNewLocal(path, ModelPathUtils.ConvertUserVisiblePathToModelPath(localPath));
+                    // 해제 중 예외가 나도 실제 상태를 다시 검사하여 복원을 시도한다.
+                    restore = true;
+                    if (localUnload) link.UnloadLocally(null); else link.Unload(null);
+                    if (RevitLinkType.IsLoaded(host, link.Id))
+                        throw new InvalidOperationException("링크를 해제하지 못하여 원본 편집을 중단했습니다.");
+                    using (var options = new OpenOptions())
+                    {
+                        options.DetachFromCentralOption = DetachFromCentralOption.DoNotDetach;
+                        using (var worksets = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets))
+                            options.SetOpenWorksetsConfiguration(worksets);
+                        local = app.Application.OpenDocumentFile(ModelPathUtils.ConvertUserVisiblePathToModelPath(localPath), options);
+                    }
+                    if (local.IsLinked || local.IsReadOnly || !local.IsWorkshared ||
+                        !IsFileBasedPath(local.GetWorksharingCentralModelPath()) ||
+                        !SamePath(ModelPathUtils.ConvertModelPathToUserVisiblePath(local.GetWorksharingCentralModelPath()), centralPath))
+                        throw new InvalidOperationException("새 로컬의 중앙모델 연결을 확인하지 못했습니다. 변경하지 않습니다.");
                 }
-                if (local.IsLinked || local.IsReadOnly || !local.IsWorkshared ||
-                    !IsFileBasedPath(local.GetWorksharingCentralModelPath()) ||
-                    !SamePath(ModelPathUtils.ConvertModelPathToUserVisiblePath(local.GetWorksharingCentralModelPath()), centralPath))
-                    throw new InvalidOperationException("새 로컬의 중앙모델 연결을 확인하지 못했습니다. 변경하지 않습니다.");
 
-                LinkedEditPlan? plan = prepare(local);
+                LinkedEditPlan? plan = prepare(local!);
                 if (plan == null) return Result.Cancelled;
-                if (batch == null && !Confirm(title, "다음 변경을 중앙모델에 동기화할까요?",
+                // 통합 일괄 확인과 별개로 기존 작업까지 함께 동기화되는 문서는 반드시 재확인한다.
+                if (reusedOpen && !Confirm(title, "이미 열린 문서의 모든 미동기화 변경도 함께 반영할까요?",
+                    "열린 문서: " + local!.Title + "\n" + localPath + "\n중앙모델: " + centralPath +
+                    "\n\n" + plan.Summary +
+                    "\n\n이번 변경뿐 아니라 이 문서에 이미 있던 미저장·미동기화 작업도 중앙모델에 함께 반영됩니다. 이번 변경만 골라 동기화할 수 없습니다." +
+                    (openedCentral ? "\n중앙 원본을 직접 연 문서입니다. 별도 복사/덮어쓰기 없이 Revit의 중앙 동기화를 실행합니다." : "") +
+                    "\n문서는 닫지 않으며 기존 요소·작업세트 소유권은 자동 반납하지 않습니다." +
+                    "\n링크는 해제/재로드하지 않습니다. 화면에 남은 링크는 필요할 때 링크 관리에서 갱신해 주세요." +
+                    "\n적용 중 항목 실패는 이번 변경만 취소합니다. 동기화 실패 시 문서를 유지하고 중앙 반영 상태를 안내합니다." +
+                    "\n동기화 완료된 변경은 현재 프로젝트의 실행 취소로 되돌릴 수 없습니다."))
+                    return Result.Cancelled;
+                if (!reusedOpen && batch == null && !Confirm(title, "다음 변경을 중앙모델에 동기화할까요?",
                     centralPath + "\n\n" + plan.Summary +
                     "\n\n다른 사용자가 잠근 요소는 강제로 수정하지 않습니다. 한 항목이라도 실패하면 이번 파일의 변경 전체를 취소합니다." +
                     "\n중앙모델 동기화 후에는 현재 프로젝트의 실행 취소로 되돌릴 수 없습니다."))
                     return Result.Cancelled;
-                using (var group = new TransactionGroup(local, title + " 링크 원본 편집"))
+                if (reusedOpen) ValidateOpenTarget(local!, centralPath);
+                using (var group = new TransactionGroup(local!, title + " 링크 원본 편집"))
                 {
                     if (group.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집을 시작하지 못했습니다.");
-                    Result edited = plan.Apply(local, logs);
+                    Result edited = plan.Apply(local!, logs);
                     if (edited != Result.Succeeded || logs.Count == 0)
                     {
                         group.RollBack();
@@ -220,33 +279,35 @@ namespace WallSplitter
                     committed = true;
                 }
                 // 네트워크 오류가 나도 사용자가 직접 복구할 수 있도록 먼저 전용 로컬에 저장한다.
-                local.Save();
-                saved = true;
+                // 사용자가 연 중앙 원본에는 Save를 선행하지 않는다. 반드시 중앙 동기화 경로를 쓴다.
+                if (!reusedOpen) { local!.Save(); saved = true; }
                 using (var transact = new TransactWithCentralOptions())
                 using (var sync = new SynchronizeWithCentralOptions())
-                using (var relinquish = new RelinquishOptions(true))
+                using (var relinquish = new RelinquishOptions(!reusedOpen))
                 {
                     transact.SetLockCallback(new NoLockWait());
                     sync.SetRelinquishOptions(relinquish);
-                    sync.SaveLocalBefore = true;
-                    sync.SaveLocalAfter = true;
+                    sync.SaveLocalBefore = !openedCentral;
+                    sync.SaveLocalAfter = !openedCentral;
                     sync.Comment = "Sunny Tools " + title + " — 링크 원본 편집";
-                    local.SynchronizeWithCentral(transact, sync);
+                    local!.SynchronizeWithCentral(transact, sync);
                 }
                 synced = true;
                 foreach (ChangeLogEntry entry in logs) entry.SourceDocumentTitle = Path.GetFileNameWithoutExtension(centralPath);
                 ChangeLog.Append(logs);
-                messages.Add("중앙모델 동기화를 완료했습니다. 변경 기록 " + logs.Count + "건.");
+                messages.Add("중앙모델 동기화를 완료했습니다. 변경 기록 " + logs.Count + "건." +
+                    (reusedOpen ? "\n기존 미동기화 작업도 함께 반영했습니다. 열린 문서와 소유권은 유지했습니다. 링크 표시는 필요 시 링크 관리에서 갱신해 주세요." : ""));
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
                 messages.Add((synced ? "중앙 동기화 이후 처리 오류: " : "작업을 완료하지 못했습니다: ") + ex.GetBaseException().Message);
-                return Result.Cancelled;
+                // 외부 명령의 Cancelled는 Revit 객체 변경을 되돌린다. 복구할 열린 문서의 변경은 보존한다.
+                return synced || (reusedOpen && committed) ? Result.Succeeded : Result.Cancelled;
             }
             finally
             {
-                if (local != null && local.IsValidObject)
+                if (!reusedOpen && local != null && local.IsValidObject)
                 {
                     if (committed && !saved && !synced)
                     {
@@ -271,7 +332,9 @@ namespace WallSplitter
                     }
                 }
                 if (committed && !synced)
-                    messages.Add("중앙 반영 완료 여부를 확인하지 못했습니다. 자동 재시도하지 마세요.\n중앙모델을 확인한 후 복구 로컬을 열어 비교·동기화해 주세요:\n" + localPath);
+                    messages.Add(reusedOpen
+                        ? "이번 변경은 열린 문서에 반영했지만 중앙 반영 완료 여부를 확인하지 못했습니다. 자동 재시도하지 마세요.\n문서를 닫거나 변경을 버리지 않았습니다. 기존 작업과 함께 중앙 상태를 확인한 후 이 문서에서 직접 저장·동기화해 주세요:\n" + localPath
+                        : "중앙 반영 완료 여부를 확인하지 못했습니다. 자동 재시도하지 마세요.\n중앙모델을 확인한 후 복구 로컬을 열어 비교·동기화해 주세요:\n" + localPath);
                 if (restore && host.IsValidObject && link.IsValidObject)
                 {
                     try
@@ -289,6 +352,7 @@ namespace WallSplitter
                 if (batch != null)
                 {
                     batch.Synced = synced;
+                    batch.RetainChanges = synced || (reusedOpen && committed);
                     batch.HasProblems = !synced || messages.Count != 1;
                     batch.Messages.AddRange(messages);
                     if (messages.Count == 0) batch.Messages.Add("미처리 — 변경 없음 또는 취소");
