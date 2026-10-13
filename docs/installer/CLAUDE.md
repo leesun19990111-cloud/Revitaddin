@@ -1,5 +1,12 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v101 — 2026-10-14 일람표 에디터 드래그 / Shift 범위 선택
+
+- 일람표 에디터 행 전체 클릭·고정 상태 드래그·마지막 클릭 기준 Shift 체크/해제 추가. 범위 직접 입력과 양방향 연동, 체크 시 행 재생성 제거, 200행 페이지/필드 전환/미리보기 적용 후 선택·스크롤 보존, 끝 자동 스크롤 및 캡처/타이머 종료 처리. Revit 조회/편집/동기화 서비스는 변경하지 않았다.
+- 실제 소스+API 대역 검사 308개: unified-v101 145(새 선택 검사 31), release-v101 91, link-safety-v101 72. 실제 WPF 라우팅 이벤트·히트테스트·기본/최소 크기 렌더 확인. OS 실제 입력 및 Revit/공유 서버 라이브 검증은 미실시.
+- Revit 2023~2027 `obj/bin/iso101<year>` 격리 Release 오류 0, 기존 경고 38/53/51/36/38. 설치기 `obj/bin/iso101` 게시 후 격리 DLL을 Payload에 명시 복사. DLL 11/11/2/2/2, 모든 연도 Clipper 포함, Autodesk DLL 제외. verify-release.cjs로 원본→Payload→ZIP 30파일 집합·SHA-256, 런타임 의존성, 신규 선택 및 기존 안전장치 심볼 확인.
+- `SunnyToolsInstaller_out_v101`, `SunnyTools_Installer_v.1.0.1.zip`(36,091,579 bytes). ZIP SHA256 `E09BB82D2FA0EB5754E7CCF114D224215E6A661315C02B6B26EF2BC887A31FF5`, EXE SHA256 `DB5632B226156BC62A1339819606776C045EFFA0677B331E0F1F479935660278`. v100 폴더/ZIP은 `Old_Versions/`에 보관. 실제 Addins 설치/사용자 모델 변경 없음.
+
 ## v100 — 2026-10-13 재료 검색 복원 / 프로젝트 정보 / 일람표 에디터
 
 - 통합 재료 지정의 모델별 검색 TextBox 복원. NAMER 프로젝트 정보 카테고리(현재/링크, 빈 값 `없음`, 읽기 전용 구분, 원시값 사전 검증) 추가. NAMER 패널 별도 Schedule Editor 버튼으로 필드/데이터 행 범위 편집과 링크 중앙 동기화. 일람표 첫 버전은 텍스트 식별/텍스트 그룹 기준만 허용하고 모호성·개수 불일치·읽기 전용 필드는 차단. 자세한 범위는 `docs/schedule-editor/CLAUDE.md`.
