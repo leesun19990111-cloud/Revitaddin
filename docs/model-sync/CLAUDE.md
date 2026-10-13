@@ -1,5 +1,11 @@
 # 모델간 변경 반영 (Model Sync)
 
+## 2026-10-13 v96 — 링크 중앙모델 편집 기록
+
+- NAMER/재료 지정의 링크 원본 편집은 기존 모델간 변경 반영과 별개다. 중앙의 새 로컬에서 수집한 ChangeLogEntry를 deferredLogs로 보류하고, SynchronizeWithCentral 성공 뒤에만 Append한다. SourceDocumentTitle은 임시 로컬 폴더가 아닌 중앙 파일의 이름이다.
+- 취소·적용 실패·동기화 완료 불확실 상태에서는 성공 로그를 추가하지 않는다. 현재 프로젝트의 기존 Append 경로는 그대로다. v94 인스턴스 재료 자동 재생 제외 규칙도 유지한다.
+- ChangeLog 및 ModelSync 명령의 구현은 변경하지 않았다. 링크 편집 수명/실패 복구 제약은 namer v96 절을 함께 읽을 것.
+
 ## 2026-10-06 v94 — 인스턴스 재료 변경 기록의 안전한 분리
 
 - 새 `ChangeKind.MaterialInstanceAssign`를 enum 끝에 추가한다. 같은 유형의 인스턴스 재료 일괄 변경은 기존 MaterialAssign(유형 슬롯 변경)과 다르므로 같은 종류로 기록하지 않는다.

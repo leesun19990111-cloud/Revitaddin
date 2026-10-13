@@ -12,10 +12,13 @@
     </Window.Resources>
     <Grid Margin="14">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="MainTabControl" Grid.Row="0">
+        <TextBlock x:Name="DocumentScopeText" Grid.Row="0" Visibility="Collapsed" TextWrapping="Wrap"
+                   Margin="0,0,0,8" Foreground="{DynamicResource AccentBrush}" FontWeight="Bold"/>
+        <TabControl x:Name="MainTabControl" Grid.Row="1">
             <TabItem Header="재료 지정">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>

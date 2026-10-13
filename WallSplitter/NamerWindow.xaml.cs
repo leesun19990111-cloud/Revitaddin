@@ -53,6 +53,9 @@ namespace WallSplitter
         // 이 파일에서는 Revit UI 타입을 전부 전체 이름으로 쓴다.
         private readonly NamerExternalEventHandler _handler;
         private readonly Autodesk.Revit.UI.ExternalEvent _event;
+        private readonly bool _linkedModal;
+        internal List<(ElementId Id, string NewName)>? LinkedRenames { get; private set; }
+        internal bool LinkedMerge { get; private set; }
         private Document _doc;
         private HashSet<ElementId> _preSelectedIds;
         private readonly HashSet<ElementId> _checkedIds = new();
@@ -149,10 +152,11 @@ namespace WallSplitter
         private int _renderedCount;
         private Button? _loadMoreButton;
 
-        internal NamerWindow(Document doc, List<ElementId> preSelectedIds)
+        internal NamerWindow(Document doc, List<ElementId> preSelectedIds, bool linkedModal = false)
         {
+            _linkedModal = linkedModal;
             InitializeComponent();
-            Instance = this;
+            if (!linkedModal) Instance = this;
             _doc = doc;
             _preSelectedIds = new HashSet<ElementId>(preSelectedIds);
 
@@ -187,6 +191,13 @@ namespace WallSplitter
             // 다시 그려지는데 그때는 이미 창이 표시돼 ActualWidth가 정상이라 그제서야 보이던 문제.
             // 창이 실제로 표시된 뒤(Loaded) 이미 그려진 행들의 너비를 한 번 다시 써서 고친다.
             Loaded += NamerWindow_Loaded;
+            if (linkedModal)
+            {
+                Title = "NAMER — 링크 중앙모델: " + doc.Title;
+                DocumentScopeText.Text = "링크 중앙모델: " + doc.Title + "\n이 파일만 편집 · 최종 적용 후 중앙 동기화 확인";
+                DocumentScopeText.Visibility = System.Windows.Visibility.Visible;
+                ShowStatus("링크 전용 편집 · 최종 적용 후 중앙 동기화 확인 · 닫으면 변경하지 않음 · 특성 창은 지원하지 않음");
+            }
         }
 
         // **모드리스 창의 WPF 이벤트 핸들러에서 예외가 새어 나가면 Revit이 그대로 죽는다.**
@@ -750,6 +761,8 @@ namespace WallSplitter
                     Style = (Style)FindResource("PrimaryButtonStyle"),
                 };
                 // Grid에서는 나중에 추가된 자식이 위에 그려진다 - 이름 TextBlock 뒤에 추가해 항상 위에 온다.
+                propsButton.IsEnabled = !_linkedModal;
+                if (_linkedModal) propsButton.ToolTip = "링크 편집에서는 Revit 기본 특성 창을 열 수 없습니다.";
                 propsButton.Click += PropsButton_Click;
                 row.PropsButton = propsButton;
                 oldNameHost.Children.Add(propsButton);
@@ -1036,6 +1049,11 @@ namespace WallSplitter
         // 기본 창으로 갈 수 없는 경우(유형을 쓰는 부재가 모델에 하나도 없을 때)에만 자체 특성 창으로 간다.
         private void PropsButton_Click(object sender, RoutedEventArgs e) => Guard("특성 창 열기", () =>
         {
+            if (_linkedModal)
+            {
+                ShowStatus("링크 편집에서는 이름 변경만 지원합니다. Revit 특성 창은 원본을 직접 열어 사용해 주세요.");
+                return;
+            }
             if (sender is not FrameworkElement fe || fe.Tag is not RenameRow row) return;
 
             _propsRow = row;
@@ -1172,6 +1190,15 @@ namespace WallSplitter
             if (result.Count == 0)
             {
                 MessageBox.Show("모델에 적용할 변경 사항이 없습니다. 먼저 항목을 선택하고 '적용'을 눌러 이름을 바꿔보세요.", "NAMER", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // 링크 작업만 동기 명령 안의 모달 창이다. 호스트의 ExternalEvent에 링크 ID를 전달하지 않는다.
+            if (_linkedModal)
+            {
+                LinkedRenames = result;
+                LinkedMerge = DuplicateMergeRadio?.IsChecked == true;
+                DialogResult = true;
                 return;
             }
 

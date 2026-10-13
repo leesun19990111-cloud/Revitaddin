@@ -22,6 +22,31 @@ namespace WallSplitter
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
 
+            if (!LinkedModelEditService.Choose(uiApp, "NAMER", out RevitLinkType? link))
+                return Result.Cancelled;
+            if (link != null)
+                return LinkedModelEditService.Run(uiApp, link, "NAMER", local =>
+                {
+                    var editor = new NamerWindow(local, new List<ElementId>(), linkedModal: true);
+                    new WindowInteropHelper(editor) { Owner = uiApp.MainWindowHandle };
+                    if (editor.ShowDialog() != true || editor.LinkedRenames == null) return null;
+                    var renames = editor.LinkedRenames;
+                    bool merge = editor.LinkedMerge;
+                    return new LinkedEditPlan
+                    {
+                        Summary = $"이름 변경 {renames.Count}개\n" +
+                            string.Join("\n", renames.Take(20).Select(item => local.GetElement(item.Id)?.Name + " → " + item.NewName)) +
+                            (renames.Count > 20 ? "\n… 나머지 항목 포함" : "") +
+                            (merge ? "\n같은 이름의 재료는 기존 재료로 병합합니다." : ""),
+                        Apply = (target, logs) =>
+                        {
+                            RenameResult result = ApplyRenames(target, renames, merge, logs);
+                            return result.Status == TransactionStatus.Committed && result.Failed.Count == 0
+                                ? Result.Succeeded : Result.Failed;
+                        }
+                    };
+                });
+
             List<ElementId> preSelected = uiDoc.Selection.GetElementIds().ToList();
 
             if (NamerWindow.Instance == null)
@@ -55,7 +80,7 @@ namespace WallSplitter
         // internal static: 모드리스 전환 전에는 Execute 안에 있던 코드 그대로이며, 이제는
         // NamerExternalEventHandler가 유효한 API 컨텍스트에서 호출한다.
         internal static RenameResult ApplyRenames(Document doc, List<(ElementId Id, string NewName)> renames,
-            bool mergeDuplicateMaterials)
+            bool mergeDuplicateMaterials, List<ChangeLogEntry>? deferredLogs = null)
         {
             var result = new RenameResult();
             var failed = result.Failed;
@@ -135,9 +160,10 @@ namespace WallSplitter
 
             // 커밋이 실제로 성공한 뒤에만 기록한다 - 롤백되면 pendingLogEntries 전부가 "실제로는 일어나지
             // 않은 변경"이 되므로, 모델간 변경 반영이 나중에 이걸 다른 문서에 재현하려 들면 안 된다.
-            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
+            if (deferredLogs != null) deferredLogs.AddRange(pendingLogEntries);
+            else if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
 
-            if (merged.Count > 0)
+            if (merged.Count > 0 && deferredLogs == null)
             {
                 string detail = string.Join("\n", merged.Take(30));
                 if (merged.Count > 30) detail += $"\n... 외 {merged.Count - 30}개";

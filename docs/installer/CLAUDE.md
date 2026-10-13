@@ -1,5 +1,15 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v96 — 2026-10-13 NAMER·재료 지정 링크 중앙모델 편집
+
+- 공유폴더 중앙 원본 편집에 대한 사용자 확인 후, 대상 한 파일의 새 로컬 생성·사용자별 링크 해제·별도 편집·기본 No 최종 확인·중앙 동기화·링크 복원을 구현했다. 현재 프로젝트 동작은 유지한다. 클라우드/Revit Server/중첩/미로드/개인 로컬 링크는 지원하지 않는다. 상세 수명·실패 복구는 namer/material-assign/model-sync v96 절을 함께 읽을 것.
+- Revit 2023~2027 격리 Release 오류 0, 경고 38/53/51/36/38개. `obj/bin/iso96<year>` 및 연도별 NuGet 경로 사용. 설치 프로그램은 `obj/bin/iso96`, SkipWallSplitterPayloadBuild=true로 게시한 후 검증한 격리 DLL로 Payload를 구성했다.
+- 실제 창/도우미 코드에 Revit 대역을 연결한 `.codex-build/release-v96` 검사 91개, 실제 공통 서비스에 대역을 연결한 `.codex-build/link-safety-v96` 안전 분기 33개, **총 124개 통과**. 링크 모달의 호스트 ID 전송 방지·취소·일부 실패 전체 롤백·저장/동기화/링크 복원 실패·지원 제외 상태 등을 검사했다. 두 링크 창 렌더를 확인했다. 테스트 fixtures의 .rvt는 단순 텍스트 대역이며 실제 Revit 모델이 아니다.
+- `verify-release.cjs`로 DLL 11/11/2/2/2(총 28), Clipper2Lib 포함/RevitAPI 제외, 출력→Payload→ZIP 30개 파일의 정확한 집합·SHA-256, 링크 신규 심볼·로그 지연·기존 안전장치·복합 구조 보존 경로를 확인했다.
+- 게시 폴더 `SunnyToolsInstaller_out_v96`, ZIP `SunnyTools_Installer_v.0.9.6.zip` (35,891,532 bytes). ZIP SHA-256 `63A2A62361CB4CA807825FBC8A0932B89B4FEE085ADF4D58CC71D86604155E80`, EXE SHA-256 `1EFDF99BA952B55E8C240719942FA7E68E00E569E67F3BD9BC99FA70FD07270D`.
+- v95 폴더/ZIP은 Old_Versions에 보관한다. 실제 Addins 복사/설치/중앙모델 변경은 하지 않았다. **실제 공유 서버 동기화는 미검증이다. Revit 종료 후 설치하고 운영 중앙과 연결되지 않은 별도 테스트 중앙+테스트 호스트에서 먼저 검사할 것.** 단순히 운영 중앙의 개인 로컬만 복사하면 운영 중앙에 동기화될 수 있으므로 테스트가 아니다.
+- 라이브 검사: NAMER 취소/이름 변경/재료 병합, 재료 유형·인스턴스·복합 레이어 변경, 다른 사용자 소유권 충돌, 중앙 동기화 후 다른 로컬의 최신 작업 다시 로드, 호스트 링크 복원, 현재 프로젝트 기존 편집을 확인한다. 네트워크 실패 재현은 테스트 환경에서만 진행하며 자동 재시도하지 말고 중앙 상태를 먼저 확인한다. 호스트 Undo 기록이 지워질 수 있고 중앙 변경은 호스트 Undo로 되돌릴 수 없음을 안내한다.
+
 ## v95 — 2026-10-06 재료 변경 시 구조 재료·가변 레이어 보존
 
 - 재료 지정과 NAMER 재료 병합에서 전체 레이어를 재생성하던 SetLayers를 제거했다. 기존 CompoundStructure의 SetMaterialId로 해당 재료만 바꾸어 구조 재료/가변 인덱스, 기능·우선순위·두께·코어·감싸기·데크/수직 영역을 유지한다. 상세 원인과 재발 금지 사항은 material-assign/namer 문서 상단.
