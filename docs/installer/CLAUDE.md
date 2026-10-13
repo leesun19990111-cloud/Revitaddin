@@ -1,5 +1,12 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v100 — 2026-10-13 재료 검색 복원 / 프로젝트 정보 / 일람표 에디터
+
+- 통합 재료 지정의 모델별 검색 TextBox 복원. NAMER 프로젝트 정보 카테고리(현재/링크, 빈 값 `없음`, 읽기 전용 구분, 원시값 사전 검증) 추가. NAMER 패널 별도 Schedule Editor 버튼으로 필드/데이터 행 범위 편집과 링크 중앙 동기화. 일람표 첫 버전은 텍스트 식별/텍스트 그룹 기준만 허용하고 모호성·개수 불일치·읽기 전용 필드는 차단. 자세한 범위는 `docs/schedule-editor/CLAUDE.md`.
+- 실제 소스+대역 회귀 277개: unified-v100 114(신규 50 포함), release-v100 91(기존 창/재료, 새 정보 패널은 별도 대역), link-safety-v100 72. WPF 기본/최소 크기 렌더 확인. 실제 Revit 행 대응/공유 서버 동기화는 미검증, 운영 중앙이 아닌 별도 테스트 문서 사용.
+- Revit 2023~2027 `obj/bin/iso100<year>` 격리 Release 오류 0, 기존 경고 38/53/51/36/38. 설치기 `obj/bin/iso100` 게시 후 검증한 DLL을 Payload에 명시 복사. 2023/2024 각 11 DLL, 2025/2026/2027 각 2 DLL, 모든 연도 Clipper 포함, Autodesk DLL 미포함.
+- 산출물 `SunnyToolsInstaller_out_v100`, `SunnyTools_Installer_v.1.0.0.zip`(36,083,410 bytes). ZIP SHA256 `5002874A8218A28262E73DFF7E53777148A3E17990EB1AF2018CC34D06D769E2`, EXE SHA256 `D31DB42FC6927FBA4ECE403042062C9EE89AD1B6FCE9B4AB52F853C71479A154`. verify-release.cjs로 원본→Payload→ZIP 30파일 집합·해시·신규/기존 심볼 검사. v99 폴더/ZIP는 `Old_Versions/`로 보관. 실제 Addins 설치/운영 문서 변경 없음.
+
 ## v99 — 2026-10-13 같은 Revit의 열린 링크 중앙/로컬 재사용
 
 - NAMER/재료 지정 통합 편집에서 같은 Revit에 열린 원본 문서의 최신 작업값을 조회하고 그 문서에서 편집·중앙 동기화한다. 기존 미저장·미동기화 작업도 포함되므로 별도 기본 No 확인을 거치며 문서·기존 소유권을 유지한다. 링크 해제/재로드는 하지 않고 표시 갱신은 별도 안내한다. 미개방 원본은 기존 전용 로컬 경로다.

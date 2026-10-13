@@ -28,7 +28,10 @@ namespace WallSplitter
         internal readonly Dictionary<string, string> OriginalMaterials = new();
         internal readonly List<string> MaterialNames = new();
         internal string NewMaterial = "";
-        internal string Key => Source.Key + "|" + UniqueId + (IsMaterial ? "|" + SlotKind + "|" + LayerIndex + "|" + ParameterId : "");
+        internal ProjectInformationValue? ProjectValue;
+        internal bool Editable => Source.Editable && (ProjectValue == null || ProjectValue.ReadOnlyReason.Length == 0);
+        internal string Key => Source.Key + "|" + UniqueId + (ProjectValue != null ? "|project|" + ProjectValue.Identity : IsMaterial ? "|" + SlotKind + "|" + LayerIndex + "|" + ParameterId : "");
+        internal string Display(string value) => ProjectValue != null && value.Length == 0 ? "없음" : value;
         internal bool Changed => IsMaterial
             ? NewMaterial.Length > 0 && OriginalMaterials.Values.Any(v => v != NewMaterial)
             : Working != Original;
@@ -73,6 +76,7 @@ namespace WallSplitter
                     if (!int.TryParse(first, out int start) || !int.TryParse(second, out int end)
                         || start < 1 || end < start || start > name.Length) return name;
                     return name.Remove(start - 1, Math.Min(end, name.Length) - start + 1);
+                case 4: return first;
                 default: return name;
             }
         }

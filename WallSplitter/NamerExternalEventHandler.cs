@@ -38,6 +38,7 @@ namespace WallSplitter
 
         internal List<(ElementId Id, string NewName)>? PendingRenames { get; set; }
         internal bool PendingMergeDuplicateMaterials { get; set; }
+        internal List<UnifiedRow>? PendingProjectInformation { get; set; }
         internal PropertyRequest? PendingProperties { get; set; }
 
         // ExternalEvent 콜백에서 예외가 새어 나가면 Revit은 아무 것도 보여주지 않는다 - 사용자에게는
@@ -52,6 +53,7 @@ namespace WallSplitter
             {
                 TaskDialog.Show("NAMER", "요청을 실행하지 못했습니다.\n\n" + ex.GetBaseException().Message);
             }
+            finally { if (NamerWindow.Instance != null) NamerWindow.Instance.IsEnabled = true; }
         }
 
         public string GetName() => "NAMER";
@@ -63,7 +65,9 @@ namespace WallSplitter
                 List<(ElementId, string)> renames = PendingRenames;
                 bool merge = PendingMergeDuplicateMaterials;
                 PendingRenames = null;
-                ExecuteRenames(app, renames, merge);
+                var project = PendingProjectInformation ?? new List<UnifiedRow>();
+                PendingProjectInformation = null;
+                ExecuteRenames(app, renames, merge, project);
                 return;
             }
 
@@ -75,13 +79,23 @@ namespace WallSplitter
             }
         }
 
-        private void ExecuteRenames(UIApplication app, List<(ElementId Id, string NewName)> renames, bool merge)
+        private void ExecuteRenames(UIApplication app, List<(ElementId Id, string NewName)> renames, bool merge, List<UnifiedRow> project)
         {
             Document? doc = ResolveDocument(app);
             if (doc == null) return;
 
-            NamerCommand.RenameResult result = NamerCommand.ApplyRenames(doc, renames, merge);
+            // 여러 카테고리를 함께 적용할 때 프로젝트 정보 하나라도 실패하면 이번 묶음 전체를 취소한다.
+            if (project.Count == 0) { NamerWindow.Instance?.OnRenamesApplied(NamerCommand.ApplyRenames(doc, renames, merge)); return; }
+            using var group = new TransactionGroup(doc, "NAMER 이름 / 프로젝트 정보 변경");
+            if (group.Start() != TransactionStatus.Started) throw new System.InvalidOperationException("변경 시작 실패");
+            var logs = new List<ChangeLogEntry>();
+            ProjectInformationService.Apply(doc, project, logs);
+            var result = renames.Count == 0 ? new NamerCommand.RenameResult { Status = TransactionStatus.Committed } : NamerCommand.ApplyRenames(doc, renames, merge, logs);
+            if (result.Status != TransactionStatus.Committed || result.Failed.Count > 0) throw new System.InvalidOperationException("이름 변경 실패로 프로젝트 정보 변경도 취소했습니다.");
+            if (group.Assimilate() != TransactionStatus.Committed) throw new System.InvalidOperationException("변경 확정 실패");
+            ChangeLog.Append(logs);
             NamerWindow.Instance?.OnRenamesApplied(result);
+            NamerWindow.Instance?.ShowStatus($"이름 {result.Renamed}개 / 프로젝트 정보 {project.Count}개 반영 완료. 저장/중앙 동기화는 직접 실행하세요.");
         }
 
         private void ExecuteProperties(UIApplication app, PropertyRequest request)

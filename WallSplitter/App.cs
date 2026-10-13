@@ -112,6 +112,14 @@ namespace WallSplitter
                 namerButton.Image = RibbonIcons.Namer(16);
             }
 
+            var scheduleButtonData = new PushButtonData("WallSplitter_ScheduleEditor", "일람표\n에디터", assemblyPath, typeof(ScheduleEditorCommand).FullName);
+            if (namerPanel.AddItem(scheduleButtonData) is PushButton scheduleButton)
+            {
+                scheduleButton.ToolTip = "Schedule Editor · 일람표의 필드와 데이터 행 범위를 지정해 실제 매개변수를 일괄 수정합니다.\n정확히 식별된 묶인 행은 전체 수정하며, 링크 원본은 중앙모델에 동기화합니다.";
+                scheduleButton.LargeImage = RibbonIcons.ScheduleEditor(32);
+                scheduleButton.Image = RibbonIcons.ScheduleEditor(16);
+            }
+
             RibbonPanel materialPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == MaterialPanelName)
                 ?? application.CreateRibbonPanel(TabName, MaterialPanelName);
 

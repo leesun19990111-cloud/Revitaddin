@@ -78,6 +78,10 @@ namespace WallSplitter
         {
             switch (entry.Kind)
             {
+                case ChangeKind.ProjectInformation:
+                case ChangeKind.ScheduleParameter:
+                    summary.Skipped.Add((entry, "프로젝트 정보/일람표 값은 해당 편집기에서 대상을 확인해 직접 변경해 주세요."));
+                    return false;
                 case ChangeKind.MaterialInstanceAssign:
                     summary.Skipped.Add((entry, "인스턴스 재료 변경은 다른 모델에서 대상 범위를 다시 확인해야 하므로 자동 반영하지 않습니다."));
                     return false;

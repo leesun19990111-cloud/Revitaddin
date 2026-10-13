@@ -1,5 +1,9 @@
 # 리본/앱 시작 (App.cs)
 
+## 2026-10-13 v100
+
+NAMER 패널에 독립 `일람표 에디터` 버튼(`WallSplitter_ScheduleEditor` → `ScheduleEditorCommand`) 추가. 격자 한 열/여러 행을 강조한 `RibbonIcons.ScheduleEditor(16/32)` 코드 아이콘 사용. 다른 버튼/등록 순서의 기존 기능은 유지. 기능 제한/안전 정책은 `docs/schedule-editor/CLAUDE.md` 참고.
+
 `App.cs`(`App : IExternalApplication`) — Sunny Tools 리본 탭·패널·버튼 등록, 아이콘 리소스, WPF `Application` 준비. 다른 모든 기능이 공유하는 시작 인프라이므로, 리본 버튼 추가/아이콘 교체/`.addin` 매니페스트 관련 작업 전에 이 문서를 먼저 읽을 것.
 
 **2026-09-23 리본 아이콘 전면 재작업 — 아래 본문의 PNG 아이콘 서술은 전부 과거 기록이다.** 리본 아이콘은 이제 하나도 남김없이 `WallSplitter/RibbonIcons.cs`가 실행 시점에 그린다(`RibbonIcons.SplitWall/SplitFloor/Settings/Toggle/Namer/MaterialAssign/ModelSync/Refresh/QuickToggle/PatternStudio/ModelLineCapture/PatternPunch/WarningPick/RoomSeparator/RoomBounding/ParamCombine/BatchJoin`). `App.LoadIcon`·`App.ToggleIconResource`·`App.Create*Icon`은 전부 삭제됐고, `Resources/icon*.png` 18개와 그 `EmbeddedResource` 항목도 csproj에서 지웠다(`ICON.png`·`Theme.xaml`·`RevitCommandLabels.2027.tsv`만 남는다). 그러니 **새 리본 버튼에 아이콘을 붙일 때 PNG를 만들지 말고 `RibbonIcons`에 메서드를 하나 더 추가할 것** — 왜 이렇게 통일했는지는 `docs/design-system/CLAUDE.md`의 같은 날짜 항목에 있다. 상태에 따라 아이콘이 바뀌는 토글 버튼(`UpdateTypeAssignmentToggleLabel`/`UpdateQuickToggleVisibilityLabel`/`UpdateParamCombineToggleLabel`)은 `PushButton.Image = RibbonIcons.Toggle(16, on)`으로 바뀌었을 뿐 구조는 그대로다. `<UseWPF>true</UseWPF>`는 여전히 필요하다(`BitmapImage` 대신 `DrawingVisual`/`RenderTargetBitmap`을 쓸 뿐 둘 다 WPF다).

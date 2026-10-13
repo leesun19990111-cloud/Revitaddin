@@ -21,6 +21,8 @@ namespace WallSplitter
         MaterialDelete,     // 재료 지정: 이름이 Key인 재료를 삭제
         MaterialIdentityEdit, // 재료 지정: 이름이 Key인 재료의 Field(클래스/설명)를 NewValue로 변경
         MaterialInstanceAssign, // 유형별 인스턴스 재료 지정 — 유형 슬롯으로 오인해 재생하지 않는다
+        ProjectInformation, // 프로젝트별 값: 기록만 남기고 다른 모델에 이름 기반 자동 재생하지 않는다
+        ScheduleParameter, // 일람표의 검증된 행/필드 수정: 자동 재생 제외
     }
 
     internal enum IdentityField

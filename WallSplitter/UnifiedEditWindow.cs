@@ -62,13 +62,13 @@ namespace WallSplitter
             _model.SelectedIndex = 0; filters.Children.Add(_model);
             _category.Width = 135;
             foreach (string label in materials ? new[] { "유형/패밀리", "현재 재료", "재료 없음" }
-                : new[] { "뷰", "시트", "패밀리", "유형", "범례", "일람표", "재료", "뷰 템플릿" }) _category.Items.Add(label);
+                : new[] { "뷰", "시트", "패밀리", "유형", "범례", "일람표", "재료", "뷰 템플릿", "프로젝트 정보" }) _category.Items.Add(label);
             _category.SelectedIndex = materials ? 0 : 2; filters.Children.Add(_category);
             _search.Width = 230; _search.ToolTip = "모든 모델의 검색 결과를 함께 표시합니다."; filters.Children.Add(_search);
             _filterMode.Width = 125;
             foreach (string label in new[] { "포함됨", "포함하지 않음", "일치함", "일치하지 않음", "시작함", "끝남" }) _filterMode.Items.Add(label);
             _filterMode.SelectedIndex = 0; filters.Children.Add(_filterMode);
-            filters.Children.Add(Button("전체 선택", () => { CommitInline(true); foreach (var row in _display.Where(r => r.Source.Editable)) row.Selected = true; RefreshPreview(); }));
+            filters.Children.Add(Button("전체 선택", () => { CommitInline(true); foreach (var row in _display.Where(r => r.Editable)) row.Selected = true; RefreshPreview(); }));
             filters.Children.Add(Button("전체 해제", () => { CommitInline(true); foreach (var row in _filtered) row.Selected = false; RefreshPreview(); }));
 
             var editor = new StackPanel(); Put(root, Section("2 · 변경 설정 — 입력 즉시 선택 항목에 미리보기", editor), 2);
@@ -76,7 +76,7 @@ namespace WallSplitter
             {
                 var line = new WrapPanel(); editor.Children.Add(line);
                 _mode.Width = 180;
-                foreach (string label in new[] { "문자열 치환", "위치에 삽입", "구분자 기준 자리바꾸기", "구간 삭제" }) _mode.Items.Add(label);
+                foreach (string label in new[] { "문자열 치환", "위치에 삽입", "구분자 기준 자리바꾸기", "구간 삭제", "값 전체 지정" }) _mode.Items.Add(label);
                 _mode.SelectedIndex = 0; line.Children.Add(_mode);
                 _first.Width = 210; _second.Width = 210; line.Children.Add(_first); line.Children.Add(_second);
                 line.Children.Add(Button("선택 항목에 적용 (창 안)", Stage));
@@ -95,21 +95,31 @@ namespace WallSplitter
                     var line = new WrapPanel(); _materialChoices.Children.Add(line);
                     line.Children.Add(new TextBlock { Text = source.Name, Width = 320, TextTrimming = TextTrimming.CharacterEllipsis,
                         ToolTip = source.Path, VerticalAlignment = VerticalAlignment.Center });
-                    var combo = new ComboBox { Width = 540, IsEditable = true, IsTextSearchEnabled = true,
-                        ItemsSource = source.Materials.OrderBy(p => p.Value).Select(p => new MaterialChoice(p.Key, p.Value)).ToList() };
+                    line.Children.Add(Label("재료 검색"));
+                    var search = new TextBox { Width = 170, ToolTip = "재료 이름 일부로 검색 (대소문자 구분 없음)", Margin = new Thickness(3) };
+                    line.Children.Add(search);
+                    var choices = source.Materials.OrderBy(p => p.Value).Select(p => new MaterialChoice(p.Key, p.Value)).ToList();
+                    var combo = new ComboBox { Width = 340, IsTextSearchEnabled = true, ItemsSource = choices,
+                        ToolTip = "검색 결과에서 지정할 재료를 직접 선택하세요." };
+                    var count = Label(choices.Count + "개");
                     combo.SelectionChanged += (_, _) => Guard(() =>
                     {
                         if (combo.SelectedItem is MaterialChoice choice) _choices[source.Key] = choice.Id;
                         else _choices.Remove(source.Key);
                         RefreshPreview();
                     });
-                    // 자유 입력은 선택으로 간주하지 않는다. 실제 항목과 정확히 일치할 때만 적용한다.
-                    combo.LostKeyboardFocus += (_, _) => Guard(() =>
+                    // 자체 테마는 편집 가능한 ComboBox 입력부를 제공하지 않는다. 독립 TextBox로 실제 목록을 필터한다.
+                    search.TextChanged += (_, _) => Guard(() =>
                     {
-                        if (combo.SelectedItem is not MaterialChoice choice || combo.Text != choice.Name) _choices.Remove(source.Key);
+                        var chosen = combo.SelectedItem as MaterialChoice;
+                        var matches = choices.Where(c => UnifiedEditLogic.Matches(c.Name, search.Text.Trim(), 0)).ToList();
+                        combo.ItemsSource = matches;
+                        combo.SelectedItem = chosen != null && matches.Contains(chosen) ? chosen : null;
+                        count.Text = matches.Count == 0 ? "검색 결과 없음" : matches.Count + "개";
                         RefreshPreview();
                     });
                     line.Children.Add(combo);
+                    line.Children.Add(count);
                 }
                 editor.Children.Add(Button("선택 항목에 재료 적용 (창 안)", Stage));
             }
@@ -117,8 +127,8 @@ namespace WallSplitter
             header.Background = Theme.Surface;
             header.Margin = new Thickness(1,0,14,0);
             Add(header, Label("선택"), 0); Add(header, Label("소속 모델"), 1); Add(header, Label("패밀리 / 대상"), 2);
-            Add(header, Label(materials ? "현재 재료" : "기존 이름"), 3);
-            Add(header, Label(materials ? "변경 후 재료 · 미리보기" : "변경 후 이름 · 미리보기"), 4);
+            Add(header, Label(materials ? "현재 재료" : "기존 이름 / 값"), 3);
+            Add(header, Label(materials ? "변경 후 재료 · 미리보기" : "변경 후 이름 / 값 · 미리보기"), 4);
             for (int column = 1; column < 4; column++)
             {
                 var splitter = new GridSplitter { Width = 6, HorizontalAlignment = HorizontalAlignment.Right,
@@ -157,8 +167,10 @@ namespace WallSplitter
                 CommitInline(true); Keyboard.ClearFocus();
                 var changed = sources.SelectMany(s => s.Rows).Where(r => r.Changed).ToList();
                 if (changed.Count == 0) { _status.Text = "변경된 항목이 없습니다."; return; }
-                if (changed.Any(r => !r.Source.Editable || (!_materials && string.IsNullOrWhiteSpace(r.Working))))
+                if (changed.Any(r => !r.Editable || (!_materials && r.ProjectValue == null && string.IsNullOrWhiteSpace(r.Working))))
                 { _status.Text = "변경할 수 없는 항목 또는 빈 이름을 확인해 주세요."; return; }
+                string? error = changed.Select(ProjectInformationService.InputError).FirstOrDefault(e => e != null);
+                if (error != null) { _status.Text = error; return; }
                 DialogResult = true;
             });
             apply.Style = (Style)FindResource("PrimaryButtonStyle"); footer.Children.Add(apply);
@@ -236,8 +248,9 @@ namespace WallSplitter
         private void UpdateHint()
         {
             _hint.Text = new[] { "첫 칸: 찾을 문자열 / 둘째 칸: 바꿀 문자열", "첫 칸: 삽입 위치 (1부터) / 둘째 칸: 넣을 문자열",
-                "첫 칸: 구분자 (첫 번째 구분자 기준) / 둘째 칸: 사용 안 함", "첫 칸: 시작 위치 / 둘째 칸: 끝 위치 (1부터)" }[Math.Max(0,_mode.SelectedIndex)];
-            _second.IsEnabled = _mode.SelectedIndex != 2;
+                "첫 칸: 구분자 (첫 번째 구분자 기준) / 둘째 칸: 사용 안 함", "첫 칸: 시작 위치 / 둘째 칸: 끝 위치 (1부터)",
+                "첫 칸: 선택 항목에 지정할 값 전체 (프로젝트 정보의 텍스트는 비우면 삭제)" }[Math.Max(0,_mode.SelectedIndex)];
+            _second.IsEnabled = _mode.SelectedIndex != 2 && _mode.SelectedIndex != 4;
         }
         private void Refresh()
         {
@@ -252,7 +265,7 @@ namespace WallSplitter
                     ? (_category.SelectedIndex == 1 ? UnifiedEditLogic.MatchesMaterials(r, query, mode)
                         : _category.SelectedIndex == 2 ? r.NewMaterial.Length == 0 && r.OriginalMaterials.Values.Any(v => v.Length == 0)
                         : MatchName(r.Family, r.Working, query, mode))
-                    : UnifiedEditLogic.Matches(r.Working, query, mode)))
+                    : r.ProjectValue != null ? MatchName(r.Family, r.Display(r.Working), query, mode) : UnifiedEditLogic.Matches(r.Working, query, mode)))
                 .OrderBy(r => r.Source.IsHost ? 0 : 1).ThenBy(r => r.Source.Name).ThenBy(r => r.Family).ThenBy(r => r.Working).ToList();
             _filtered = new List<UnifiedRow>(); _display = new List<UnifiedRow>();
             foreach (var row in parents)
@@ -282,14 +295,14 @@ namespace WallSplitter
             foreach (var row in _display.Take(_limit))
             {
                 var grid = Columns(); grid.Background = row.Selected ? Theme.SelectionHighlight : Brushes.Transparent;
-                grid.ToolTip = row.Source.Path + (row.Source.Editable ? "" : "\n" + row.Source.BlockReason);
+                grid.ToolTip = row.Source.Path + "\n" + row.Detail + (row.Source.Editable ? "" : "\n" + row.Source.BlockReason);
                 var selection = new StackPanel { Orientation = Orientation.Horizontal };
-                var check = new CheckBox { IsChecked = row.Selected, IsEnabled = row.Source.Editable, Margin = new Thickness(5), IsHitTestVisible = false, Focusable = false };
+                var check = new CheckBox { IsChecked = row.Selected, IsEnabled = row.Editable, Margin = new Thickness(5), IsHitTestVisible = false, Focusable = false };
                 var visual = new RowVisual { Row = row, Grid = grid, Check = check, Preview = Cell(""), ValueHost = new Grid { MinHeight = 32 } };
                 grid.Tag = visual; _visuals.Add(visual);
                 grid.MouseLeftButtonDown += (_, e) => Guard(() =>
                 {
-                    if (!row.Source.Editable) return;
+                    if (!row.Editable) return;
                     BeginDrag(row, (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
                     _items.CaptureMouse(); e.Handled = true;
                 });
@@ -301,14 +314,14 @@ namespace WallSplitter
                 }
                 Add(grid, selection, 0);
                 Add(grid, Cell(row.Source.Name), 1);
-                Add(grid, Cell(_materials ? row.Family + " / " + row.Working + "\n" + row.Detail : row.Family), 2);
-                var original = Cell(row.Original); Add(grid, original, 3);
+                Add(grid, Cell(_materials ? row.Family + " / " + row.Working + "\n" + row.Detail : row.ProjectValue != null ? row.Family + " · " + row.Detail : row.Family), 2);
+                var original = Cell(row.Display(row.Original)); Add(grid, original, 3);
                 visual.ValueHost.Children.Add(visual.Preview); Add(grid, visual.ValueHost, 4);
                 if (!_materials)
                 {
                     MouseButtonEventHandler edit = (_, e) => Guard(() =>
                     {
-                        if (e.ClickCount != 2 || !row.Source.Editable) return;
+                        if (e.ClickCount != 2 || !row.Editable) return;
                         // 첫 클릭이 바꾼 체크를 되돌린다. 이름 편집은 일괄 선택과 독립이다.
                         EndDrag(); row.Selected = !row.Selected; BeginInline(visual); e.Handled = true;
                     });
@@ -331,7 +344,7 @@ namespace WallSplitter
             SyncColumns(); RefreshPreview();
             _scroll.UpdateLayout(); _scroll.ScrollToVerticalOffset(offset);
         }
-        private string PreviewName(UnifiedRow row) => row.Selected && row.Source.Editable
+        private string PreviewName(UnifiedRow row) => row.Selected && row.Editable
             ? UnifiedEditLogic.Rename(row.Working, _mode.SelectedIndex, _first.Text, _second.Text) : row.Working;
         private void RefreshPreview()
         {
@@ -341,7 +354,7 @@ namespace WallSplitter
                 var row = visual.Row;
                 string value = _materials ? (row.Selected && row.Source.Editable && _choices.TryGetValue(row.Source.Key, out var id)
                     && row.Source.Materials.TryGetValue(id, out var name) ? name : row.Value) : PreviewName(row);
-                visual.Preview.Text = value; visual.Preview.ToolTip = value;
+                visual.Preview.Text = row.Display(value); visual.Preview.ToolTip = row.Display(value);
                 visual.Preview.Foreground = value != row.Original ? Theme.Accent : Theme.TextSecondary;
                 visual.Check.IsChecked = row.Selected;
                 visual.Grid.Background = row.Selected ? Theme.SelectionHighlight : Brushes.Transparent;
@@ -387,7 +400,7 @@ namespace WallSplitter
         {
             if (from < 0 || to < 0) return;
             for (int i = Math.Min(from,to); i <= Math.Max(from,to); i++)
-                if (_display[i].Source.Editable) _display[i].Selected = value;
+                if (_display[i].Editable) _display[i].Selected = value;
         }
         private void EndDrag()
         {
@@ -397,7 +410,7 @@ namespace WallSplitter
         private void BeginInline(RowVisual visual)
         {
             CommitInline(true); EndDrag();
-            if (!visual.Row.Source.Editable) return;
+            if (!visual.Row.Editable) return;
             var box = new TextBox { Text = visual.Row.Working, Margin = new Thickness(3) };
             _editing = visual; visual.Editor = box;
             visual.Preview.Visibility = Visibility.Collapsed; visual.ValueHost.Children.Add(box);
@@ -436,7 +449,7 @@ namespace WallSplitter
             }
             else
             {
-                foreach (var row in _filtered.Where(r => r.Selected && r.Source.Editable))
+                foreach (var row in _filtered.Where(r => r.Selected && r.Editable))
                     row.Working = UnifiedEditLogic.Rename(row.Working, _mode.SelectedIndex, _first.Text, _second.Text);
                 _first.Clear(); _second.Clear();
             }

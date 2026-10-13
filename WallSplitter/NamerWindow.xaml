@@ -28,7 +28,7 @@
         <StackPanel Grid.Row="0">
         <TextBlock x:Name="DocumentScopeText" Visibility="Collapsed" TextWrapping="Wrap" Margin="0,0,0,8"
                    Foreground="{DynamicResource AccentBrush}" FontWeight="Bold"/>
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+        <WrapPanel Margin="0,0,0,8">
             <TextBlock Text="대상:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
             <RadioButton x:Name="CategoryViewRadio" Content="뷰" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
             <RadioButton x:Name="CategorySheetRadio" Content="시트" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
@@ -38,7 +38,8 @@
             <RadioButton x:Name="CategoryScheduleRadio" Content="일람표" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
             <RadioButton x:Name="CategoryViewTemplateRadio" Content="뷰 템플릿" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
             <RadioButton x:Name="CategoryMaterialRadio" Content="재료" GroupName="Category" Checked="CategoryRadio_Checked"/>
-        </StackPanel>
+            <RadioButton x:Name="CategoryProjectInformationRadio" Content="프로젝트 정보" GroupName="Category" Margin="14,0,0,0" Checked="CategoryRadio_Checked"/>
+        </WrapPanel>
         </StackPanel>
 
         <StackPanel x:Name="MaterialDuplicatePanel" Grid.Row="1" Margin="0,0,0,8" Visibility="Collapsed">

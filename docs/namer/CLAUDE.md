@@ -1,5 +1,14 @@
 # NAMER (이름 일괄 변경)
 
+## 2026-10-13 v100 — 프로젝트 정보 카테고리
+
+- `NamerCategory.ProjectInformation`은 enum 끝에 추가(기존 순서/직렬화 값 유지). `CollectCandidates`는 이 분류에서 요소 이름을 반환하지 않는다. 프로젝트 정보는 한 요소의 여러 매개변수이므로 `ProjectInformationService.Read`가 별도 순수 값 행을 만든다. `UnifiedRow.Key`에 매개변수 ID/공유 GUID를 포함해 동명 항목도 분리한다.
+- 통합 창에 9번째 카테고리와 `값 전체 지정`을 추가했다. 기존 이름 편집·드래그·열 크기·가족 계층은 그대로. 매개변수명/값으로 검색, 기존 값/미리보기, 빈 값은 표시만 `없음`(원시값은 빈 문자열). 직접 입력/일괄 지정 시 빈 텍스트 허용. 숫자/예 아니요는 형식 검사. 읽기 전용·요소 참조·전용 열거값은 표시하되 편집 차단.
+- 기존 모드리스 창은 `ProjectInformationPanel`을 같은 창의 카테고리 영역에 표시한다. 다른 카테고리의 미적용 이름 변경은 유지한다. 패널은 Revit 객체 없이 순수 값만 사용. `ExternalEvent`에서 프로젝트 정보와 누적 이름 변경을 TransactionGroup으로 처리하고 하나라도 실패하면 이번 묶음 전체 취소. 로그는 그룹 성공 이후만 기록. `Raise` 거절/예외/실행 완료에서 창 비활성 상태를 복구한다.
+- 적용 직전 대상 UniqueId/매개변수 GUID 또는 ID/정의명/저장형/데이터형/내부 원시값/표시 단위를 재검사한다. 외부 변경을 덮어쓰지 않는다. 문자열 `Set`, 정수/예 아니요 `Set(int)`, 단위 실수 `SetValueString`. IFailuresPreprocessor를 추가하지 않았다.
+- `ProjectInformationService.Snapshot/Validate/Apply`는 일람표 에디터에서도 재사용하므로 수정 시 `docs/schedule-editor/CLAUDE.md`도 읽는다. `Validate(forWrite:false)`는 정렬/필터 의존값 검사에만 사용하며 실제 쓰기는 항상 writable 검사.
+- 실제 소스+API 대역 테스트 unified-v100: 기존 64 + 프로젝트 정보/검색 23 + 일람표 27 = 114개. 기존 계층/재료 91개 및 링크 안전 72개 별도 유지. 실모델/서버는 미검증.
+
 ## 2026-10-13 v99 — 같은 Revit에 열린 링크 원본 재사용
 
 - 사용자 명시 요청으로 v96의 “같은 중앙/로컬이 열려 있으면 차단”을 대체한다. FindOpenTarget은 Application.Documents의 비링크·비패밀리 문서를 실제 파일/중앙 경로로 찾고 중복 후보는 거부한다. 읽기 전용/편집 중/분리/비작업공유/중앙 연결 불일치 문서는 새 로컬로 우회하지 않는다. 호스트 자기 자신은 현재 모델 항목으로 유도한다. WPF에는 Document를 저장하지 않는다.

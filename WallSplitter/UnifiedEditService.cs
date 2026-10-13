@@ -103,13 +103,13 @@ namespace WallSplitter
             }
         }
 
-        internal static List<UnifiedSource> Collect(Document host, bool materials, UIApplication? app = null)
+        internal static List<UnifiedSource> Collect(Document host, bool materials, UIApplication? app = null, bool readRows = true)
         {
             var sources = new List<UnifiedSource>();
             var current = new UnifiedSource { Key = "host", Name = "[현재] " + host.Title, IsHost = true, Path = host.PathName };
             if (host.IsReadOnly || host.IsModifiable) current.BlockReason = "읽기 전용 또는 편집 모드";
             sources.Add(current);
-            ReadRows(current, host, materials);
+            if (readRows) ReadRows(current, host, materials);
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (RevitLinkType link in new FilteredElementCollector(host).OfClass(typeof(RevitLinkType))
                 .Cast<RevitLinkType>().OrderBy(l => l.IsNestedLink))
@@ -141,7 +141,7 @@ namespace WallSplitter
                             Document? open = LinkedModelEditService.FindOpenTarget(app, source.Path);
                             if (open != null) { doc = open; source.OpenDocumentPath = open.PathName; }
                         }
-                        ReadRows(source, doc, materials);
+                        if (readRows) ReadRows(source, doc, materials);
                     }
                 }
                 catch (Exception ex) { source.BlockReason = "조회/편집 불가: " + ex.GetBaseException().Message; }
@@ -154,6 +154,7 @@ namespace WallSplitter
         {
             if (!materials)
             {
+                source.Rows.AddRange(ProjectInformationService.Read(doc, source));
                 var indexed = new Dictionary<string, UnifiedRow>();
                 foreach (NamerWindow.NamerCategory category in Enum.GetValues(typeof(NamerWindow.NamerCategory)))
                     foreach (Element element in NamerWindow.CollectCandidates(doc, category))
@@ -205,13 +206,17 @@ namespace WallSplitter
             // 링크 로드 시점 이후 중앙에서 바뀐 항목을 덮어쓰지 않는다. 쓰기 전에 전부 다시 확인한다.
             foreach (var row in rows)
             {
+                if (row.ProjectValue != null) { ProjectInformationService.Validate(doc, row); continue; }
                 Element element = doc.GetElement(row.UniqueId) ?? throw new InvalidOperationException("요소가 삭제됨: " + row.Original);
                 if (element.Name != (materials ? row.Working : row.Original))
                     throw new InvalidOperationException("조회 후 이름이 변경됨: " + row.Original + " — 링크를 갱신하고 다시 조회하세요.");
             }
             if (!materials)
             {
-                var result = NamerCommand.ApplyRenames(doc, rows.Select(r => (doc.GetElement(r.UniqueId).Id, r.Working)).ToList(), merge, logs);
+                ProjectInformationService.Apply(doc, rows.Where(r => r.ProjectValue != null).ToList(), logs);
+                var names = rows.Where(r => r.ProjectValue == null).ToList();
+                if (names.Count == 0) return Result.Succeeded;
+                var result = NamerCommand.ApplyRenames(doc, names.Select(r => (doc.GetElement(r.UniqueId).Id, r.Working)).ToList(), merge, logs);
                 return result.Status == TransactionStatus.Committed && result.Failed.Count == 0 ? Result.Succeeded : Result.Failed;
             }
             var assignments = new List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)>();

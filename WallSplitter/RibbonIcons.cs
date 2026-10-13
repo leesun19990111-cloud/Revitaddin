@@ -39,6 +39,20 @@ namespace WallSplitter
         // 아이콘 바깥 여백. 리본이 아이콘을 다시 확대/축소하지 않도록 16/32 실제 크기에 맞춰 그린다.
         private static double Margin(int size) => Math.Max(1.5, size * 0.09);
 
+        // 일람표 격자에서 한 열과 여러 행을 강조한다.
+        internal static BitmapSource ScheduleEditor(int size) => Draw(size, d =>
+        {
+            double m = Margin(size), w = size - m * 2, step = w / 4;
+            d.DrawRectangle(Paper, OutlinePen(size), new Rect(m, m, w, w));
+            d.DrawRectangle(Fill, null, new Rect(m, m, w, step));
+            d.DrawRectangle(Accent, null, new Rect(m + step, m + step, step, step * 2));
+            for (int i = 1; i < 4; i++)
+            {
+                d.DrawLine(Stroke(Outline, Math.Max(0.7, size / 32.0), false), new Point(m, m + step * i), new Point(size - m, m + step * i));
+                d.DrawLine(Stroke(Outline, Math.Max(0.7, size / 32.0), false), new Point(m + step * i, m), new Point(m + step * i, size - m));
+            }
+        });
+
         // 먹선(윤곽) 펜 - 16px에서 1px, 32px에서 2px.
         private static Pen OutlinePen(int size)
         {

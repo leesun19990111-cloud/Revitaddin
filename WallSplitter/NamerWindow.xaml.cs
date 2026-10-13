@@ -16,7 +16,7 @@ namespace WallSplitter
     {
         // internal: ChangeLogEntry.Category와 ChangeReplayEngine이 "어느 카테고리였는지"/"대상 문서에서
         // 후보를 어떻게 모으는지"를 그대로 재사용하기 위해 이 창 바깥에서도 접근해야 한다.
-        internal enum NamerCategory { View, Sheet, Family, Type, Legend, Schedule, Material, ViewTemplate }
+        internal enum NamerCategory { View, Sheet, Family, Type, Legend, Schedule, Material, ViewTemplate, ProjectInformation }
         private enum NamerMode { Replace, Insert, Swap, DeleteRange }
 
         private sealed class RenameRow
@@ -57,6 +57,8 @@ namespace WallSplitter
         internal List<(ElementId Id, string NewName)>? LinkedRenames { get; private set; }
         internal bool LinkedMerge { get; private set; }
         private Document _doc;
+        private readonly List<UnifiedRow> _projectRows = new();
+        private ProjectInformationPanel? _projectPanel;
         private HashSet<ElementId> _preSelectedIds;
         private readonly HashSet<ElementId> _checkedIds = new();
         private readonly HashSet<NamerCategory> _categoriesInitialized = new();
@@ -158,6 +160,7 @@ namespace WallSplitter
             InitializeComponent();
             if (!linkedModal) Instance = this;
             _doc = doc;
+            LoadProjectInformation();
             _preSelectedIds = new HashSet<ElementId>(preSelectedIds);
 
             _handler = new NamerExternalEventHandler { TargetDocument = doc };
@@ -268,6 +271,7 @@ namespace WallSplitter
                 case NamerCategory.Schedule: CategoryScheduleRadio.IsChecked = true; break;
                 case NamerCategory.Material: CategoryMaterialRadio.IsChecked = true; break;
                 case NamerCategory.ViewTemplate: CategoryViewTemplateRadio.IsChecked = true; break;
+                case NamerCategory.ProjectInformation: CategoryProjectInformationRadio.IsChecked = true; break;
             }
         }
 
@@ -286,6 +290,7 @@ namespace WallSplitter
                 CategoryLegendRadio.IsChecked == true ? NamerCategory.Legend :
                 CategoryScheduleRadio.IsChecked == true ? NamerCategory.Schedule :
                 CategoryViewTemplateRadio.IsChecked == true ? NamerCategory.ViewTemplate :
+                CategoryProjectInformationRadio?.IsChecked == true ? NamerCategory.ProjectInformation :
                 NamerCategory.Material;
 
             LoadCategory(category);
@@ -293,6 +298,7 @@ namespace WallSplitter
 
         private void LoadCategory(NamerCategory category)
         {
+            if (_editingRow != null) EndInlineEdit(_editingRow, commit: true);
             _category = category;
             _categoryElements = CollectCandidates(_doc, category);
             RefreshFamilyTypes();
@@ -328,7 +334,36 @@ namespace WallSplitter
                     ? System.Windows.Visibility.Visible
                     : System.Windows.Visibility.Collapsed;
             RenderRows();
+            ShowProjectInformation(category == NamerCategory.ProjectInformation);
             UpdatePendingChangesText();
+        }
+
+        private void LoadProjectInformation()
+        {
+            _projectRows.Clear();
+            var source = new UnifiedSource { Key = "host", Name = _doc.Title, Path = _doc.PathName, IsHost = true,
+                BlockReason = _doc.IsReadOnly ? "읽기 전용 문서" : "" };
+            _projectRows.AddRange(ProjectInformationService.Read(_doc, source));
+            _projectPanel?.Render();
+        }
+
+        private void ShowProjectInformation(bool show)
+        {
+            if (Content is not WpfGrid root) return;
+            if (_projectPanel == null)
+            {
+                _projectPanel = new ProjectInformationPanel(_projectRows, UpdatePendingChangesText);
+                WpfGrid.SetRow(_projectPanel, 1); WpfGrid.SetRowSpan(_projectPanel, 6); root.Children.Add(_projectPanel);
+            }
+            foreach (UIElement child in root.Children)
+            {
+                int row = WpfGrid.GetRow(child);
+                if (child == _projectPanel || row < 1 || row > 6) continue;
+                child.Visibility = show ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+            }
+            if (!show) MaterialDuplicatePanel.Visibility = _category == NamerCategory.Material ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            _projectPanel.Visibility = show ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            if (show) _projectPanel.Render();
         }
 
         // Revit에서 미리 선택한 건 대부분 모델 "인스턴스"(벽, 배선, 패밀리 인스턴스 등)이지, 유형/패밀리
@@ -1131,6 +1166,7 @@ namespace WallSplitter
         // 다른 카테고리로 옮겨가거나 다른 작업 모드를 골라 계속 이어서 적용할 수 있다.
         private void ApplyButton_Click(object sender, RoutedEventArgs e) => Guard("적용", () =>
         {
+            if (_category == NamerCategory.ProjectInformation) { _projectPanel?.Stage(); return; }
             int changedCount = 0;
             foreach (Element el in _filteredElements)
             {
@@ -1177,6 +1213,10 @@ namespace WallSplitter
         // 클릭들로 확정된) 이름만 그대로 모델에 옮겨 쓴다.
         private void FinalApplyButton_Click(object sender, RoutedEventArgs e) => Guard("최종 적용", () =>
         {
+            if (_editingRow != null) EndInlineEdit(_editingRow, commit: true);
+            var projectChanges = _projectRows.Where(r => r.Changed).ToList();
+            string? inputError = projectChanges.Select(ProjectInformationService.InputError).FirstOrDefault(error => error != null);
+            if (inputError != null) { MessageBox.Show(this, inputError, "프로젝트 정보"); return; }
             var result = new List<(ElementId, string)>();
             foreach (KeyValuePair<ElementId, string> kvp in _workingNames)
             {
@@ -1187,7 +1227,7 @@ namespace WallSplitter
                 if (kvp.Value != trueOriginal) result.Add((kvp.Key, kvp.Value));
             }
 
-            if (result.Count == 0)
+            if (result.Count == 0 && projectChanges.Count == 0)
             {
                 MessageBox.Show("모델에 적용할 변경 사항이 없습니다. 먼저 항목을 선택하고 '적용'을 눌러 이름을 바꿔보세요.", "NAMER", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -1196,6 +1236,7 @@ namespace WallSplitter
             // 링크 작업만 동기 명령 안의 모달 창이다. 호스트의 ExternalEvent에 링크 ID를 전달하지 않는다.
             if (_linkedModal)
             {
+                if (projectChanges.Count > 0) { MessageBox.Show(this, "프로젝트 정보는 통합 모델 창에서 변경해 주세요.", "NAMER"); return; }
                 LinkedRenames = result;
                 LinkedMerge = DuplicateMergeRadio?.IsChecked == true;
                 DialogResult = true;
@@ -1205,9 +1246,18 @@ namespace WallSplitter
             // 모드리스라 여기서 바로 Transaction을 열 수 없다 - 요청만 넣고 Revit이 유효한 컨텍스트에서
             // 처리한 뒤 OnRenamesApplied로 결과를 돌려준다. 창은 닫지 않는다(모드리스의 요점).
             _handler.PendingRenames = result;
+            _handler.PendingProjectInformation = projectChanges;
             _handler.PendingMergeDuplicateMaterials = DuplicateMergeRadio?.IsChecked == true;
-            ShowStatus($"{result.Count}개 이름을 모델에 반영하는 중...");
-            _event.Raise();
+            ShowStatus($"이름 {result.Count}개 / 프로젝트 정보 {projectChanges.Count}개를 모델에 반영하는 중...");
+            IsEnabled = false;
+            Autodesk.Revit.UI.ExternalEventRequest request;
+            try { request = _event.Raise(); }
+            catch { IsEnabled = true; throw; }
+            if (request != Autodesk.Revit.UI.ExternalEventRequest.Accepted && request != Autodesk.Revit.UI.ExternalEventRequest.Pending)
+            {
+                IsEnabled = true; _handler.PendingRenames = null; _handler.PendingProjectInformation = null;
+                ShowStatus("Revit이 요청을 받지 못했습니다. 다른 명령을 종료하고 다시 적용해 주세요.");
+            }
         });
 
         // NamerExternalEventHandler가 이름 변경을 끝낸 뒤 호출한다. Revit API 스레드에서 바로 불리지만
@@ -1225,6 +1275,7 @@ namespace WallSplitter
             // 않은 변경"으로 계속 세어져 사용자가 또 최종 적용을 누르게 된다. 체크 상태는 유지한다.
             _trueOriginalNames.Clear();
             _workingNames.Clear();
+            LoadProjectInformation();
             _categoryElements = CollectCandidates(_doc, _category);
             RefreshFamilyTypes();
             RenderRows(preserveView: true);
@@ -1256,6 +1307,7 @@ namespace WallSplitter
                 _categoriesInitialized.Clear();
                 _expandedFamilies.Clear();
                 _familyTypes.Clear();
+                LoadProjectInformation();
                 ShowStatus("다른 문서로 바뀌어 작업 중이던 내용을 비웠습니다.");
             }
 
@@ -1274,7 +1326,7 @@ namespace WallSplitter
         private void UpdatePendingChangesText()
         {
             int pending = _workingNames.Count(kvp =>
-                _trueOriginalNames.TryGetValue(kvp.Key, out string? orig) && kvp.Value != orig);
+                _trueOriginalNames.TryGetValue(kvp.Key, out string? orig) && kvp.Value != orig) + _projectRows.Count(r => r.Changed);
             PendingChangesText.Text = pending == 0
                 ? "모델에 아직 반영되지 않은 변경 사항이 없습니다."
                 : $"아직 모델에 반영되지 않은 변경 사항 {pending}개 (전체 카테고리 합계, '적용'으로 확정한 것 전부 — 이후 체크 해제되어도 포함됨) — '최종 적용'을 눌러야 실제로 저장됩니다.";

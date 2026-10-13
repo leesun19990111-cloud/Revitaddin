@@ -1,5 +1,10 @@
 # 모델간 변경 반영 (Model Sync)
 
+## 2026-10-13 v100 — 프로젝트 정보/일람표 값 기록
+
+- `ChangeKind.ProjectInformation`, `ScheduleParameter`를 뒤에 추가. 해당 편집기의 성공 후 기존 로그에 기록하되 다른 모델에 이름 기반으로 자동 재생하지 않는다. ResolveOne에서 명시적 제외 사유를 표시하고 ModelSyncWindow에도 한국어 종류를 표시한다.
+- 프로젝트별 매개변수 ID/행 구성은 다른 문서에 이식할 수 없으므로 기존 Rename/MaterialAssign로 기록하지 말 것. 링크 작업은 중앙 동기화 성공 후에만 로그 확정하는 v99 경로 그대로다.
+
 ## 2026-10-13 v97 — 통합 편집의 모델별 기록
 
 - 통합 NAMER/재료 지정은 각 모델의 스냅샷 변경을 UniqueId로 그 원본에 반영하는 기능이며 이름 매칭 기반 ModelSync 재생과 다르다. 기존 재생 구현은 변경하지 않는다.
