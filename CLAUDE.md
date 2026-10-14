@@ -28,6 +28,7 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 리본/앱 시작 (탭·패널·아이콘·매니페스트) | `App.cs`, `RibbonIcons.cs`, `WallSplitter.addin` | `docs/app-shell/CLAUDE.md` |
 | NAMER (이름 일괄 변경, 개별 이름 수정, 특성 창 — **모드리스 창**) | `NamerWindow.*`, `NamerCommand.cs`, `NamerExternalEventHandler.cs`, `NamerPropertiesWindow.*` | `docs/namer/CLAUDE.md` |
 | 일람표 에디터 (필드/행 범위의 매개변수 일괄 편집) | `ScheduleEditor*.cs`, `ProjectInformationService.cs` | `docs/schedule-editor/CLAUDE.md` |
+| 독립 매개변수 관리자 (외부 WPF 프로그램·별도 Revit 작업 프로세스) | `SunnyParameterManager/`, `SunnyToolsInstaller/ParameterManagerInstaller.cs` | `docs/parameter-manager/CLAUDE.md` |
 | 재료 지정/삭제/클래스·설명 변경 | `MaterialAssignWindow.*`, `MaterialAssignCommand.cs`, `MaterialSlotFinder.cs` | `docs/material-assign/CLAUDE.md` |
 | 모델간 변경 반영 | `ModelSyncWindow.*`, `ModelSyncCommand.cs`, `ChangeLog.cs`, `ChangeReplayEngine.cs` | `docs/model-sync/CLAUDE.md` |
 | 패턴 스튜디오 (Revit/PAT 채우기 패턴 편집) | `Pattern*.cs`, `PatternStudioWindow.*`, `PatFileService.cs` | `docs/pattern-studio/CLAUDE.md` |
@@ -51,5 +52,6 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 
 - 애드인 한 연도만 빌드: `dotnet build WallSplitter/WallSplitter.csproj -c Release2026` (또는 `Debug2026`, 2023~2027 아무 연도나).
 - 설치 프로그램 빌드(5개 연도 자동 포함): `dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release`
-- 테스트 프로젝트/린터/CI 없음.
+- 독립 매개변수 관리자 빌드/테스트/배포: `node SunnyParameterManager/build-release.cjs` (기존 출력 덮어쓰기 금지), 패키지 재검증: 같은 명령에 `--verify`.
+- 독립 프로그램 테스트는 `SunnyParameterManager/Tests` 및 `LifecycleTests`. 기존 애드인 전체를 위한 통합 CI는 없음.
 - 참고: 해당 연도 애드인이 Revit에 로드된 상태면 빌드의 마지막 DLL 복사 단계만 실패한다 (컴파일 자체는 실패하지 않으며, 그 연도 Configuration에만 영향).

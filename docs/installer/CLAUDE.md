@@ -1,5 +1,13 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.0 — 2026-10-14 Sunny 매개변수 관리자
+
+- 사용자 요청으로 독립 WPF 프로그램 + Revit 2026 전용 작업 프로세스 연결 모듈을 추가했다. 상세 규칙과 기능 범위는 `docs/parameter-manager/CLAUDE.md`, 안내는 같은 폴더의 `사용안내.md`.
+- `ParameterManagerOnly=true` 빌드는 기존 5개 연도 WallSplitter payload 생성/포함을 건너뛰며 `ParameterManagerInstaller`가 별도 앱 폴더·2026 전용 manifest·바탕화면 바로가기를 설치한다. 기존 Sunny Tools v109는 수정/아카이브하지 않는다. 새 제품 산출물은 `SunnyParameterManagerInstaller_out_v010`, `SunnyParameterManager_Installer_v.0.1.0.zip`이다.
+- 설치기는 Revit/관리자 실행 중 중단, .NET8Desktop x64 확인, payload SHA-256 확인, 버전별 앱 경로에 설치, 이전 manifest/shortcut 보관. Autodesk API DLL은 배포하지 않는다. 실제 Addins 직접 복사는 하지 않았고 설치기를 사용자 대신 실행하지 않았다.
+- 반복 빌드는 `node SunnyParameterManager/build-release.cjs`, `--verify`는 ZIP 재검증, `--package-only`는 검증된 현재 빌드 출력의 압축 복구 전용(소스 변경 시 반드시 먼저 다시 빌드). `obj/ParameterManager010`/`bin/ParameterManager010` 격리. BaseIntermediateOutputPath를 바꿔도 과거 obj 생성 코드가 소스에 혼입되지 않도록 installer의 DefaultItemExcludes에 obj/bin을 명시했다.
+- 55개 Core/WPF + 25개 실제 ModelEngine를 링크한 API 대역 검사 통과. 실제 사용자 RVT 열기/저장/중앙 동기화는 미검증. 보안 제품이 열거에 주입하는 임시 DOCX 등은 읽거나 배포하지 않고, ZIP에는 검증한 파일 목록만 명시적으로 넣는다.
+
 ## v109 — 2026-10-14 공유 유형 매개변수 / 작업세트 편집
 
 - 실제 Revit 진단 창을 접근성 텍스트로 읽어 행 연결 2327/2338, 원시값 충돌 11, 사용자 필드 표시 분포 불일치를 확인. 공유 GUID 대리값 대신 실제 소유 집합 조회, 작업세트 모델별 GUID 선택/검증/Set, 일부 읽기 전용 행의 전체 필드 차단 보완, 편집 가능 행 선택 및 상세 진단을 반영했다. 상세는 schedule-editor v109.

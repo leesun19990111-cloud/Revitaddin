@@ -1,0 +1,178 @@
+{
+  "version": 4,
+  "targets": {
+    "net8.0-windows": {
+      "Nice3point.Revit.Api.RevitAPI/2026.4.10": {
+        "type": "package",
+        "compile": {
+          "ref/net8.0-windows7.0/RevitAPI.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Nice3point.Revit.Api.RevitAPIUI/2026.4.10": {
+        "type": "package",
+        "compile": {
+          "ref/net8.0-windows7.0/RevitAPIUI.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "SunnyParameterManager.Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "compile": {
+          "bin/placeholder/SunnyParameterManager.Core.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/SunnyParameterManager.Core.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Nice3point.Revit.Api.RevitAPI/2026.4.10": {
+      "sha512": "Kb4CHF9AKZ+49tHwdHyuKLrL1O/T6zOFUFZSOhB4lhiTao9akNmS6qTMVeD0oZo5m93dQX7CxnwloPxm1NFmRw==",
+      "type": "package",
+      "path": "nice3point.revit.api.revitapi/2026.4.10",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "License.md",
+        "Readme.md",
+        "images/PackageIcon.png",
+        "nice3point.revit.api.revitapi.2026.4.10.nupkg.sha512",
+        "nice3point.revit.api.revitapi.nuspec",
+        "ref/net8.0-windows7.0/RevitAPI.dll",
+        "ref/net8.0-windows7.0/RevitAPI.xml"
+      ]
+    },
+    "Nice3point.Revit.Api.RevitAPIUI/2026.4.10": {
+      "sha512": "/U9vJA2KZcouTSXKBstuBfz6m5TmE1WLuZyITkMoRwv51YTq5GlZszvW/v5GnCFWdwOCRtHxMsBR4cWnH/btKw==",
+      "type": "package",
+      "path": "nice3point.revit.api.revitapiui/2026.4.10",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "License.md",
+        "Readme.md",
+        "images/PackageIcon.png",
+        "nice3point.revit.api.revitapiui.2026.4.10.nupkg.sha512",
+        "nice3point.revit.api.revitapiui.nuspec",
+        "ref/net8.0-windows7.0/RevitAPIUI.dll",
+        "ref/net8.0-windows7.0/RevitAPIUI.xml"
+      ]
+    },
+    "SunnyParameterManager.Core/1.0.0": {
+      "type": "project",
+      "path": "../Core/SunnyParameterManager.Core.csproj",
+      "msbuildProject": "../Core/SunnyParameterManager.Core.csproj"
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net8.0-windows": [
+      "Nice3point.Revit.Api.RevitAPI >= 2026.4.10",
+      "Nice3point.Revit.Api.RevitAPIUI >= 2026.4.10",
+      "SunnyParameterManager.Core >= 1.0.0"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\User\\.nuget\\packages\\": {},
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyParameterManager\\Bridge\\SunnyParameterManager.Bridge.csproj",
+      "projectName": "SunnyParameterManager.Bridge",
+      "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyParameterManager\\Bridge\\SunnyParameterManager.Bridge.csproj",
+      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyParameterManager\\Bridge\\obj\\",
+      "projectStyle": "PackageReference",
+      "fallbackFolders": [
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+      ],
+      "configFilePaths": [
+        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net8.0-windows"
+      ],
+      "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net8.0-windows": {
+          "framework": "net8.0-windows7.0",
+          "targetAlias": "net8.0-windows",
+          "projectReferences": {
+            "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyParameterManager\\Core\\SunnyParameterManager.Core.csproj": {
+              "projectPath": "C:\\Users\\User\\Desktop\\Sunny\\자동화 작업\\wall addin\\WallSplitter\\SunnyParameterManager\\Core\\SunnyParameterManager.Core.csproj"
+            }
+          }
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "10.0.400"
+    },
+    "frameworks": {
+      "net8.0-windows": {
+        "framework": "net8.0-windows7.0",
+        "targetAlias": "net8.0-windows",
+        "dependencies": {
+          "Nice3point.Revit.Api.RevitAPI": {
+            "target": "Package",
+            "version": "[2026.4.10, )"
+          },
+          "Nice3point.Revit.Api.RevitAPIUI": {
+            "target": "Package",
+            "version": "[2026.4.10, )"
+          }
+        },
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[8.0.31, 8.0.31]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[8.0.31, 8.0.31]"
+          },
+          {
+            "name": "Microsoft.WindowsDesktop.App.Ref",
+            "version": "[8.0.31, 8.0.31]"
+          }
+        ],
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.401/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}

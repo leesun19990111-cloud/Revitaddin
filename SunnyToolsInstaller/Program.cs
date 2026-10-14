@@ -3,6 +3,10 @@ using System.Text;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+// 독립 제품 배포는 같은 설치 엔진을 사용하되 기존 Sunny Tools 애드인을 변경하지 않는다.
+if (Directory.Exists(Path.Combine(AppContext.BaseDirectory, "ParameterManager")))
+    return ParameterManagerInstaller.Run();
+
 Console.WriteLine("=== Sunny Tools Revit 애드인 설치 프로그램 (Revit 2023~2027 지원) ===");
 Console.WriteLine();
 

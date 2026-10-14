@@ -1,0 +1,99 @@
+<Window x:Class="SunnyParameterManager.Desktop.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Sunny · 매개변수 관리자 0.1" Width="1360" Height="860" MinWidth="1080" MinHeight="700" Background="#F2F2F3" FontFamily="Segoe UI" FontSize="13" Closing="OnClosing">
+ <Window.Resources>
+  <SolidColorBrush x:Key="Accent" Color="#5980A6"/>
+  <Style TargetType="Button"><Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="0,0,8,0"/><Setter Property="Background" Value="#FAFAFA"/><Setter Property="BorderBrush" Value="#C9CED3"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Cursor" Value="Hand"/></Style>
+  <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="{StaticResource Accent}"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+  <Style TargetType="TextBox"><Setter Property="Padding" Value="7,5"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="BorderBrush" Value="#C9CED3"/></Style>
+  <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="31"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Margin" Value="0,0,8,0"/></Style>
+  <Style TargetType="DataGrid"><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="CanUserAddRows" Value="False"/><Setter Property="CanUserDeleteRows" Value="False"/><Setter Property="IsReadOnly" Value="True"/><Setter Property="SelectionMode" Value="Extended"/><Setter Property="SelectionUnit" Value="FullRow"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="HorizontalGridLinesBrush" Value="#ECEFF1"/><Setter Property="RowHeight" Value="30"/><Setter Property="HeadersVisibility" Value="Column"/><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#CDD2D7"/><Setter Property="AlternatingRowBackground" Value="#F7F8FA"/><Setter Property="EnableRowVirtualization" Value="True"/><Setter Property="EnableColumnVirtualization" Value="True"/></Style>
+  <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="#E8ECEF"/><Setter Property="Padding" Value="8,10"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="BorderBrush" Value="#D5DADE"/><Setter Property="BorderThickness" Value="0,0,1,1"/></Style>
+  <Style TargetType="TabItem"><Setter Property="Padding" Value="18,9"/></Style>
+ </Window.Resources>
+ <Grid Margin="20" Background="#F2F2F3">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="0,0,0,16">
+   <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+    <Button Content="작업 불러오기" Click="LoadWorkspace"/><Button Content="작업 저장" Click="SaveWorkspace"/><Button Content="샘플로 둘러보기" Click="SampleClick"/>
+   </StackPanel>
+   <StackPanel><TextBlock Text="SUNNY / 매개변수 관리자" FontSize="25" FontWeight="SemiBold" Foreground="#243A50"/><TextBlock Text="여러 RVT의 값을 한곳에서 확인하고, 검토한 변경만 반영합니다." Foreground="#687785" Margin="0,5,0,0"/></StackPanel>
+  </DockPanel>
+  <Border Grid.Row="1" Background="White" BorderBrush="#CDD2D7" BorderThickness="1" Padding="12" Margin="0,0,0,14">
+   <DockPanel><Button DockPanel.Dock="Right" Content="작업용 Revit 종료" Click="StopWorker"/><Button DockPanel.Dock="Right" Content="Revit 연결" Style="{StaticResource Primary}" Click="ConnectWorker"/>
+    <TextBlock Text="Revit 2026" VerticalAlignment="Center" Margin="0,0,12,0" FontWeight="SemiBold"/>
+    <TextBox x:Name="RevitPathBox" Text="C:\Program Files\Autodesk\Revit 2026\Revit.exe" ToolTip="설치 위치가 다르면 Revit 2026 실행 파일 경로를 입력하세요."/>
+   </DockPanel>
+  </Border>
+  <Grid Grid.Row="2" x:Name="WorkspacePanel">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="260" MinWidth="210"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <Border Background="White" BorderBrush="#CDD2D7" BorderThickness="1" Padding="12">
+    <DockPanel>
+     <StackPanel DockPanel.Dock="Top"><TextBlock Text="01  대상 모델" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+      <WrapPanel><Button Content="RVT 추가" Click="AddModels"/><Button Content="제거" Click="RemoveModel"/></WrapPanel>
+      <Button Content="등록 모델 조회 / 새로고침" Click="ReadModels" Margin="0,10,0,8"/>
+      <Button Content="모든 모델 함께 보기" Click="ShowAllModels" Margin="0,0,0,12"/>
+     </StackPanel>
+     <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0"><TextBlock Text="모델 간 값 복사" FontWeight="SemiBold" Margin="0,0,0,8"/>
+      <TextBlock Text="기준 모델" Foreground="#687785"/><ComboBox x:Name="SourceCombo" DisplayMemberPath="Title" Margin="0,6,0,8"/>
+      <CheckBox x:Name="ApproveNamed" Content="일반 매개변수 연결 승인" ToolTip="공유 GUID가 없는 경우에만 동일 이름·자료형·범위의 유일한 매개변수를 연결합니다." Margin="0,0,0,8"/>
+      <Button Content="선택한 행에 기준값 복사" Click="CopyValues" Margin="0,0,0,10"/>
+      <TextBlock Text="카테고리·패밀리·유형이 같은 대상만 연결합니다. 인스턴스 자동 대응과 엑셀 규칙은 아직 지원하지 않습니다." TextWrapping="Wrap" Foreground="#687785" FontSize="12"/>
+     </StackPanel>
+     <ListBox x:Name="ModelsList" SelectionChanged="ModelSelectionChanged" BorderThickness="0" HorizontalContentAlignment="Stretch">
+      <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="3,8"><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}"/><TextBlock Text="{Binding Status}" Foreground="#687785" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel></DataTemplate></ListBox.ItemTemplate>
+     </ListBox>
+    </DockPanel>
+   </Border>
+   <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" Background="Transparent"/>
+   <TabControl Grid.Column="2" x:Name="MainTabs" Background="White" BorderBrush="#CDD2D7">
+    <TabItem Header="02  매개변수 편집">
+     <Grid Margin="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <ComboBox x:Name="ScopeCombo" SelectedIndex="0" SelectionChanged="FilterChanged"><ComboBoxItem Content="유형"/><ComboBoxItem Content="인스턴스"/><ComboBoxItem Content="프로젝트 정보"/><ComboBoxItem Content="전체 범위"/></ComboBox>
+       <ComboBox Grid.Column="1" x:Name="FieldCombo" IsTextSearchEnabled="True" SelectionChanged="FilterChanged" ToolTip="편집할 매개변수를 선택하세요."/>
+       <TextBox Grid.Column="2" x:Name="SearchBox" TextChanged="SearchChanged" ToolTip="모델·카테고리·패밀리·유형·현재 값 검색"/>
+      </Grid>
+      <DockPanel Grid.Row="1" Margin="0,0,0,10"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="보이는 편집 가능 행 선택" Click="SelectEditable"/><Button Content="선택 해제" Click="ClearSelection"/></StackPanel><TextBlock x:Name="CountText" Text="RVT를 등록하고 조회해 주세요." VerticalAlignment="Center" Foreground="#687785"/></DockPanel>
+      <DataGrid Grid.Row="2" x:Name="ValuesGrid" SelectionChanged="ValueSelectionChanged" Sorting="ValuesSorting">
+       <DataGrid.Columns>
+        <DataGridTextColumn Header="소속 모델" Binding="{Binding ModelTitle}" Width="140"/>
+        <DataGridTextColumn Header="카테고리" Binding="{Binding Category}" Width="95"/>
+        <DataGridTextColumn Header="패밀리 / 유형" Binding="{Binding TypeName}" Width="190"/>
+        <DataGridTextColumn Header="매개변수" Binding="{Binding Name}" Width="120"/>
+        <DataGridTextColumn Header="현재 값" Binding="{Binding ValueLabel}" Width="150"/>
+        <DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="220"/>
+        <DataGridTextColumn Header="패밀리" Binding="{Binding Family}" Width="150"/>
+        <DataGridTextColumn Header="범위" Binding="{Binding Scope}" Width="95"/>
+        <DataGridTextColumn Header="요소 ID" Binding="{Binding ElementId}" Width="90"/>
+        <DataGridTextColumn Header="매개변수 식별자" Binding="{Binding ParameterKey}" Width="260"/>
+       </DataGrid.Columns>
+      </DataGrid>
+      <Border Grid.Row="3" Background="#F0F4F7" Padding="12" Margin="0,12,0,0">
+       <StackPanel><TextBlock x:Name="EditorHint" Text="행을 선택한 뒤 값을 입력하세요. Ctrl·Shift로 여러 행을 선택할 수 있습니다." TextWrapping="Wrap" Foreground="#526474" Margin="0,0,0,8"/>
+        <DockPanel><Button DockPanel.Dock="Right" Content="변경 예정에 추가" Style="{StaticResource Primary}" Click="StageValues" Margin="10,0,0,0"/>
+         <Grid><TextBox x:Name="ValueBox" MinHeight="33"/><ComboBox x:Name="ChoiceCombo" Visibility="Collapsed" IsEditable="True" IsTextSearchEnabled="True" Margin="0"/></Grid>
+        </DockPanel>
+       </StackPanel>
+      </Border>
+     </Grid>
+    </TabItem>
+    <TabItem Header="03  변경 예정 / 최종 적용">
+     <DockPanel Margin="12">
+      <StackPanel DockPanel.Dock="Top"><TextBlock Text="아래 목록에 있는 변경만 적용합니다. 선택 해제나 검색 변경은 이미 추가한 변경을 취소하지 않습니다." TextWrapping="Wrap" Margin="0,0,0,10" Foreground="#687785"/>
+       <WrapPanel Margin="0,0,0,10"><Button Content="선택 변경 제외" Click="RemoveEdits"/><Button Content="전체 변경 초기화" Click="ClearEdits"/></WrapPanel>
+      </StackPanel>
+      <DataGrid x:Name="EditsGrid"><DataGrid.Columns><DataGridTextColumn Header="소속 모델" Binding="{Binding Model}" Width="140"/><DataGridTextColumn Header="패밀리 / 유형" Binding="{Binding Type}" Width="200"/><DataGridTextColumn Header="매개변수" Binding="{Binding Field}" Width="120"/><DataGridTextColumn Header="기존 값" Binding="{Binding Before}" Width="140"/><DataGridTextColumn Header="변경값" Binding="{Binding Value}" Width="150"/><DataGridTextColumn Header="입력 근거" Binding="{Binding Reason}" Width="180"/></DataGrid.Columns></DataGrid>
+     </DockPanel>
+    </TabItem>
+    <TabItem Header="처리 결과">
+     <DockPanel Margin="12"><Button DockPanel.Dock="Top" Content="이 작업의 기록 폴더 열기" Click="OpenLogs" HorizontalAlignment="Left" Margin="0,0,0,10"/><TextBox x:Name="ReportBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" BorderThickness="0" Text="실제 파일을 변경하기 전, 별도 테스트 모델에서 먼저 확인해 주세요."/></DockPanel>
+    </TabItem>
+   </TabControl>
+  </Grid>
+  <Grid Grid.Row="3" Margin="0,16,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <StackPanel><TextBlock x:Name="StatusText" Text="연결 전 · RVT 파일 추가 또는 샘플로 둘러보기를 선택하세요." TextWrapping="Wrap" Foreground="#526474"/><TextBlock x:Name="PendingText" Text="변경 예정 0건 · 아직 파일을 수정하지 않았습니다." FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel>
+   <Button Grid.Column="1" x:Name="ApplyButton" Content="최종 적용 · 저장 / 중앙 동기화" Style="{StaticResource Primary}" Click="ApplyChanges" Margin="16,0,0,0" MinHeight="44" IsEnabled="False"/>
+  </Grid>
+ </Grid>
+</Window>
