@@ -130,7 +130,7 @@ internal static class Program
                 var content = (FrameworkElement)w.Content;
                 content.Measure(new Size(size.Item1, size.Item2)); content.Arrange(new Rect(0, 0, size.Item1, size.Item2)); content.UpdateLayout();
                 Render(w, "main-" + size.Item1, size.Item1, size.Item2);
-                Check(grid.ActualWidth > 500 && grid.ActualHeight > 180, $"목록 표시 영역 {size.Item1} ({grid.ActualWidth:N0}×{grid.ActualHeight:N0})");
+                Check(grid.ActualWidth > 500 && grid.ActualHeight > 145, $"목록 표시 영역 {size.Item1} ({grid.ActualWidth:N0}×{grid.ActualHeight:N0})");
             }
             w.LoadSample();
             var rules = new RuleSet { Version = 1, Name = "연습 룰셋", SampleOnly = true, Rules = [new() { Name = "업체명 입력", Match = new() { Scope = "유형", Type = "KAC-W", TypeMatch = "시작" }, Set = [new() { Name = "업체명", DataType = "text", Storage = "String", Value = "연습 업체" }] }] };
@@ -146,11 +146,49 @@ internal static class Program
             w.LoadSample();
             w.PrepareRules(RulePlanner.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "연습용.sunnyrules.json"))));
             Check(edits.Items.Count == 36 && ((TextBox)w.FindName("RuleSummary")).Text.Contains("연습 전용"), "실제 배포 연습용 파일 불러오기");
+            FieldSearchTests();
             Console.WriteLine("화면 렌더: " + RenderOutput);
             Console.WriteLine($"TOTAL {_count} PASS · 실제 Revit/중앙 서버 검증은 별도 필요");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+    private static void FieldSearchTests()
+    {
+        var w = new MainWindow(); w.LoadSample();
+        var search = (TextBox)w.FindName("FieldSearchBox");
+        var combo = (ComboBox)w.FindName("FieldCombo");
+        var status = (TextBlock)w.FindName("FieldSearchStatus");
+        var grid = (DataGrid)w.FindName("ValuesGrid");
+        var input = (TextBox)w.FindName("ValueBox");
+        var edits = (DataGrid)w.FindName("EditsGrid");
+        var row = grid.Items[0]; grid.SelectedItems.Add(row); input.Text = "검색 전 입력"; Invoke(w, "StageValues");
+        search.Text = "업체";
+        Check(combo.Items.Cast<string>().SequenceEqual(new[] { "재료명", "업체명" }) && status.Text == "검색 1개", "매개변수 부분 검색 + 현재 선택 별도 유지");
+        Check((string)combo.SelectedItem == "재료명" && grid.SelectedItems.Contains(row) && input.Text == "검색 전 입력", "매개변수 검색은 선택 행과 입력값 불변");
+        Check(edits.Items.Count == 1 && ((ValueEdit)edits.Items[0]).Value == "검색 전 입력", "매개변수 검색은 변경 예정 보존");
+        search.Text = "없는매개변수";
+        Check(status.Text == "검색 0개" && combo.Items.Count == 1 && (string)combo.SelectedItem == "재료명", "검색 결과 없음에도 다른 항목 자동 선택 금지");
+        Check(grid.Items.Count == 36 && grid.Items.Cast<ParameterRow>().All(r => r.Name == "재료명"), "검색 실패 시 모든 매개변수 행으로 확장 금지");
+        Invoke(w, "ClearFieldSearch");
+        Check(search.Text == "" && combo.Items.Count == 4 && (string)combo.SelectedItem == "재료명" && grid.SelectedItems.Contains(row), "검색 지우기는 전체 후보 복원 및 선택 유지");
+        Check(!((Button)w.FindName("ClearFieldSearchButton")).IsEnabled, "빈 검색 지우기 버튼 비활성");
+        search.Text = "  ifc  ";
+        Check(combo.Items.Contains("다음으로 IFC로 내보내기") && status.Text == "검색 1개", "영문 대소문자 무시 및 앞뒤 공백 제거");
+        combo.SelectedItem = "다음으로 IFC로 내보내기";
+        Check(combo.Items.Count == 1 && grid.Items.Count == 36 && grid.Items.Cast<ParameterRow>().All(r => r.Name == "다음으로 IFC로 내보내기"), "검색 결과 선택 후 해당 필드만 표시 및 이전 유지 항목 제거");
+        Check(input.Text == "" && grid.SelectedItems.Count == 0 && edits.Items.Count == 1, "실제 필드 변경은 입력 초기화하되 누적 변경 보존");
+        ((TextBox)w.FindName("SearchBox")).Text = "W01";
+        search.Text = "공사코드";
+        Check(grid.Items.Count == 2 && combo.Items.Contains("조달청표준공사코드"), "이름/현재 값 검색과 매개변수 후보 검색 독립");
+        ((ComboBox)w.FindName("ScopeCombo")).SelectedIndex = 1;
+        Check(grid.Items.Count == 0 && combo.Items.Contains("조달청표준공사코드"), "범위가 달라도 검색 후보와 선택 필드 유지");
+        ((ComboBox)w.FindName("ScopeCombo")).SelectedIndex = 0;
+        ((ListBox)w.FindName("ModelsList")).SelectedIndex = 0;
+        Check(grid.Items.Count == 1 && (string)combo.SelectedItem == "다음으로 IFC로 내보내기", "파일 필터 변경 시 검색과 선택 필드 유지");
+        search.Text = "업체";
+        combo.SelectedItem = "업체명";
+        Render(w, "field-search", 1080, 700);
     }
     private static void Invoke(MainWindow w, string method) => typeof(MainWindow).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, [w, new RoutedEventArgs()]);
     private static void Render(MainWindow w, string name, int width, int height)

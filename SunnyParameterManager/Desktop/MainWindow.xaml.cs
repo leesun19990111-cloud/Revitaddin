@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ModelItem> _models = [];
     private readonly Dictionary<string, ValueEdit> _edits = [];
     private readonly WorkerClient _worker = new();
+    private List<string> _fieldNames = [];
     private bool _initialized, _filtering, _busy, _sample, _selecting;
 
     public MainWindow()
@@ -139,13 +140,31 @@ public partial class MainWindow : Window
     private void RefreshFields()
     {
         if (!_initialized) return;
-        _filtering = true;
         var current = FieldCombo.SelectedItem as string;
-        var names = AllRows().Select(r => r.Name).Distinct().OrderBy(s => s).ToList();
-        FieldCombo.ItemsSource = names;
-        FieldCombo.SelectedItem = current != null && names.Contains(current) ? current : names.Contains("재료명") ? "재료명" : names.FirstOrDefault();
-        _filtering = false; RefreshRows();
+        _fieldNames = AllRows().Select(r => r.Name).Distinct().OrderBy(s => s).ToList();
+        ApplyFieldSearch(current != null && _fieldNames.Contains(current) ? current : _fieldNames.Contains("재료명") ? "재료명" : _fieldNames.FirstOrDefault());
+        RefreshRows();
     }
+    private void ApplyFieldSearch(string? current)
+    {
+        var search = FieldSearchBox.Text.Trim();
+        var matches = _fieldNames.Where(n => n.Contains(search, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        var count = matches.Count;
+        // 검색만으로 선택/행/입력값을 바꾸지 않는다. 검색 밖의 현재 항목은 맨 위에 남긴다.
+        var retained = current != null && !matches.Contains(current);
+        if (retained) matches.Insert(0, current!);
+        _filtering = true;
+        try { FieldCombo.ItemsSource = matches; FieldCombo.SelectedItem = current; }
+        finally { _filtering = false; }
+        FieldSearchStatus.Text = search.Length == 0 ? $"전체 {count:N0}개" : $"검색 {count:N0}개";
+        FieldSearchStatus.ToolTip = retained ? "검색 결과와 별도로 현재 선택 항목을 맨 위에 유지합니다." : "등록한 파일에서 조회한 매개변수 이름을 검색합니다.";
+        ClearFieldSearchButton.IsEnabled = FieldSearchBox.Text.Length > 0;
+    }
+    private void FieldSearchChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_initialized && !_filtering) Guard(() => ApplyFieldSearch(FieldCombo.SelectedItem as string));
+    }
+    private void ClearFieldSearch(object sender, RoutedEventArgs e) => Guard(() => { FieldSearchBox.Clear(); FieldSearchBox.Focus(); });
     private void RefreshRows()
     {
         if (!_initialized || _filtering) return;
@@ -163,6 +182,7 @@ public partial class MainWindow : Window
     private void FilterChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_initialized || _filtering) return;
+        if (ReferenceEquals(sender, FieldCombo)) ApplyFieldSearch(FieldCombo.SelectedItem as string);
         ValueBox.Clear(); ChoiceCombo.SelectedItem = null; RefreshRows();
     }
     private void SearchChanged(object sender, TextChangedEventArgs e) { if (_initialized) RefreshRows(); }
@@ -352,7 +372,7 @@ public partial class MainWindow : Window
                 }
             m.ConnectCatalogs(); _models.Add(new() { Path = m.Path, Snapshot = m, Status = "샘플 데이터 · 파일 변경 없음" });
         }
-        ModelsList.SelectedItem = null; SourceCombo.SelectedIndex = 0; ScopeCombo.SelectedIndex = 0; MainTabs.SelectedIndex = 0; SearchBox.Clear();
+        ModelsList.SelectedItem = null; SourceCombo.SelectedIndex = 0; ScopeCombo.SelectedIndex = 0; MainTabs.SelectedIndex = 0; SearchBox.Clear(); FieldSearchBox.Clear();
         RefreshFields(); UpdatePending(); StatusText.Text = "샘플 모드 · 선택·입력·기준값 복사·작업 저장을 시험할 수 있습니다. 실제 RVT에는 적용되지 않습니다.";
     }
     private void OnClosing(object? sender, CancelEventArgs e)

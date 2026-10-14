@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SunnyParameterManager.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+39e523b3a55ffd004b2aa71695a20f95124c0bd7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+82a279f98a2f147109ddb2b840438e39251f7181")]
 [assembly: System.Reflection.AssemblyProductAttribute("SunnyParameterManager.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SunnyParameterManager.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

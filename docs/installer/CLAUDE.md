@@ -1,5 +1,13 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.3 — 2026-10-14 매개변수 이름 검색
+
+- 수정할 항목에 부분 검색/검색 개수/초기화. 선택 필드·행·입력·누적 변경 보존. 실제 저장 엔진은 불변. 상세는 parameter-manager 문서.
+- out_v013 / SunnyParameterManager_Installer_v.0.1.3.zip, App-0.1.3-<timestamp>-<id>, Protocol.Release 0.1.3. 설치기 obj/bin ParameterManager013, lifecycle Release013. 같은 제품 v012만 Old_Versions로 보존하며 Sunny Tools v109는 그대로 둔다.
+- 125개 Core/룰셋/WPF + 33개 API 대역 테스트, 기본/최소 크기와 검색 UI 렌더 검증. 프로그램 13파일 / ZIP 20파일 해시 검증. 사용자 모델 변경/실제 설치는 하지 않는다.
+- 기존 Core obj/Release DLL 매핑 잠금(CS2012)을 만나 사용자 프로세스 종료 없이 Tests013/Publish013/Bridge013으로 단계별 obj/bin 경로도 격리했다. 같은 소스의 실제 출력→배포 해시는 그대로 검사한다.
+- 최종 158건 통과, Bridge 경고/오류 0개, 패키지 13/20파일 해시 일치. ZIP 29,773,008 bytes, SHA-256 `4BA1F0EAFCFAA1D86F471DEEEB6A2D481645A2E6E97029CE0A6F9E95E1BF01E7`. v012 폴더/ZIP 보관 완료.
+
 ## 별도 제품 0.1.2 — 2026-10-14 파일 기반 중앙 조회 수정
 
 - 매개변수 관리자의 서버 전용 GUID 오용을 제거하고 생성 식별자 + 정규 중앙 경로 검증으로 변경. 단계별 실패 안내 추가. UI 배치/룰셋/기존 Sunny Tools v109는 불변. 상세는 parameter-manager 문서.
