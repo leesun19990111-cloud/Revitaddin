@@ -1,5 +1,12 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v104 — 2026-10-14 네이머/재료 지정 모델·이름 정렬 선택
+
+- 통합 창 검색 영역에 정렬 기준을 추가. 기본 모델별/전체 이름순 선택, 패밀리 계층·선택·누적 편집·페이지 보존. 현재 모델 전용 창과 실제 저장/중앙 동기화 경로는 변경하지 않았다. 상세 규칙은 namer/material-assign v104 참조.
+- unified-v104 213(기존199+정렬14), release-v104 91, link-safety-v104 72, 총 **376개** API 대역·실제 WPF 회귀 통과. 기본/최소 창 렌더 확인. 실제 Revit/중앙 서버 검증은 미실시.
+- Revit 2023~2027 `obj/bin/iso104<year>` 격리 Release 오류0, 기존 경고38/53/51/36/38. 설치기 `obj/bin/iso104` 게시 후 격리 DLL 명시 복사. DLL11/11/2/2/2, 모든 연도 Clipper 포함·Autodesk DLL 제외. verify-release.cjs의 30파일 집합/해시 및 정렬/기존 안전장치 심볼 통과.
+- `SunnyToolsInstaller_out_v104`, `SunnyTools_Installer_v.1.0.4.zip`(**36,157,799 bytes**). ZIP SHA256 `14FD2AC5A901700AB9F2766CD5D5C95577054C9F2C277CDC19C596F15FADD12C`, EXE SHA256 `E81700C90BD8299D352EC7BD99CA67F3125C9DAAE4E39D9592EBD91AC84A1367`. v103 폴더/ZIP은 Old_Versions에 보관. 사용자 Addins 설치/모델 변경 없음.
+
 ## v103 — 2026-10-14 도면목록표/링크 시트 읽기 전용 오판 수정
 
 - OST_Sheets 전용 경로로 현재·링크의 실제 ViewSheet를 수집한다. 임시 복제의 도면번호/링크 파일 정보와 대조해 모델 소속을 연결하며 원본 일람표 필드는 보존한다. 같은 번호/ID의 모델 격리, 링크 OFF+빈 파일 정보 열, 모호한 행만 부분 차단, 기본 매개변수 직접 접근 보완. 상세 제한/중앙 안전 경로는 schedule-editor v103 참조.

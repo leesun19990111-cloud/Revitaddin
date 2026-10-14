@@ -14,7 +14,7 @@ namespace WallSplitter
     {
         private readonly List<UnifiedSource> _sources;
         private readonly bool _materials;
-        private readonly ComboBox _model = new(), _category = new(), _filterMode = new(), _mode = new();
+        private readonly ComboBox _model = new(), _category = new(), _filterMode = new(), _mode = new(), _sort = new();
         private readonly TextBox _search = new(), _first = new(), _second = new();
         private readonly TextBlock _status = new(), _hint = new();
         private readonly StackPanel _items = new(), _materialChoices = new();
@@ -68,6 +68,12 @@ namespace WallSplitter
             _filterMode.Width = 125;
             foreach (string label in new[] { "포함됨", "포함하지 않음", "일치함", "일치하지 않음", "시작함", "끝남" }) _filterMode.Items.Add(label);
             _filterMode.SelectedIndex = 0; filters.Children.Add(_filterMode);
+            var sorting = new StackPanel { Orientation = Orientation.Horizontal };
+            sorting.Children.Add(Label("정렬"));
+            _sort.Width = 115; _sort.Items.Add("모델 기준"); _sort.Items.Add("이름 기준"); _sort.SelectedIndex = 0;
+            _sort.ToolTip = materials ? "모델 기준: 현재 모델 먼저, 링크별 묶음 / 이름 기준: 모델 구분 없이 대상 유형명 순"
+                : "모델 기준: 현재 모델 먼저, 링크별 묶음 / 이름 기준: 모델 구분 없이 항목명 순 (패밀리 하위 유형은 부모 아래 유지)";
+            sorting.Children.Add(_sort); filters.Children.Add(sorting);
             filters.Children.Add(Button("전체 선택", () => { CommitInline(true); foreach (var row in _display.Where(r => r.Editable)) row.Selected = true; RefreshPreview(); }));
             filters.Children.Add(Button("전체 해제", () => { CommitInline(true); foreach (var row in _filtered) row.Selected = false; RefreshPreview(); }));
 
@@ -178,6 +184,7 @@ namespace WallSplitter
             _category.SelectionChanged += (_, _) => Guard(Refresh);
             _filterMode.SelectionChanged += (_, _) => Guard(Refresh);
             _search.TextChanged += (_, _) => Guard(Refresh);
+            _sort.SelectionChanged += (_, _) => Guard(Resort);
             _items.MouseMove += (_, e) => Guard(() =>
             {
                 if (!_dragging) return;
@@ -266,21 +273,40 @@ namespace WallSplitter
                         : _category.SelectedIndex == 2 ? r.NewMaterial.Length == 0 && r.OriginalMaterials.Values.Any(v => v.Length == 0)
                         : MatchName(r.Family, r.Working, query, mode))
                     : r.ProjectValue != null ? MatchName(r.Family, r.Display(r.Working), query, mode) : UnifiedEditLogic.Matches(r.Working, query, mode)))
-                .OrderBy(r => r.Source.IsHost ? 0 : 1).ThenBy(r => r.Source.Name).ThenBy(r => r.Family).ThenBy(r => r.Working).ToList();
-            _filtered = new List<UnifiedRow>(); _display = new List<UnifiedRow>();
-            foreach (var row in parents)
-            {
-                _filtered.Add(row); _display.Add(row);
-                if (!_materials && row.IsFamily)
-                {
-                    var children = row.Source.Rows.Where(r => r.ParentId == row.UniqueId).OrderBy(r => r.Working).ToList();
-                    _filtered.AddRange(children); if (row.Expanded) _display.AddRange(children);
-                }
-            }
+                .ToList();
+            BuildDisplay(parents);
             var keep = new HashSet<UnifiedRow>(_filtered);
             foreach (var row in categoryRows.Concat(!_materials && _category.SelectedIndex == 2 ? all.Where(r => r.ParentId.Length > 0) : Enumerable.Empty<UnifiedRow>()))
                 if (!keep.Contains(row)) row.Selected = false;
             Render();
+        }
+        private void Resort()
+        {
+            if (!_ready) return;
+            CommitInline(true); EndDrag(); _anchor = null;
+            // 정렬은 검색을 다시 실행하지 않는다. 선택/누적 편집/펼침/페이지 분량을 보존한다.
+            var parents = _filtered.Where(r => _materials || _category.SelectedIndex != 2 || r.IsFamily).ToList();
+            BuildDisplay(parents); Render();
+        }
+        private void BuildDisplay(IEnumerable<UnifiedRow> parents)
+        {
+            var comparer = StringComparer.CurrentCultureIgnoreCase;
+            string Name(UnifiedRow row) => row.ProjectValue != null ? row.Family : row.Working;
+            var ordered = _sort.SelectedIndex == 1
+                ? parents.OrderBy(Name, comparer).ThenBy(r => r.Family, comparer)
+                    .ThenBy(r => r.Source.IsHost ? 0 : 1).ThenBy(r => r.Source.Name, comparer)
+                : parents.OrderBy(r => r.Source.IsHost ? 0 : 1).ThenBy(r => r.Source.Name, comparer)
+                    .ThenBy(r => r.Source.Key, StringComparer.Ordinal).ThenBy(r => r.Family, comparer).ThenBy(Name, comparer);
+            _filtered = new List<UnifiedRow>(); _display = new List<UnifiedRow>();
+            foreach (var row in ordered.ThenBy(r => r.Key, StringComparer.Ordinal))
+            {
+                _filtered.Add(row); _display.Add(row);
+                if (!_materials && row.IsFamily)
+                {
+                    var children = row.Source.Rows.Where(r => r.ParentId == row.UniqueId).OrderBy(r => r.Working, comparer).ThenBy(r => r.Key, StringComparer.Ordinal).ToList();
+                    _filtered.AddRange(children); if (row.Expanded) _display.AddRange(children);
+                }
+            }
         }
         private static bool MatchName(string family, string name, string query, int mode) =>
             mode == 1 || mode == 3 ? UnifiedEditLogic.Matches(family, query, mode) && UnifiedEditLogic.Matches(name, query, mode)
