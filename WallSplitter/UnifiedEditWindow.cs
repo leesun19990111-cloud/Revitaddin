@@ -9,7 +9,7 @@ using Grid = System.Windows.Controls.Grid;
 
 namespace WallSplitter
 {
-    // 링크 해제 전에 읽은 순수 값만 표시한다. 창 안에서는 Revit API를 호출하지 않는다.
+    // 열린 원본 또는 링크에서 읽은 순수 값만 표시한다. 창 안에서는 Revit API를 호출하지 않는다.
     internal sealed class UnifiedEditWindow : Window
     {
         private readonly List<UnifiedSource> _sources;
@@ -17,6 +17,8 @@ namespace WallSplitter
         private readonly ComboBox _model = new(), _category = new(), _filterMode = new(), _mode = new(), _sort = new();
         private readonly TextBox _search = new(), _first = new(), _second = new();
         private readonly TextBlock _status = new(), _hint = new();
+        private readonly TextBlock _targetHeader = Label(""), _originalHeader = Label(""), _previewHeader = Label("");
+        private readonly TextBlock _projectHelp = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4,4,4,0) };
         private readonly StackPanel _items = new(), _materialChoices = new();
         private readonly CheckBox _merge = new() { Content = "같은 이름의 재료 병합", IsChecked = false };
         private readonly Dictionary<string, string> _choices = new();
@@ -76,6 +78,13 @@ namespace WallSplitter
             sorting.Children.Add(_sort); filters.Children.Add(sorting);
             filters.Children.Add(Button("전체 선택", () => { CommitInline(true); foreach (var row in _display.Where(r => r.Editable)) row.Selected = true; RefreshPreview(); }));
             filters.Children.Add(Button("전체 해제", () => { CommitInline(true); foreach (var row in _filtered) row.Selected = false; RefreshPreview(); }));
+            if (!materials)
+            {
+                filters.Children.Add(Button("프로젝트 정보 · 모든 모델", ShowProjectInformation));
+                _projectHelp.Text = "모델별 정보 항목을 선택해 값을 지정하거나 값 칸을 두 번 클릭하세요. 빈 값은 ‘없음’으로 표시합니다.\n링크 수정: 대상 원본의 로컬을 같은 Revit에 먼저 열고 네이머를 실행하세요. 링크 중앙에 동기화하며 현재 모델의 저장·동기화는 직접 진행합니다.";
+                _projectHelp.Foreground = Theme.Accent;
+                filters.Children.Add(_projectHelp);
+            }
 
             var editor = new StackPanel(); Put(root, Section("2 · 변경 설정 — 입력 즉시 선택 항목에 미리보기", editor), 2);
             if (!materials)
@@ -132,9 +141,8 @@ namespace WallSplitter
             var header = _header;
             header.Background = Theme.Surface;
             header.Margin = new Thickness(1,0,14,0);
-            Add(header, Label("선택"), 0); Add(header, Label("소속 모델"), 1); Add(header, Label("패밀리 / 대상"), 2);
-            Add(header, Label(materials ? "현재 재료" : "기존 이름 / 값"), 3);
-            Add(header, Label(materials ? "변경 후 재료 · 미리보기" : "변경 후 이름 / 값 · 미리보기"), 4);
+            Add(header, Label("선택"), 0); Add(header, Label("소속 모델"), 1); Add(header, _targetHeader, 2);
+            Add(header, _originalHeader, 3); Add(header, _previewHeader, 4);
             for (int column = 1; column < 4; column++)
             {
                 var splitter = new GridSplitter { Width = 6, HorizontalAlignment = HorizontalAlignment.Right,
@@ -152,7 +160,7 @@ namespace WallSplitter
             _status.TextWrapping = TextWrapping.Wrap; _status.Margin = new Thickness(0,8,0,8); Put(root, _status, 5);
             var footer = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right }; Put(root, footer, 6);
             footer.Children.Add(Button("모델 상태 / 제외 사유", () => MessageBox.Show(this, string.Join("\n\n", sources.Select(s =>
-                s.Name + "\n" + s.Path + "\n" + (s.Editable ? "편집 가능 (적용 시 중앙 연결/소유권 재검사)" : s.BlockReason))), "모델 상태")));
+                s.Name + "\n" + s.Path + "\n" + SourceStatus(s))), "모델 상태")));
             footer.Children.Add(Button("현재 모델 전용 도구", () =>
             {
                 if (sources.SelectMany(s => s.Rows).Any(r => r.Changed) && MessageBox.Show(this,
@@ -259,9 +267,42 @@ namespace WallSplitter
                 "첫 칸: 선택 항목에 지정할 값 전체 (프로젝트 정보의 텍스트는 비우면 삭제)" }[Math.Max(0,_mode.SelectedIndex)];
             _second.IsEnabled = _mode.SelectedIndex != 2 && _mode.SelectedIndex != 4;
         }
+        private void ShowProjectInformation()
+        {
+            CommitInline(true); EndDrag();
+            // 필터를 한 번에 전환한다. 누적 변경은 보존하고 이전 이름 편집 입력은 옮기지 않는다.
+            _ready = false;
+            try
+            {
+                _model.SelectedIndex = 0; _category.SelectedIndex = (int)NamerWindow.NamerCategory.ProjectInformation;
+                _search.Clear(); _filterMode.SelectedIndex = 0;
+                _first.Clear(); _second.Clear(); _mode.SelectedIndex = 4;
+            }
+            finally { _ready = true; }
+            UpdateHint(); Refresh();
+        }
+        private static string SourceStatus(UnifiedSource source)
+        {
+            if (!source.Editable) return source.BlockReason;
+            if (source.IsHost) return "현재 모델에서 편집 · 저장/동기화는 직접 진행";
+            if (string.IsNullOrWhiteSpace(source.OpenDocumentPath))
+                return "원본 로컬 열기 필요 · 같은 Revit에 대상 원본의 로컬을 연 뒤 네이머/재료 지정을 다시 실행하세요. 현재는 링크에 저장된 값을 표시합니다.";
+            return "열린 원본 사용: " + source.OpenDocumentPath + "\n최종 적용 시 중앙 연결/소유권 재검사 · 기존 작업을 포함하여 동기화";
+        }
+        private void UpdateCategoryLabels()
+        {
+            bool project = !_materials && _category.SelectedIndex == (int)NamerWindow.NamerCategory.ProjectInformation;
+            _targetHeader.Text = project ? "정보 항목" : "패밀리 / 대상";
+            _originalHeader.Text = _materials ? "현재 재료" : project ? "현재 값" : "기존 이름 / 값";
+            _previewHeader.Text = _materials ? "변경 후 재료 · 미리보기" : project ? "변경 후 값 · 미리보기" : "변경 후 이름 / 값 · 미리보기";
+            _projectHelp.Visibility = project ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            _merge.Visibility = project ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+            _search.ToolTip = project ? "프로젝트 정보 항목명 또는 값으로 검색합니다. 빈 값은 ‘없음’으로 검색하세요." : "모든 모델의 검색 결과를 함께 표시합니다.";
+        }
         private void Refresh()
         {
             if (!_ready) return;
+            UpdateCategoryLabels();
             CommitInline(true); EndDrag(); _anchor = null;
             _limit = 200;
             var all = _sources.SelectMany(s => s.Rows).ToList();
