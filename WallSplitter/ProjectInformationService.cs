@@ -80,6 +80,12 @@ namespace WallSplitter
             var info = row.Category == (int)NamerWindow.NamerCategory.ProjectInformation ? doc.ProjectInformation : doc.GetElement(row.UniqueId);
             if (info == null || info.UniqueId != row.UniqueId) throw new InvalidOperationException("매개변수 대상이 변경되었습니다.");
             var matches = info.Parameters.Cast<Parameter>().Where(p => Identity(p) == expected.Identity).ToList();
+            // 일부 기본 매개변수는 Parameters 열거에서 빠져도 전용 접근자로 조회된다.
+            if (expected.Identity.StartsWith("id:", StringComparison.Ordinal) && int.TryParse(expected.Identity.Substring(3), out int builtin) && builtin < 0)
+            {
+                var direct = info.get_Parameter((BuiltInParameter)builtin);
+                if (direct != null) matches = new List<Parameter> { direct };
+            }
             if (matches.Count != 1) throw new InvalidOperationException(expected.Name + ": 매개변수가 삭제되거나 중복되었습니다.");
             Parameter p = matches[0];
             if ((forWrite && (p.IsReadOnly || !row.Editable)) || p.Definition.Name != expected.Name || (int)p.StorageType != expected.Storage ||

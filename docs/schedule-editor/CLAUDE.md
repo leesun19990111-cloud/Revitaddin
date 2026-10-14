@@ -1,5 +1,17 @@
 # 일람표 에디터 (Schedule Editor)
 
+## v103 — 2026-10-14 도면목록표 전용 행 연결 / 기본 매개변수 접근
+
+- 사용자 재현: 링크 포함 도면목록표의 동일 도면번호가 전부 소속 확인 불가, `시트 번호` 필터/정렬 재검증 실패. 링크 제외+빈 `RVT 링크: 파일 이름` 열에서도 모든 필드가 읽기 전용. 시트는 모델 형상이 아니므로 일반 뷰/링크 그래픽 collector에 의존하지 않는다. `ScheduleEditorService.Read`에서 OST_Sheets는 새 `ScheduleEditorSheets.Read`로 분기한다. 키/내포/재료 산출 기존 차단은 유지한다.
+- 현재 및 로드된 링크 Document의 ViewSheet를 직접 수집한다. 모델 권한/원본 경로는 UnifiedEditService에서 조회하고 이미 열린 편집 원본은 기존 FindOpenTarget으로 재사용한다. 조회 중 다른 원본을 새로 열거나 중앙을 수정하지 않는다. 링크 문서 자체에는 쓰지 않으며 저장은 기존 LinkedModelEditService.Run 경로뿐이다.
+- 개별 행은 원래 정렬/필터를 유지한 임시 복제에 SHEET_NUMBER 및 링크 포함 시 RVT_LINK_FILE_NAME_WITHOUT_EXT 열을 추가/노출하여 읽는다. Count를 읽고 성공/실패 모두 RollBack한다. 원본에는 열/서식/템플릿 변경이 남지 않는다. 기본 번호·원본 파일·직접 표시 필드를 대조하고 Source.Key+시트 UniqueId로 연결한다. 같은 ID/번호인 다른 모델은 분리, 같은 원본 반복 링크는 중복 제거. 서로 다른 경로의 동명 파일 등 여전히 모호하면 해당 행만 읽기 전용으로 두며 정상 행까지 막지 않는다. 복제에서 얻은 ScheduleField API 객체는 롤백 이후 사용하지 않는다.
+- 묶인 행은 기존 정렬 필드만 기준으로 모든 직접 값/원시값 및 실제 Count를 검증한다. 정렬에 없는 보조 열을 그룹 식별에 추가하지 않는다. 필터/정렬 의존 매개변수가 해석 불가하거나 후보 개수가 다르면 그 행을 차단한다. 반올림/동명 참조로 원시값이 다른 그룹도 차단한다.
+- 링크 포함 OFF의 빈 파일 정보는 식별 필수조건이 아니다. 링크 정보·계산식·합계는 해당 열만 읽기 전용; 일반 시트 필드는 개별 writable 상태로 판단한다. 열린 원본의 문자열 값과 링크 표의 표시가 다르면 해당 셀을 차단하여 기존 미동기화 작업을 덮어쓰지 않는다. 시트번호와 직접 표시/필터/정렬 값을 guard로 보관하고 원본 쓰기 직전 다시 검사한다. 최종 재조회 fingerprint 비교도 유지한다.
+- 기본 매개변수는 Parameters 열거 대신 get_Parameter(BuiltInParameter)로 조회한다. 일반 일람표 Resolve 및 공유 ProjectInformationService.Validate도 동일 방식으로 보완한다. 공유 GUID/원시값/정의/권한 검사를 생략하지 않는다. 문서별 양수 ID나 이름으로 링크 사용자 매개변수를 추측하지 않는다.
+- 도면목록표는 2023~2027 지원 API만 사용한다. 아래 v100/v102의 **2023 링크 포함 차단은 일반 모델 요소 일람표에만 적용**하며 도면목록표는 예외이다. UI 드래그/Shift·필드별 입력/중앙 확인 및 다른 로컬에 대한 제약은 유지한다.
+- API 대역+실제 서비스/UI 회귀: unified-v103 **199**(신규22), release-v103 **91**, link-safety-v103 **72**, 총 **362개**. 같은 번호/ID의 호스트+2링크·표 순서·선택 모델만 수정·Parameters에 없는 기본 시트번호 저장·미동기화 원본·모호한 행 부분 차단·링크 OFF/빈 파일열·그룹 개수·임시 복제 정리 검사. WPF 기본/최소 크기 렌더 확인. 2023~2027 컴파일 오류0. **실제 Revit 표시 엔진 및 중앙 서버는 미검증**이다.
+- 공식 근거: [링크 뷰 collector는 visible graphical elements 대상](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/968b52a0-de55-2f96-de40-968812bc41c7.htm), [ScheduleFieldType의 링크 파일/인스턴스 필드](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/9888db7d-00d0-4fd7-a1a9-cdd1fb5fce16.htm), [GetLinkDocument는 변경/저장 대상이 아님](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/6f81c365-15d9-06b8-48ef-df84914fec60.htm).
+
 ## v102 — 2026-10-14 비텍스트 행 식별 / 필드별 입력기
 
 - 사용자 오류 원인: v100의 `TextDirect`와 텍스트 전용 그룹 제한. 단순히 숫자 필드가 섞인 문제와는 다르다. 아래 v100의 텍스트 전용/참조 전체 금지 규칙은 이 절로 대체한다. 키/내포/재료 수량 산출, 2023 링크 포함 제한은 유지한다.

@@ -22,7 +22,7 @@ namespace WallSplitter
             var shared = host.GetElement(field.ParameterId) as SharedParameterElement;
             bool builtin = long.TryParse(field.ParameterId.ToString(), out long number) && number < 0;
             if (!candidate.Source.IsHost && !builtin && shared == null) return null;
-            Parameter? Find(Element owner) => shared != null ? owner.get_Parameter(shared.GuidValue) :
+            Parameter? Find(Element owner) => shared != null ? owner.get_Parameter(shared.GuidValue) : builtin ? owner.get_Parameter((BuiltInParameter)number) :
                 owner.Parameters.Cast<Parameter>().SingleOrDefault(p => p.Id == field.ParameterId);
             Element owner = candidate.Element;
             if (field.FieldType == ScheduleFieldType.ElementType) owner = candidate.Document.GetElement(owner.GetTypeId());
@@ -43,6 +43,8 @@ namespace WallSplitter
             if (definition.IsKeySchedule || definition.IsMaterialTakeoff || definition.HasEmbeddedSchedule)
                 throw new InvalidOperationException("첫 버전은 일반 요소 일람표만 지원합니다. 키 일람표·재료 수량 산출·내포된 일람표는 편집하지 않습니다.");
             if (host.IsReadOnly || host.IsModifiable) throw new InvalidOperationException("읽기 전용/편집 중 문서에서는 일람표를 조회할 수 없습니다.");
+            if (definition.CategoryId == new ElementId(BuiltInCategory.OST_Sheets))
+                return ScheduleEditorSheets.Read(app, schedule);
             var data = new ScheduleEditorSnapshot { ScheduleId = schedule.UniqueId, Name = schedule.Name };
             var sources = UnifiedEditService.Collect(host, false, app, false);
             var candidates = new List<Candidate>();

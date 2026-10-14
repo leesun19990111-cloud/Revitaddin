@@ -1,5 +1,10 @@
 # NAMER (이름 일괄 변경)
 
+## 2026-10-14 v103 — 공통 매개변수 재검증의 기본 ID 접근 보완
+
+- `ProjectInformationService.Validate`는 `id:<음수 built-in>`를 Parameters 열거뿐 아니라 get_Parameter(BuiltInParameter)로 다시 조회한다. 시트 번호처럼 전용 접근자는 지원하지만 열거에 없는 항목을 저장 직전에 잘못 거부하는 문제를 수정했다.
+- 공유 GUID, 정의/저장형/원시값, writable 상태 검사는 유지한다. NAMER 프로젝트 정보의 참조 읽기 전용/일반 이름/재료 편집 범위는 변경하지 않았다. unified-v103 199 + release-v103 91 + link-safety-v103 72 회귀 통과. 세부 도면목록표 변경은 schedule-editor v103 참조. 실제 Revit/서버 검증은 미실시.
+
 ## 2026-10-14 v102 — 공통 매개변수 서비스의 일람표 참조 편집 확장
 
 - `ProjectInformationValue`에 일람표 전용 참조 종류/원래·선택 UniqueId/모델별 후보/단위 라벨 추가. `UnifiedRow.Changed`는 해당 참조만 ID로 비교한다. 일반 이름·재료·프로젝트 정보의 기존 판단은 유지한다.

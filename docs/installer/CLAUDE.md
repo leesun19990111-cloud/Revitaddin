@@ -1,5 +1,12 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v103 — 2026-10-14 도면목록표/링크 시트 읽기 전용 오판 수정
+
+- OST_Sheets 전용 경로로 현재·링크의 실제 ViewSheet를 수집한다. 임시 복제의 도면번호/링크 파일 정보와 대조해 모델 소속을 연결하며 원본 일람표 필드는 보존한다. 같은 번호/ID의 모델 격리, 링크 OFF+빈 파일 정보 열, 모호한 행만 부분 차단, 기본 매개변수 직접 접근 보완. 상세 제한/중앙 안전 경로는 schedule-editor v103 참조.
+- 실제 소스+Revit API 대역 검사 **362개**: unified-v103 199(신규22), 기존 UI/재료 release-v103 91, link-safety-v103 72. WPF 링크 도면목록표/호스트 전용 최소 창 렌더 확인. 실제 Revit 표시 엔진 및 공유 서버 동기화는 미검증이며 사용자 모델을 변경하지 않았다.
+- Revit 2023~2027 `obj/bin/iso103<year>` 격리 Release 오류0, 기존 경고38/53/51/36/38. 설치기 `obj/bin/iso103` 게시 후 최신 DLL 명시 복사. DLL11/11/2/2/2, 모든 연도 Clipper 포함·Autodesk DLL 제외. verify-release.cjs로 원본→Payload→ZIP 30파일 집합·SHA-256·신규/기존 심볼 검사 통과.
+- 배포 `SunnyToolsInstaller_out_v103`, `SunnyTools_Installer_v.1.0.3.zip`(**36,154,391 bytes**). ZIP SHA256 `5275503F849C397EED50EB033DD117DFE0C7B110B0F0AEA385391904B406A13A`, EXE SHA256 `5130B2FA1CEB30D2294BABBFC14A979758EF22186A49BA54F0B6865BEC8FC567`. v102 폴더/ZIP은 `Old_Versions/`에 보관. 실제 Addins 직접 복사/설치 없음.
+
 ## v102 — 2026-10-14 일람표 비텍스트 행 식별 및 필드별 편집
 
 - 텍스트 전용 식별 제한을 숫자/단위/직접 참조로 확대. 표시 서식·원시값·그룹 개수 불일치와 재검증 불가 행은 창을 열되 읽기 전용. 텍스트/정수/단위 숫자/예 아니요/모델별 재료·지원 레벨 검색 선택 입력기. 상세 지원 범위와 제한은 schedule-editor v102 참조.
