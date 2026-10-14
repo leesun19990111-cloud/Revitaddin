@@ -49,6 +49,18 @@ namespace WallSplitter
     }
     internal static class ScheduleEditorLogic
     {
+        internal static HashSet<int> EditableRows(ScheduleEditorSnapshot data, ScheduleEditorField field)
+        {
+            if (field.Reason.Length > 0 || field.Editor == ScheduleEditorKind.ReadOnly) return new HashSet<int>();
+            var numbers = new HashSet<int>(data.Rows.Where(r => r.Reason.Length == 0 && !r.Errors.ContainsKey(field.Id) &&
+                r.Targets.TryGetValue(field.Id, out var targets) && targets.Count > 0 && targets.All(t => t.Editable)).Select(r => r.Number));
+            // 공동 대상 중 일부 행만 골라 수정하지 않는다. 의존 행도 모두 선택 가능해야 한다.
+            bool removed;
+            do { removed = false; foreach (var row in data.Rows.Where(r => numbers.Contains(r.Number)).ToList())
+                if (row.RequiredRows.Any(n => !numbers.Contains(n))) { numbers.Remove(row.Number); removed = true; }
+            } while (removed);
+            return numbers;
+        }
         internal sealed class RowMatch
         {
             internal List<int> Members = new(), RequiredRows = new();

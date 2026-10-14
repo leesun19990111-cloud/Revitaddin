@@ -51,6 +51,11 @@ namespace WallSplitter
             tools.Children.Add(_boolean);
             tools.Children.Add(Button("전체 선택", () => { _range.Text = data.Rows.Count == 0 ? "" : "1-" + data.Rows.Count; }));
             tools.Children.Add(Button("선택 해제", () => _range.Clear()));
+            tools.Children.Add(Button("편집 가능 행만 선택", () =>
+            {
+                if (_field.SelectedItem is ScheduleEditorField f)
+                    _range.Text = FormatRange(ScheduleEditorLogic.EditableRows(data, f));
+            }));
             tools.Children.Add(Button("동일 표시 행 함께 선택", () =>
             {
                 var numbers = ScheduleEditorLogic.ParseRows(_range.Text, data.Rows.Count);
@@ -223,7 +228,8 @@ namespace WallSplitter
         {
             if (_editorField == field.Id) return;
             _editorField = field.Id; _value.Clear(); _boolean.SelectedIndex = -1; _referenceChoices.Clear(); _referenceEditors.Children.Clear();
-            _editorHint.Text = field.Hint;
+            int editableCount = ScheduleEditorLogic.EditableRows(_data, field).Count;
+            _editorHint.Text = "편집 가능 " + editableCount + "행 / " + _data.Rows.Count + "행 · " + field.Hint;
             _value.Visibility = field.Editor == ScheduleEditorKind.Text || field.Editor == ScheduleEditorKind.Integer || field.Editor == ScheduleEditorKind.Number ? Visibility.Visible : Visibility.Collapsed;
             _boolean.Visibility = field.Editor == ScheduleEditorKind.Boolean ? Visibility.Visible : Visibility.Collapsed;
             _stage.IsEnabled = field.Editor != ScheduleEditorKind.ReadOnly;

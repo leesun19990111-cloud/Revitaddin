@@ -1,5 +1,15 @@
 # 일람표 에디터 (Schedule Editor)
 
+## v109 — 2026-10-14 실제 진단 조회 / 공유 매개변수 소유 범위 / 작업세트
+
+- 사용자가 연 실제 Revit 2026 일람표 에디터의 접근성 텍스트를 computer-use로 조회했다. 캡처는 시간 초과, 클릭은 geometry unavailable, 키보드 이동은 검증되지 않아 사용자가 ‘행 연결 진단’을 열었다. 표 2338, 후보 2339, 연결 2327, 다른 원시값 충돌 11행. 제작정보/KBIMS-부위코드/조달청표준공사코드는 표시 분포 불일치, 매개변수 연결 오류 4037셀. 모델 이름/원문 진단은 저장소에 보관하지 않는다. 실제 값 쓰기·중앙 동기화·설치는 하지 않았다.
+- 공식 ScheduleFieldType.Instance는 공유 **유형** 매개변수도 포함한다. GUID 접근자는 실제로 소유하지 않는 인스턴스/유형에서도 대리 매개변수를 반환할 수 있다. Resolve가 반환값!=null이면 실제 유형 탐색을 중단하던 결함을 수정: 공유 GUID는 owner.Parameters의 실제 소유 집합에서 유일한 항목만 사용한다. IsReadOnly/HasValue로 소유를 추정하지 않는다. 양쪽 실제 소유가 확인되면 임의 우선순위로 쓰지 않고 차단. 기존 built-in 전용 접근자는 그대로 유지한다. 실제 사용자 필드마다 이 원인이 맞는지는 새 버전에서 대조해야 하며 모두 해결됐다고 단정하지 않는다.
+- 작업세트는 ELEM_PARTITION_PARAM+Integer에만 opt-in ReferenceKind=작업세트. 문서별 UserWorkset GUID→이름 목록, 원래 작업세트 GUID 및 선택 GUID/이름 재검증 후 Set(int). 문서별 숫자 ID를 공유하지 않으며 원시 식별 키도 모델별 분리한다. 시스템 작업세트·임의 정수 직접 입력 제외, 작업세트 생성/강제 체크아웃/소유권 반납 없음. IsEditable(작업세트 소유 여부)을 모든 이동 가능성으로 오인해 필터링하지 않는다. Revit의 실제 Set/Commit 실패는 기존 문서 트랜잭션 롤백으로 처리한다.
+- ConfigureEditors는 실제 편집 가능한 타깃의 저장형/참조 종류를 비교한다. 읽기 전용 행은 그대로 제한하고 다른 정상 행까지 전체 필드를 막지 않는다. 새 ‘편집 가능 행만 선택’은 명시적으로 누를 때만 선택을 교체하며 공동 RequiredRows의 일부라도 불가하면 그 공동 집합 모두 제외. Stage는 여전히 선택된 불가 행을 자동 건너뛰지 않고 차단한다. UI에 가능 행 수를 표시한다.
+- Read/Snapshot의 doc.IsLinked는 영구 읽기 전용 대신 원본 로컬 미연결 안내. 실제 열린 원본의 IsReadOnly는 유지. MissingParameterReason은 모델/실제 GUID 또는 ID/유형·인스턴스 범위를 표시한다. 진단에 필드별 가능 행·원본 권한 집계 추가. GUID 불일치를 이름으로 우회하거나 매개변수를 자동 생성하지 않는다.
+- 실제 서비스/UI+대역 unified-v109 306건, link-safety52, release91. 작업세트 이동·선택 전용·GUID/이름 stale·실패 rollback·실제 읽기 전용 유지, GUID 대리값(읽기 전용 및 writable-empty)과 실제 소유 유형/인스턴스·중복·다른 GUID 방어를 포함한다. 2023~2027 오류0. 사용자 모델에서 수정본 적용과 서버 동기화는 미검증. 새 설치 후 유형 공유값/작업세트 각각 소수 행으로 테스트하고 진단을 재비교할 것.
+- 근거: [공유 매개변수 FieldType](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/9888db7d-00d0-4fd7-a1a9-cdd1fb5fce16.htm), [GUID 대리값 재현과 실제 Parameters 소유 확인](https://forums.autodesk.com/t5/revit-api-forum/element-get-parameter-guid-returns-unreliable-result/td-p/11340145), [작업세트 요소 변경](https://help.autodesk.com/cloudhelp/2024/CHS/Revit-API/files/Revit_API_Developers_Guide/Advanced_Topics/Worksharing/Revit_API_Revit_API_Developers_Guide_Advanced_Topics_Worksharing_Elements_in_Worksets_html.html).
+
 ## v108 — 2026-10-14 다중 카테고리의 누락 매개변수 / 행 연결 진단
 
 - 사용자 v107 실측: 모든 소속 확인 불가, ‘표시값이 정확히 대응하는 식별 필드가 없습니다’, 승인 버튼은 ‘승인 불필요’. 실제 연결 세션은 없어 원본 표 수치의 직접 실측은 못 했다. 코드에서 Direct의 candidates.All, 전체 분포 완전 일치 요구, 링크 helper 검사 전 identityFields.Count==0 throw를 확인하고 대역으로 해당 실패 조건을 재현했다. **실제 모델의 유일한 원인을 확정한 것으로 기록하지 말 것.**

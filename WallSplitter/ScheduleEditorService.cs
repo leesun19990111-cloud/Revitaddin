@@ -47,7 +47,14 @@ namespace WallSplitter
         {
             Parameter? Find(Element owner)
             {
-                if (key.Guid.Length > 0) return owner.get_Parameter(Guid.Parse(key.Guid));
+                // GUID 접근자는 인스턴스에 없는 유형 매개변수도 읽기 전용 대리값으로 반환할 수 있다.
+                // 실제 Parameters 소유 집합에서만 찾고, 없을 때 유형으로 이동한다.
+                if (key.Guid.Length > 0)
+                {
+                    Guid guid = Guid.Parse(key.Guid);
+                    var owned = owner.Parameters.Cast<Parameter>().Where(p => p.IsShared && p.GUID == guid).ToList();
+                    return owned.Count == 1 ? owned[0] : null;
+                }
                 if (key.Id < 0) return owner.get_Parameter((BuiltInParameter)key.Id);
                 var matches = owner.Parameters.Cast<Parameter>().Where(p => key.IsHost ? p.Id.ToString() == key.Id.ToString() :
                     !p.IsShared && p.Definition.Name == key.Name && p.Definition.GetDataType().TypeId == key.DataType &&
@@ -59,12 +66,28 @@ namespace WallSplitter
             if (key.IsType) owner = document.GetElement(element.GetTypeId());
             if (owner == null) return null;
             Parameter? p = Find(owner);
+            if (p != null && key.Guid.Length > 0 && !key.IsType && !key.IsProjectInfo)
+            {
+                var type = document.GetElement(element.GetTypeId());
+                if (type != null && Find(type) != null) return null; // 양쪽 실제 소유가 확인되면 범위를 추측하지 않는다.
+            }
             if (p == null && !key.IsType && !key.IsProjectInfo)
             {
                 owner = document.GetElement(element.GetTypeId());
                 if (owner != null) p = Find(owner);
             }
             return p == null || owner == null ? null : (owner, p);
+        }
+
+        private static string MissingParameterReason(Document host, ScheduleField field, Candidate member)
+        {
+            var key = ParameterIdentity(host, field, member.Source.IsHost);
+            if (key == null) return member.Source.Name + " · " + field.GetName() + ": 직접 편집할 매개변수 식별자가 없는 필드입니다.";
+            string identity = key.Guid.Length > 0 ? "공유 GUID " + key.Guid : key.Id < 0 ? "기본 ID " + key.Id :
+                key.IsHost ? "현재 모델 ID " + key.Id : "프로젝트 매개변수 ‘" + key.Name + "’ / " + key.DataType;
+            string scope = key.IsProjectInfo ? "프로젝트 정보" : key.IsType ? "유형" : "인스턴스 및 유형";
+            return member.Source.Name + " · " + field.GetName() + ": " + scope + "에서 " + identity +
+                "에 해당하는 매개변수가 없거나 유일하지 않습니다. 빈 값과 매개변수 없음은 다릅니다. 이름만 같은 다른 항목에 쓰지 않습니다.";
         }
 
         internal static ScheduleEditorSnapshot Read(UIApplication app, ViewSchedule schedule)
@@ -101,7 +124,7 @@ namespace WallSplitter
 #endif
             }
             if (candidates.Count == 0 || candidates.Count > 20000) throw new InvalidOperationException("조회 대상이 없거나 20,000개를 넘습니다. 일람표 필터로 범위를 줄여 주세요.");
-            data.Diagnostics.Add("행 연결 진단 v108 · 링크 포함=" + definition.IncludeLinkedFiles + " · 개별 행=" + definition.IsItemized);
+            data.Diagnostics.Add("행 연결 진단 v109 · 링크 포함=" + definition.IncludeLinkedFiles + " · 개별 행=" + definition.IsItemized);
             foreach (var group in candidates.GroupBy(c => c.Source.Key))
                 data.Diagnostics.Add(group.First().Source.Name + " · 수집 후보 " + group.Count() + "개");
             var originalFields = definition.GetFieldOrder().Select(definition.GetField).ToList();
@@ -270,7 +293,7 @@ namespace WallSplitter
                     foreach (var member in members)
                     {
                         var resolved = Resolve(host, f, member);
-                        if (resolved == null) { row.Errors[id] = "동일 매개변수를 확인할 수 없습니다. 공유 GUID 또는 유일한 프로젝트 매개변수 이름·자료형을 확인하세요."; break; }
+                        if (resolved == null) { row.Errors[id] = MissingParameterReason(host, f, member); break; }
                         var snapshot = ProjectInformationService.Snapshot(member.Document, resolved.Value.Owner, resolved.Value.Parameter, member.Source);
                         if (opened.TryGetValue(member.Source.Key, out var original) && original != null)
                         {
@@ -301,6 +324,13 @@ namespace WallSplitter
                 if (reason.Length == 0) groupRows[matches[i].Members] = row;
             }
             ScheduleEditorParameters.ConfigureEditors(data);
+            foreach (var field in data.Fields)
+            {
+                data.Diagnostics.Add("필드 상태: " + field.Name + " · 편집 가능 " + ScheduleEditorLogic.EditableRows(data, field).Count + "/" + data.Rows.Count + "행 · " + field.Editor);
+                var targets = data.Rows.SelectMany(r => r.Targets.TryGetValue(field.Id, out var list) ? list : new List<UnifiedRow>()).Distinct();
+                foreach (var group in targets.GroupBy(t => t.Source.Name + " · " + (t.ProjectValue?.ReadOnlyReason.Length > 0 ? t.ProjectValue.ReadOnlyReason : t.Source.Editable ? "원본 편집 가능" : t.Source.BlockReason)))
+                    data.Diagnostics.Add("  " + group.Key + " · 실제 매개변수 " + group.Count() + "개");
+            }
             foreach (var group in data.Rows.GroupBy(r => r.Reason.Length == 0 ? "요소 연결 성공" : r.Reason))
                 data.Diagnostics.Add(group.Key + " · " + group.Count() + "행");
             foreach (var group in data.Rows.SelectMany(r => r.Errors.Values).GroupBy(s => s)) data.Diagnostics.Add("셀 제한: " + group.Key + " · " + group.Count() + "건");

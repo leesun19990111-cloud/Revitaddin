@@ -31,6 +31,8 @@ namespace WallSplitter
         private static string Value(Document doc, Parameter p)
         {
             if (!p.HasValue) return "";
+            if (p.Id == new ElementId(BuiltInParameter.ELEM_PARTITION_PARAM) && p.StorageType == StorageType.Integer && doc.IsWorkshared)
+                return doc.GetWorksetTable().GetWorkset(new WorksetId(p.AsInteger()))?.Name ?? p.AsValueString() ?? "";
             if (p.StorageType == StorageType.String) return p.AsString() ?? "";
             if (p.StorageType == StorageType.Integer && p.Definition.GetDataType() == SpecTypeId.Boolean.YesNo)
                 return p.AsInteger() == 0 ? "아니요" : "예";
@@ -43,7 +45,7 @@ namespace WallSplitter
             var v = new ProjectInformationValue { Identity = Identity(p), Name = p.Definition.Name, Storage = (int)p.StorageType,
                 DataType = p.Definition.GetDataType().TypeId, Raw = Raw(p), YesNo = p.Definition.GetDataType() == SpecTypeId.Boolean.YesNo,
                 Integer = p.Definition.GetDataType() == SpecTypeId.Int.Integer };
-            v.ReadOnlyReason = p.IsReadOnly ? "읽기 전용 — Revit에서 변경 불가" :
+            v.ReadOnlyReason = doc.IsLinked ? "원본 로컬 미연결 — 같은 Revit에 원본 로컬을 연 뒤 다시 조회하세요." : p.IsReadOnly ? "읽기 전용 — Revit에서 변경 불가" :
                 p.StorageType == StorageType.ElementId || p.StorageType == StorageType.None ? "Revit 전용 선택/설정 항목 — 기본 특성에서 수정" :
                 p.StorageType == StorageType.Integer && !v.YesNo && !v.Integer ? "Revit 전용 열거값 — 기본 특성에서 수정" : "";
             string text = Value(doc, p);
@@ -63,7 +65,7 @@ namespace WallSplitter
                     Storage = (int)parameter.StorageType, DataType = parameter.Definition.GetDataType().TypeId, Raw = Raw(parameter),
                     YesNo = parameter.Definition.GetDataType() == SpecTypeId.Boolean.YesNo,
                     Integer = parameter.Definition.GetDataType() == SpecTypeId.Int.Integer };
-                value.ReadOnlyReason = parameter.IsReadOnly ? "읽기 전용 — Revit에서 변경 불가" :
+                value.ReadOnlyReason = doc.IsLinked ? "원본 로컬 미연결 — 같은 Revit에 원본 로컬을 연 뒤 다시 조회하세요." : parameter.IsReadOnly ? "읽기 전용 — Revit에서 변경 불가" :
                     parameter.StorageType == StorageType.ElementId || parameter.StorageType == StorageType.None ? "Revit 전용 선택/설정 항목 — 기본 프로젝트 정보에서 수정" :
                     parameter.StorageType == StorageType.Integer && !value.YesNo && !value.Integer ? "Revit 전용 열거값 — 기본 프로젝트 정보에서 수정" : "";
                 string text = Value(doc, parameter);
@@ -93,6 +95,10 @@ namespace WallSplitter
                 throw new InvalidOperationException(expected.Name + ": 조회 이후 값/정의/편집 권한이 변경되었습니다. 다시 조회하세요.");
             // 같은 내부 값이라도 단위 표시가 바뀌면 입력값을 잘못 해석할 수 있다.
             if (Value(doc, p) != row.Original) throw new InvalidOperationException(expected.Name + ": 표시 단위가 변경되었습니다. 다시 조회하세요.");
+            if (expected.ReferenceKind == "작업세트" && (p.StorageType != StorageType.Integer ||
+                p.Id != new ElementId(BuiltInParameter.ELEM_PARTITION_PARAM) || !doc.IsWorkshared ||
+                (doc.GetWorksetTable().GetWorkset(new WorksetId(p.AsInteger()))?.UniqueId.ToString("D") ?? "") != expected.OriginalReference))
+                throw new InvalidOperationException(expected.Name + ": 원래 작업세트가 변경되었습니다. 다시 조회하세요.");
             return p;
         }
         internal static string? InputError(UnifiedRow row)
@@ -100,6 +106,7 @@ namespace WallSplitter
             var value = row.ProjectValue;
             if (value == null || !row.Changed) return null;
             if (!row.Editable) return value.Name + ": " + value.ReadOnlyReason;
+            if (value.ReferenceKind.Length > 0) return null; // 작업세트는 정수 직접 입력이 아니라 모델별 선택값이다.
             if (value.YesNo && !TryBoolean(row.Working, out _)) return value.Name + ": 예/아니요 또는 1/0으로 입력하세요.";
             if (value.Integer && !int.TryParse(row.Working, NumberStyles.Integer, CultureInfo.CurrentCulture, out _)) return value.Name + ": 정수를 입력하세요.";
             if (value.Storage == (int)StorageType.Double && string.IsNullOrWhiteSpace(row.Working)) return value.Name + ": 단위가 있는 숫자를 입력하세요. 숫자 항목은 빈 값으로 지울 수 없습니다.";
@@ -124,6 +131,17 @@ namespace WallSplitter
                 var row = rows[i]; var p = parameters[i]; var value = row.ProjectValue!;
                 bool success;
                 if (p.StorageType == StorageType.String) success = p.Set(row.Working);
+                else if (schedule && value.ReferenceKind == "작업세트")
+                {
+                    if (!doc.IsWorkshared || doc.IsLinked || p.StorageType != StorageType.Integer ||
+                        p.Id != new ElementId(BuiltInParameter.ELEM_PARTITION_PARAM))
+                        throw new InvalidOperationException(value.Name + ": 작업세트 변경 대상이 아닙니다.");
+                    using var collector = new FilteredWorksetCollector(doc);
+                    var workset = collector.OfKind(WorksetKind.UserWorkset).FirstOrDefault(w => w.UniqueId.ToString("D") == value.SelectedReference);
+                    if (workset == null || !value.ReferenceChoices.TryGetValue(value.SelectedReference, out string? expectedName) || workset.Name != expectedName)
+                        throw new InvalidOperationException(value.Name + ": 선택한 작업세트가 삭제되거나 이름이 변경되었습니다. 다시 조회하세요.");
+                    success = p.Set(workset.Id.IntegerValue);
+                }
                 else if (schedule && value.ReferenceKind.Length > 0)
                 {
                     var target = doc.GetElement(value.SelectedReference);
