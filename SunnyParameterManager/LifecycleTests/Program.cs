@@ -87,6 +87,12 @@ internal static class Program
    Check(result.Success && result.RequiresAttention && result.Applied == 1, "동기화 성공 후 닫기 실패는 반영 성공으로 보고");
    r = Setup(); State.Doc.IsReadOnly = true; result = Run(r);
    Check(!result.Success && !State.Events.Contains("tx-start"), "실제 읽기전용 원본 강제 해제 금지");
+   r = Setup(); r.Edits[0].Value = "테스트재료"; r.Edits[0].MaterialSource = new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = "material-v1" }; result = Run(r);
+   Check(result.Success && State.Doc.Element.Parameter.Value == "테스트재료", "재료 근거 재검증 후 저장");
+   r = Setup(); r.Edits[0].Value = "테스트재료"; r.Edits[0].MaterialSource = new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = "old-material" }; result = Run(r);
+   Check(!result.Success && !State.Events.Contains("tx-start") && !State.Events.Contains("save"), "조회 후 재료 변경은 쓰기 전 차단");
+   r = Setup(); r.Edits[0].Value = "테스트재료"; r.Edits[0].MaterialSource = new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = "material-v1" }; State.MaterialChangesAfterSet = true; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save") && State.Doc.Element.Parameter.Value == "기존", "같은 적용 묶음의 재료 변경도 확정 후 전체 롤백");
    Console.WriteLine($"TOTAL {_count} PASS · API 대역 제어 흐름 검사이며 실제 Revit 검증 아님");
    Console.WriteLine("테스트 기록: " + _root); return 0;
   }

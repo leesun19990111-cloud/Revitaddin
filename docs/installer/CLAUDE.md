@@ -1,5 +1,12 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.4 — 2026-10-14 KAC 룰셋 / 외측 재료명
+
+- 버전2 KAC 프로필과 외측 재료 조회·적용 전/후 근거 재검증. 사용자별 엑셀/룰셋은 저장소/설치 페이로드에 포함하지 않고 별도 전달한다. 상세 규칙은 parameter-manager 문서.
+- out_v014 / SunnyParameterManager_Installer_v.0.1.4.zip / App-0.1.4, Protocol.Release 0.1.4. 같은 제품 v013만 Old_Versions로 보존. Sunny Tools v109와 실제 설치/Addins/RVT는 불변.
+- Core/룰셋/WPF 167 + lifecycle 36 + 재료 리더 대역 17, 외부 실제 룰셋 2건 별도. MaterialTests 프로젝트는 실제 OuterMaterialReader.cs를 링크해 벽/바닥/지붕/천장·미지정·다중 재료·막층·근거 변경을 검사한다. 새 빌드 중간 경로는 014로 분리한다.
+- 최종 220건 및 실제 룰셋 2건 통과. Bridge 경고/오류 0, 프로그램 13파일/ZIP 20파일 해시 일치. ZIP 29,790,971 bytes, SHA-256 `4E29085E921485286A8AF229651DB6B6875EE49FD614E3C55ADEB5AAD9E55B30`. v013 폴더/ZIP 보관 완료. 설치기 실행/실제 RVT 저장은 하지 않았다.
+
 ## 별도 제품 0.1.3 — 2026-10-14 매개변수 이름 검색
 
 - 수정할 항목에 부분 검색/검색 개수/초기화. 선택 필드·행·입력·누적 변경 보존. 실제 저장 엔진은 불변. 상세는 parameter-manager 문서.

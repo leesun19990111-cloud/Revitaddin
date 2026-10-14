@@ -156,6 +156,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         var p = ParameterReader.Resolve(owner, expected.ParameterKey) ?? throw new InvalidOperationException("매개변수가 없거나 중복됩니다: " + expected.Name);
         var actual = reader.Read(owner, p);
         EditPlanner.CheckFresh(expected, actual);
+        if (edit.MaterialSource != null) KacRulePlanner.CheckMaterial(edit, reader.ReadMaterial(owner, true));
         if (doc.IsWorkshared && WorksharingUtils.GetCheckoutStatus(doc, owner.Id) == CheckoutStatus.OwnedByOtherUser)
             throw new InvalidOperationException("다른 사용자가 소유하고 있습니다: " + expected.TypeName);
         if (edit.Mode is not ("입력" or "원시값")) throw new InvalidOperationException("알 수 없는 값 입력 형식입니다.");
@@ -204,6 +205,8 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         else throw new InvalidOperationException("지원하지 않는 값입니다.");
         return new WriteAction(setter, () =>
         {
+            // 같은 묶음의 다른 수동 편집이 재료를 바꾼 경우도 전체 롤백한다.
+            if (edit.MaterialSource != null) KacRulePlanner.CheckMaterial(edit, reader.ReadMaterial(owner, true));
             var check = ParameterReader.Raw(p);
             var same = p.StorageType == StorageType.Double ? Math.Abs(double.Parse(check, Invariant) - double.Parse(raw, Invariant)) <= Math.Max(1e-9, Math.Abs(double.Parse(raw, Invariant)) * 1e-10) : check == raw;
             if (!same) throw new InvalidOperationException("Revit 확정 후 값이 요청과 달라 이번 묶음을 취소합니다: " + expected.Name);

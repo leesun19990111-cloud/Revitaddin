@@ -1,5 +1,17 @@
 # 독립 매개변수 관리자
 
+## 2026-10-14 · 0.1.4 KAC 엑셀 기반 룰셋 / 외측 재료명
+
+- 사용자 확정: 항목명으로 열 검색, 동일 코드 중 맨 위의 처음 적힌 값, 외측 재료 하나. 추가 확인으로 벽 외측·바닥/지붕 최상단·천장 최하단, 일반 유형 다중 재료/외측 불명은 기존값 유지. 실제 재료/층 정의를 수정하는 기능이 아니다.
+- Version2의 별도 Kac 프로필. Version1 규칙/전체 보류 동작은 그대로. 타입 이름 `KAC-[AS]-AA0000`의 경계를 확인하여 다른 공정/5자리 숫자/중간 문자열은 제외. 6개 유형 텍스트 매개변수만 이름 유일성 + 실제 text spec/storage/editor/권한으로 연결한다. 인스턴스 대리값·다른 GUID 자동 복사·매개변수 생성은 하지 않는다.
+- Classification 표는 정확한 6자 코드, Ifc 표는 가장 긴 접두어 우선. 중복 확정표/알 수 없는 JSON 속성/임의 정책 거부. 미확인 항목은 항목별 유지·모든 사유를 요약/작업 기록에 남김. 기존 수동 변경과 다른 값은 전체 보류. 동일값 제외. 원본 엑셀과 실제 확정표는 사용자에게 별도 전달하며 저장소/설치 ZIP에 넣지 않는다.
+- 분석한 두 엑셀은 수정하지 않았다. 분류표 20시트(색인 포함), 1499코드, IFC 건축 구분 28접두어. KBIMS 열 I/J, 조달청 H/I는 열번호 대신 항목명 탐지. 데이터 중복 5건은 첫 기입값 채택. 빈 KBIMS 124코드/조달청 155코드는 임의 상위 분류 상속 없이 유지. IFC 표의 IfcCurtainwall 철자만 정식 IfcCurtainWall로 정규화하고 검토 기록에 명시. FA1/FA2/FA3 분류를 합치지 않는다. 원본 자료의 규칙은 프로그램이 실행 중 재해석하지 않는다.
+- OuterMaterialReader는 CompoundStructure.GetLayers의 공식 순서(벽 exterior→interior, 수평 top→bottom) 사용. 천장은 마지막층. 외층 미지정 시 안쪽층 대체 금지, 0두께 막층도 포함. 수직 복합벽 보류. 일반 유형은 유형 material parameters + type.GetMaterialIds(false)가 단일 재료이며 미지정 슬롯이 없을 때만 사용. 인스턴스/도장 재료로 추정하지 않는다.
+- MaterialEvidence는 유형별 캐시로 조회하고 ParameterRow에 저장. 룰셋 재료명 ValueEdit에 근거/재료명/해시를 포함. ModelEngine.Prepare에서 fresh 읽기, 트랜잭션 확정 후에도 fresh 읽기하여 같은 묶음의 수동 재료 변경까지 롤백. 기존 저장·동기화/실패 보존 경계는 그대로. 구버전 기록은 새 조회 필요.
+- 테스트: Core/룰셋/WPF 167 + lifecycle 36 + 실제 OuterMaterialReader를 링크한 API 대역 17, 외부 실제 룰셋 추가 2건. 실제 운영 RVT/중앙 동기화는 미검증. 단위 테스트를 실제 Revit DB 검증으로 소개하지 않는다.
+- 배포 전 실제 설치 RevitAPI.dll을 읽어 SpecTypeId.String.Text.TypeId = `autodesk.spec:spec.string-2.0.0`, MultilineText = `autodesk.spec.aec:multilineText-2.0.0` 확인. 초기 추정 문자열 `autodesk.spec:string.text-2.0.0`은 잘못된 형식이어서 수정했다. 대역에 같은 오타를 쓰면 테스트도 통과하는 함정을 재발하지 말 것. 실제 상수와 비교하고 URL/숫자/추정 spec 거부 회귀를 유지한다.
+- 별도 제품 0.1.4/out_v014, 단계별 Tests014/Release014/Material014/Publish014/Bridge014/ParameterManager014 격리. 같은 제품 v013만 아카이브, 기존 애드인 v109 불변. 사용자 모델/설치본 자동 변경 없음.
+
 ## 2026-10-14 · 0.1.3 수정할 항목의 매개변수 검색
 
 - FieldSearchBox를 수정할 항목 위에 추가. 한국어/영문 이름의 부분 포함(CurrentCultureIgnoreCase), 앞뒤 공백 제거, 검색 개수와 × 초기화 제공. 현재 값/유형 검색 SearchBox와 별개다. 조회한 전체 매개변수 이름을 RefreshFields 시 캐시하고 입력마다 RVT 재조회하지 않는다.

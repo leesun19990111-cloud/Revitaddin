@@ -8,6 +8,14 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
 {
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
     public List<string> Notices { get; } = [];
+    private readonly Dictionary<string, MaterialEvidence> _materials = [];
+    public MaterialEvidence ReadMaterial(Element owner, bool fresh = false)
+    {
+        if (!fresh && _materials.TryGetValue(owner.UniqueId, out var material)) return material;
+        var result = OuterMaterialReader.Read(doc, owner);
+        if (!fresh) _materials[owner.UniqueId] = result;
+        return result;
+    }
 
     public List<ParameterRow> ReadAll()
     {
@@ -78,6 +86,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         }
         else if (r.BlockReason.Length == 0) r.BlockReason = "표시 전용 — 이 참조/전용 열거값 편집기는 첫 버전에서 미지원";
         r.Choices = model.Catalogs.GetValueOrDefault(r.ChoiceCatalog, []);
+        if (owner is ElementType && KacRulePlanner.TypeCode(r.TypeName).Length > 0) r.OuterMaterial = ReadMaterial(owner);
         return r;
     }
 

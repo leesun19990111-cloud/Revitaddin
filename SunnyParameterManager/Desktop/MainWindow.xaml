@@ -1,6 +1,6 @@
 <Window x:Class="SunnyParameterManager.Desktop.MainWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="Sunny · 매개변수 관리자 0.1.3" Width="1360" Height="860" MinWidth="1080" MinHeight="700" Background="#F2F2F3" FontFamily="Segoe UI" FontSize="13" Closing="OnClosing">
+ Title="Sunny · 매개변수 관리자 0.1.4" Width="1360" Height="860" MinWidth="1080" MinHeight="700" Background="#F2F2F3" FontFamily="Segoe UI" FontSize="13" Closing="OnClosing">
  <Window.Resources>
   <SolidColorBrush x:Key="Accent" Color="#5980A6"/>
   <Style TargetType="Button"><Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="0,0,8,0"/><Setter Property="Background" Value="#FAFAFA"/><Setter Property="BorderBrush" Value="#C9CED3"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Cursor" Value="Hand"/></Style>

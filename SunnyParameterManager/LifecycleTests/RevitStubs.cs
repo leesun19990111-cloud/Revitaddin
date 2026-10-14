@@ -16,8 +16,8 @@ namespace Autodesk.Revit.DB
   public static Document Doc = new();
   public static BasicFileInfo Info = new();
   public static List<string> Events = [];
-  public static bool FailSave, FailSync, FailClose, FailCommit, FailSet, VerifyMismatch, OwnedOther;
-  public static void Reset() { Doc = new(); Info = new(); Events = []; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = false; }
+  public static bool FailSave, FailSync, FailClose, FailCommit, FailSet, VerifyMismatch, OwnedOther, MaterialChangesAfterSet;
+  public static void Reset() { Doc = new(); Info = new(); Events = []; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = false; }
  }
  public enum StorageType { String, Integer, Double, ElementId }
  public enum BuiltInParameter { ELEM_PARTITION_PARAM = -100 }
@@ -108,6 +108,7 @@ namespace SunnyParameterManager.Bridge
  using Autodesk.Revit.DB;
  internal sealed class ParameterReader(Document doc, ModelSnapshot model)
  {
+  public MaterialEvidence ReadMaterial(Element owner, bool fresh = false) => new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = State.MaterialChangesAfterSet && State.Events.Contains("set") ? "material-v2" : "material-v1" };
   public List<string> Notices { get; } = [];
   public List<ParameterRow> ReadAll() => [Read(doc.Element, doc.Element.Parameter)];
   public ParameterRow Read(Element owner, Parameter p) => new() { ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = "유형", TypeName = "W1", Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };

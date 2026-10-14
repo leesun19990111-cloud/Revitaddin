@@ -10,6 +10,7 @@ public sealed class RuleSet
     public string Name { get; set; } = "";
     public bool SampleOnly { get; set; }
     public List<ParameterRule> Rules { get; set; } = [];
+    public KacRuleProfile? Kac { get; set; }
 }
 
 public sealed class ParameterRule
@@ -78,7 +79,12 @@ public static class RulePlanner
 
     private static void Validate(RuleSet? file)
     {
-        if (file == null || file.Version != 1 || string.IsNullOrWhiteSpace(file.Name) || file.Rules == null || file.Rules.Count is < 1 or > 500)
+        if (file?.Version == 2)
+        {
+            KacRulePlanner.Validate(file);
+            return;
+        }
+        if (file == null || file.Version != 1 || file.Kac != null || string.IsNullOrWhiteSpace(file.Name) || file.Rules == null || file.Rules.Count is < 1 or > 500)
             throw new InvalidOperationException("룰셋 버전(1), 이름, 1~500개 규칙이 필요합니다.");
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var rule in file.Rules)
@@ -108,6 +114,7 @@ public static class RulePlanner
     {
         Validate(file);
         if (file.SampleOnly && !sample) throw new InvalidOperationException("연습용 룰셋은 실제 모델에 사용할 수 없습니다.");
+        if (file.Version == 2) return KacRulePlanner.Plan(file, available, pending, sample);
         var owners = available.GroupBy(r => (r.ModelPath, r.OwnerId, r.Scope)).Select(g => g.ToList()).ToList();
         var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Rule)>();
         var matched = new HashSet<(string, string, string)>();

@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.1.3";
+    public const string Release = "0.1.4";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -59,6 +59,7 @@ public sealed class ParameterRow
     public string Display { get; set; } = "";
     public string BlockReason { get; set; } = "";
     public string ChoiceCatalog { get; set; } = "";
+    public MaterialEvidence? OuterMaterial { get; set; }
     [JsonIgnore] public List<ValueChoice> Choices { get; set; } = [];
     [JsonIgnore] public bool Editable => BlockReason.Length == 0 && Editor.Length > 0;
     [JsonIgnore] public string Key => JsonSerializer.Serialize(new[] { ModelPath.ToUpperInvariant(), OwnerId, ParameterKey });
@@ -69,6 +70,14 @@ public sealed class ParameterRow
 }
 
 public sealed record ValueChoice(string Key, string Name);
+// 조회 때 확인한 재료와 근거. 실제 저장 때 같은 근거인지 다시 검사한다.
+public sealed class MaterialEvidence
+{
+    public string Name { get; set; } = "";
+    public string Fingerprint { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public string Basis { get; set; } = "";
+}
 public sealed class ValueEdit
 {
     public ParameterRow Original { get; set; } = new();
@@ -77,6 +86,7 @@ public sealed class ValueEdit
     public string RawValue { get; set; } = "";
     public string ReferenceKey { get; set; } = "";
     public string Reason { get; set; } = "직접 입력";
+    public MaterialEvidence? MaterialSource { get; set; }
     [JsonIgnore] public string Model => Original.ModelTitle;
     [JsonIgnore] public string Type => Original.Family + " : " + Original.TypeName;
     [JsonIgnore] public string Field => Original.Name;
