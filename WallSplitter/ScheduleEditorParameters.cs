@@ -67,6 +67,7 @@ namespace WallSplitter
             {
                 var targets = data.Rows.SelectMany(r => r.Targets.TryGetValue(field.Id, out var list) ? list : new List<UnifiedRow>()).Distinct().ToList();
                 var values = targets.Select(t => t.ProjectValue!).Where(v => v != null).ToList();
+                field.ConnectionFailed = field.Reason.Length == 0 && values.Count == 0;
                 if (field.Reason.Length > 0 || values.Count == 0 || targets.All(t => !t.Editable))
                 {
                     field.Editor = ScheduleEditorKind.ReadOnly;

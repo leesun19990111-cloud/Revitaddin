@@ -61,6 +61,13 @@ namespace WallSplitter
             {
                 if (_field.SelectedItem is not ScheduleEditorField f) return;
                 var numbers = ScheduleEditorLogic.ParseRows(_range.Text, data.Rows.Count);
+                var disconnected = data.Rows.Where(r => numbers.Contains(r.Number)).FirstOrDefault(r => r.Reason.Length > 0 || r.Errors.ContainsKey(f.Id) || !r.Targets.TryGetValue(f.Id, out var targets) || targets.Count == 0);
+                if (disconnected != null)
+                {
+                    _status.Text = "연결 승인 단계까지 도달하지 못했습니다. " + disconnected.Number + "행: " +
+                        (disconnected.Reason.Length > 0 ? disconnected.Reason : disconnected.Errors.TryGetValue(f.Id, out var error) ? error : "실제 수정 대상을 찾지 못했습니다.") + " ‘행 연결 진단’을 확인해 주세요.";
+                    return;
+                }
                 var mappings = data.Rows.Where(r => numbers.Contains(r.Number)).SelectMany(r => r.ParameterMappings.TryGetValue(f.Id, out var list) ? list : new List<string>()).Distinct().ToList();
                 if (mappings.Count == 0) { _status.Text = "선택한 행은 별도 프로젝트 매개변수 연결 승인이 필요하지 않습니다."; return; }
                 if (MessageBox.Show(this, "공유 GUID가 없는 프로젝트 매개변수입니다. 동일 이름·자료형의 유일한 항목을 다음처럼 연결할까요? 의미가 같은 항목인지 확인하세요.\n\n" +
@@ -80,6 +87,7 @@ namespace WallSplitter
                 }
                 Render();
             }); tools.Children.Add(_stage);
+            tools.Children.Add(Button("행 연결 진단", () => CreateDiagnosticsWindow().ShowDialog()));
             string[] labels = { "선택 / 행", "소속 모델", "요소 수", "현재 값", "변경 후 값 · 미리보기", "상태" };
             for (int i = 0; i < labels.Length; i++) Add(_header, Cell(labels[i]), i);
             for (int i = 1; i < 5; i++)
@@ -120,6 +128,20 @@ namespace WallSplitter
             _dragTimer.Tick += (_, _) => Guard(() => UpdateDrag(Mouse.GetPosition(_scroll), Mouse.LeftButton == MouseButtonState.Pressed));
             Deactivated += (_, _) => Guard(EndDrag); Closed += (_, _) => Guard(EndDrag);
             SizeChanged += (_, _) => Guard(Sync); _header.SizeChanged += (_, _) => Guard(Sync); Render();
+        }
+        private Window CreateDiagnosticsWindow()
+        {
+            var window = new Window { Owner = this, Title = "Schedule Editor · 행 연결 진단", Width = 820, Height = 580,
+                MinWidth = 600, MinHeight = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            window.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/WallSplitter;component/Resources/Theme.xaml", UriKind.Relative) });
+            var panel = new DockPanel { Margin = new Thickness(12), Background = Theme.WindowBackground };
+            var note = new TextBlock { Text = "원본 모델은 변경하지 않습니다. 아래 내용을 선택해 복사할 수 있습니다. 모델 이름·필드 이름이 포함됩니다.", Foreground = Theme.TextPrimary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) };
+            DockPanel.SetDock(note, Dock.Top); panel.Children.Add(note);
+            panel.Children.Add(new TextBox { Text = string.Join(Environment.NewLine, _data.Diagnostics.Count > 0 ? _data.Diagnostics :
+                    _data.Rows.Select(r => r.Reason).Where(s => s.Length > 0).Distinct().ToList()),
+                IsReadOnly = true, AcceptsReturn = true, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(8),
+                TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+            window.Content = panel; return window;
         }
         private void Guard(Action action)
         {

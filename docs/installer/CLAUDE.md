@@ -1,5 +1,13 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## v108 — 2026-10-14 다중 카테고리 행 연결 실패 보완
+
+- 누락 매개변수 빈 셀 식별/없음 guard, 표 밖 후보로 인한 전체 열 제외 방지, helper 검사 순서, 미연결 승인 오안내, 행 연결 진단을 반영했다. 상세는 schedule-editor v108. 중앙 쓰기 안전 경로는 불변.
+- 대역 회귀 423건(unified280/link-safety52/release91), WPF 정상·실패·진단 렌더 확인. 2023~2027 격리 Release 오류0/경고40·53·51·36·38. `iso108<year>`/설치 `iso108` 경로로 기존 사용자 변경을 보존했다.
+- 게시 후 새 DLL을 Payload에 명시 복사. DLL11/11/2/2/2, Clipper 포함/Autodesk DLL 제외, ZIP 30파일 집합·SHA256, 새 기능 및 기존 안전장치 심볼 검사 통과.
+- `SunnyToolsInstaller_out_v108`, `SunnyTools_Installer_v.1.0.8.zip` 36,197,000 bytes. ZIP SHA256 `92CF62DA1B114B54D05198E8EF5AD827F536E7D328F30621EA4C06FAEB85F171`, EXE SHA256 `16E55C4CC6D0BFE25A208EEFFEA07B0BDAEEFA1DC93C4065842910CA267F970D`. v107 폴더/ZIP은 Old_Versions 보관.
+- 실제 Addins 복사/설치/사용자 모델 쓰기는 하지 않았다. 실제 사용자 일람표 연결·중앙 동기화는 미검증이며, 미해결 시 새 진단의 모델/필드별 수치로 확인할 것. Revit 2023 일반 링크 포함 미지원 유지.
+
 ## v107 — 2026-10-14 다중 카테고리 링크 일람표 편집
 
 - 링크 파일/배치 보조 열 식별, 정상 행 보존 및 동일 표시 행 전체 집합 선택, 열린 원본 매개변수 스냅샷, 비공유 프로젝트 매개변수 명시적 연결 승인, ProjectInfo 및 IFC 엔티티 필드 안내를 반영했다. 구체적 제한/원인/확인은 schedule-editor v107 참조. 공통 중앙 동기화 안전 경로는 변경하지 않았다.

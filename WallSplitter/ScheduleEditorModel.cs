@@ -8,10 +8,10 @@ namespace WallSplitter
     internal sealed class ScheduleEditorField
     {
         internal string Id = "", Name = "", Reason = "";
-        internal bool IsType, IsProjectInfo, IsIfcEntity;
+        internal bool IsType, IsProjectInfo, IsIfcEntity, ConnectionFailed;
         internal ScheduleEditorKind Editor;
         internal string Hint = "";
-        public override string ToString() => Name + (Reason.Length > 0 || Editor == ScheduleEditorKind.ReadOnly ? " [읽기 전용]" : IsProjectInfo ? " [프로젝트 전체에 영향]" : IsType ? " [유형: 다른 행에도 영향]" : "");
+        public override string ToString() => Name + (ConnectionFailed ? " [요소 연결 필요]" : Reason.Length > 0 || Editor == ScheduleEditorKind.ReadOnly ? " [읽기 전용]" : IsProjectInfo ? " [프로젝트 전체에 영향]" : IsType ? " [유형: 다른 행에도 영향]" : "");
     }
     internal sealed class ScheduleEditorRow
     {
@@ -27,6 +27,7 @@ namespace WallSplitter
     internal sealed class ScheduleEditorSnapshot
     {
         internal string ScheduleId = "", Name = "";
+        internal readonly List<string> Diagnostics = new();
         internal readonly List<ScheduleEditorField> Fields = new();
         internal readonly List<ScheduleEditorRow> Rows = new();
         internal readonly Dictionary<string, UnifiedRow> Pending = new();
@@ -37,6 +38,14 @@ namespace WallSplitter
     {
         internal string SourceKey = "", ElementId = "", TypeId = "";
         internal readonly List<UnifiedRow> Values = new();
+        internal readonly List<ScheduleEditorParameterIdentity> Missing = new();
+    }
+    // API 객체를 보관하지 않고, 조회 당시 없던 매개변수도 쓰기 직전에 다시 검사한다.
+    internal sealed class ScheduleEditorParameterIdentity
+    {
+        internal string Guid = "", Name = "", DataType = "";
+        internal long Id;
+        internal bool IsHost, IsType, IsProjectInfo;
     }
     internal static class ScheduleEditorLogic
     {

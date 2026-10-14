@@ -25,32 +25,43 @@ namespace WallSplitter
             : c.Link?.get_Parameter(BuiltInParameter.RVT_LINK_FILE_NAME_WITHOUT_EXT)?.AsString() ?? (c.Link == null ? "" : System.IO.Path.GetFileNameWithoutExtension(c.Link.Name));
         private static string Display(Document host, ScheduleField f, Candidate c) => LinkField(f)
             ? LinkValue(c, f.FieldType == ScheduleFieldType.RevitLinkInstance)
-            : ScheduleEditorParameters.Display(host, c.Document, f, Resolve(host, f, c)!.Value.Parameter);
-        private static (Element Owner, Parameter Parameter)? Resolve(Document host, ScheduleField field, Candidate candidate)
+            : Resolve(host, f, c) is { } p ? ScheduleEditorParameters.Display(host, c.Document, f, p.Parameter) : "";
+        private static ScheduleEditorParameterIdentity? ParameterIdentity(Document host, ScheduleField field, bool isHost)
         {
             if (field.IsCalculatedField || field.IsCombinedParameterField || field.ParameterId == ElementId.InvalidElementId ||
                 (field.FieldType != ScheduleFieldType.Instance && field.FieldType != ScheduleFieldType.ElementType && field.FieldType != ScheduleFieldType.ProjectInfo)) return null;
+            if (!long.TryParse(field.ParameterId.ToString(), out long id)) return null;
             var shared = host.GetElement(field.ParameterId) as SharedParameterElement;
             var definition = (host.GetElement(field.ParameterId) as ParameterElement)?.GetDefinition();
-            bool builtin = long.TryParse(field.ParameterId.ToString(), out long number) && number < 0;
-            if (!candidate.Source.IsHost && !builtin && shared == null && definition == null) return null;
+            if (!isHost && id > 0 && shared == null && definition == null) return null;
+            return new ScheduleEditorParameterIdentity { Id = id, Guid = shared?.GuidValue.ToString() ?? "", Name = definition?.Name ?? "",
+                DataType = definition?.GetDataType().TypeId ?? "", IsHost = isHost, IsType = field.FieldType == ScheduleFieldType.ElementType,
+                IsProjectInfo = field.FieldType == ScheduleFieldType.ProjectInfo };
+        }
+        private static (Element Owner, Parameter Parameter)? Resolve(Document host, ScheduleField field, Candidate candidate)
+        {
+            var key = ParameterIdentity(host, field, candidate.Source.IsHost);
+            return key == null ? null : Resolve(candidate.Document, candidate.Element, key);
+        }
+        private static (Element Owner, Parameter Parameter)? Resolve(Document document, Element element, ScheduleEditorParameterIdentity key)
+        {
             Parameter? Find(Element owner)
             {
-                if (shared != null) return owner.get_Parameter(shared.GuidValue);
-                if (builtin) return owner.get_Parameter((BuiltInParameter)number);
-                var matches = owner.Parameters.Cast<Parameter>().Where(p => candidate.Source.IsHost ? p.Id == field.ParameterId :
-                    !p.IsShared && p.Definition.Name == definition!.Name && p.Definition.GetDataType().TypeId == definition.GetDataType().TypeId &&
-                    candidate.Document.GetElement(p.Id) is ParameterElement).ToList();
+                if (key.Guid.Length > 0) return owner.get_Parameter(Guid.Parse(key.Guid));
+                if (key.Id < 0) return owner.get_Parameter((BuiltInParameter)key.Id);
+                var matches = owner.Parameters.Cast<Parameter>().Where(p => key.IsHost ? p.Id.ToString() == key.Id.ToString() :
+                    !p.IsShared && p.Definition.Name == key.Name && p.Definition.GetDataType().TypeId == key.DataType &&
+                    document.GetElement(p.Id) is ParameterElement).ToList();
                 return matches.Count == 1 ? matches[0] : null;
             }
-            Element owner = candidate.Element;
-            if (field.FieldType == ScheduleFieldType.ProjectInfo) owner = candidate.Document.ProjectInformation;
-            if (field.FieldType == ScheduleFieldType.ElementType) owner = candidate.Document.GetElement(owner.GetTypeId());
+            Element? owner = element;
+            if (key.IsProjectInfo) owner = document.ProjectInformation;
+            if (key.IsType) owner = document.GetElement(element.GetTypeId());
             if (owner == null) return null;
             Parameter? p = Find(owner);
-            if (p == null && field.FieldType == ScheduleFieldType.Instance)
+            if (p == null && !key.IsType && !key.IsProjectInfo)
             {
-                owner = candidate.Document.GetElement(candidate.Element.GetTypeId());
+                owner = document.GetElement(element.GetTypeId());
                 if (owner != null) p = Find(owner);
             }
             return p == null || owner == null ? null : (owner, p);
@@ -90,6 +101,9 @@ namespace WallSplitter
 #endif
             }
             if (candidates.Count == 0 || candidates.Count > 20000) throw new InvalidOperationException("조회 대상이 없거나 20,000개를 넘습니다. 일람표 필터로 범위를 줄여 주세요.");
+            data.Diagnostics.Add("행 연결 진단 v108 · 링크 포함=" + definition.IncludeLinkedFiles + " · 개별 행=" + definition.IsItemized);
+            foreach (var group in candidates.GroupBy(c => c.Source.Key))
+                data.Diagnostics.Add(group.First().Source.Name + " · 수집 후보 " + group.Count() + "개");
             var originalFields = definition.GetFieldOrder().Select(definition.GetField).ToList();
             var shownFields = originalFields.Where(f => !f.IsHidden).ToList();
             foreach (var field in shownFields)
@@ -100,10 +114,12 @@ namespace WallSplitter
                         (field.FieldType != ScheduleFieldType.Instance && field.FieldType != ScheduleFieldType.ElementType && field.FieldType != ScheduleFieldType.ProjectInfo)
                         ? "계산식·합성·관련 요소·합계 필드는 직접 편집할 수 없습니다." : "" });
             // 표시 단위와 원시값을 함께 검증한다. 모호한 행은 순서로 추측하지 않는다.
-            bool Direct(ScheduleField f) => !f.IsCalculatedField && !f.IsCombinedParameterField && f.DisplayType == ScheduleFieldDisplayType.Standard && (LinkField(f) || candidates.All(c => Resolve(host, f, c) is { } p && p.Parameter.StorageType != StorageType.None));
+            bool Direct(ScheduleField f) => !f.IsCalculatedField && !f.IsCombinedParameterField && f.DisplayType == ScheduleFieldDisplayType.Standard && (LinkField(f) || candidates.Any(c => Resolve(host, f, c) is { } p && p.Parameter.StorageType != StorageType.None));
             var identityFields = definition.IsItemized ? shownFields.Where(Direct).ToList()
                 : definition.GetSortGroupFields().Select(s => definition.GetField(s.FieldId)).ToList();
-            string mappingError = (definition.IsItemized && identityFields.Count == 0) || identityFields.Any(f => !Direct(f))
+            foreach (var field in shownFields.Where(f => !identityFields.Contains(f)))
+                data.Diagnostics.Add(field.GetName() + " · " + field.FieldType + " · 식별 후보 제외 · 매개변수 연결 " + candidates.Count(c => Resolve(host, field, c) != null) + "/" + candidates.Count);
+            string mappingError = !definition.IsItemized && identityFields.Any(f => !Direct(f))
                 ? "행과 요소를 정확히 연결할 직접 매개변수 필드가 부족합니다. 계산식/관련 요소 기준은 표시만 합니다." : "";
             var cells = new List<Dictionary<string, string>>();
             var counts = new List<int>();
@@ -128,8 +144,12 @@ namespace WallSplitter
                         {
                             var type = instance ? ScheduleFieldType.RevitLinkInstance : ScheduleFieldType.RevitLinkType;
                             var parameter = new ElementId(instance ? BuiltInParameter.RVT_LINK_INSTANCE_NAME : BuiltInParameter.RVT_LINK_FILE_NAME_WITHOUT_EXT);
-                            var helper = d.GetFieldOrder().Select(d.GetField).FirstOrDefault(f => f.FieldType == type && f.ParameterId == parameter) ?? d.AddField(type, parameter);
-                            helper.IsHidden = false; linkColumns[helper.FieldId.ToString()] = instance;
+                            try
+                            {
+                                var helper = d.GetFieldOrder().Select(d.GetField).FirstOrDefault(f => f.FieldType == type && f.ParameterId == parameter) ?? d.AddField(type, parameter);
+                                helper.IsHidden = false; linkColumns[helper.FieldId.ToString()] = instance;
+                            }
+                            catch (Exception ex) { data.Diagnostics.Add("보조 열 추가 불가: " + type + " · " + ex.GetBaseException().Message); }
                         }
                     }
                     var countField = d.GetFieldOrder().Select(d.GetField).FirstOrDefault(f => f.FieldType == ScheduleFieldType.Count) ?? d.AddField(ScheduleFieldType.Count);
@@ -149,6 +169,7 @@ namespace WallSplitter
                 }
                 finally { tx.RollBack(); }
             }
+            data.Diagnostics.Add("표 데이터 " + cells.Count + "행 · 표시 요소 합계 " + counts.Sum() + "개 · 후보 합계 " + candidates.Count + "개");
             var matches = cells.Select(_ => new ScheduleEditorLogic.RowMatch()).ToList();
             if (mappingError.Length == 0) try
             {
@@ -162,31 +183,44 @@ namespace WallSplitter
                         var values = candidates.Select(c => Display(host, f, c)).ToList();
                         var expected = values.GroupBy(v => v).ToDictionary(g => g.Key, g => g.Count());
                         var actual = cells.Select((r, i) => new { value = r[id], count = counts[i] }).GroupBy(p => p.value).ToDictionary(g => g.Key, g => g.Sum(p => p.count));
-                        if (expected.Count != actual.Count || expected.Any(p => !actual.TryGetValue(p.Key, out int n) || n != p.Value))
+                        // 뷰 수집기에 표 밖 후보가 섞여도 정상 키까지 버리지 않는다. 마지막 복합키별 개수는 반드시 정확히 대조한다.
+                        bool covered = actual.All(p => expected.TryGetValue(p.Key, out int n) && n >= p.Value);
+                        if (!covered || (!definition.IsItemized && (expected.Count != actual.Count || expected.Any(p => actual[p.Key] != p.Value))))
                             throw new InvalidOperationException(f.GetName() + ": 표시값/요소 분포 불일치");
                         columns.Add(id, values);
+                        data.Diagnostics.Add(f.GetName() + " · " + f.FieldType + " · 식별 사용 · 값 종류 표/후보 " + actual.Count + "/" + expected.Count +
+                            (LinkField(f) ? "" : " · 매개변수 없음/연결 불가 " + candidates.Count(c => Resolve(host, f, c) == null)));
                     }
-                    catch when (definition.IsItemized) { identityFields.Remove(f); }
+                    catch (Exception ex) when (definition.IsItemized) { identityFields.Remove(f); data.Diagnostics.Add(f.GetName() + " · 식별 제외: " + ex.GetBaseException().Message); }
                 }
-                if (definition.IsItemized && identityFields.Count == 0) throw new InvalidOperationException("표시값이 정확히 대응하는 식별 필드가 없습니다.");
                 var ids = identityFields.Select(f => f.FieldId.ToString()).ToList();
                 foreach (var helper in linkColumns.Where(p => !ids.Contains(p.Key)))
                 {
                     var values = candidates.Select(c => LinkValue(c, helper.Value)).ToList();
                     var expected = values.GroupBy(v => v).ToDictionary(g => g.Key, g => g.Count());
                     var actual = cells.Select((r, i) => new { value = r[helper.Key], count = counts[i] }).GroupBy(p => p.value).ToDictionary(g => g.Key, g => g.Sum(p => p.count));
-                    if (expected.Count != actual.Count || expected.Any(p => !actual.TryGetValue(p.Key, out int n) || n != p.Value)) continue;
+                    if (actual.Any(p => !expected.TryGetValue(p.Key, out int n) || n < p.Value))
+                    {
+                        data.Diagnostics.Add("링크 " + (helper.Value ? "배치" : "파일") + " 보조 열 · 표시값/후보 분포 불일치");
+                        data.Diagnostics.Add("  표: " + string.Join(" / ", actual.Take(20).Select(p => "[" + p.Key + "] " + p.Value)));
+                        data.Diagnostics.Add("  후보: " + string.Join(" / ", expected.Take(20).Select(p => "[" + p.Key + "] " + p.Value)));
+                        continue;
+                    }
                     ids.Add(helper.Key); columns.Add(helper.Key, values);
+                    data.Diagnostics.Add("링크 " + (helper.Value ? "배치" : "파일") + " 보조 열 · 식별 사용");
                 }
+                if (definition.IsItemized && ids.Count == 0) throw new InvalidOperationException("표시값이 정확히 대응하는 식별 필드가 없습니다. ‘행 연결 진단’에서 후보 수와 제외된 필드를 확인하세요.");
                 var candidateKeys = candidates.Select((c, i) => ScheduleEditorLogic.Key(ids.Select(id => columns[id][i]))).ToList();
-                var rawKeys = candidates.Select(c => ScheduleEditorLogic.Key(identityFields.Select(f => LinkField(f) ? Display(host, f, c) : ScheduleEditorParameters.RawKey(Resolve(host, f, c)!.Value.Parameter, c.Source.Key)))).ToList();
+                var rawKeys = candidates.Select(c => ScheduleEditorLogic.Key(identityFields.Select(f => LinkField(f) ? Display(host, f, c) :
+                    Resolve(host, f, c) is { } p ? ScheduleEditorParameters.RawKey(p.Parameter, c.Source.Key) : "missing"))).ToList();
                 var displayedKeys = cells.Select(row => ScheduleEditorLogic.Key(ids.Select(id => row[id]))).ToList();
                 matches = ScheduleEditorLogic.MatchRows(displayedKeys, candidateKeys, rawKeys, counts, definition.IsItemized);
             }
             catch (Exception ex) { mappingError = "표시만 가능: " + ex.GetBaseException().Message; }
+            var candidateErrors = new Dictionary<Candidate, string>();
             var dependencyFields = identityFields.Concat(definition.GetSortGroupFields().Select(f => definition.GetField(f.FieldId)))
                 .Concat(definition.GetFilters().Select(f => definition.GetField(f.FieldId))).GroupBy(f => f.FieldId.ToString()).Select(g => g.First()).ToList();
-            foreach (var member in candidates)
+            foreach (var member in matches.SelectMany(m => m.Members).Distinct().Select(index => candidates[index]))
             {
                 var guard = new ScheduleEditorGuard { SourceKey = member.Source.Key, ElementId = member.Element.UniqueId,
                     TypeId = member.Document.GetElement(member.Element.GetTypeId())?.UniqueId ?? "" };
@@ -194,7 +228,13 @@ namespace WallSplitter
                 {
                     if (LinkField(f)) continue; // 링크 정보는 최종 재조회 fingerprint로 검증한다.
                     var resolved = Resolve(host, f, member);
-                    if (resolved == null) { mappingError = "표시만 가능 — 필터/정렬 조건을 적용 전에 재검증할 수 없습니다: " + f.GetName(); continue; }
+                    if (resolved == null)
+                    {
+                        var key = ParameterIdentity(host, f, member.Source.IsHost);
+                        if (key == null) candidateErrors[member] = "필터/정렬 조건 재검증 불가: " + f.GetName();
+                        else guard.Missing.Add(key);
+                        continue;
+                    }
                     guard.Values.Add(ProjectInformationService.Snapshot(member.Document, resolved.Value.Owner, resolved.Value.Parameter, member.Source));
                 }
                 data.Guards.Add(guard);
@@ -206,6 +246,7 @@ namespace WallSplitter
             for (int i = 0; i < cells.Count; i++)
             {
                 string reason = mappingError.Length > 0 ? mappingError : matches[i].Reason;
+                if (reason.Length == 0) reason = matches[i].Members.Select(index => candidates[index]).Where(candidateErrors.ContainsKey).Select(c => candidateErrors[c]).FirstOrDefault() ?? "";
                 // 동일 행 수 × 공동 대상 수만큼 Revit API를 반복 호출하지 않는다. 공동 집합은 한 번만 읽는다.
                 if (reason.Length == 0 && groupRows.TryGetValue(matches[i].Members, out var cachedRow))
                 {
@@ -260,6 +301,9 @@ namespace WallSplitter
                 if (reason.Length == 0) groupRows[matches[i].Members] = row;
             }
             ScheduleEditorParameters.ConfigureEditors(data);
+            foreach (var group in data.Rows.GroupBy(r => r.Reason.Length == 0 ? "요소 연결 성공" : r.Reason))
+                data.Diagnostics.Add(group.Key + " · " + group.Count() + "행");
+            foreach (var group in data.Rows.SelectMany(r => r.Errors.Values).GroupBy(s => s)) data.Diagnostics.Add("셀 제한: " + group.Key + " · " + group.Count() + "건");
             return data;
         }
         internal static void ValidateGuards(Document doc, ScheduleEditorSnapshot data, string sourceKey)
@@ -268,6 +312,8 @@ namespace WallSplitter
             {
                 Element element = doc.GetElement(guard.ElementId) ?? throw new InvalidOperationException("조회 이후 일람표 요소가 삭제되었습니다.");
                 if ((doc.GetElement(element.GetTypeId())?.UniqueId ?? "") != guard.TypeId) throw new InvalidOperationException("조회 이후 일람표 요소의 유형이 변경되었습니다.");
+                foreach (var missing in guard.Missing)
+                    if (Resolve(doc, element, missing) != null) throw new InvalidOperationException("조회 당시 없거나 연결할 수 없던 매개변수가 변경되었습니다. 일람표를 다시 조회하세요.");
                 foreach (var value in guard.Values) ProjectInformationService.Validate(doc, value, false);
             }
         }
