@@ -67,7 +67,7 @@ public static class EditPlanner
     {
         if (expected.OwnerId != actual.OwnerId || expected.ParameterKey != actual.ParameterKey || expected.Scope != actual.Scope ||
             expected.Name != actual.Name || expected.DataType != actual.DataType || expected.Storage != actual.Storage || expected.Editor != actual.Editor ||
-            expected.TypeKey != actual.TypeKey || expected.Unit != actual.Unit || expected.HasValue != actual.HasValue || expected.Raw != actual.Raw || !actual.Editable)
+            expected.TypeKey != actual.TypeKey || expected.TypeOwnerId != actual.TypeOwnerId || expected.Unit != actual.Unit || expected.HasValue != actual.HasValue || expected.Raw != actual.Raw || !actual.Editable)
             throw new InvalidOperationException($"{expected.TypeName} / {expected.Name}: 조회 후 대상·값·단위 또는 편집 권한이 달라졌습니다. 다시 조회하세요.");
     }
 }

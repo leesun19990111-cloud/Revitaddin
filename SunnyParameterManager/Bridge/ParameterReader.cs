@@ -11,9 +11,11 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
     private readonly Dictionary<string, MaterialEvidence> _materials = [];
     public MaterialEvidence ReadMaterial(Element owner, bool fresh = false)
     {
-        if (!fresh && _materials.TryGetValue(owner.UniqueId, out var material)) return material;
-        var result = OuterMaterialReader.Read(doc, owner);
-        if (!fresh) _materials[owner.UniqueId] = result;
+        var type = owner as ElementType ?? doc.GetElement(owner.GetTypeId()) as ElementType;
+        if (type == null) return new() { Reason = "요소의 원본 유형을 확인할 수 없습니다" };
+        if (!fresh && _materials.TryGetValue(type.UniqueId, out var material)) return material;
+        var result = OuterMaterialReader.Read(doc, type);
+        if (!fresh) _materials[type.UniqueId] = result;
         return result;
     }
 
@@ -56,6 +58,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             Category = owner is ProjectInfo ? "프로젝트 정보" : owner.Category?.Name ?? "기타",
             CategoryKey = owner is ProjectInfo ? "project" : (owner.Category?.Id.Value ?? 0).ToString(Invariant),
             Family = type?.FamilyName ?? "", TypeName = owner is ProjectInfo ? "프로젝트 정보" : type?.Name ?? owner.Name ?? "",
+            TypeOwnerId = type?.UniqueId ?? "",
             ParameterKey = Key(p), Name = p.Definition.Name, DataType = spec.TypeId, Storage = p.StorageType.ToString(),
             HasValue = p.HasValue, Raw = Raw(p), Display = Display(p), BlockReason = p.IsReadOnly ? "읽기 전용 — 원본 Revit에서 변경 불가" : ""
         };

@@ -23,6 +23,8 @@ doc.Materials[1].Name = "KAC-외장"; wall.Structure.Layers[0] = new(new(-1), 1)
 Check(OuterMaterialReader.Read(doc, wall).Reason.Contains("안쪽"), "미지정 외층을 내층으로 대체 금지");
 wall.Structure = Structure(); wall.Structure.IsVerticallyCompound = true;
 Check(OuterMaterialReader.Read(doc, wall).Reason.Contains("수직"), "수직 복합벽 외측 추정 금지");
+wall.Structure.Homogeneous = true;
+Check(OuterMaterialReader.Read(doc, wall).Name == "KAC-외장", "수직 복합 플래그라도 높이 전체가 같은 평행층이면 외측 판독");
 var family = new ElementType { Parameters = [new(1)] };
 Check(OuterMaterialReader.Read(doc, family).Name == "KAC-외장", "일반 유형 단일 재료");
 family.Parameters.Add(new(1));
@@ -61,7 +63,7 @@ namespace Autodesk.Revit.DB
  public class CeilingType : HostObjAttributes { }
  public class Material : Element { public string Name { get; set; } = ""; }
  public class Document { public Dictionary<long, Material> Materials { get; } = []; public Element? GetElement(ElementId id) => Materials.GetValueOrDefault(id.Value); }
- public class CompoundStructure : IDisposable { public List<CompoundStructureLayer> Layers = []; public int LayerCount => Layers.Count; public bool IsVerticallyCompound; public IList<CompoundStructureLayer> GetLayers() => Layers; public void Dispose() { } }
+ public class CompoundStructure : IDisposable { public List<CompoundStructureLayer> Layers = []; public int LayerCount => Layers.Count; public bool IsVerticallyCompound, Homogeneous; public bool IsVerticallyHomogeneous() => Homogeneous; public IList<CompoundStructureLayer> GetLayers() => Layers; public void Dispose() { } }
  public class CompoundStructureLayer(ElementId id, double width) { public ElementId MaterialId = id; public double Width = width; public int Function = 1; }
 }
 namespace SunnyParameterManager.Bridge

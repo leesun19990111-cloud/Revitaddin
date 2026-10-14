@@ -19,7 +19,8 @@ internal static class OuterMaterialReader
                 using var structure = host.GetCompoundStructure();
                 if (structure != null && structure.LayerCount > 0)
                 {
-                    if (structure.IsVerticallyCompound) return Missing("수직 복합벽은 높이에 따라 외측 재료가 달라 확인이 필요합니다");
+                    // IsVerticallyCompound만으로는 일정한 평행층 벽까지 제외된다.
+                    if (structure.IsVerticallyCompound && !structure.IsVerticallyHomogeneous()) return Missing("수직 복합벽은 높이에 따라 외측 재료가 달라 확인이 필요합니다");
                     var layers = structure.GetLayers();
                     var bottom = type is CeilingType;
                     var index = bottom ? layers.Count - 1 : 0;

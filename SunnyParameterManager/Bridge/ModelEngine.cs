@@ -205,6 +205,9 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         else throw new InvalidOperationException("지원하지 않는 값입니다.");
         return new WriteAction(setter, () =>
         {
+            var verified = reader.Read(owner, p);
+            if (expected.TypeOwnerId != verified.TypeOwnerId || expected.TypeKey != verified.TypeKey)
+                throw new InvalidOperationException("Revit 확정 후 요소의 유형이 달라 이번 묶음을 취소합니다: " + expected.TypeName);
             // 같은 묶음의 다른 수동 편집이 재료를 바꾼 경우도 전체 롤백한다.
             if (edit.MaterialSource != null) KacRulePlanner.CheckMaterial(edit, reader.ReadMaterial(owner, true));
             var check = ParameterReader.Raw(p);

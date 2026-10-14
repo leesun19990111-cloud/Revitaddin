@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.1.4";
+    public const string Release = "0.1.5";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -48,6 +48,7 @@ public sealed class ParameterRow
     public string CategoryKey { get; set; } = "";
     public string Family { get; set; } = "";
     public string TypeName { get; set; } = "";
+    public string TypeOwnerId { get; set; } = "";
     public string ParameterKey { get; set; } = "";
     public string Name { get; set; } = "";
     public string DataType { get; set; } = "";

@@ -1,5 +1,12 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.5 — 2026-10-15 IFC·재료명 누락 수정
+
+- 실제 유형 IFC 기본 식별자 연결, 승인된 인스턴스 재료명/업체명/IFC 적용과 실제 유형 ID 재검증, 균질 벽의 외측 재료 판독, 항목별 누락 요약. 기존 업무 룰셋은 보존하고 InstanceFields를 명시한 새 파일을 별도 전달한다.
+- out_v015 / SunnyParameterManager_Installer_v.0.1.5.zip / App-0.1.5 / Protocol.Release 0.1.5. Tests015/Release015/Material015/Publish015/Bridge015 및 installer ParameterManager015 격리. 같은 제품 v014만 아카이브하며 Sunny Tools v109 불변.
+- Core/룰셋/WPF 186 + lifecycle 38 + 재료 리더 대역 18, 별도 실무 룰셋/조회 기록 5건. 수정본의 실제 RVT 쓰기·중앙 동기화 및 설치기 실행은 수행하지 않는다.
+- 최종 247건 통과, Bridge 경고/오류 0. 프로그램 13파일/ZIP 20파일 해시 일치. ZIP 29,796,010 bytes, SHA-256 `C234C4B8546964E7B771EE7AC94E573289DE35494EE7E5B424E1CE1212966860`. v014 폴더/ZIP 아카이브 후 이전 ZIP 해시도 유지 확인.
+
 ## 별도 제품 0.1.4 — 2026-10-14 KAC 룰셋 / 외측 재료명
 
 - 버전2 KAC 프로필과 외측 재료 조회·적용 전/후 근거 재검증. 사용자별 엑셀/룰셋은 저장소/설치 페이로드에 포함하지 않고 별도 전달한다. 상세 규칙은 parameter-manager 문서.

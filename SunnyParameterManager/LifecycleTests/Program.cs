@@ -93,6 +93,10 @@ internal static class Program
    Check(!result.Success && !State.Events.Contains("tx-start") && !State.Events.Contains("save"), "조회 후 재료 변경은 쓰기 전 차단");
    r = Setup(); r.Edits[0].Value = "테스트재료"; r.Edits[0].MaterialSource = new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = "material-v1" }; State.MaterialChangesAfterSet = true; result = Run(r);
    Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save") && State.Doc.Element.Parameter.Value == "기존", "같은 적용 묶음의 재료 변경도 확정 후 전체 롤백");
+   r = Setup(); State.TypeOwnerId = "type-2"; result = Run(r);
+   Check(!result.Success && !State.Events.Contains("tx-start"), "조회 뒤 이름이 같아도 소속 유형 ID 변경은 편집 전 차단");
+   r = Setup(); State.TypeChangesAfterSet = true; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "트랜잭션 확정 중 소속 유형 변경은 묶음 롤백");
    Console.WriteLine($"TOTAL {_count} PASS · API 대역 제어 흐름 검사이며 실제 Revit 검증 아님");
    Console.WriteLine("테스트 기록: " + _root); return 0;
   }
