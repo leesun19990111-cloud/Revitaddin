@@ -22,3 +22,4 @@ C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParame
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Release\net8.0-windows\SunnyParameterManager.Tests.pdb
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Release\net8.0-windows\SunnyParameterManager.Tests.genruntimeconfig.cache
 C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Release\net8.0-windows\ref\SunnyParameterManager.Tests.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\bin\Release\net8.0-windows\연습용.sunnyrules.json

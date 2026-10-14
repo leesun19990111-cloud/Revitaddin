@@ -11,6 +11,7 @@ using System.IO;
 internal static class Program
 {
     private static int _count;
+    private static readonly string RenderOutput = Path.Combine(AppContext.BaseDirectory, "renders", DateTime.Now.ToString("yyyyMMdd-HHmmss-fff"));
     private static void Check(bool condition, string name) { if (!condition) throw new Exception("FAIL " + name); _count++; Console.WriteLine("PASS " + name); }
     private static void Reject(Action action, string name) { bool rejected = false; try { action(); } catch (InvalidOperationException) { rejected = true; } Check(rejected, name); }
     private static ParameterRow Row(string path = "A", string owner = "1") => new() { ModelPath = path, ModelTitle = path, OwnerId = owner, Scope = "유형", CategoryKey = "wall", Family = "기본벽", TypeName = "W1", ParameterKey = "guid:aaa", Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = "기존", Display = "기존" };
@@ -83,6 +84,7 @@ internal static class Program
             bool invalidSession = false;
             try { Protocol.SessionFolder("../other"); } catch (FormatException) { invalidSession = true; }
             Check(invalidSession, "세션 경로 탈출 차단");
+            RuleTests.Run(Check, Reject);
             return UiTests();
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -93,13 +95,20 @@ internal static class Program
         try
         {
             _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-            var w = new MainWindow(); w.LoadSample();
+            var w = new MainWindow();
+            Check(((FrameworkElement)w.FindName("WelcomePanel")).Visibility == Visibility.Visible, "첫 화면 파일 선택 안내");
+            Check(!((Expander)w.FindName("AdvancedSettings")).IsExpanded && !((Expander)w.FindName("CopyExpander")).IsExpanded, "세부 설정 기본 숨김");
+            Check(!((Button)w.FindName("RulesButton")).IsEnabled, "조회 전 룰셋 적용 방지");
+            Render(w, "welcome", 1320, 820);
+            w.LoadSample();
+            Check(((FrameworkElement)w.FindName("WelcomePanel")).Visibility == Visibility.Collapsed && ((Button)w.FindName("RulesButton")).IsEnabled, "파일 준비 후 룰셋 버튼 사용");
             var grid = (DataGrid)w.FindName("ValuesGrid");
             Check(grid.Items.Count == 36, "실제 화면 샘플 36행");
             Check(grid.SelectionMode == DataGridSelectionMode.Extended, "Shift 범위 선택 기본 컨트롤");
             var before = ((ParameterRow)grid.Items[0]).Raw;
             grid.SelectedItems.Add(grid.Items[0]);
             ((TextBox)w.FindName("ValueBox")).Text = "직접 테스트";
+            Check(((TextBlock)w.FindName("InputPreview")).Text.Contains("직접 테스트"), "입력 즉시 기존값 변경값 표시");
             Invoke(w, "StageValues");
             var edits = (DataGrid)w.FindName("EditsGrid");
             Check(edits.Items.Count == 1 && ((ValueEdit)edits.Items[0]).Value == "직접 테스트", "실제 UI 미리보기 연결");
@@ -112,20 +121,45 @@ internal static class Program
             Check(grid.Items.Count == 0 && edits.Items.Count == 1, "검색 변경 후 누적 작업 보존");
             ((TextBox)w.FindName("SearchBox")).Text = "";
             Check(grid.Items.Count == 36, "검색 해제 복원");
-            var output = Path.Combine(AppContext.BaseDirectory, "renders"); Directory.CreateDirectory(output);
+            Check(!((Button)w.FindName("StageButton")).IsEnabled, "선택 없는 입력 방지");
+            Invoke(w, "ReviewChanges");
+            Check(((TabControl)w.FindName("MainTabs")).SelectedIndex == 1 && edits.Items.Count == 1, "검토 이동은 저장 없이 미리보기만");
+            ((TabControl)w.FindName("MainTabs")).SelectedIndex = 0;
             foreach (var size in new[] { (1320, 820), (1080, 700) })
             {
                 var content = (FrameworkElement)w.Content;
                 content.Measure(new Size(size.Item1, size.Item2)); content.Arrange(new Rect(0, 0, size.Item1, size.Item2)); content.UpdateLayout();
-                Check(grid.ActualWidth > 500 && grid.ActualHeight > 180, "목록 표시 영역 " + size.Item1);
-                var bitmap = new RenderTargetBitmap(size.Item1, size.Item2, 96, 96, PixelFormats.Pbgra32); bitmap.Render(content);
-                var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                using var stream = File.Create(Path.Combine(output, "main-" + size.Item1 + ".png")); encoder.Save(stream);
+                Render(w, "main-" + size.Item1, size.Item1, size.Item2);
+                Check(grid.ActualWidth > 500 && grid.ActualHeight > 180, $"목록 표시 영역 {size.Item1} ({grid.ActualWidth:N0}×{grid.ActualHeight:N0})");
             }
+            w.LoadSample();
+            var rules = new RuleSet { Version = 1, Name = "연습 룰셋", SampleOnly = true, Rules = [new() { Name = "업체명 입력", Match = new() { Scope = "유형", Type = "KAC-W", TypeMatch = "시작" }, Set = [new() { Name = "업체명", DataType = "text", Storage = "String", Value = "연습 업체" }] }] };
+            ((TextBox)w.FindName("SearchBox")).Text = "해당없음";
+            w.PrepareRules(rules);
+            Check(edits.Items.Count == 36 && ((TabControl)w.FindName("MainTabs")).SelectedIndex == 1, "룰셋은 검색/선택과 무관하게 등록 파일 전체 평가 후 검토 이동");
+            Check(((TextBox)w.FindName("RuleSummary")).Text.Contains("연습 룰셋") && !((Button)w.FindName("ApplyButton")).IsEnabled, "룰셋 요약 및 샘플 저장 차단");
+            w.PrepareRules(rules); Check(edits.Items.Count == 36, "룰셋 재불러오기 중복 누적 방지");
+            rules.Rules[0].Set[0].Value = "충돌";
+            Reject(() => w.PrepareRules(rules), "UI 룰셋 충돌 보류");
+            Check(edits.Items.Count == 36 && ((ValueEdit)edits.Items[0]).Value == "연습 업체", "UI 룰셋 실패 기존 작업 보호");
+            Render(w, "rules-review", 1320, 820);
+            w.LoadSample();
+            w.PrepareRules(RulePlanner.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "연습용.sunnyrules.json"))));
+            Check(edits.Items.Count == 36 && ((TextBox)w.FindName("RuleSummary")).Text.Contains("연습 전용"), "실제 배포 연습용 파일 불러오기");
+            Console.WriteLine("화면 렌더: " + RenderOutput);
             Console.WriteLine($"TOTAL {_count} PASS · 실제 Revit/중앙 서버 검증은 별도 필요");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
     private static void Invoke(MainWindow w, string method) => typeof(MainWindow).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, [w, new RoutedEventArgs()]);
+    private static void Render(MainWindow w, string name, int width, int height)
+    {
+        var content = (FrameworkElement)w.Content;
+        content.Measure(new Size(width, height)); content.Arrange(new Rect(0, 0, width, height)); content.UpdateLayout();
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32); bitmap.Render(content);
+        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        Directory.CreateDirectory(RenderOutput);
+        using var stream = File.Create(Path.Combine(RenderOutput, name + ".png")); encoder.Save(stream);
+    }
 }

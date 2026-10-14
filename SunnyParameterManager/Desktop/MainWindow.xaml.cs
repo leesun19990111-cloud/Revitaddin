@@ -41,6 +41,7 @@ public partial class MainWindow : Window
         ModelsList.ItemsSource = _models; SourceCombo.ItemsSource = _models;
         _worker.Progress = text => StatusText.Text = text;
         _initialized = true;
+        UpdatePending();
     }
 
     private void Guard(Action action)
@@ -51,26 +52,33 @@ public partial class MainWindow : Window
     private async Task Run(Func<Task> action)
     {
         if (_busy) return;
-        _busy = true; WorkspacePanel.IsEnabled = false; ApplyButton.IsEnabled = false;
+        _busy = true; WorkspacePanel.IsEnabled = false; TopActions.IsEnabled = false; ApplyButton.IsEnabled = false; ReviewButton.IsEnabled = false;
         try { await action(); }
         catch (Exception ex) { StatusText.Text = ex.Message; ReportBox.AppendText("\n" + DateTime.Now.ToString("HH:mm:ss") + " · " + ex.Message + "\n"); MessageBox.Show(this, ex.Message, "Sunny 매개변수 관리자", MessageBoxButton.OK, MessageBoxImage.Warning); }
-        finally { _busy = false; WorkspacePanel.IsEnabled = true; UpdatePending(); }
+        finally { _busy = false; WorkspacePanel.IsEnabled = true; TopActions.IsEnabled = true; UpdatePending(); }
     }
     private bool DiscardPending()
     {
         return _edits.Count == 0 || MessageBox.Show(this, "아직 적용하지 않은 변경 예정 목록을 버릴까요? 작업 저장으로 따로 보관할 수 있습니다.", "변경 예정 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 
-    private void AddModels(object sender, RoutedEventArgs e) => Guard(() =>
+    private async void AddModels(object sender, RoutedEventArgs e)
     {
+        if (_busy) return;
+        bool added = false;
+        Guard(() =>
+        {
         var dialog = new OpenFileDialog { Filter = "Revit 모델 (*.rvt)|*.rvt", Multiselect = true, Title = "매개변수를 읽고 수정할 모델 선택" };
         if (dialog.ShowDialog(this) != true) return;
-        if (_sample) { if (!DiscardPending()) return; _edits.Clear(); _models.Clear(); _sample = false; }
+        if (_sample) { if (!DiscardPending()) return; _edits.Clear(); _models.Clear(); _sample = false; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
         foreach (var path in dialog.FileNames)
             if (_models.All(m => !string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) _models.Add(new() { Path = path });
         if (SourceCombo.SelectedIndex < 0) SourceCombo.SelectedIndex = 0;
-        RefreshFields(); UpdatePending();
-    });
+        ModelsList.SelectedItem = null; MainTabs.SelectedIndex = 0;
+        RefreshFields(); UpdatePending(); added = true;
+        });
+        if (added) await ReadRegisteredModels(true);
+    }
     private void RemoveModel(object sender, RoutedEventArgs e) => Guard(() =>
     {
         if (ModelsList.SelectedItem is not ModelItem item) return;
@@ -92,11 +100,18 @@ public partial class MainWindow : Window
         if (_busy) return;
         if (_sample) { StatusText.Text = "샘플에서는 실제 RVT를 조회하지 않습니다. RVT 추가로 실제 작업을 시작하세요."; return; }
         if (_edits.Count > 0) { MessageBox.Show(this, "변경 예정 목록이 있습니다. 적용하거나 초기화한 뒤 새로 조회하세요.", "미리보기 보호"); return; }
+        await ReadRegisteredModels(false);
+    }
+    private async Task ReadRegisteredModels(bool onlyUnread)
+    {
         await Run(async () =>
         {
             if (_models.Count == 0) throw new InvalidOperationException("먼저 RVT 파일을 추가하세요.");
+            var targets = _models.Where(m => !onlyUnread || m.Snapshot == null).ToList();
+            if (targets.Count == 0) { StatusText.Text = "선택한 파일은 이미 읽었습니다."; return; }
+            StatusText.Text = "파일을 읽을 준비 중입니다. 처음에는 Revit 시작에 몇 분 걸릴 수 있습니다.";
             await _worker.Connect(RevitPathBox.Text.Trim());
-            foreach (var item in _models)
+            foreach (var item in targets)
             {
                 item.Snapshot = null; item.Status = "조회 중…";
                 var result = await _worker.Send(new Request { Operation = "조회", Path = item.Path });
@@ -111,7 +126,11 @@ public partial class MainWindow : Window
                 else { item.Status = "조회 실패"; ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n"); }
                 if (result.RequiresAttention) break;
             }
-            RefreshFields(); StatusText.Text = "조회 완료 · 실패/제외 사유는 처리 결과 탭에서 확인하세요.";
+            RefreshFields();
+            StatusText.Text = _models.All(m => m.Snapshot != null)
+                ? "파일을 읽었습니다. ‘② 룰셋 불러오기’를 누르거나, 항목과 행을 선택해 직접 입력하세요."
+                : "일부 파일을 읽지 못했습니다. ‘처리 결과’에서 이유를 확인하세요.";
+            if (_models.Any(m => m.Snapshot == null)) MainTabs.SelectedIndex = 2;
         });
     }
     private static string ModelIdentityPath(ModelSnapshot s) => s.CentralPath.Length > 0 ? s.CentralPath : s.CanonicalPath;
@@ -141,7 +160,11 @@ public partial class MainWindow : Window
         CountText.Text = $"{visible.Count:N0}행 · 편집 가능 {visible.Count(r => r.Editable):N0}행";
         UpdateEditor();
     }
-    private void FilterChanged(object sender, SelectionChangedEventArgs e) { if (_initialized) RefreshRows(); }
+    private void FilterChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized || _filtering) return;
+        ValueBox.Clear(); ChoiceCombo.SelectedItem = null; RefreshRows();
+    }
     private void SearchChanged(object sender, TextChangedEventArgs e) { if (_initialized) RefreshRows(); }
     private void ModelSelectionChanged(object sender, SelectionChangedEventArgs e) { if (_initialized) RefreshRows(); }
     private void ShowAllModels(object sender, RoutedEventArgs e) => Guard(() => { ModelsList.SelectedItem = null; RefreshRows(); });
@@ -169,6 +192,45 @@ public partial class MainWindow : Window
         EditorHint.Text = selected.Count == 0 ? "행을 선택하세요. Ctrl·Shift로 여러 행을 선택하고, 머리글을 눌러 정렬할 수 있습니다." :
             $"선택 {selected.Count:N0}행 · {string.Join(", ", selected.Select(r => r.Editor.Length == 0 ? "표시 전용" : r.Editor).Distinct())} · " +
             (selected.Any(r => r.Editor == "단위 숫자") ? "숫자는 단위까지 입력하세요(예: 200 mm). 단위 생략 시 각 모델 단위로 해석됩니다." : "값을 비우면 텍스트를 지웁니다. 아직 RVT에는 반영되지 않습니다.");
+        UpdateInputPreview();
+    }
+    private void InputChanged(object sender, TextChangedEventArgs e) { if (_initialized) UpdateInputPreview(); }
+    private void ChoiceChanged(object sender, SelectionChangedEventArgs e) { if (_initialized) UpdateInputPreview(); }
+    private void UpdateInputPreview()
+    {
+        var selected = ValuesGrid.SelectedItems.Cast<ParameterRow>().ToList();
+        var value = ChoiceCombo.Visibility == Visibility.Visible ? ChoiceCombo.SelectedItem as string ?? "" : ValueBox.Text;
+        var sameField = selected.Select(r => r.FieldKey).Distinct().Count() == 1;
+        StageButton.IsEnabled = selected.Count > 0 && sameField && selected.All(r => EditPlanner.Validate(r, value).Length == 0);
+        StageButton.Content = selected.Count > 0 ? $"선택한 {selected.Count:N0}개에 입력" : "선택한 행에 입력";
+        var before = selected.Select(r => r.ValueLabel).Distinct().Take(2).ToList();
+        InputPreview.Text = selected.Count == 0 ? "목록에서 바꿀 행을 먼저 선택하세요." :
+            !sameField ? "자료형·범위가 같은 항목끼리 선택하세요." :
+            !StageButton.IsEnabled ? "입력할 수 없는 행 또는 값입니다. 상태와 선택 목록을 확인하세요." :
+            $"미리보기: {(before.Count == 1 ? before[0] : "(여러 값)")}  →  {(value.Length == 0 ? "(빈 값으로 지움)" : value)} · 아직 파일에 저장하지 않습니다.";
+    }
+    private void ReviewChanges(object sender, RoutedEventArgs e) => Guard(() => { MainTabs.SelectedIndex = 1; });
+    private void LoadRules(object sender, RoutedEventArgs e) => Guard(() =>
+    {
+        var dialog = new OpenFileDialog { Filter = "Sunny 룰셋 (*.sunnyrules.json)|*.sunnyrules.json|JSON 파일 (*.json)|*.json", Title = "함께 정한 룰셋 파일 선택" };
+        if (dialog.ShowDialog(this) != true) return;
+        if (new FileInfo(dialog.FileName).Length > 2 * 1024 * 1024) throw new InvalidOperationException("룰셋은 2MB 이하만 지원합니다.");
+        PrepareRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)));
+    });
+    // 룰셋은 조회된 전체 파일로 평가한다. 그리드의 검색/행 선택 때문에 일부만 조용히 적용하면 안 된다.
+    public void PrepareRules(RuleSet file)
+    {
+        if (_busy) throw new InvalidOperationException("진행 중인 파일 작업이 끝난 후 불러오세요.");
+        if (_models.Count == 0 || _models.Any(m => m.Snapshot == null))
+            throw new InvalidOperationException("모든 대상 파일을 먼저 읽어야 합니다. 실패하거나 중복된 파일은 ‘파일 관리’에서 제외하세요.");
+        var plan = RulePlanner.Plan(file, AllRows(), _edits.Values, _sample);
+        foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
+        RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes) +
+            "\n※ 불러올 당시의 결과입니다. 이후 제외/직접 입력한 내용은 아래 목록이 최종 기준입니다.";
+        RuleSummaryPanel.Visibility = Visibility.Visible;
+        ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
+        UpdatePending(); MainTabs.SelectedIndex = 1;
+        StatusText.Text = $"룰셋으로 {plan.Edits.Count:N0}개 변경을 준비했습니다. 기존 값과 바뀔 값을 확인하세요. 아직 저장하지 않았습니다.";
     }
     private void StageValues(object sender, RoutedEventArgs e) => Guard(() =>
     {
@@ -178,7 +240,7 @@ public partial class MainWindow : Window
         var planned = EditPlanner.Stage(selected, value);
         foreach (var row in selected) _edits.Remove(row.Key);
         foreach (var edit in planned) _edits[edit.Original.Key] = edit;
-        UpdatePending(); StatusText.Text = $"{planned.Count:N0}건을 변경 예정에 추가했습니다. 최종 적용 전에는 파일을 수정하지 않습니다.";
+        UpdatePending(); StatusText.Text = $"{planned.Count:N0}개 값을 준비했습니다. 오른쪽 아래 ‘③ 변경 내용 확인’을 눌러주세요. 아직 저장하지 않았습니다.";
     });
     private void CopyValues(object sender, RoutedEventArgs e) => Guard(() =>
     {
@@ -197,6 +259,12 @@ public partial class MainWindow : Window
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         PendingText.Text = $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
         ApplyButton.IsEnabled = !_busy && !_sample && _edits.Count > 0 && !_worker.NeedsAttention;
+        ReviewButton.IsEnabled = !_busy && _edits.Count > 0;
+        ReviewButton.Content = $"③ 변경 내용 확인 ({_edits.Count:N0})";
+        WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RulesButton.IsEnabled = !_busy && _models.Count > 0 && _models.All(m => m.Snapshot != null);
+        FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
+            $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
     }
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
@@ -255,7 +323,7 @@ public partial class MainWindow : Window
             throw new InvalidDataException("작업 파일의 모델 연결이 일치하지 않습니다.");
         var rows = file.Models.SelectMany(m => m.Rows).ToDictionary(r => r.Key);
         foreach (var edit in file.Edits) if (!rows.ContainsKey(edit.Original.Key)) throw new InvalidDataException("변경 대상이 조회 목록에 없습니다.");
-        _models.Clear(); _edits.Clear(); _sample = file.Sample;
+        _models.Clear(); _edits.Clear(); _sample = file.Sample; RuleSummaryPanel.Visibility = Visibility.Collapsed;
         foreach (var path in file.Paths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var snapshot = file.Models.SingleOrDefault(m => m.Path == path); snapshot?.ConnectCatalogs();
@@ -272,7 +340,7 @@ public partial class MainWindow : Window
     private void SampleClick(object sender, RoutedEventArgs e) => Guard(() => { if (DiscardPending()) LoadSample(); });
     public void LoadSample()
     {
-        _edits.Clear(); _models.Clear(); _sample = true;
+        _edits.Clear(); _models.Clear(); _sample = true; RuleSummaryPanel.Visibility = Visibility.Collapsed;
         for (int n = 1; n <= 2; n++)
         {
             var m = new ModelSnapshot { Path = $"샘플_건축_{n}.rvt", Title = $"샘플_건축_{n}", Kind = "샘플", Identity = "sample" };
@@ -284,7 +352,7 @@ public partial class MainWindow : Window
                 }
             m.ConnectCatalogs(); _models.Add(new() { Path = m.Path, Snapshot = m, Status = "샘플 데이터 · 파일 변경 없음" });
         }
-        ModelsList.SelectedItem = null; SourceCombo.SelectedIndex = 0; ScopeCombo.SelectedIndex = 0;
+        ModelsList.SelectedItem = null; SourceCombo.SelectedIndex = 0; ScopeCombo.SelectedIndex = 0; MainTabs.SelectedIndex = 0; SearchBox.Clear();
         RefreshFields(); UpdatePending(); StatusText.Text = "샘플 모드 · 선택·입력·기준값 복사·작업 저장을 시험할 수 있습니다. 실제 RVT에는 적용되지 않습니다.";
     }
     private void OnClosing(object? sender, CancelEventArgs e)

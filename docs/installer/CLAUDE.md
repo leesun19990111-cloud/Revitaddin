@@ -1,5 +1,13 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.1 — 2026-10-14 쉬운 화면 / 룰셋 불러오기
+
+- 매개변수 관리자만 갱신. 파일 선택 후 자동 연결/조회, 간단한 시작 화면, 선언형 룰셋 불러오기 및 변경 검토를 추가. 실무 규칙은 아직 없고 연습용 룰셋만 동봉한다.
+- 산출물 SunnyParameterManagerInstaller_out_v011 및 SunnyParameterManager_Installer_v.0.1.1.zip. 같은 제품 v010 폴더/ZIP만 Old_Versions에 보존하고 기존 애드인 v109는 그대로 둔다.
+- obj/ParameterManager011 및 bin/ParameterManager011 격리 빌드. 설치 경로 App-0.1.1-<timestamp>-<id>. Protocol.Release도 0.1.1로 갱신하여 구버전 작업 모듈 혼용 거부.
+- ZIP에는 기본 사용 안내 외에 룰셋 파일 안내와 연습용.sunnyrules.json 추가. 허용 목록으로 13개 프로그램 파일 / 전체 20개 ZIP 파일의 SHA-256 검증. 임시 보안 미끼 파일 제외.
+- 112개 Core/룰셋/WPF + 25개 기존 엔진 API 대역 검사. 실제 RVT 저장/중앙 동기화와 사용자 대신 설치는 하지 않는다.
+
 ## 별도 제품 0.1.0 — 2026-10-14 Sunny 매개변수 관리자
 
 - 사용자 요청으로 독립 WPF 프로그램 + Revit 2026 전용 작업 프로세스 연결 모듈을 추가했다. 상세 규칙과 기능 범위는 `docs/parameter-manager/CLAUDE.md`, 안내는 같은 폴더의 `사용안내.md`.
