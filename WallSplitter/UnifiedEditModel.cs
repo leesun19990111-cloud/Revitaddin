@@ -34,7 +34,7 @@ namespace WallSplitter
         internal string Display(string value) => ProjectValue != null && value.Length == 0 ? "없음" : value;
         internal bool Changed => IsMaterial
             ? NewMaterial.Length > 0 && OriginalMaterials.Values.Any(v => v != NewMaterial)
-            : Working != Original;
+            : ProjectValue?.ReferenceKind.Length > 0 ? ProjectValue.SelectedReference != ProjectValue.OriginalReference : Working != Original;
         internal string Value => IsMaterial
             ? (NewMaterial.Length > 0 && Source.Materials.TryGetValue(NewMaterial, out string? name) ? name : Original)
             : Working;

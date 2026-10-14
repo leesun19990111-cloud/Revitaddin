@@ -1,5 +1,17 @@
 # 일람표 에디터 (Schedule Editor)
 
+## v102 — 2026-10-14 비텍스트 행 식별 / 필드별 입력기
+
+- 사용자 오류 원인: v100의 `TextDirect`와 텍스트 전용 그룹 제한. 단순히 숫자 필드가 섞인 문제와는 다르다. 아래 v100의 텍스트 전용/참조 전체 금지 규칙은 이 절로 대체한다. 키/내포/재료 수량 산출, 2023 링크 포함 제한은 유지한다.
+- `ScheduleEditorParameters.Display`: Double은 **호스트 일람표 Units + 필드 GetFormatOptions**로 UnitFormatUtils.Format. 링크 문서 단위를 표시 행 식별에 대신 쓰지 말 것. String/Integer/ElementId는 실제 매개변수 표시값/참조명을 읽는다. 개별 행에서 표시 분포가 정확히 맞는 직접 필드만 복합 식별에 사용한다. 일부 특수 표시 필드(예/아니요 등)가 대응하지 않아도 다른 필드로 정확히 1:1 식별되면 허용한다. 묶인 행은 모든 정렬/그룹 필드가 직접 해석 가능하고 분포가 맞아야 하며 하나라도 제외해 추측하지 않는다.
+- 표시 복합키 + 저장형별 원시값 + 실제 Revit Count를 대조한다. 같은 표시키에 다른 원시값(반올림 또는 동명 참조)이 겹치면 차단한다. 참조 원시키는 모델 키를 포함하므로 서로 다른 모델의 동명 레벨 등을 임의 병합하지 않는다. 결과 불일치/의존값 검증 불가 시 조회 창은 열되 모든 행에 읽기 전용 사유, 빈 Targets를 넣는다. 원본/임시 복제 롤백 규칙 유지. 직접 정렬 필드와 필터 필드는 식별에서 제외됐더라도 사전검증 guard에 포함한다.
+- UI 입력기: Text, Integer, Number(단위 안내), Boolean(예/아니요), Reference(모델별 검색/목록), ReadOnly. 필드 전환 시 입력값/참조 선택을 초기화하여 다른 필드에 이월되지 않는다. 행 선택/스크롤/누적 미리보기는 유지한다. 숫자 문법/단위의 최종 판정은 실제 Revit `SetValueString`이며 실패 시 해당 문서 트랜잭션은 롤백한다. 여러 중앙 파일의 이미 끝난 동기화까지 되돌리지는 않는다.
+- 참조 편집은 writable 재료 spec 및 명시한 레벨 built-in만: LEVEL_PARAM, FAMILY_LEVEL_PARAM, SCHEDULE_LEVEL_PARAM, WALL_BASE_CONSTRAINT, WALL_HEIGHT_TYPE, ROOF_BASE_LEVEL_PARAM, STAIRS_BASE_LEVEL_PARAM, STAIRS_TOP_LEVEL_PARAM. 임의 참조를 이름/현재 값이 Level이라는 이유만으로 허용하지 말 것. 없음/카테고리별/연결 안 됨 등 음수 sentinel은 신규 선택 목록에 넣지 않는다(원래 값은 변경하지 않으면 보존). 다른 참조·특수 정수 열거값·계산식·합성·합계·읽기 전용은 사유 표시만 한다.
+- 참조 목록은 원본 모델마다 한 번 수집한 UniqueId→이름을 공유한다. `StageReferences`에서 선택된 모든 행/모델을 먼저 검증하고 하나라도 누락하면 전체 미리보기 불변. 대상 문서에서 UniqueId/이름/클래스를 다시 검증한 뒤 Set(ElementId). 이름 자동 매핑 금지. 레벨의 형상 영향 안내 유지.
+- `ProjectInformationService`/`UnifiedRow.Changed` 공용 확장: 일람표 opt-in 참조만 읽기 전용을 해제하고 참조 ID로 변경 여부 판단. NAMER 프로젝트 정보 참조는 종전대로 읽기 전용이다. 실제 쓰기/로그/중앙 동기화 안전 경로와 IFailuresPreprocessor 금지 유지.
+- 테스트: unified-v102 177(기존145 + 신규32), 기존 UI/재료91 + 링크72 = **340개**. 숫자만 있는 일람표/필드 서식/반올림 차단/숫자 및 레벨 그룹/특수 표시 fallback/형식 분류/참조 원자성·stale·실패 rollback/모델 격리/계산식 읽기 전용/기본·최소 UI 렌더. Revit 2023~2027 컴파일 오류0. API 대역 검증이며 실제 Revit 표시 엔진·서버는 미검증.
+- 공식 근거: [매개변수 저장형·ElementId 특수값](https://help.autodesk.com/cloudhelp/2024/ENU/Revit-API/files/Revit_API_Developers_Guide/Basic_Interaction_with_Revit_Elements/Parameters/Revit_API_Revit_API_Developers_Guide_Basic_Interaction_with_Revit_Elements_Parameters_Parameter_html.html), [UnitFormatUtils.Format](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/2aa08848-a28b-6fd9-79ef-d708b79ec28d.htm), [ScheduleField.GetFormatOptions](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/c0f20eb6-3e5e-11b3-458c-f38acbe2cddd.htm).
+
 ## v101 — 2026-10-14 드래그 / Shift 범위 체크·해제
 
 - `ScheduleEditorWindow`만 변경. NAMER 통합 창과 같은 시작 행 반대 상태 고정 드래그, 마지막 클릭 행 기준 Shift 범위 선택/해제. 빠르게 건너간 중간 행도 처리하고 되짚어도 반전하지 않는다. Shift 클릭 뒤 기준은 그 클릭 행으로 갱신한다.

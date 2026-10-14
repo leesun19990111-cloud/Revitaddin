@@ -12,6 +12,9 @@ namespace WallSplitter
         internal string Identity = "", Name = "", DataType = "", Raw = "", ReadOnlyReason = "";
         internal int Storage;
         internal bool YesNo, Integer;
+        // 일람표 전용 참조 편집. 문서별 UniqueId만 사용하고 이름으로 자동 매핑하지 않는다.
+        internal string ReferenceKind = "", OriginalReference = "", SelectedReference = "", UnitLabel = "";
+        internal Dictionary<string, string> ReferenceChoices = new();
     }
 
     internal static class ProjectInformationService
@@ -115,6 +118,14 @@ namespace WallSplitter
                 var row = rows[i]; var p = parameters[i]; var value = row.ProjectValue!;
                 bool success;
                 if (p.StorageType == StorageType.String) success = p.Set(row.Working);
+                else if (schedule && value.ReferenceKind.Length > 0)
+                {
+                    var target = doc.GetElement(value.SelectedReference);
+                    if ((value.ReferenceKind != "재료" && value.ReferenceKind != "레벨") || target == null || !value.ReferenceChoices.TryGetValue(target.UniqueId, out string? expectedName) ||
+                        target.Name != expectedName || (value.ReferenceKind == "재료" ? target is not Material : target is not Level))
+                        throw new InvalidOperationException(value.Name + ": 선택한 참조가 삭제되거나 변경되었습니다. 다시 조회하세요.");
+                    success = p.Set(target.Id);
+                }
                 else if (value.YesNo) { TryBoolean(row.Working, out int b); success = p.Set(b); }
                 else if (value.Integer) success = p.Set(int.Parse(row.Working, CultureInfo.CurrentCulture));
                 else success = p.SetValueString(row.Working);

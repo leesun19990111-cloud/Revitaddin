@@ -4,11 +4,14 @@ using System.Linq;
 
 namespace WallSplitter
 {
+    internal enum ScheduleEditorKind { Text, Integer, Number, Boolean, Reference, ReadOnly }
     internal sealed class ScheduleEditorField
     {
         internal string Id = "", Name = "", Reason = "";
         internal bool IsType;
-        public override string ToString() => Name + (Reason.Length > 0 ? " [읽기 전용]" : IsType ? " [유형: 다른 행에도 영향]" : "");
+        internal ScheduleEditorKind Editor;
+        internal string Hint = "";
+        public override string ToString() => Name + (Reason.Length > 0 || Editor == ScheduleEditorKind.ReadOnly ? " [읽기 전용]" : IsType ? " [유형: 다른 행에도 영향]" : "");
     }
     internal sealed class ScheduleEditorRow
     {
@@ -54,13 +57,13 @@ namespace WallSplitter
         internal static List<List<int>> Match(IList<string> displayed, IList<string> candidates, bool itemized)
         {
             if (displayed.Distinct(StringComparer.Ordinal).Count() != displayed.Count)
-                throw new InvalidOperationException("같은 식별값의 행이 여러 개라 실제 요소를 구분할 수 없습니다. 개별 행은 고유한 마크 등 텍스트 필드를 추가해 주세요.");
+                throw new InvalidOperationException("같은 식별값의 행이 여러 개라 실제 요소를 구분할 수 없습니다. 고유한 마크 등 요소를 구분할 직접 매개변수 필드를 추가해 주세요.");
             var groups = candidates.Select((key, index) => (key, index)).GroupBy(p => p.key, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Select(p => p.index).ToList(), StringComparer.Ordinal);
             if (groups.Count != displayed.Count || displayed.Any(key => !groups.ContainsKey(key)))
                 throw new InvalidOperationException("일람표의 정렬/필터 행과 실제 요소가 일치하지 않습니다. 모호한 대상을 수정하지 않습니다.");
             var result = displayed.Select(key => groups[key]).ToList();
-            if (itemized && result.Any(g => g.Count != 1)) throw new InvalidOperationException("개별 행과 실제 요소를 1:1로 구분할 수 없습니다. 고유한 텍스트 필드를 추가하세요.");
+            if (itemized && result.Any(g => g.Count != 1)) throw new InvalidOperationException("개별 행과 실제 요소를 1:1로 구분할 수 없습니다. 고유한 직접 매개변수 필드를 추가하세요.");
             return result;
         }
         internal static void Stage(ScheduleEditorSnapshot data, ScheduleEditorField field, HashSet<int> numbers, string value)
@@ -74,6 +77,7 @@ namespace WallSplitter
                 if (!row.Targets.TryGetValue(field.Id, out var list) || list.Count == 0) throw new InvalidOperationException(row.Number + "행: 수정 대상을 확인할 수 없습니다.");
                 foreach (var target in list)
                 {
+                    if (target.ProjectValue?.ReferenceKind.Length > 0) throw new InvalidOperationException("참조 필드는 모델별 목록에서 대상을 선택하세요.");
                     if (!target.Editable) throw new InvalidOperationException(row.Number + "행: " + target.Source.Name + " · " + target.Source.BlockReason + target.ProjectValue?.ReadOnlyReason);
                     targets[target.Key] = target;
                 }
@@ -87,6 +91,32 @@ namespace WallSplitter
                 if (error != null) throw new InvalidOperationException(error);
             }
             foreach (var target in targets.Values) { target.Working = value; if (target.Changed) data.Pending[target.Key] = target; else data.Pending.Remove(target.Key); }
+        }
+        internal static void StageReferences(ScheduleEditorSnapshot data, ScheduleEditorField field, HashSet<int> numbers, Dictionary<string, string> choices)
+        {
+            if (field.Reason.Length > 0) throw new InvalidOperationException(field.Reason);
+            var targets = new Dictionary<string, UnifiedRow>();
+            foreach (var row in data.Rows.Where(r => numbers.Contains(r.Number)))
+            {
+                if (row.Reason.Length > 0) throw new InvalidOperationException(row.Reason);
+                if (row.Errors.TryGetValue(field.Id, out string? error)) throw new InvalidOperationException(error);
+                if (!row.Targets.TryGetValue(field.Id, out var list) || list.Count == 0) throw new InvalidOperationException("행의 수정 대상을 확인할 수 없습니다.");
+                foreach (var target in list)
+                {
+                    var value = target.ProjectValue;
+                    if (!target.Editable || value == null || value.ReferenceKind.Length == 0 ||
+                        !choices.TryGetValue(target.Source.Key, out string? id) || !value.ReferenceChoices.ContainsKey(id))
+                        throw new InvalidOperationException(target.Source.Name + ": 편집 가능 여부와 해당 모델의 참조 선택을 확인하세요.");
+                    targets[target.Key] = target;
+                }
+            }
+            if (targets.Count == 0) throw new InvalidOperationException("변경할 행을 지정하세요.");
+            foreach (var target in targets.Values)
+            {
+                var value = target.ProjectValue!; value.SelectedReference = choices[target.Source.Key];
+                target.Working = value.SelectedReference == value.OriginalReference ? target.Original : value.ReferenceChoices[value.SelectedReference];
+                if (target.Changed) data.Pending[target.Key] = target; else data.Pending.Remove(target.Key);
+            }
         }
     }
 }

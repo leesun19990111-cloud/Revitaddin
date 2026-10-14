@@ -1,5 +1,11 @@
 # NAMER (이름 일괄 변경)
 
+## 2026-10-14 v102 — 공통 매개변수 서비스의 일람표 참조 편집 확장
+
+- `ProjectInformationValue`에 일람표 전용 참조 종류/원래·선택 UniqueId/모델별 후보/단위 라벨 추가. `UnifiedRow.Changed`는 해당 참조만 ID로 비교한다. 일반 이름·재료·프로젝트 정보의 기존 판단은 유지한다.
+- `ProjectInformationService.Apply(schedule:true)`에서 명시적으로 활성화한 재료/레벨 참조만 대상 문서의 ID·이름·클래스 재검증 후 Set(ElementId). NAMER `Read`/`Snapshot`은 참조를 계속 읽기 전용으로 생성한다. 일람표만 ConfigureReference로 지원 필드를 opt-in한다. NAMER의 프로젝트 정보 참조까지 임의로 활성화하지 말 것.
+- 기존 값·정의·단위·권한 사전검사, transaction 취소 및 성공 뒤 로그 규칙 유지. unified-v102 177, release-v102 91, link-safety-v102 72 회귀. 실모델/중앙 서버 검증은 별도 필요. 상세: `docs/schedule-editor/CLAUDE.md` v102.
+
 ## 2026-10-13 v100 — 프로젝트 정보 카테고리
 
 - `NamerCategory.ProjectInformation`은 enum 끝에 추가(기존 순서/직렬화 값 유지). `CollectCandidates`는 이 분류에서 요소 이름을 반환하지 않는다. 프로젝트 정보는 한 요소의 여러 매개변수이므로 `ProjectInformationService.Read`가 별도 순수 값 행을 만든다. `UnifiedRow.Key`에 매개변수 ID/공유 GUID를 포함해 동명 항목도 분리한다.

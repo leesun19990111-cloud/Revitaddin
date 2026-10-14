@@ -15,6 +15,12 @@ namespace WallSplitter
         private readonly ComboBox _field = new();
         private readonly TextBox _range = new(), _value = new();
         private readonly TextBlock _status = new();
+        private readonly TextBlock _editorHint = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(5) };
+        private readonly ComboBox _boolean = new() { Width = 140, ItemsSource = new[] { "예", "아니요" }, SelectedIndex = -1 };
+        private readonly StackPanel _referenceEditors = new();
+        private readonly Dictionary<string, string> _referenceChoices = new();
+        private Button _stage = null!;
+        private string _editorField = "";
         private readonly StackPanel _rows = new();
         private readonly Grid _header = Columns();
         private readonly List<Grid> _grids = new();
@@ -35,17 +41,29 @@ namespace WallSplitter
             for (int i = 0; i < 6; i++) root.RowDefinitions.Add(new RowDefinition { Height = i == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             Put(root, new TextBlock { Text = data.Name + "\n원래 정렬 순서의 데이터 행만 1부터 번호를 붙입니다. 제목·열 제목·소계·합계·빈 구분행은 제외됩니다.\n행 클릭·드래그 / Shift + 클릭으로 범위 체크·해제합니다. 행 번호 직접 입력도 가능합니다.\n묶인 행은 확인된 요소 전체에 적용합니다. 유형 값 변경은 선택 밖의 같은 유형에도 영향을 줍니다.",
                 Foreground = Theme.Accent, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) }, 0);
-            var tools = new WrapPanel { Margin = new Thickness(0,0,0,8) }; Put(root, tools, 1);
+            var inputArea = new StackPanel { Margin = new Thickness(0,0,0,8) }; Put(root, inputArea, 1);
+            var tools = new WrapPanel(); inputArea.Children.Add(tools);
+            inputArea.Children.Add(_editorHint);
+            inputArea.Children.Add(new ScrollViewer { Content = _referenceEditors, MaxHeight = 140, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             tools.Children.Add(Cell("필드")); _field.Width = 290; _field.ItemsSource = data.Fields; _field.SelectedIndex = 0; tools.Children.Add(_field);
             tools.Children.Add(Cell("행 (예: 1-10,12)")); _range.Width = 160; tools.Children.Add(_range);
             tools.Children.Add(Cell("지정할 값")); _value.Width = 220; _value.ToolTip = "텍스트는 비우면 삭제 · 숫자는 대상 모델의 프로젝트 단위로 입력"; tools.Children.Add(_value);
+            tools.Children.Add(_boolean);
             tools.Children.Add(Button("전체 선택", () => { _range.Text = data.Rows.Count == 0 ? "" : "1-" + data.Rows.Count; }));
             tools.Children.Add(Button("선택 해제", () => _range.Clear()));
-            tools.Children.Add(Button("미리보기에 적용", () =>
+            _stage = Button("미리보기에 적용", () =>
             {
                 if (_field.SelectedItem is not ScheduleEditorField f) return;
-                ScheduleEditorLogic.Stage(data, f, ScheduleEditorLogic.ParseRows(_range.Text, data.Rows.Count), _value.Text); Render();
-            }));
+                var numbers = ScheduleEditorLogic.ParseRows(_range.Text, data.Rows.Count);
+                if (f.Editor == ScheduleEditorKind.ReadOnly) throw new InvalidOperationException(f.Hint);
+                if (f.Editor == ScheduleEditorKind.Reference) ScheduleEditorLogic.StageReferences(data, f, numbers, _referenceChoices);
+                else
+                {
+                    if (f.Editor == ScheduleEditorKind.Boolean && _boolean.SelectedItem == null) throw new InvalidOperationException("예 또는 아니요를 선택하세요.");
+                    ScheduleEditorLogic.Stage(data, f, numbers, f.Editor == ScheduleEditorKind.Boolean ? (string)_boolean.SelectedItem : _value.Text);
+                }
+                Render();
+            }); tools.Children.Add(_stage);
             string[] labels = { "선택 / 행", "소속 모델", "요소 수", "현재 값", "변경 후 값 · 미리보기", "상태" };
             for (int i = 0; i < labels.Length; i++) Add(_header, Cell(labels[i]), i);
             for (int i = 1; i < 5; i++)
@@ -62,7 +80,11 @@ namespace WallSplitter
             footer.Children.Add(Button("미리보기 전체 초기화", () =>
             {
                 if (MessageBox.Show(this, "누적된 변경을 모두 초기화할까요?", "초기화", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
-                foreach (var target in data.Rows.SelectMany(r => r.Targets.Values).SelectMany(r => r).Distinct()) target.Working = target.Original;
+                foreach (var target in data.Rows.SelectMany(r => r.Targets.Values).SelectMany(r => r).Distinct())
+                {
+                    target.Working = target.Original;
+                    if (target.ProjectValue != null) target.ProjectValue.SelectedReference = target.ProjectValue.OriginalReference;
+                }
                 data.Pending.Clear(); Render();
             }));
             footer.Children.Add(Button("닫기", Close));
@@ -113,6 +135,7 @@ namespace WallSplitter
         {
             EndDrag();
             if (_field.SelectedItem is not ScheduleEditorField field) return;
+            ConfigureEditor(field);
             double offset = _scroll.VerticalOffset;
             _rows.Children.Clear(); _grids.Clear(); _checks.Clear();
             foreach (var row in _data.Rows.Take(_limit))
@@ -136,7 +159,7 @@ namespace WallSplitter
                 var values = targets.Select(t => t.Working).Distinct().ToList();
                 string preview = changed ? values.Count == 1 ? (values[0].Length == 0 ? "없음" : values[0]) : "<다양함>" : original.Length == 0 ? "없음" : original;
                 var after = Cell(preview); after.Foreground = changed ? Theme.Accent : Theme.TextSecondary; Add(grid, after, 4);
-                string reason = field.Reason.Length > 0 ? field.Reason : row.Errors.TryGetValue(field.Id, out var error) ? error :
+                string reason = row.Reason.Length > 0 ? row.Reason : field.Reason.Length > 0 ? field.Reason : row.Errors.TryGetValue(field.Id, out var error) ? error :
                     targets.Any(t => !t.Editable) ? string.Join(" / ", targets.Where(t => !t.Editable).Select(t => t.Source.BlockReason + t.ProjectValue?.ReadOnlyReason).Distinct()) :
                     field.IsType ? "유형 전체 변경" : row.ElementCount > 1 ? "묶인 요소 모두 변경" : "편집 가능";
                 Add(grid, Cell(reason), 5);
@@ -155,6 +178,37 @@ namespace WallSplitter
             }
             catch (Exception ex) { _rangeError = ex.Message; }
             RefreshSelection();
+        }
+        private void ConfigureEditor(ScheduleEditorField field)
+        {
+            if (_editorField == field.Id) return;
+            _editorField = field.Id; _value.Clear(); _boolean.SelectedIndex = -1; _referenceChoices.Clear(); _referenceEditors.Children.Clear();
+            _editorHint.Text = field.Hint;
+            _value.Visibility = field.Editor == ScheduleEditorKind.Text || field.Editor == ScheduleEditorKind.Integer || field.Editor == ScheduleEditorKind.Number ? Visibility.Visible : Visibility.Collapsed;
+            _boolean.Visibility = field.Editor == ScheduleEditorKind.Boolean ? Visibility.Visible : Visibility.Collapsed;
+            _stage.IsEnabled = field.Editor != ScheduleEditorKind.ReadOnly;
+            if (field.Editor != ScheduleEditorKind.Reference) return;
+            var targets = _data.Rows.SelectMany(r => r.Targets.TryGetValue(field.Id, out var list) ? list : new List<UnifiedRow>()).Where(t => t.Editable).Distinct().ToList();
+            foreach (var model in targets.GroupBy(t => t.Source.Key))
+            {
+                var line = new WrapPanel(); _referenceEditors.Children.Add(line);
+                line.Children.Add(Cell(model.First().Source.Name));
+                line.Children.Add(new TextBlock { Text = "이름 검색", Margin = new Thickness(5), VerticalAlignment = VerticalAlignment.Center });
+                var search = new TextBox { Width = 160, Margin = new Thickness(3), ToolTip = "이름 검색 · 검색만으로 지정하지 않습니다." }; line.Children.Add(search);
+                var common = model.First().ProjectValue!.ReferenceChoices.Where(p => model.All(t => t.ProjectValue!.ReferenceChoices.ContainsKey(p.Key)))
+                    .OrderBy(p => p.Value).ToList();
+                var combo = new ComboBox { Width = 340, Margin = new Thickness(3), DisplayMemberPath = "Value", SelectedValuePath = "Key", ItemsSource = common }; line.Children.Add(combo);
+                combo.SelectionChanged += (_, _) => Guard(() =>
+                {
+                    if (combo.SelectedValue is string id) _referenceChoices[model.Key] = id; else _referenceChoices.Remove(model.Key);
+                });
+                search.TextChanged += (_, _) => Guard(() =>
+                {
+                    string? old = combo.SelectedValue as string;
+                    combo.ItemsSource = common.Where(p => p.Value.IndexOf(search.Text, StringComparison.CurrentCultureIgnoreCase) >= 0).ToList();
+                    combo.SelectedValue = old;
+                });
+            }
         }
         private void RefreshSelection()
         {
