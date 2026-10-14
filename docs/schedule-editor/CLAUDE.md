@@ -1,5 +1,16 @@
 # 일람표 에디터 (Schedule Editor)
 
+## v107 — 2026-10-14 다중 카테고리 링크 사용자 매개변수 / 동일 표시 행
+
+- 사용자 실측: 링크 포함 시 동일 식별값 행으로 전체 읽기 전용. 대상은 다중 카테고리의 재료명·층·업체명·조달청표준공사코드·건축물번호 등 공유/프로젝트 매개변수, 추가로 `다음으로 IFC로 내보내기`. 기존 Match가 중복 키 한 건에도 전체 throw하고, Resolve가 링크 비공유 매개변수를 전부 제외하며, 표시용 링크 캐시 Parameter.IsReadOnly를 그대로 사용하던 제한을 수정했다.
+- 개별 행의 임시 복제에 RVT_LINK_FILE_NAME_WITHOUT_EXT / RVT_LINK_INSTANCE_NAME을 노출하여 표시 분포가 실제 후보와 정확히 맞는 보조 열만 식별에 사용한다. 원본 정렬/필터 불변, 복제 finally 롤백, 보조 ScheduleField 객체는 롤백 밖으로 넘기지 않는다. 묶인 행에는 보조 필드를 추가하지 않는다(그룹 분할 방지). 링크 메타데이터 정렬/필터는 직접 요소 매개변수로 오인하지 않으며 최종 fingerprint로 확인한다.
+- `MatchRows`는 키별로 개수와 원시값을 검사한다. 정상 키는 유지, 모호한 키만 사유를 표시한다. 개별 행의 동일 표시 키는 실제 후보 수=해당 데이터 행 Count 합이고 원시값도 동일한 경우에 한해 모든 행이 공동 대상 집합을 참조한다. 한 행↔한 요소를 주장하지 않는다. RequiredRows/`공동 N` 표시, Stage/StageReferences는 관련 행을 하나라도 빠뜨리면 누적 변경 전에 차단한다. 새 `동일 표시 행 함께 선택` 버튼은 사용자가 눌렀을 때만 관련 행을 추가한다. 비개별 중복 그룹/반올림 원시값 차이/개수 불일치는 여전히 차단한다. 이전 v100 '모든 중복 행 무조건 차단' 대신 이 전체 집합 편집만 허용하며 순번으로 배분 금지는 유지한다.
+- 공유 필드는 GUID, built-in은 음수 ID 사용. 비공유 프로젝트 필드는 host ParameterElement.GetDefinition의 실제 이름/자료형과 대상 문서의 비공유 ParameterElement 파라미터를 비교하여 유일한 후보만 연결한다. 열 제목이나 문서 간 양수 ID를 식별자로 사용하지 않는다. 사용자 요청에 따라 이전 '링크 사용자 매개변수는 GUID만' 제한을 확장하되 **명시적 승인 없이 이름 매핑으로 수정하지 않는다**. 행별 ParameterMappings에 모델 키/경로·정의명·자료형·유형/인스턴스·실제 로컬 ID를 기록하고 `프로젝트 매개변수 연결 확인`에서 기본 No 확인 후 해당 연결만 이번 조회의 ApprovedMappings로 승인한다. Stage 두 경로가 승인 여부를 확인한다. 후보 중복/자료형 불일치/없는 파라미터는 차단하며 새 매개변수 생성/바인딩 변경 없음.
+- 실제 편집 스냅샷은 FindOpenTarget의 열린 원본에서 요소 UniqueId와 매개변수를 다시 찾는다. 캐시와 원본의 owner/parameter key·원시값·자료형이 같을 때 원본의 읽기 전용 및 참조 목록을 사용한다. 원본의 기존 미동기화 값/삭제된 요소는 셀 오류로 처리한다. 필터/정렬 guards는 캐시 기준으로 원본 쓰기 직전 다시 확인한다. 최종 fingerprint에 공동 선택 범위·행 오류·대상 매개변수 Key도 포함했다. 실제 쓰기와 중앙 동기화는 기존 Run/Preflight/Validate/Apply만 사용한다.
+- 일반 요소 일람표의 ProjectInfo 필드를 소속 문서 ProjectInformation으로 해석하고 모델 전체 영향 표시. IFC_EXPORT_ELEMENT_AS / IFC_EXPORT_ELEMENT_TYPE_AS 문자열 필드는 IsIfcEntity로 구분해 엔티티 입력 안내 제공. 예/아니요/유형별 IFC 내보내기 토글이나 PredefinedType을 자동 변경하지 않는다. IFC 스키마별 엔티티 선택기/검증/실제 export는 이번 범위 밖이며 별도 검증 필요. 공식 [필드 타입](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/9888db7d-00d0-4fd7-a1a9-cdd1fb5fce16.htm), [IFC 엔티티 지정과 export 여부](https://help.autodesk.com/cloudhelp/2024/ENU/Revit-DocumentPresent/files/GUID-7119A8C3-A0EE-4568-8C35-750410D867C9.htm).
+- 동일 표시 행은 공동 대상 스냅샷/RequiredRows를 공유하여 행 수×공동 대상 수만큼 Revit API를 반복하지 않는다. 행별 Cells와 원래 순서는 유지하며 매개변수 작업값은 의도대로 공유한다.
+- `.codex-build/unified-v107` 263건(기존235+28), link-safety52, release91 = 406 대역 회귀 통과. 모델 열 분리/원본 권한/캐시 미변경/기존 작업 보호/부분 모호성/공동 선택·스냅샷 공유/프로젝트 매개변수 승인·중복·자료형·GUID/IFC 저장을 검증했다. 실제 WPF 기본/최소 렌더 확인. 2023~2027 컴파일 성공(2023 일반 링크 포함은 기존 제한 유지). 실제 Revit 다중 카테고리 표 렌더링/서버 동기화/IFC export 성공은 보증하지 않으며 아래 테스트 문서에 따라 테스트 중앙에서 확인할 것.
+
 ## v105 — 2026-10-14 공통 링크 충돌 경로 차단
 
 - NAMER/재료 지정과 공유하는 LinkedModelEditService가 자동 임시 로컬 생성·링크 해제·재열기·닫기를 제거했다. 같은 Revit에 편집 원본/로컬을 먼저 열어야 한다. 아래 과거 ‘없으면 전용 로컬’ 지침은 폐기한다. 상세 원인/규칙은 namer v105 및 linked-edit-crash-v105.md 참조.

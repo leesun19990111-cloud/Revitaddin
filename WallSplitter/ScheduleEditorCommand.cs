@@ -12,7 +12,9 @@ namespace WallSplitter
     public sealed class ScheduleEditorCommand : IExternalCommand
     {
         private static string Fingerprint(ScheduleEditorSnapshot data) => ScheduleEditorLogic.Key(data.Rows.Select(r =>
-            ScheduleEditorLogic.Key(new[] { r.Identity }.Concat(r.Cells.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value)))));
+            ScheduleEditorLogic.Key(new[] { r.Identity, r.Reason, string.Join(",", r.RequiredRows) }
+                .Concat(r.Cells.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value))
+                .Concat(r.Targets.OrderBy(p => p.Key).Select(p => p.Key + ":" + ScheduleEditorLogic.Key(p.Value.Select(v => v.Key).OrderBy(k => k)))))));
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             bool retained = false;
@@ -32,6 +34,7 @@ namespace WallSplitter
                 if (!LinkedModelEditService.Confirm("Schedule Editor", "미리보기의 변경을 실제 모델에 적용할까요?",
                     summary + "\n\n묶인 행은 조회 때 확인한 요소 모두를 수정합니다. 새로 추가된 요소로 범위를 넓히지 않습니다." +
                     "\n유형 값은 선택 밖의 같은 유형에도 적용됩니다. 텍스트 빈 값은 기존 값을 지웁니다." +
+                    "\n프로젝트 정보 필드는 해당 모델 전체에 영향을 줍니다. 동일 표시 행은 안내된 행 전체를 선택한 경우에만 공동 대상을 수정합니다." +
                     "\n링크 중앙모델로 동기화합니다. 이미 열린 원본/로컬의 기존 변경도 함께 동기화되므로 별도로 확인합니다." +
                     "\n현재 모델은 마지막에 반영하며 자동 저장/동기화하지 않습니다. 다른 사용자의 로컬은 그 사용자가 최신 항목을 불러와야 갱신됩니다." +
                     "\n실패 시 나머지 모델을 중단합니다. 이미 중앙에 동기화된 모델은 자동으로 되돌릴 수 없습니다.")) return Result.Cancelled;

@@ -86,7 +86,8 @@ namespace WallSplitter
                     ScheduleEditorKind.Boolean => "예 / 아니요를 선택하세요.",
                     ScheduleEditorKind.Integer => "정수 입력 (예: 12). 빈 값으로 지울 수 없습니다.",
                     ScheduleEditorKind.Number => "숫자 입력 · 단위를 함께 입력할 수 있습니다. 생략 시 모델별 프로젝트 단위: " + string.Join(" / ", targets.Select(t => t.Source.Name + " = " + t.ProjectValue!.UnitLabel).Distinct()),
-                    _ => "텍스트 입력 · 비우면 기존 내용을 지웁니다."
+                    _ => field.IsIfcEntity ? "IFC 엔티티 이름 입력 (예: IfcWall, IfcSlab). 비우면 기존 지정 삭제. IFC 내보내기 여부/미리 정의된 유형은 자동 변경하지 않습니다. 스키마 적합성은 실제 IFC 내보내기에서 확인하세요."
+                        : "텍스트 입력 · 비우면 기존 내용을 지웁니다."
                 };
             }
         }

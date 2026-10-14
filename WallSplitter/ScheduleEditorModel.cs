@@ -8,16 +8,18 @@ namespace WallSplitter
     internal sealed class ScheduleEditorField
     {
         internal string Id = "", Name = "", Reason = "";
-        internal bool IsType;
+        internal bool IsType, IsProjectInfo, IsIfcEntity;
         internal ScheduleEditorKind Editor;
         internal string Hint = "";
-        public override string ToString() => Name + (Reason.Length > 0 || Editor == ScheduleEditorKind.ReadOnly ? " [읽기 전용]" : IsType ? " [유형: 다른 행에도 영향]" : "");
+        public override string ToString() => Name + (Reason.Length > 0 || Editor == ScheduleEditorKind.ReadOnly ? " [읽기 전용]" : IsProjectInfo ? " [프로젝트 전체에 영향]" : IsType ? " [유형: 다른 행에도 영향]" : "");
     }
     internal sealed class ScheduleEditorRow
     {
         internal int Number;
         internal string Models = "", Identity = "", Reason = "";
         internal int ElementCount;
+        internal List<int> RequiredRows = new();
+        internal readonly Dictionary<string, List<string>> ParameterMappings = new();
         internal readonly Dictionary<string, string> Cells = new();
         internal readonly Dictionary<string, List<UnifiedRow>> Targets = new();
         internal readonly Dictionary<string, string> Errors = new();
@@ -29,6 +31,7 @@ namespace WallSplitter
         internal readonly List<ScheduleEditorRow> Rows = new();
         internal readonly Dictionary<string, UnifiedRow> Pending = new();
         internal readonly List<ScheduleEditorGuard> Guards = new();
+        internal readonly HashSet<string> ApprovedMappings = new();
     }
     internal sealed class ScheduleEditorGuard
     {
@@ -37,6 +40,44 @@ namespace WallSplitter
     }
     internal static class ScheduleEditorLogic
     {
+        internal sealed class RowMatch
+        {
+            internal List<int> Members = new(), RequiredRows = new();
+            internal string Reason = "";
+        }
+        // 개별 대응을 추측하지 않는다. 동일 표시 행은 전체 집합/개수를 확인한 경우에만 함께 수정한다.
+        internal static List<RowMatch> MatchRows(IList<string> displayed, IList<string> candidates, IList<string> raw, IList<int> counts, bool itemized)
+        {
+            var result = displayed.Select(_ => new RowMatch()).ToList();
+            var pools = candidates.Select((key, i) => (key, i)).GroupBy(p => p.key).ToDictionary(g => g.Key, g => g.Select(p => p.i).ToList());
+            foreach (var rows in displayed.Select((key, i) => (key, i)).GroupBy(p => p.key))
+            {
+                var indices = rows.Select(p => p.i).ToList();
+                pools.TryGetValue(rows.Key, out var members); members ??= new List<int>();
+                string error = members.Count != indices.Sum(i => counts[i]) ? "행 표시 개수와 실제 대상 개수가 다릅니다. 링크 상태와 일람표를 갱신해 주세요."
+                    : members.Select(i => raw[i]).Distinct().Count() > 1 ? "같은 표시값에 서로 다른 원시값이 있습니다. 반올림/동명 참조를 구분할 수 없습니다."
+                    : (!itemized && indices.Count > 1) || (itemized && indices.Any(i => counts[i] != 1)) ? "묶인 행의 개별 대응을 확인할 수 없습니다." : "";
+                var required = indices.Count > 1 ? indices.Select(i => i + 1).ToList() : new List<int>();
+                foreach (int index in indices)
+                {
+                    result[index].Reason = error;
+                    if (error.Length > 0) continue;
+                    result[index].Members = members;
+                    result[index].RequiredRows = required;
+                }
+            }
+            return result;
+        }
+        private static void ValidateSelection(ScheduleEditorSnapshot data, ScheduleEditorField field, HashSet<int> numbers)
+        {
+            foreach (var row in data.Rows.Where(r => numbers.Contains(r.Number)))
+            {
+                if (row.RequiredRows.Any(n => !numbers.Contains(n)))
+                    throw new InvalidOperationException(row.Number + "행은 동일 표시 행 중 하나입니다. ‘동일 표시 행 함께 선택’ 후 적용하세요. 함께 선택할 행: " + string.Join(", ", row.RequiredRows));
+                if (row.ParameterMappings.TryGetValue(field.Id, out var mappings) && mappings.Any(m => !data.ApprovedMappings.Contains(m)))
+                    throw new InvalidOperationException("‘프로젝트 매개변수 연결 확인’에서 모델별 연결 항목을 승인한 뒤 적용하세요. 이름만으로 자동 수정하지 않습니다.");
+            }
+        }
         internal static string Key(IEnumerable<string> values) => string.Concat(values.Select(v => v.Length + ":" + v));
         internal static HashSet<int> ParseRows(string input, int count)
         {
@@ -69,6 +110,7 @@ namespace WallSplitter
         internal static void Stage(ScheduleEditorSnapshot data, ScheduleEditorField field, HashSet<int> numbers, string value)
         {
             if (field.Reason.Length > 0) throw new InvalidOperationException(field.Reason);
+            ValidateSelection(data, field, numbers);
             var targets = new Dictionary<string, UnifiedRow>();
             foreach (var row in data.Rows.Where(r => numbers.Contains(r.Number)))
             {
@@ -95,6 +137,7 @@ namespace WallSplitter
         internal static void StageReferences(ScheduleEditorSnapshot data, ScheduleEditorField field, HashSet<int> numbers, Dictionary<string, string> choices)
         {
             if (field.Reason.Length > 0) throw new InvalidOperationException(field.Reason);
+            ValidateSelection(data, field, numbers);
             var targets = new Dictionary<string, UnifiedRow>();
             foreach (var row in data.Rows.Where(r => numbers.Contains(r.Number)))
             {

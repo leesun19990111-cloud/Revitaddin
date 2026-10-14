@@ -39,7 +39,7 @@ namespace WallSplitter
             Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/WallSplitter;component/Resources/Theme.xaml", UriKind.Relative) });
             var root = new Grid { Margin = new Thickness(14), Background = Theme.WindowBackground }; Content = root;
             for (int i = 0; i < 6; i++) root.RowDefinitions.Add(new RowDefinition { Height = i == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
-            Put(root, new TextBlock { Text = data.Name + "\n원래 정렬 순서의 데이터 행만 1부터 번호를 붙입니다. 제목·열 제목·소계·합계·빈 구분행은 제외됩니다.\n행 클릭·드래그 / Shift + 클릭으로 범위 체크·해제합니다. 행 번호 직접 입력도 가능합니다.\n묶인 행은 확인된 요소 전체에 적용합니다. 유형 값 변경은 선택 밖의 같은 유형에도 영향을 줍니다.",
+            Put(root, new TextBlock { Text = data.Name + "\n원래 정렬 순서의 데이터 행만 1부터 번호를 붙입니다. 제목·열 제목·소계·합계·빈 구분행은 제외됩니다.\n행 클릭·드래그 / Shift + 클릭으로 범위 체크·해제합니다. 행 번호 직접 입력도 가능합니다.\n묶인 행은 확인된 요소 전체에 적용합니다. 유형 값 변경은 선택 밖의 같은 유형에도 영향을 줍니다.\n링크 수정 전, 대상 원본의 로컬을 같은 Revit에 열어 두세요. 계산식/실제 읽기 전용 필드는 변경하지 않습니다.",
                 Foreground = Theme.Accent, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) }, 0);
             var inputArea = new StackPanel { Margin = new Thickness(0,0,0,8) }; Put(root, inputArea, 1);
             var tools = new WrapPanel(); inputArea.Children.Add(tools);
@@ -51,6 +51,22 @@ namespace WallSplitter
             tools.Children.Add(_boolean);
             tools.Children.Add(Button("전체 선택", () => { _range.Text = data.Rows.Count == 0 ? "" : "1-" + data.Rows.Count; }));
             tools.Children.Add(Button("선택 해제", () => _range.Clear()));
+            tools.Children.Add(Button("동일 표시 행 함께 선택", () =>
+            {
+                var numbers = ScheduleEditorLogic.ParseRows(_range.Text, data.Rows.Count);
+                foreach (var row in data.Rows.Where(r => numbers.Contains(r.Number)).ToList()) numbers.UnionWith(row.RequiredRows);
+                _range.Text = FormatRange(numbers);
+            }));
+            tools.Children.Add(Button("프로젝트 매개변수 연결 확인", () =>
+            {
+                if (_field.SelectedItem is not ScheduleEditorField f) return;
+                var numbers = ScheduleEditorLogic.ParseRows(_range.Text, data.Rows.Count);
+                var mappings = data.Rows.Where(r => numbers.Contains(r.Number)).SelectMany(r => r.ParameterMappings.TryGetValue(f.Id, out var list) ? list : new List<string>()).Distinct().ToList();
+                if (mappings.Count == 0) { _status.Text = "선택한 행은 별도 프로젝트 매개변수 연결 승인이 필요하지 않습니다."; return; }
+                if (MessageBox.Show(this, "공유 GUID가 없는 프로젝트 매개변수입니다. 동일 이름·자료형의 유일한 항목을 다음처럼 연결할까요? 의미가 같은 항목인지 확인하세요.\n\n" +
+                    string.Join("\n", mappings) + "\n\n이번 조회에서 선택한 연결만 승인하며, 아직 모델에는 적용하지 않습니다.", "프로젝트 매개변수 연결 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+                data.ApprovedMappings.UnionWith(mappings); Render();
+            }));
             _stage = Button("미리보기에 적용", () =>
             {
                 if (_field.SelectedItem is not ScheduleEditorField f) return;
@@ -151,7 +167,7 @@ namespace WallSplitter
                 });
                 // 체크박스의 키보드/접근성 클릭도 같은 선택 규칙을 사용한다.
                 check.Click += (_, _) => Guard(() => { BeginDrag(row.Number, (Keyboard.Modifiers & ModifierKeys.Shift) != 0); EndDrag(); });
-                Add(grid, Cell(row.Models), 1); Add(grid, Cell(row.ElementCount.ToString()), 2);
+                Add(grid, Cell(row.Models), 1); Add(grid, Cell((row.RequiredRows.Count > 0 ? "공동 " : "") + row.ElementCount), 2);
                 string original = row.Cells.TryGetValue(field.Id, out var cell) ? cell : "";
                 Add(grid, Cell(original.Length == 0 ? "없음" : original), 3);
                 var targets = row.Targets.TryGetValue(field.Id, out var list) ? list : new List<UnifiedRow>();
@@ -161,7 +177,9 @@ namespace WallSplitter
                 var after = Cell(preview); after.Foreground = changed ? Theme.Accent : Theme.TextSecondary; Add(grid, after, 4);
                 string reason = row.Reason.Length > 0 ? row.Reason : field.Reason.Length > 0 ? field.Reason : row.Errors.TryGetValue(field.Id, out var error) ? error :
                     targets.Any(t => !t.Editable) ? string.Join(" / ", targets.Where(t => !t.Editable).Select(t => t.Source.BlockReason + t.ProjectValue?.ReadOnlyReason).Distinct()) :
-                    field.IsType ? "유형 전체 변경" : row.ElementCount > 1 ? "묶인 요소 모두 변경" : "편집 가능";
+                    row.ParameterMappings.TryGetValue(field.Id, out var mapping) && mapping.Any(m => !_data.ApprovedMappings.Contains(m)) ? "프로젝트 매개변수 연결 확인 필요" :
+                    row.RequiredRows.Count > 0 ? "동일 표시 " + row.RequiredRows.Count + "행 함께 선택 필요 · 공동 대상 " + row.ElementCount + "개 전체 변경" :
+                    field.IsProjectInfo ? "해당 모델의 프로젝트 정보 전체 변경" : field.IsType ? "유형 전체 변경" : row.ElementCount > 1 ? "묶인 요소 모두 변경" : "편집 가능";
                 Add(grid, Cell(reason), 5);
                 _rows.Children.Add(new Border { Child = grid, BorderBrush = Theme.Border, BorderThickness = new Thickness(0,0,0,1) });
             }
