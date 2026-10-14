@@ -1,5 +1,14 @@
 # NAMER (이름 일괄 변경)
 
+## 2026-10-14 v105 — 링크 임시 로컬 재열기 네이티브 강제 종료 차단
+
+- journal.0239/0240/0241에서 링크 해제 후 `LinkedModelEdits` 임시 로컬 로드 중 `SelectedPartitionsForEdit`→`decommitDocument`→`0xc0000005`를 확인했다. 실패 시점은 중앙 동기화 호출 이전이다. 엔진 내부 결함의 정확한 원인을 단정하지 않는다. 원본 저널/덤프/프로젝트 경로는 저장소에 넣지 않는다. [비식별 사후 분석 및 검증](linked-edit-crash-v105.md).
+- **아래 v96~v104의 ‘원본이 없으면 새 로컬 생성/링크 해제/재열기/복원’ 규칙은 폐기한다.** LinkedModelEditService.Run은 같은 Revit에 이미 열린 검증된 원본/로컬만 처리한다. CreateNewLocal/OpenDocumentFile/Unload/UnloadLocally/Load/Close/강제 소유권 반납/선행 Save를 호출하지 않는다. try/catch로 네이티브 접근 위반을 막을 수 없으므로 자동 경로 자체를 되살리지 말 것.
+- RequireOpenTarget은 읽기 전용 사전 검사다. 원본이 없거나 잘못된 상태면 안내 후 차단. UnifiedEditService.Preflight는 변경 있는 모든 소스만 먼저 검사하여 뒤 모델의 준비 부족 때문에 앞 모델만 변경되는 것을 방지한다. 일람표도 같은 검사를 호출한다. 항목별 stale 값/소유권/형상 검사는 여전히 실제 반영 직전에 수행하므로 다중 모델 원자성 보장은 아니다.
+- 열린 원본의 기존 작업 포함 확인(기본 No), 그룹 종료 뒤 Sync, RelinquishOptions(false), 성공 뒤 로그, 실패 변경 보존/RetainChanges/외부 명령 Succeeded 규칙은 유지한다. 중첩 Run은 Interlocked로 차단한다. 동기화 실패 시 문서를 열어 두고 재시도·Save·Close·Reload를 하지 않는다. 현재 모델 자동 Sync 없음.
+- 진단 기록: `%LOCALAPPDATA%/WallSplitter/Diagnostics/LinkedEdit-yyyyMMdd.log`, 작업 GUID/시각/단계만 기록한다. 모델 경로·이름·값은 제외, 기록 실패는 무시한다. `sync-start`와 `sync-completed` 구분. 네이티브 종료 후 finally의 실행을 가정하지 말 것.
+- unified-v105 221(기존213+사전검사8), release-v105 91, link-safety-v105 52 = 364 통과. 기존 72 링크 검사 중 폐기된 자동 로컬 경로는 제거하고 열린 문서/새 차단 정책으로 재구성했다. 5개 연도 빌드 오류0, 설치 DLL에서 금지 API 이름 부재 검사. **실제 Revit/중앙 서버 재현 검증은 미실시**. 사용자가 테스트 중앙의 로컬을 먼저 열어 진행해야 한다.
+
 ## 2026-10-14 v104 — 통합 목록의 모델/이름 정렬
 
 - UnifiedEditWindow 공통 검색 영역에 정렬 ComboBox. 기본 모델 기준: 현재 먼저→모델명→모델 키→패밀리→작업명. 이름 기준: 작업명(프로젝트 정보는 항목명 Family)→패밀리→현재 먼저→모델명. 마지막 Key로 동률을 결정하며 문화권 대소문자 무시 비교를 사용한다. 재료 지정은 재료명 아닌 대상 유형명을 기준으로 한다.

@@ -1,0 +1,15 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\bin\Debug\net8.0\LinkSafety.exe
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\bin\Debug\net8.0\LinkSafety.deps.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\bin\Debug\net8.0\LinkSafety.runtimeconfig.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\bin\Debug\net8.0\LinkSafety.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\bin\Debug\net8.0\LinkSafety.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.AssemblyInfo.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.sourcelink.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\refint\LinkSafety.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\LinkSafety.genruntimeconfig.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\link-safety-v105\obj\Debug\net8.0\ref\LinkSafety.dll

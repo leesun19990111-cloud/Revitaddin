@@ -27,6 +27,7 @@ namespace WallSplitter
                 var window = new ScheduleEditorWindow(data); new WindowInteropHelper(window) { Owner = app.MainWindowHandle };
                 if (window.ShowDialog() != true) return Result.Cancelled;
                 var batches = data.Pending.Values.GroupBy(r => r.Source.Key).OrderBy(g => g.First().Source.IsHost ? 1 : 0).ToList();
+                UnifiedEditService.Preflight(app, batches.Select(g => g.First().Source));
                 string summary = string.Join("\n", batches.Select(g => g.First().Source.Name + " · " + g.Count() + "개 매개변수\n" + g.First().Source.Path));
                 if (!LinkedModelEditService.Confirm("Schedule Editor", "미리보기의 변경을 실제 모델에 적용할까요?",
                     summary + "\n\n묶인 행은 조회 때 확인한 요소 모두를 수정합니다. 새로 추가된 요소로 범위를 넓히지 않습니다." +

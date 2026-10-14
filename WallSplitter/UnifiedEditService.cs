@@ -33,6 +33,7 @@ namespace WallSplitter
                 var batches = sources.Select(s => (Source: s, Rows: s.Rows.Where(r => r.Changed).ToList()))
                     .Where(b => b.Rows.Count > 0).OrderBy(b => b.Source.IsHost ? 1 : 0).ToList();
                 if (batches.Count == 0) return Result.Cancelled;
+                Preflight(app, batches.Select(b => b.Source));
                 string summary = string.Join("\n\n", batches.Select(b =>
                     b.Source.Name + " · " + b.Rows.Count + "개 변경" +
                     (materials ? " · 인스턴스 " + b.Rows.Where(r => r.IsInstance).SelectMany(r => r.OriginalMaterials.Keys).Distinct().Count() + "개" : "") +
@@ -42,7 +43,7 @@ namespace WallSplitter
                     summary + "\n\n링크는 원본 중앙모델에 동기화되어 다른 사용자·프로젝트에도 반영됩니다." +
                     "\n현재 모델은 마지막에 반영하며 자동 저장·중앙 동기화하지 않습니다." +
                     "\n이미 열린 링크 원본은 해당 문서를 재사용합니다. 그 문서의 기존 작업도 함께 동기화되므로 실행 직전에 별도로 확인합니다." +
-                    "\n링크 해제/복원은 실행 취소 기록을 지울 수 있습니다. 공유좌표는 저장하지 않습니다." +
+                    "\n링크 원본의 로컬은 같은 Revit에 미리 열어 두어야 합니다. 링크 해제·자동 재열기·재로드는 하지 않습니다." +
                     "\n항목 적용 실패는 이번 모델의 변경을 취소합니다. 동기화 실패 시에는 변경을 보존하고 나머지 모델을 중단합니다. 이미 동기화된 모델은 자동으로 되돌릴 수 없습니다." +
                     "\n서버 동기화 실패는 중앙 반영 여부가 불확실할 수 있으므로 자동 재시도하지 않습니다." +
                     (!materials && window.MergeMaterials ? "\n같은 이름의 재료는 모델 안에서 병합합니다." : "")))
@@ -101,6 +102,30 @@ namespace WallSplitter
                 TaskDialog.Show(title, "통합 편집을 완료하지 못했습니다.\n" + ex.GetBaseException().Message);
                 return retainChanges ? Result.Succeeded : Result.Cancelled;
             }
+        }
+
+        // 변경할 모든 모델의 준비 상태를 먼저 확인한다. 앞 모델만 바뀌는 사전조건 실패를 방지한다.
+        internal static void Preflight(UIApplication app, IEnumerable<UnifiedSource> sources)
+        {
+            Document host = app.ActiveUIDocument.Document;
+            if (!host.IsValidObject || host.IsReadOnly || host.IsModifiable || host.IsLinked || host.IsFamilyDocument)
+                throw new InvalidOperationException("현재 프로젝트를 편집할 수 없습니다. 이번 작업은 아무 모델에도 반영하지 않았습니다.");
+            var errors = new List<string>();
+            foreach (UnifiedSource source in sources.GroupBy(s => s.Key).Select(g => g.First()))
+            {
+                try
+                {
+                    if (!source.Editable) throw new InvalidOperationException(source.BlockReason);
+                    if (source.IsHost) continue;
+                    var link = host.GetElement(source.LinkUniqueId) as RevitLinkType
+                        ?? throw new InvalidOperationException("링크가 삭제되었습니다. 다시 조회해 주세요.");
+                    LinkedModelEditService.RequireOpenTarget(app, link, source.Path);
+                }
+                catch (Exception ex) { errors.Add(source.Name + " — " + ex.GetBaseException().Message); }
+            }
+            if (errors.Count > 0)
+                throw new InvalidOperationException("사전 검사에서 중단했습니다. 현재 모델을 포함해 아무 모델에도 이번 변경을 적용하지 않았습니다.\n\n" +
+                    string.Join("\n\n", errors));
         }
 
         internal static List<UnifiedSource> Collect(Document host, bool materials, UIApplication? app = null, bool readRows = true)
