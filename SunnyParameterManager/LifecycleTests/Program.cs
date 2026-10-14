@@ -13,7 +13,7 @@ internal static class Program
   State.Reset(); State.Doc.IsWorkshared = State.Info.IsWorkshared = shared; State.Info.CentralPath = shared ? _central : "";
   var path = central ? _central : _source;
   var original = new ParameterReader(State.Doc, new ModelSnapshot { Path = path }).ReadAll().Single();
-  return new Request { Path = path, CanonicalPath = ModelEngine.Canonical(path), Operation = "적용", Identity = State.Doc.CreationGUID.ToString("D") + "/" + (shared ? State.Doc.WorksharingCentralGUID.ToString("D") : "일반"), Confirmed = true, LocalChangesConfirmed = true, Edits = EditPlanner.Stage([original], "새값") };
+  return new Request { Path = path, CanonicalPath = ModelEngine.Canonical(path), Operation = "적용", Identity = "파일-v2/" + State.Doc.CreationGUID.ToString("D") + "/" + (shared ? "중앙:" + ModelEngine.Canonical(_central).ToUpperInvariant() : "일반"), Confirmed = true, LocalChangesConfirmed = true, Edits = EditPlanner.Stage([original], "새값") };
  }
  private static Response Run(Request r) => new ModelEngine(_root, _ => { }).Run(new App(), r);
  public static int Main()
@@ -26,6 +26,23 @@ internal static class Program
    File.WriteAllText(_source, "테스트 대역 원본"); File.WriteAllText(_central, "테스트 대역 중앙");
    var r = Setup(); r.Operation = "조회"; var result = Run(r);
    Check(result.Success && result.Snapshot!.Rows.Count == 1 && State.Events.SequenceEqual(new[] { "open", "close" }), "조회는 저장/트랜잭션 없이 닫기");
+   r = Setup(true, true); r.Operation = "조회"; result = Run(r);
+   Check(result.Success && result.Snapshot!.Kind == "중앙" && result.Snapshot.Rows.Count == 1 && State.Events.SequenceEqual(new[] { "create-local", "open", "close" }), "파일 기반 중앙 조회는 서버 전용 GUID 없이 읽고 저장하지 않기");
+   var centralIdentity = result.Snapshot!.Identity;
+   r.Id = Guid.NewGuid().ToString("N"); r.Operation = "적용"; r.Identity = centralIdentity; State.Events.Clear(); result = Run(r);
+   Check(result.Success && State.Events.Contains("create-local") && State.Events.Contains("sync"), "중앙 조회 후 새 작업 로컬에서도 같은 모델 식별");
+   r = Setup(true); r.Operation = "조회"; result = Run(r);
+   Check(result.Success && result.Snapshot!.Kind == "로컬" && State.Events.SequenceEqual(new[] { "open", "close" }), "기존 파일 기반 로컬 조회도 저장/동기화 없음");
+   r = Setup(true, true); State.Doc.CreationGUID = Guid.NewGuid(); result = Run(r);
+   Check(!result.Success && result.Message.Contains("다른 문서") && !State.Events.Contains("tx-start"), "같은 경로의 중앙모델 교체 시 편집 차단");
+   r = Setup(true, true); State.Doc.CentralPathOverride = _source; result = Run(r);
+   Check(!result.Success && result.Message.Contains("중앙모델과 연결") && !State.Events.Contains("tx-start"), "열린 로컬의 중앙 연결 변경 차단");
+   r = Setup(true); State.Info.CentralPath = _source; result = Run(r);
+   Check(!result.Success && result.Message.Contains("다른 문서") && !State.Events.Contains("tx-start"), "CreationGUID가 같아도 중앙 경로 변경 차단");
+   r = Setup(); r.Operation = "조회"; State.Doc.CreationGUID = Guid.Empty; result = Run(r);
+   Check(!result.Success && result.Message.Contains("식별자") && State.Events.SequenceEqual(new[] { "open", "close" }), "빈 모델 식별자를 성공한 조회로 사용하지 않기");
+   r = Setup(); r.Identity = State.Doc.CreationGUID.ToString("D") + "/일반"; result = Run(r);
+   Check(!result.Success && result.Message.Contains("다시 조회") && !State.Events.Contains("tx-start"), "이전 버전 조회 기록은 새로 조회한 뒤 적용");
    r = Setup(); result = Run(r);
    Check(result.Success && result.Applied == 1 && State.Doc.Element.Parameter.Value == "새값", "일반 파일 변경 성공");
    Check(State.Events.SequenceEqual(new[] { "open", "group-start", "tx-start", "set", "tx-commit", "assimilate", "save", "close" }), "일반 파일 단계 순서");

@@ -1,5 +1,13 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.2 — 2026-10-14 파일 기반 중앙 조회 수정
+
+- 매개변수 관리자의 서버 전용 GUID 오용을 제거하고 생성 식별자 + 정규 중앙 경로 검증으로 변경. 단계별 실패 안내 추가. UI 배치/룰셋/기존 Sunny Tools v109는 불변. 상세는 parameter-manager 문서.
+- out_v012 / SunnyParameterManager_Installer_v.0.1.2.zip, 설치 App-0.1.2-<timestamp>-<id>, Protocol.Release 0.1.2. 설치기 obj/bin ParameterManager012 격리. 같은 제품 v011 폴더/ZIP만 Old_Versions로 보존.
+- 112개 Core/룰셋/WPF + 33개 API 대역 회귀 검사. 파일 모델에서 GUID getter가 실제처럼 실패하게 하여 수정 전 재현/수정 후 통과를 확인한다. UseSharedCompilation=false 및 lifecycle obj/bin Release012 격리로 테스트 DLL 매핑 잠금 회피; 사용자 Revit/프로그램 강제 종료 없음.
+- 빌드→페이로드→ZIP 허용 파일의 SHA-256 검증. 실제 설치 실행/사용자 RVT 수정/중앙 동기화는 수행하지 않는다. 업데이트 후 구버전 작업 기록을 그대로 적용하지 말고 RVT를 다시 조회할 것.
+- 최종 검증: 112 + 33 = 145건 통과, Revit 2026 Bridge 경고/오류 0개, 프로그램 13파일 / ZIP 20파일 해시 일치. ZIP 29,771,593 bytes, SHA-256 `309FA2B315FFD1DF537A6A93A2375C26E778C2CCCE7A3BC89043EA24DD9A1A5D`. v011 폴더/ZIP은 Old_Versions로 이동 완료.
+
 ## 별도 제품 0.1.1 — 2026-10-14 쉬운 화면 / 룰셋 불러오기
 
 - 매개변수 관리자만 갱신. 파일 선택 후 자동 연결/조회, 간단한 시작 화면, 선언형 룰셋 불러오기 및 변경 검토를 추가. 실무 규칙은 아직 없고 연습용 룰셋만 동봉한다.

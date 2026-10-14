@@ -61,11 +61,16 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             using var options = new OpenOptions { DetachFromCentralOption = DetachFromCentralOption.DoNotDetach };
             if (info.IsWorkshared) options.SetOpenWorksetsConfiguration(new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets));
             doc = app.OpenDocumentFile(ModelPathUtils.ConvertUserVisiblePathToModelPath(openPath), options);
+            Step("모델 식별 및 중앙 연결 확인");
             if (doc.IsFamilyDocument || doc.IsLinked || doc.IsDetached || doc.IsReadOnly) throw new InvalidOperationException("일반 프로젝트 원본만 지원합니다. 패밀리·링크·분리·읽기 전용 문서는 처리하지 않습니다.");
             if (doc.IsWorkshared != info.IsWorkshared) throw new InvalidOperationException("파일의 작업공유 상태가 달라졌습니다.");
             if (doc.IsWorkshared && !string.Equals(Canonical(ModelPathUtils.ConvertModelPathToUserVisiblePath(doc.GetWorksharingCentralModelPath())), central, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("원래 중앙모델과 연결이 다릅니다.");
-            var identity = doc.CreationGUID.ToString("D") + "/" + (doc.IsWorkshared ? doc.WorksharingCentralGUID.ToString("D") : "일반");
+            // WorksharingCentralGUID는 Revit Server 전용이다. 파일 기반 중앙/로컬에 호출하면 예외가 난다.
+            // 작업마다 새로 만드는 로컬의 경로 대신, 생성 식별자와 위에서 검증한 실제 중앙 경로를 결합한다.
+            var creationId = doc.CreationGUID;
+            if (creationId == Guid.Empty) throw new InvalidOperationException("모델 생성 식별자를 확인할 수 없습니다. 조회를 중단합니다.");
+            var identity = "파일-v2/" + creationId.ToString("D") + "/" + (doc.IsWorkshared ? "중앙:" + central.ToUpperInvariant() : "일반");
             var metadata = new ModelSnapshot { Path = req.Path, CanonicalPath = source, Title = Path.GetFileNameWithoutExtension(source), CentralPath = central, Kind = isCentral ? "중앙" : doc.IsWorkshared ? "로컬" : "일반", Identity = identity };
             if (req.Operation == "조회")
             {
@@ -129,7 +134,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         }
         catch (Exception ex)
         {
-            result.Message = (result.Success ? result.Message + "\n후처리 안내: " : "") + ex.Message + (preserve ? "\n변경 또는 중앙 반영 여부를 확인해야 합니다. 작업용 Revit과 로컬을 보존합니다. 자동 재실행하지 마세요." : "");
+            result.Message = (result.Success ? result.Message + "\n후처리 안내: " : "") + (string.IsNullOrEmpty(result.Stage) ? "" : "[" + result.Stage + "] ") + ex.Message + (preserve ? "\n변경 또는 중앙 반영 여부를 확인해야 합니다. 작업용 Revit과 로컬을 보존합니다. 자동 재실행하지 마세요." : "");
             result.RequiresAttention = preserve;
             // 저장/동기화 성공 뒤 닫기만 실패한 경우 이미 성공한 변경을 실패로 거짓 보고하지 않는다.
             if (!preserve && doc != null)

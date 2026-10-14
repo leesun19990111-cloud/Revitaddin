@@ -44,11 +44,13 @@ namespace Autodesk.Revit.DB
  public sealed class Document
  {
   public bool IsFamilyDocument, IsLinked, IsDetached, IsReadOnly, IsWorkshared;
-  public Guid CreationGUID { get; } = Guid.NewGuid();
-  public Guid WorksharingCentralGUID { get; } = Guid.NewGuid();
+  public Guid CreationGUID { get; set; } = Guid.NewGuid();
+  // 파일 기반 모델에서는 실제 Revit처럼 실패해야 서버 전용 API 오용을 잡을 수 있다.
+  public Guid WorksharingCentralGUID => throw new InvalidOperationException("The current document is a file-based model.");
+  public string? CentralPathOverride;
   public Element Element { get; } = new();
   public bool Missing;
-  public ModelPath GetWorksharingCentralModelPath() => new(State.Info.CentralPath);
+  public ModelPath GetWorksharingCentralModelPath() => new(CentralPathOverride ?? State.Info.CentralPath);
   public Element? GetElement(string id) => Missing ? null : Element;
   public object GetUnits() => new();
   public void Save() { State.Events.Add("save"); if (State.FailSave) throw new IOException("테스트 저장 실패"); }

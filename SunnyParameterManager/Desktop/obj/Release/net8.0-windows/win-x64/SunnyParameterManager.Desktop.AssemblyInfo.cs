@@ -12,11 +12,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("SunnyParameterManager")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.1+ce3c45e86584cee60a927804b6ce32340613d26d")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.2+39e523b3a55ffd004b2aa71695a20f95124c0bd7")]
 [assembly: System.Reflection.AssemblyProductAttribute("SunnyParameterManager")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SunnyParameterManager")]
-[assembly: System.Reflection.AssemblyVersionAttribute("0.1.1.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("0.1.2.0")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows7.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows7.0")]
 
