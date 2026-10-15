@@ -122,7 +122,7 @@ internal static class KacRuleTests
         var expectedRow = JsonSerializer.Deserialize<ParameterRow>(JsonSerializer.Serialize(actualRow))!;
         actualRow.TypeOwnerId = "동명 교체 유형";
         reject(() => EditPlanner.CheckFresh(expectedRow, actualRow), "조회 후 동명 유형 교체도 실제 ID로 차단");
-        file = File(); file.Kac!.InstanceFields = ["제작정보"];
+        file = File(); file.Kac!.InstanceFields = ["임의 항목"];
         reject(() => Plan(Mixed(), file), "승인하지 않은 인스턴스 항목 범위 거부");
         file = File(); file.Kac!.InstanceFields = ["재료명", "재료명"];
         reject(() => Plan(Mixed(), file), "인스턴스 항목 중복 거부");
@@ -167,6 +167,60 @@ internal static class KacRuleTests
         file = File(); file.Kac!.UnresolvedMaterialValue = "임의";
         reject(() => Plan(Rows(), file), "임의 미확인 대체값 거부");
         check(RulePlanner.Parse(JsonSerializer.Serialize(ndFile)).Kac!.UnresolvedMaterialValue == "ND", "새 ND 룰셋 파싱");
+        var allFieldsFile = File();
+        allFieldsFile.Kac!.InstanceFields = ["다음으로 IFC로 내보내기", "제작정보", "KBIMS-부위코드", "조달청표준공사코드", "재료명", "업체명"];
+        List<ParameterRow> AllScopes(bool typeFields)
+        {
+            var result = Rows(); result.ForEach(r => r.TypeOwnerId = r.OwnerId);
+            if (!typeFields) result.RemoveAll(r => r.Name != "다음으로 IFC로 내보내기");
+            foreach (var id in new[] { "instance-1", "instance-2" })
+            {
+                var batch = Rows();
+                foreach (var r in batch)
+                {
+                    r.Scope = "인스턴스"; r.OwnerId = r.ElementId = id; r.TypeOwnerId = "owner"; r.OuterMaterial = null;
+                    if (r.Name == "다음으로 IFC로 내보내기") r.ParameterKey = KacRulePlanner.IfcInstanceKey;
+                }
+                result.AddRange(batch);
+            }
+            return result;
+        }
+        check(RulePlanner.Parse(JsonSerializer.Serialize(allFieldsFile)).Kac!.InstanceFields.Count == 6, "6항목 인스턴스 명시 허용");
+        rows = AllScopes(false); plan = Plan(rows, allFieldsFile);
+        check(plan.Edits.Count == 13, "유형에 없는 업무 필드도 실제 인스턴스에서 입력");
+        foreach (var (name, value) in new[] { ("제작정보", "KAC-v1.0"), ("KBIMS-부위코드", "E22"), ("조달청표준공사코드", "AEA110") })
+        {
+            check(plan.Edits.Count(e => e.Field == name && e.Value == value && e.Original.Scope == "인스턴스") == 2, name + " 같은 유형 모든 요소 적용");
+            check(plan.Notes.Any(n => n.Contains(name + ": 변경 예정 2개")), name + " 인스턴스 요약");
+        }
+        check(Plan(AllScopes(true), allFieldsFile).Edits.Count == 18, "유형과 인스턴스 양쪽에 있으면 각 실제 필드 편집");
+        rows = AllScopes(true); rows.RemoveAll(r => r.Scope == "인스턴스" && r.Name is "KBIMS-부위코드" or "조달청표준공사코드");
+        plan = Plan(rows, allFieldsFile);
+        check(plan.Edits.Count(e => e.Field is "KBIMS-부위코드" or "조달청표준공사코드") == 2 &&
+            !plan.Notes.Any(n => n.Contains("/ 인스턴스") && (n.Contains("/ KBIMS-부위코드:") || n.Contains("/ 조달청표준공사코드:"))), "유형 전용 코드의 인스턴스 누락 오안내 방지");
+        rows = AllScopes(false); rows.RemoveAll(r => r.Name == "KBIMS-부위코드");
+        check(Plan(rows, allFieldsFile).Notes.Any(n => n.Contains("/ KBIMS-부위코드: 확인 필요") && n.Contains("매개변수 0개")), "양쪽 모두 없는 필드는 조용히 생략하지 않기");
+        check(Plan(AllScopes(false), ndFile).Edits.All(e => e.Field is not ("제작정보" or "KBIMS-부위코드" or "조달청표준공사코드")), "기존 3항목 룰셋의 인스턴스 범위 보존");
+        rows = AllScopes(false); rows.Single(r => r.OwnerId == "instance-1" && r.Name == "KBIMS-부위코드").BlockReason = "수식";
+        check(Plan(rows, allFieldsFile).Edits.Count(e => e.Field == "KBIMS-부위코드") == 1, "인스턴스 KBIMS 읽기전용은 우회하지 않기");
+        rows = AllScopes(false); var secondCode = JsonSerializer.Deserialize<ParameterRow>(JsonSerializer.Serialize(rows.First(r => r.Name == "KBIMS-부위코드")))!;
+        secondCode.ParameterKey = "guid:other"; rows.Add(secondCode);
+        check(Plan(rows, allFieldsFile).Edits.Count(e => e.Field == "KBIMS-부위코드") == 1, "인스턴스 동명 KBIMS 후보 중 임의 선택 금지");
+        rows = AllScopes(false); rows.Where(r => r.Name == "조달청표준공사코드").ToList().ForEach(r => r.DataType = "autodesk.spec.aec:number-2.0.0");
+        check(Plan(rows, allFieldsFile).Edits.All(e => e.Field != "조달청표준공사코드"), "인스턴스 조달청 자료형 불일치 유지");
+        rows = AllScopes(false); rows.Where(r => r.Scope == "인스턴스").ToList().ForEach(r => r.TypeOwnerId = "다른 유형");
+        check(Plan(rows, allFieldsFile).Edits.Count == 1, "6항목도 실제 소속 유형 불일치 시 차단");
+        rows = AllScopes(false); rows.ForEach(r => r.TypeName = "KAC-A-CL9999_미등록");
+        check(Plan(rows, allFieldsFile).Edits.All(e => e.Field is not ("KBIMS-부위코드" or "조달청표준공사코드")), "인스턴스라도 미등록 분류코드는 추정 금지");
+        var blankMapping = File(); blankMapping.Kac!.InstanceFields = [.. allFieldsFile.Kac.InstanceFields];
+        blankMapping.Kac.Classification[0].Kbims = blankMapping.Kac.Classification[0].Procurement = "";
+        check(Plan(AllScopes(false), blankMapping).Edits.All(e => e.Field is not ("KBIMS-부위코드" or "조달청표준공사코드")), "빈 분류코드는 인스턴스 기존값도 지우지 않기");
+        rows = AllScopes(false); rows.Where(r => r.Name == "KBIMS-부위코드").ToList().ForEach(r => r.Raw = r.Display = "E22");
+        check(Plan(rows, allFieldsFile).Edits.All(e => e.Field != "KBIMS-부위코드"), "인스턴스 KBIMS 동일값 제외");
+        rows = AllScopes(false); var pendingCode = EditPlanner.Stage([rows.First(r => r.Name == "조달청표준공사코드")], "수동 코드");
+        reject(() => RulePlanner.Plan(allFieldsFile, rows, pendingCode, false), "인스턴스 조달청 수동 변경 충돌 보류");
+        rows = AllScopes(false); rows.Where(r => r.Scope == "인스턴스").ToList().ForEach(r => r.Scope = "프로젝트 정보");
+        check(Plan(rows, allFieldsFile).Edits.Count == 1, "6항목도 프로젝트 정보로 확장 금지");
         // 사용자 원본은 저장소/배포에 넣지 않는다. 환경변수로 지정했을 때만 생성한 실제 룰셋도 평가한다.
         var actualFile = Environment.GetEnvironmentVariable("SUNNY_KAC_RULE_TEST_FILE");
         if (!string.IsNullOrWhiteSpace(actualFile))

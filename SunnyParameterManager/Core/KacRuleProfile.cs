@@ -55,7 +55,7 @@ public static class KacRulePlanner
             p.Classification == null || p.Classification.Count is < 1 or > 5000 || p.Ifc == null || p.Ifc.Count is < 1 or > 200 ||
             p.UnresolvedMaterialValue is not ("" or "ND") ||
             p.InstanceFields == null || p.InstanceFields.Distinct().Count() != p.InstanceFields.Count ||
-            p.InstanceFields.Any(n => n is not ("재료명" or "업체명" or "다음으로 IFC로 내보내기")))
+            p.InstanceFields.Any(n => !Fields.Contains(n)))
             throw new InvalidOperationException("버전2 KAC 룰셋의 유형 범위·재료/미확인 정책·고정값·매핑표를 확인하세요. 일반 규칙과 혼합할 수 없습니다.");
         var codes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in p.Classification)
@@ -101,7 +101,13 @@ public static class KacRulePlanner
         var notes = new List<string>();
         var all = available.ToList();
         var types = all.Where(r => r.Scope == "유형").GroupBy(r => (r.ModelPath.ToUpperInvariant(), r.OwnerId))
-            .ToDictionary(g => g.Key, g => g.First());
+            .ToDictionary(g => g.Key, g => g.ToList());
+        // 실제 소속 유형이 일치하는 배치 요소의 필드만 반대 범위의 존재 근거로 쓴다.
+        var instanceNames = all.Where(r => r.Scope == "인스턴스" && !string.IsNullOrEmpty(r.TypeOwnerId) &&
+                types.TryGetValue((r.ModelPath.ToUpperInvariant(), r.TypeOwnerId), out var t) &&
+                t[0].TypeName == r.TypeName && t[0].Family == r.Family && t[0].CategoryKey == r.CategoryKey)
+            .GroupBy(r => (r.ModelPath.ToUpperInvariant(), r.TypeOwnerId))
+            .ToDictionary(g => g.Key, g => g.Select(r => r.Name).ToHashSet(StringComparer.Ordinal));
         var changed = Fields.ToDictionary(n => n, _ => 0);
         var same = Fields.ToDictionary(n => n, _ => 0);
         var skipped = Fields.ToDictionary(n => n, _ => 0);
@@ -114,17 +120,20 @@ public static class KacRulePlanner
             var code = TypeCode(first.TypeName);
             if (code.Length == 0) { outside++; continue; }
             var source = first;
+            var sourceRows = rows;
             var label = $"{first.ModelTitle} / {first.TypeName} / {first.Scope} {first.ElementId}";
             if (instance)
             {
                 if (string.IsNullOrEmpty(first.TypeOwnerId) || rows.Any(r => r.TypeOwnerId != first.TypeOwnerId) ||
-                    !types.TryGetValue((first.ModelPath.ToUpperInvariant(), first.TypeOwnerId), out source) ||
-                    source.TypeName != first.TypeName || source.Family != first.Family || source.CategoryKey != first.CategoryKey)
+                    !types.TryGetValue((first.ModelPath.ToUpperInvariant(), first.TypeOwnerId), out var linkedRows) ||
+                    linkedRows[0].TypeName != first.TypeName || linkedRows[0].Family != first.Family || linkedRows[0].CategoryKey != first.CategoryKey)
                 {
                     notes.Add($"{label}: 실제 소속 유형 식별 정보 없음/불일치 — 모델 다시 조회 필요. 이름만으로 연결하지 않습니다");
                     foreach (var name in profile.InstanceFields) skipped[name]++;
                     continue;
                 }
+                sourceRows = linkedRows;
+                source = linkedRows[0];
                 instances++;
             }
             else plan.MatchedOwners++;
@@ -132,8 +141,11 @@ public static class KacRulePlanner
             {
                 if (instance && !profile.InstanceFields.Contains(name)) return;
                 void Skip(string why) { skipped[name]++; notes.Add($"{label} / {name}: 확인 필요 — {why}. 기존값 유지"); }
-                // 이 항목이 인스턴스에만 바인딩된 유형에는 존재하지 않는 유형 필드를 요구하지 않는다.
-                if (!instance && profile.InstanceFields.Contains(name) && name != Fields[0] && rows.All(r => r.Name != name)) return;
+                // 한 범위에만 있는 필드를 반대 범위의 누락으로 중복 보고하지 않는다.
+                // 양쪽 모두 없거나 실제 필드가 모호/읽기전용이면 아래에서 사유를 표시한다.
+                if (name != Fields[0] && profile.InstanceFields.Contains(name) && rows.All(r => r.Name != name) &&
+                    (instance ? sourceRows.Any(r => r.Name == name) :
+                        instanceNames.TryGetValue((first.ModelPath.ToUpperInvariant(), first.OwnerId), out var names) && names.Contains(name))) return;
                 if (string.IsNullOrWhiteSpace(value)) { Skip(basis); return; }
                 // 이름이 같은 다른 저장형식도 모호한 대상으로 취급한다. 임의 첫 매개변수 선택 금지.
                 var candidates = name == Fields[0]

@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.7 — 2026-10-15 6항목 유형·인스턴스 지원
+
+- KAC InstanceFields에 KBIMS-부위코드·조달청표준공사코드·제작정보도 허용. 반대 범위 필드 존재 시 누락 중복 안내 방지, 기존 룰셋 범위·분류표·재료 ND·저장 안전 경로 유지. 개인 업무 룰셋은 별도 전달하며 ZIP/저장소에 포함하지 않는다.
+- out_v017 / SunnyParameterManager_Installer_v.0.1.7.zip / App-0.1.7 / Protocol.Release 0.1.7. Tests017/Release017/Material017/Publish017/Bridge017 및 installer ParameterManager017 격리. 같은 제품 v016만 보존한다. 실제 설치/사용자 RVT 쓰기·새 버전 중앙 동기화는 미검증.
+- Core/룰셋/WPF 231 + 실제 업무 룰셋 3 + lifecycle 41 + 재료 리더 22 = 297건 통과. Bridge 경고/오류 0. 프로그램 13파일/ZIP 20파일 해시 일치. ZIP 29,799,060 bytes, SHA-256 `6502C8433659A399E8977186B9EE33A6F772C51E9FC0539A38462BAA241015AD`. v016 폴더/ZIP은 Old_Versions로 원본 보존.
+
 ## 별도 제품 0.1.6 — 2026-10-15 재료 미확인 ND 룰셋
 
 - 기존 KAC 대상의 미확인 재료명에만 ND를 지정하는 opt-in 정책, 정상 조회와 API 실패 구분, 저장 전/확정 후 ND 판정 재검증. 업무 룰셋은 별도 전달하며 설치 ZIP에 개인 데이터를 넣지 않는다.
