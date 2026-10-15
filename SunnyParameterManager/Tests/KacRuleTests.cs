@@ -126,6 +126,47 @@ internal static class KacRuleTests
         reject(() => Plan(Mixed(), file), "승인하지 않은 인스턴스 항목 범위 거부");
         file = File(); file.Kac!.InstanceFields = ["재료명", "재료명"];
         reject(() => Plan(Mixed(), file), "인스턴스 항목 중복 거부");
+        var ndFile = File(); ndFile.Kac!.InstanceFields = ["재료명", "업체명", "다음으로 IFC로 내보내기"];
+        ndFile.Kac.UnresolvedMaterialValue = "ND";
+        MaterialEvidence Missing() => new() { FallbackAllowed = true, Reason = "유형에 지정된 재료 없음" };
+        rows = Rows(); rows.ForEach(r => r.OuterMaterial = Missing());
+        plan = Plan(rows, ndFile); var ndEdit = plan.Edits.Single(e => e.Field == "재료명");
+        check(ndEdit.Value == "ND" && ndEdit.MaterialSource?.FallbackAllowed == true, "미확인 유형 재료명 ND와 재검증 근거");
+        check(ndEdit.Reason.Contains("재료 미확인 → ND"), "ND 입력 근거와 사유 표시");
+        check(plan.Notes.Any(n => n.Contains("ND 변경 예정 1개")), "ND 별도 요약 개수");
+        check(Plan(rows).Edits.All(e => e.Field != "재료명"), "기존 룰셋은 미확인 재료명 유지");
+        check(Plan(Rows(), ndFile).Edits.Single(e => e.Field == "재료명").Value == "철근콘크리트", "확인한 재료를 ND로 바꾸지 않기");
+        rows = Mixed(); rows.Where(r => r.Scope == "유형").ToList().ForEach(r => r.OuterMaterial = Missing());
+        check(Plan(rows, ndFile).Edits.Count(e => e.Field == "재료명" && e.Value == "ND") == 2, "미확인 유형의 모든 배치 요소에 ND");
+        rows.ForEach(r => r.TypeName = "일반 유형");
+        check(Plan(rows, ndFile).Edits.Count == 0, "ND도 기존 KAC 범위 밖으로 확장 금지");
+        rows = Rows(); rows.ForEach(r => r.Scope = "프로젝트 정보");
+        check(Plan(rows, ndFile).Edits.Count == 0, "ND 프로젝트 정보 제외");
+        rows = Rows(); rows.ForEach(r => r.OuterMaterial = null);
+        check(Plan(rows, ndFile).Edits.All(e => e.Field != "재료명"), "조회 누락은 재료 없음으로 취급하지 않기");
+        rows.ForEach(r => r.OuterMaterial = new() { Reason = "재료 조회 실패" });
+        check(Plan(rows, ndFile).Edits.All(e => e.Field != "재료명"), "재료 API 조회 실패는 ND로 덮어쓰지 않기");
+        rows.ForEach(r => r.OuterMaterial = Missing()); rows[4].BlockReason = "수식";
+        check(Plan(rows, ndFile).Edits.All(e => e.Field != "재료명"), "ND 실제 읽기전용 유지");
+        rows[4].BlockReason = ""; rows[4].Raw = rows[4].Display = "ND";
+        check(Plan(rows, ndFile).Edits.All(e => e.Field != "재료명"), "이미 ND는 재입력 제외");
+        rows[4].Raw = rows[4].Display = "기존 수동명";
+        check(Plan(rows, ndFile).Edits.Single(e => e.Field == "재료명").Before == "기존 수동명", "ND 덮어쓰기의 기존값 표시");
+        reject(() => RulePlanner.Plan(ndFile, rows, EditPlanner.Stage([rows[4]], "다른 예정값"), false), "ND와 수동 변경 충돌 보류");
+        rows.Add(new() { ModelPath = "A", OwnerId = "owner", Scope = "유형", TypeName = rows[0].TypeName, Name = "재료명", ParameterKey = "id:duplicate" });
+        check(Plan(rows, ndFile).Edits.All(e => e.Field != "재료명"), "ND 동명 다중 후보 차단");
+        KacRulePlanner.CheckMaterial(ndEdit, Missing()); check(true, "ND 미확인 상태 재검증 성공");
+        reject(() => KacRulePlanner.CheckMaterial(ndEdit, new() { Name = "KAC-새 재료", Fingerprint = "new" }), "ND 계획 뒤 실제 재료 발견 시 차단");
+        reject(() => KacRulePlanner.CheckMaterial(ndEdit, new() { Reason = "재료 조회 실패" }), "ND 재검증 중 API 실패 차단");
+        reject(() => KacRulePlanner.CheckMaterial(ndEdit, null), "ND 재검증 정보 상실 차단");
+        reject(() => KacRulePlanner.CheckMaterial(ndEdit, new() { FallbackAllowed = true, Reason = "다른 미확인 상태" }), "ND 미확인 사유 변경 차단");
+        var ndRoundTrip = JsonSerializer.Deserialize<ValueEdit>(JsonSerializer.Serialize(ndEdit))!;
+        check(ndRoundTrip.MaterialSource!.FallbackAllowed, "ND 근거 작업 저장 왕복");
+        ndRoundTrip.Value = "다른값";
+        reject(() => KacRulePlanner.CheckMaterial(ndRoundTrip, Missing()), "미확인 근거로 ND 이외 값 쓰기 금지");
+        file = File(); file.Kac!.UnresolvedMaterialValue = "임의";
+        reject(() => Plan(Rows(), file), "임의 미확인 대체값 거부");
+        check(RulePlanner.Parse(JsonSerializer.Serialize(ndFile)).Kac!.UnresolvedMaterialValue == "ND", "새 ND 룰셋 파싱");
         // 사용자 원본은 저장소/배포에 넣지 않는다. 환경변수로 지정했을 때만 생성한 실제 룰셋도 평가한다.
         var actualFile = Environment.GetEnvironmentVariable("SUNNY_KAC_RULE_TEST_FILE");
         if (!string.IsNullOrWhiteSpace(actualFile))
@@ -133,6 +174,11 @@ internal static class KacRuleTests
             var actual = RulePlanner.Parse(System.IO.File.ReadAllText(actualFile));
             check(Plan(Rows(), actual).Edits.Count == 6, "실제 생성한 룰셋 불러오기와 6항목 적용 계획");
             check(Plan(Rows("KAC-A-WA7140_벽"), actual).Edits.Single(e => e.Field == "조달청표준공사코드").Value == "ANC362", "실제 표 중복 코드 첫 값");
+            if (actual.Kac!.UnresolvedMaterialValue == "ND")
+            {
+                var realRows = Mixed(); realRows.Where(r => r.Scope == "유형").ToList().ForEach(r => r.OuterMaterial = Missing());
+                check(Plan(realRows, actual).Edits.Count(e => e.Field == "재료명" && e.Value == "ND") == 2, "전달할 실제 룰셋의 인스턴스 ND 적용");
+            }
             var snapshotPath = Environment.GetEnvironmentVariable("SUNNY_KAC_SNAPSHOT_FILE");
             if (!string.IsNullOrWhiteSpace(snapshotPath))
             {

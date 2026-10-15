@@ -97,6 +97,12 @@ internal static class Program
    Check(!result.Success && !State.Events.Contains("tx-start"), "조회 뒤 이름이 같아도 소속 유형 ID 변경은 편집 전 차단");
    r = Setup(); State.TypeChangesAfterSet = true; result = Run(r);
    Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "트랜잭션 확정 중 소속 유형 변경은 묶음 롤백");
+   r = Setup(); r.Edits[0].Value = "ND"; r.Edits[0].MaterialSource = new() { FallbackAllowed = true, Reason = "유형 재료 없음" }; State.MaterialMissing = true; result = Run(r);
+   Check(result.Success && State.Doc.Element.Parameter.Value == "ND", "미확인 재료 ND 적용과 전후 재검증 성공");
+   r = Setup(); r.Edits[0].Value = "ND"; r.Edits[0].MaterialSource = new() { FallbackAllowed = true, Reason = "유형 재료 없음" }; result = Run(r);
+   Check(!result.Success && !State.Events.Contains("tx-start"), "ND 계획 후 재료 지정 시 쓰기 전 차단");
+   r = Setup(); r.Edits[0].Value = "ND"; r.Edits[0].MaterialSource = new() { FallbackAllowed = true, Reason = "유형 재료 없음" }; State.MaterialMissing = State.MaterialChangesAfterSet = true; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save") && State.Doc.Element.Parameter.Value == "기존", "ND 확정 중 재료 발견 시 묶음 롤백");
    Console.WriteLine($"TOTAL {_count} PASS · API 대역 제어 흐름 검사이며 실제 Revit 검증 아님");
    Console.WriteLine("테스트 기록: " + _root); return 0;
   }

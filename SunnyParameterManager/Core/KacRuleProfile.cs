@@ -15,6 +15,8 @@ public sealed class KacRuleProfile
     public List<string> Sources { get; set; } = [];
     // 명시한 항목만 실제 소속 유형 기준으로 배치 요소에도 입력한다. 기본은 기존 유형 전용.
     public List<string> InstanceFields { get; set; } = [];
+    // 빈 값은 기존 유지 정책. ND는 기존 KAC 대상의 재료 미확인에만 적용한다.
+    public string UnresolvedMaterialValue { get; set; } = "";
 }
 public sealed class KacClassification
 {
@@ -51,6 +53,7 @@ public static class KacRulePlanner
             p.MaterialPolicy != "외측-상단-천장하단-단일재료" || p.UnresolvedPolicy != "기존값유지-확인필요" ||
             string.IsNullOrWhiteSpace(p.ManufacturerInfo) || string.IsNullOrWhiteSpace(p.Company) || p.Sources == null ||
             p.Classification == null || p.Classification.Count is < 1 or > 5000 || p.Ifc == null || p.Ifc.Count is < 1 or > 200 ||
+            p.UnresolvedMaterialValue is not ("" or "ND") ||
             p.InstanceFields == null || p.InstanceFields.Distinct().Count() != p.InstanceFields.Count ||
             p.InstanceFields.Any(n => n is not ("재료명" or "업체명" or "다음으로 IFC로 내보내기")))
             throw new InvalidOperationException("버전2 KAC 룰셋의 유형 범위·재료/미확인 정책·고정값·매핑표를 확인하세요. 일반 규칙과 혼합할 수 없습니다.");
@@ -68,10 +71,20 @@ public static class KacRulePlanner
 
     public static string MaterialName(MaterialEvidence evidence) => evidence.Name.StartsWith("KAC-", StringComparison.Ordinal) ? evidence.Name[4..] : evidence.Name;
 
+    public static bool CanUseMaterialFallback(MaterialEvidence? evidence) => evidence is
+        { FallbackAllowed: true, Reason.Length: > 0, Name.Length: 0, Fingerprint.Length: 0 };
+
     public static void CheckMaterial(ValueEdit edit, MaterialEvidence? actual)
     {
         var expected = edit.MaterialSource;
         if (expected == null) return;
+        if (expected.FallbackAllowed)
+        {
+            if (edit.Mode != "입력" || edit.Field != "재료명" || edit.Value != "ND" ||
+                !CanUseMaterialFallback(expected) || !CanUseMaterialFallback(actual) || expected.Reason != actual!.Reason)
+                throw new InvalidOperationException(edit.Type + ": 조회 후 재료 미확인 상태가 달라졌습니다. ND로 덮어쓰지 않고 중단합니다. 다시 조회하세요.");
+            return;
+        }
         if (edit.Mode != "입력" || expected.Fingerprint.Length == 0 || actual == null || actual.Reason.Length > 0 ||
             expected.Fingerprint != actual.Fingerprint || expected.Name != actual.Name || expected.Basis != actual.Basis ||
             MaterialName(actual) != edit.Value)
@@ -92,7 +105,7 @@ public static class KacRulePlanner
         var changed = Fields.ToDictionary(n => n, _ => 0);
         var same = Fields.ToDictionary(n => n, _ => 0);
         var skipped = Fields.ToDictionary(n => n, _ => 0);
-        int identical = 0, outside = 0, instances = 0;
+        int identical = 0, outside = 0, instances = 0, materialFallbacks = 0;
         foreach (var owner in all.Where(r => r.Scope == "유형" || r.Scope == "인스턴스" && profile.InstanceFields.Count > 0)
                      .GroupBy(r => (r.ModelPath.ToUpperInvariant(), r.OwnerId)))
         {
@@ -144,6 +157,7 @@ public static class KacRulePlanner
                     edit.Reason = $"룰셋: {file.Name} / {code} / {basis}";
                     plan.Edits.Add(edit);
                     changed[name]++;
+                    if (material?.FallbackAllowed == true) materialFallbacks++;
                 }
             }
             var ifc = ifcs.FirstOrDefault(x => code.StartsWith(x.Prefix, StringComparison.Ordinal));
@@ -154,12 +168,15 @@ public static class KacRulePlanner
             Assign("조달청표준공사코드", classification?.Procurement, classification?.ProcurementSource is { Length: > 0 } ps ? ps : "해당 코드의 조달청 값 없음");
             var material = source.OuterMaterial;
             var materialOk = material != null && material.Reason.Length == 0 && material.Fingerprint.Length > 0;
-            Assign("재료명", materialOk ? MaterialName(material!) : null,
-                materialOk ? material!.Basis + " / " + material.Name : material?.Reason is { Length: > 0 } mr ? mr : "외측 재료 정보 없음 — 모델 다시 조회 필요", materialOk ? material : null);
+            var fallback = profile.UnresolvedMaterialValue == "ND" && CanUseMaterialFallback(material);
+            Assign("재료명", materialOk ? MaterialName(material!) : fallback ? "ND" : null,
+                materialOk ? material!.Basis + " / " + material.Name : fallback ? "재료 미확인 → ND / " + material!.Reason : material?.Reason is { Length: > 0 } mr ? mr : "외측 재료 정보 없음 — 모델 다시 조회 필요",
+                materialOk || fallback ? material : null);
             Assign("업체명", profile.Company, "고정값");
         }
         plan.Notes.Add($"KAC-A-/KAC-S- 유형 {plan.MatchedOwners:N0}개 · 배치 요소 {instances:N0}개 · 변경 {plan.Edits.Count:N0}개 · 동일값 {identical:N0}개 · 확인 필요 {notes.Count:N0}개 · 코드 형식 제외 {outside:N0}개");
         foreach (var name in Fields) plan.Notes.Add($"{name}: 변경 예정 {changed[name]:N0}개 · 이미 동일 {same[name]:N0}개 · 확인 필요 {skipped[name]:N0}개");
+        if (profile.UnresolvedMaterialValue == "ND") plan.Notes.Add($"재료 미확인 → ND 변경 예정 {materialFallbacks:N0}개. 기존 KAC 대상만 적용하며, 재료 조회 실패·정보 누락·실제 읽기전용은 제외합니다.");
         plan.Notes.Add(profile.InstanceFields.Count == 0 ? "유형 매개변수만 변경합니다." : "배치 요소 추가 대상: " + string.Join(", ", profile.InstanceFields) + ". 실제 유형 식별자로 연결합니다.");
         plan.Notes.Add("프로젝트 정보·실제 재료/층 구성·매개변수 바인딩·IFC 내보내기 여부/미리 정의된 유형은 변경하지 않습니다. 확인 필요 항목은 기존값을 유지합니다.");
         plan.Notes.AddRange(notes);

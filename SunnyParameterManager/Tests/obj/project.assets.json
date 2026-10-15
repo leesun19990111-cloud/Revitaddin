@@ -2,7 +2,7 @@
   "version": 4,
   "targets": {
     "net8.0-windows": {
-      "SunnyParameterManager/0.1.5": {
+      "SunnyParameterManager/0.1.6": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
@@ -31,7 +31,7 @@
     }
   },
   "libraries": {
-    "SunnyParameterManager/0.1.5": {
+    "SunnyParameterManager/0.1.6": {
       "type": "project",
       "path": "../Desktop/SunnyParameterManager.Desktop.csproj",
       "msbuildProject": "../Desktop/SunnyParameterManager.Desktop.csproj"
@@ -44,7 +44,7 @@
   },
   "projectFileDependencyGroups": {
     "net8.0-windows": [
-      "SunnyParameterManager >= 0.1.5",
+      "SunnyParameterManager >= 0.1.6",
       "SunnyParameterManager.Core >= 1.0.0"
     ]
   },

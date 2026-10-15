@@ -40,6 +40,12 @@ Check(OuterMaterialReader.Read(doc, family).Reason.Contains("없음"), "재료 �
 Check(OuterMaterialReader.Read(doc, new Element()).Reason.Contains("유형"), "인스턴스 재료 추정 차단");
 family.FailRead = true;
 Check(OuterMaterialReader.Read(doc, family).Reason.Contains("실패"), "재료 읽기 실패는 보류 이유 제공");
+Check(!OuterMaterialReader.Read(doc, family).FallbackAllowed, "조회 예외에는 ND 대체 허용 금지");
+family.FailRead = false;
+Check(KacRulePlanner.CanUseMaterialFallback(OuterMaterialReader.Read(doc, family)), "재료 없는 정상 조회는 ND 대체 가능");
+family.Parameters = [new(1), new(2)];
+Check(KacRulePlanner.CanUseMaterialFallback(OuterMaterialReader.Read(doc, family)), "외측 판별 불가 정상 조회는 ND 대체 가능");
+Check(!OuterMaterialReader.Read(doc, new Element()).FallbackAllowed, "유형 아닌 잘못된 조회는 ND 대체 금지");
 Console.WriteLine($"TOTAL {count} PASS · 실제 리더 코드의 API 대역 검사이며 Revit 실파일 검증 아님");
 
 namespace Autodesk.Revit.DB

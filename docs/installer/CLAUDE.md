@@ -1,5 +1,12 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.6 — 2026-10-15 재료 미확인 ND 룰셋
+
+- 기존 KAC 대상의 미확인 재료명에만 ND를 지정하는 opt-in 정책, 정상 조회와 API 실패 구분, 저장 전/확정 후 ND 판정 재검증. 업무 룰셋은 별도 전달하며 설치 ZIP에 개인 데이터를 넣지 않는다.
+- out_v016 / SunnyParameterManager_Installer_v.0.1.6.zip / App-0.1.6 / Protocol.Release 0.1.6. Tests016/Release016/Material016/Publish016/Bridge016 및 installer ParameterManager016 격리. 같은 제품 v015만 아카이브한다.
+- Core/룰셋/WPF 210 + lifecycle 41 + 재료 리더 22. 실제 설치/사용자 RVT 쓰기·중앙 동기화 미검증.
+- 실제 전달 룰셋 추가 3건 포함 총 276건 통과. Bridge 오류/경고 0. 13개 프로그램 파일/ZIP 20파일 해시 일치. ZIP 29,797,720 bytes, SHA-256 `F687E3553CA856E2A63E31EA669FF6DD035F8223E56F38F13D47355BBDC8A1C1`. v015 폴더/ZIP 아카이브 및 원본 ZIP 해시 유지 확인.
+
 ## 별도 제품 0.1.5 — 2026-10-15 IFC·재료명 누락 수정
 
 - 실제 유형 IFC 기본 식별자 연결, 승인된 인스턴스 재료명/업체명/IFC 적용과 실제 유형 ID 재검증, 균질 벽의 외측 재료 판독, 항목별 누락 요약. 기존 업무 룰셋은 보존하고 InstanceFields를 명시한 새 파일을 별도 전달한다.

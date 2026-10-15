@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.1.5";
+    public const string Release = "0.1.6";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -74,6 +74,8 @@ public sealed record ValueChoice(string Key, string Name);
 // 조회 때 확인한 재료와 근거. 실제 저장 때 같은 근거인지 다시 검사한다.
 public sealed class MaterialEvidence
 {
+    // 정상 조회 결과 재료를 확정할 수 없는 경우만 허용. 예외·이전 조회 누락은 제외한다.
+    public bool FallbackAllowed { get; set; }
     public string Name { get; set; } = "";
     public string Fingerprint { get; set; } = "";
     public string Reason { get; set; } = "";

@@ -13,7 +13,7 @@ internal static class OuterMaterialReader
     {
         try
         {
-            if (owner is not ElementType type) return Missing("유형 재료만 지원합니다");
+            if (owner is not ElementType type) return Missing("유형 재료만 지원합니다", false);
             if (type is HostObjAttributes host)
             {
                 using var structure = host.GetCompoundStructure();
@@ -41,9 +41,9 @@ internal static class OuterMaterialReader
             return Found(single, "유형 단일 재료", new { Type = type.UniqueId, Material = single.UniqueId, single.Name,
                 Parameters = parameters.Select(p => ParameterReader.Key(p)).OrderBy(x => x).ToArray() });
         }
-        catch (Exception ex) { return Missing("재료 조회 실패: " + ex.Message); }
+        catch (Exception ex) { return Missing("재료 조회 실패: " + ex.Message, false); }
     }
-    private static MaterialEvidence Missing(string reason) => new() { Reason = reason };
+    private static MaterialEvidence Missing(string reason, bool fallbackAllowed = true) => new() { Reason = reason, FallbackAllowed = fallbackAllowed };
     private static MaterialEvidence Found(Material material, string basis, object source) => new()
     {
         Name = material.Name, Basis = basis,
