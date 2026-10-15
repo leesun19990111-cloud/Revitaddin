@@ -1,5 +1,10 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.8 — 2026-10-15 기존 층 텍스트 정리
+
+- KAC NormalizeFloorName opt-in, 각 유형/요소의 기존 층 문자열만 정리하고 빈 값·실제 레벨·위치는 유지한다. 기존 6항목과 저장 안전 경로는 불변. 개인 7항목 룰셋은 별도 전달하고 ZIP/저장소에 넣지 않는다.
+- out_v018 / SunnyParameterManager_Installer_v.0.1.8.zip / App-0.1.8 / Protocol.Release 0.1.8. Tests018/Release018/Material018/Publish018/Bridge018 및 installer ParameterManager018 격리. 같은 제품 v017만 Old_Versions에 보관한다. Core/룰셋/WPF 261 + 실제 룰셋 4 + lifecycle 41 + 재료 리더 22 통과. Bridge 경고/오류 0, 프로그램 13파일/ZIP 20파일 해시 일치. 실제 설치·사용자 RVT 저장·중앙 동기화는 미검증.
+
 ## 별도 제품 0.1.7 — 2026-10-15 6항목 유형·인스턴스 지원
 
 - KAC InstanceFields에 KBIMS-부위코드·조달청표준공사코드·제작정보도 허용. 반대 범위 필드 존재 시 누락 중복 안내 방지, 기존 룰셋 범위·분류표·재료 ND·저장 안전 경로 유지. 개인 업무 룰셋은 별도 전달하며 ZIP/저장소에 포함하지 않는다.

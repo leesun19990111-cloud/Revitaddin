@@ -221,11 +221,57 @@ internal static class KacRuleTests
         reject(() => RulePlanner.Plan(allFieldsFile, rows, pendingCode, false), "인스턴스 조달청 수동 변경 충돌 보류");
         rows = AllScopes(false); rows.Where(r => r.Scope == "인스턴스").ToList().ForEach(r => r.Scope = "프로젝트 정보");
         check(Plan(rows, allFieldsFile).Edits.Count == 1, "6항목도 프로젝트 정보로 확장 금지");
+        var floorFile = File(); floorFile.Kac!.NormalizeFloorName = true; floorFile.Kac.InstanceFields = ["층"];
+        ParameterRow Floor(string value, string id = "owner", string scope = "유형") => new()
+        {
+            ModelPath = "A", ModelTitle = "A", OwnerId = id, TypeOwnerId = "owner", Scope = scope,
+            TypeName = "KAC-S-CL1210_기둥", Name = "층", ParameterKey = "guid:floor",
+            DataType = "autodesk.spec:spec.string-2.0.0", Storage = "String", Editor = "텍스트", HasValue = true, Raw = value, Display = value
+        };
+        foreach (var (input, output) in new[] { ("GL+6300_지상2층", "지상2층"), ("GL-3000_지하1층", "지하1층"),
+            ("GL±0_지상1층", "지상1층"), (" gl + 6300.5 _ 지상 2 층 ", "지상2층"), ("지하 12 층", "지하12층") })
+        {
+            var f = Floor(input); var result = Plan([.. Rows(), f], floorFile);
+            check(result.Edits.Single(e => e.Field == "층").Value == output && f.Raw == input, "층 기존값 정리: " + input);
+        }
+        foreach (var input in new[] { "", " ", "지상2층", "GL+6300_옥탑층", "지상1층~지상3층", "GL+6300_지상2층_기계실", "임의_지상2층", "지상1층_지상2층", "ND" })
+            check(Plan([.. Rows(), Floor(input)], floorFile).Edits.All(e => e.Field != "층"), "빈 값·동일값·모호한 층 보존: " + input);
+        check(!RulePlanner.Parse(JsonSerializer.Serialize(File())).Kac!.NormalizeFloorName, "구 룰셋 층 정리 기본 꺼짐");
+        check(RulePlanner.Parse(JsonSerializer.Serialize(floorFile)).Kac!.NormalizeFloorName, "층 정책 파일 왕복");
+        check(Plan([.. Rows(), Floor("GL+6300_지상2층")]).Edits.Count == 6, "구 룰셋의 6항목만 적용");
+        List<ParameterRow> floorRows = [.. Rows(), Floor("GL+6300_지상2층"), Floor("GL±0_지상1층", "i1", "인스턴스"), Floor("GL-3000_지하1층", "i2", "인스턴스"), Floor("", "i3", "인스턴스")];
+        var floorsPlan = Plan(floorRows, floorFile);
+        check(floorsPlan.Edits.Count == 9 && floorsPlan.Edits.Single(e => e.Original.OwnerId == "i1").Value == "지상1층" &&
+            floorsPlan.Edits.Single(e => e.Original.OwnerId == "i2").Value == "지하1층", "같은 유형도 각 요소 현재 층 유지하고 빈 요소 채우지 않기");
+        check(floorsPlan.Notes.Any(n => n.Contains("빈 값 1개 유지")), "빈 층 유지 요약");
+        var floorRow = Floor("GL+6300_지상2층"); floorRow.HasValue = false;
+        check(Plan([.. Rows(), floorRow], floorFile).Edits.Count == 6, "HasValue 없는 층은 유지");
+        floorRow.HasValue = true; floorRow.BlockReason = "수식";
+        check(Plan([.. Rows(), floorRow], floorFile).Edits.Count == 6, "읽기전용 층 유지");
+        floorRow.BlockReason = ""; floorRow.Storage = "ElementId";
+        check(Plan([.. Rows(), floorRow], floorFile).Edits.Count == 6, "실제 레벨 참조 변경 금지");
+        floorRow = Floor("GL+6300_지상2층"); var otherFloor = Floor("GL+6300_지상2층"); otherFloor.ParameterKey = "guid:other";
+        check(Plan([.. Rows(), floorRow, otherFloor], floorFile).Edits.Count == 6, "동명 층 매개변수 임의 선택 금지");
+        reject(() => RulePlanner.Plan(floorFile, [.. Rows(), floorRow], EditPlanner.Stage([floorRow], "수동층"), false), "층 수동 변경 충돌 보류");
+        var changedFloor = Floor("GL+10000_지상3층");
+        reject(() => EditPlanner.CheckFresh(floorRow, changedFloor), "조회 후 층 변경은 저장 전 차단");
+        floorRow.Scope = "프로젝트 정보";
+        check(Plan([.. Rows(), floorRow], floorFile).Edits.Count == 6, "층 프로젝트 정보 제외");
+        floorRow = Floor("GL+6300_지상2층"); floorRow.TypeName = "일반 유형"; floorRow.OwnerId = "other";
+        check(Plan([.. Rows(), floorRow], floorFile).Edits.Count == 6, "층 KAC 범위 외 제외");
+        floorRow = Floor("GL+6300_지상2층", "i1", "인스턴스"); floorRow.TypeOwnerId = "다른 유형";
+        check(Plan([.. Rows(), floorRow], floorFile).Edits.Count == 6, "층 실제 유형 연결 불일치 차단");
+        floorFile.Kac.InstanceFields = [];
+        check(Plan(floorRows, floorFile).Edits.Count == 7, "층 인스턴스는 명시한 경우만 적용");
+        floorFile.Kac.NormalizeFloorName = false; floorFile.Kac.InstanceFields = ["층"];
+        reject(() => Plan(Rows(), floorFile), "층 정책 없이 인스턴스 항목 추가 거부");
         // 사용자 원본은 저장소/배포에 넣지 않는다. 환경변수로 지정했을 때만 생성한 실제 룰셋도 평가한다.
         var actualFile = Environment.GetEnvironmentVariable("SUNNY_KAC_RULE_TEST_FILE");
         if (!string.IsNullOrWhiteSpace(actualFile))
         {
             var actual = RulePlanner.Parse(System.IO.File.ReadAllText(actualFile));
+            if (actual.Kac!.NormalizeFloorName)
+                check(Plan([.. Rows(), Floor("GL+6300_지상2층")], actual).Edits.Single(e => e.Field == "층").Value == "지상2층", "전달할 실제 7항목 룰셋 층 정리");
             check(Plan(Rows(), actual).Edits.Count == 6, "실제 생성한 룰셋 불러오기와 6항목 적용 계획");
             check(Plan(Rows("KAC-A-WA7140_벽"), actual).Edits.Single(e => e.Field == "조달청표준공사코드").Value == "ANC362", "실제 표 중복 코드 첫 값");
             if (actual.Kac!.UnresolvedMaterialValue == "ND")

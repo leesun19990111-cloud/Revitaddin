@@ -17,6 +17,8 @@ public sealed class KacRuleProfile
     public List<string> InstanceFields { get; set; } = [];
     // 빈 값은 기존 유지 정책. ND는 기존 KAC 대상의 재료 미확인에만 적용한다.
     public string UnresolvedMaterialValue { get; set; } = "";
+    // 기존 '층' 텍스트만 정리한다. 레벨 참조나 빈 값을 추정해 채우지 않는다.
+    public bool NormalizeFloorName { get; set; }
 }
 public sealed class KacClassification
 {
@@ -55,7 +57,7 @@ public static class KacRulePlanner
             p.Classification == null || p.Classification.Count is < 1 or > 5000 || p.Ifc == null || p.Ifc.Count is < 1 or > 200 ||
             p.UnresolvedMaterialValue is not ("" or "ND") ||
             p.InstanceFields == null || p.InstanceFields.Distinct().Count() != p.InstanceFields.Count ||
-            p.InstanceFields.Any(n => !Fields.Contains(n)))
+            p.InstanceFields.Any(n => !Fields.Contains(n) && !(n == "층" && p.NormalizeFloorName)))
             throw new InvalidOperationException("버전2 KAC 룰셋의 유형 범위·재료/미확인 정책·고정값·매핑표를 확인하세요. 일반 규칙과 혼합할 수 없습니다.");
         var codes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in p.Classification)
@@ -70,6 +72,15 @@ public static class KacRulePlanner
     }
 
     public static string MaterialName(MaterialEvidence evidence) => evidence.Name.StartsWith("KAC-", StringComparison.Ordinal) ? evidence.Name[4..] : evidence.Name;
+
+    public static string? NormalizedFloorName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 1000) return null;
+        // 전체 문자열이 알려진 표기일 때만 처리. 범위·복수층·옥탑 등은 추측하지 않는다.
+        var match = Regex.Match(value, @"\A\s*(?:GL\s*[+\-±]\s*[0-9]+(?:\.[0-9]+)?\s*_\s*)?(지상|지하)\s*([0-9]+)\s*층\s*\z",
+            RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+        return match.Success ? match.Groups[1].Value + match.Groups[2].Value + "층" : null;
+    }
 
     public static bool CanUseMaterialFallback(MaterialEvidence? evidence) => evidence is
         { FallbackAllowed: true, Reason.Length: > 0, Name.Length: 0, Fingerprint.Length: 0 };
@@ -108,9 +119,11 @@ public static class KacRulePlanner
                 t[0].TypeName == r.TypeName && t[0].Family == r.Family && t[0].CategoryKey == r.CategoryKey)
             .GroupBy(r => (r.ModelPath.ToUpperInvariant(), r.TypeOwnerId))
             .ToDictionary(g => g.Key, g => g.Select(r => r.Name).ToHashSet(StringComparer.Ordinal));
-        var changed = Fields.ToDictionary(n => n, _ => 0);
-        var same = Fields.ToDictionary(n => n, _ => 0);
-        var skipped = Fields.ToDictionary(n => n, _ => 0);
+        string[] fields = profile.NormalizeFloorName ? [.. Fields, "층"] : Fields;
+        var changed = fields.ToDictionary(n => n, _ => 0);
+        var same = fields.ToDictionary(n => n, _ => 0);
+        var skipped = fields.ToDictionary(n => n, _ => 0);
+        int emptyFloors = 0;
         int identical = 0, outside = 0, instances = 0, materialFallbacks = 0;
         foreach (var owner in all.Where(r => r.Scope == "유형" || r.Scope == "인스턴스" && profile.InstanceFields.Count > 0)
                      .GroupBy(r => (r.ModelPath.ToUpperInvariant(), r.OwnerId)))
@@ -185,9 +198,25 @@ public static class KacRulePlanner
                 materialOk ? material!.Basis + " / " + material.Name : fallback ? "재료 미확인 → ND / " + material!.Reason : material?.Reason is { Length: > 0 } mr ? mr : "외측 재료 정보 없음 — 모델 다시 조회 필요",
                 materialOk || fallback ? material : null);
             Assign("업체명", profile.Company, "고정값");
+            if (profile.NormalizeFloorName && (!instance || profile.InstanceFields.Contains("층")))
+            {
+                var floors = rows.Where(r => r.Name == "층").ToList();
+                if (floors.Count > 1)
+                {
+                    skipped["층"]++;
+                    notes.Add($"{label} / 층: 확인 필요 — 동명 매개변수 {floors.Count}개. 기존값 유지");
+                }
+                else if (floors.Count == 1)
+                {
+                    var floor = floors[0];
+                    if (!floor.HasValue || string.IsNullOrWhiteSpace(floor.Raw)) emptyFloors++;
+                    else Assign("층", NormalizedFloorName(floor.Raw), "기존 층 텍스트 정리 (GL 높이 접두어 제거 / 지상·지하 층명). 인식 불가 값은 유지");
+                }
+            }
         }
         plan.Notes.Add($"KAC-A-/KAC-S- 유형 {plan.MatchedOwners:N0}개 · 배치 요소 {instances:N0}개 · 변경 {plan.Edits.Count:N0}개 · 동일값 {identical:N0}개 · 확인 필요 {notes.Count:N0}개 · 코드 형식 제외 {outside:N0}개");
-        foreach (var name in Fields) plan.Notes.Add($"{name}: 변경 예정 {changed[name]:N0}개 · 이미 동일 {same[name]:N0}개 · 확인 필요 {skipped[name]:N0}개");
+        foreach (var name in fields) plan.Notes.Add($"{name}: 변경 예정 {changed[name]:N0}개 · 이미 동일 {same[name]:N0}개 · 확인 필요 {skipped[name]:N0}개");
+        if (profile.NormalizeFloorName) plan.Notes.Add($"층: 빈 값 {emptyFloors:N0}개 유지. 각 유형/요소의 현재 텍스트만 정리하며 실제 레벨·위치·높이는 변경하지 않습니다.");
         if (profile.UnresolvedMaterialValue == "ND") plan.Notes.Add($"재료 미확인 → ND 변경 예정 {materialFallbacks:N0}개. 기존 KAC 대상만 적용하며, 재료 조회 실패·정보 누락·실제 읽기전용은 제외합니다.");
         plan.Notes.Add(profile.InstanceFields.Count == 0 ? "유형 매개변수만 변경합니다." : "배치 요소 추가 대상: " + string.Join(", ", profile.InstanceFields) + ". 실제 유형 식별자로 연결합니다.");
         plan.Notes.Add("프로젝트 정보·실제 재료/층 구성·매개변수 바인딩·IFC 내보내기 여부/미리 정의된 유형은 변경하지 않습니다. 확인 필요 항목은 기존값을 유지합니다.");
