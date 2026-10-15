@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.1.9 — 2026-10-15 공간파일 프로젝트 정보
+
+- Version3 Space 룰셋으로 공항/건물번호 파일명 연결, 명시한 공항별 건물명 별칭, 미확인 건축물번호 유지. 기존 KAC 룰셋과 저장 경로는 불변. 원본 Excel/개인 업무 표는 설치 ZIP/저장소에 넣지 않는다.
+- out_v019 / SunnyParameterManager_Installer_v.0.1.9.zip / App-0.1.9 / Protocol.Release 0.1.9. Tests019/Release019/Material019/Publish019/Bridge019 및 installer ParameterManager019 격리. 같은 제품 v018만 Old_Versions에 보관, Sunny Tools v109 유지. 실제 설치·사용자 RVT 저장·중앙 동기화는 미검증.
+- Core/룰셋/WPF 316 + 실제 개인 룰셋 12 + lifecycle 41 + 재료 리더 22 = 391건 통과. Bridge 오류/경고 0. 프로그램 13파일/ZIP 20파일 해시 일치. 개인 공간 표는 177행과 확정 별칭을 별도 전달하며 입력 미확인 목록도 개인 폴더에만 둔다.
+
 ## 별도 제품 0.1.8 — 2026-10-15 기존 층 텍스트 정리
 
 - KAC NormalizeFloorName opt-in, 각 유형/요소의 기존 층 문자열만 정리하고 빈 값·실제 레벨·위치는 유지한다. 기존 6항목과 저장 안전 경로는 불변. 개인 7항목 룰셋은 별도 전달하고 ZIP/저장소에 넣지 않는다.

@@ -51,7 +51,7 @@ public static class KacRulePlanner
     public static void Validate(RuleSet file)
     {
         var p = file.Kac;
-        if (string.IsNullOrWhiteSpace(file.Name) || file.Rules == null || file.Rules.Count != 0 || p == null || p.Scope != "유형" ||
+        if (string.IsNullOrWhiteSpace(file.Name) || file.Space != null || file.Rules == null || file.Rules.Count != 0 || p == null || p.Scope != "유형" ||
             p.MaterialPolicy != "외측-상단-천장하단-단일재료" || p.UnresolvedPolicy != "기존값유지-확인필요" ||
             string.IsNullOrWhiteSpace(p.ManufacturerInfo) || string.IsNullOrWhiteSpace(p.Company) || p.Sources == null ||
             p.Classification == null || p.Classification.Count is < 1 or > 5000 || p.Ifc == null || p.Ifc.Count is < 1 or > 200 ||
