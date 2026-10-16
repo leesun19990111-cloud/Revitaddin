@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.2.0 — 2026-10-16 반복 적용 실패 보호
+
+- 작업 문서 Revit 오류 관찰/요소 번호 보고, 확정 후 대상 재조회 및 상세 유형 비교, 오류 발생 묶음 저장 전 취소, 실패 조회값 재적용 차단과 확인 후 부분 재조회. 결합 해제/오류 억제/중앙 강제 저장은 하지 않는다. 실제 형상 오류 자체를 자동 수리했다고 표현하지 말 것.
+- out_v020 / SunnyParameterManager_Installer_v.0.2.0.zip / App-0.2.0 / Protocol.Release 0.2.0. Tests020/Release020/Material020/Publish020/Bridge020 및 installer ParameterManager020 격리. 같은 제품 v019만 Old_Versions 보관, Sunny Tools v109 유지.
+- Core/룰셋/WPF 326 + lifecycle 51 + 재료 리더 22 = 399건 통과. Bridge 경고/오류 0, 프로그램 13파일/ZIP 20파일 해시 일치. 실제 설치·수정본의 사용자 RVT 저장·중앙 동기화는 미검증.
+
 ## 별도 제품 0.1.9 — 2026-10-15 공간파일 프로젝트 정보
 
 - Version3 Space 룰셋으로 공항/건물번호 파일명 연결, 명시한 공항별 건물명 별칭, 미확인 건축물번호 유지. 기존 KAC 룰셋과 저장 경로는 불변. 원본 Excel/개인 업무 표는 설치 ZIP/저장소에 넣지 않는다.

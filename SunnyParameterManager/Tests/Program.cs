@@ -149,11 +149,39 @@ internal static class Program
             w.PrepareRules(RulePlanner.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "연습용.sunnyrules.json"))));
             Check(edits.Items.Count == 36 && ((TextBox)w.FindName("RuleSummary")).Text.Contains("연습 전용"), "실제 배포 연습용 파일 불러오기");
             FieldSearchTests();
+            FailedApplyTests();
             Console.WriteLine("화면 렌더: " + RenderOutput);
             Console.WriteLine($"TOTAL {_count} PASS · 실제 Revit/중앙 서버 검증은 별도 필요");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+    private static void FailedApplyTests()
+    {
+        var w = new MainWindow(); w.LoadSample();
+        Check(w.Title.Contains(Protocol.Release), "창 제목에 실제 실행 버전 표시");
+        var models = ((ListBox)w.FindName("ModelsList")).Items.Cast<ModelItem>().ToList();
+        var grid = (DataGrid)w.FindName("ValuesGrid");
+        foreach (var row in grid.Items.Cast<ParameterRow>()) grid.SelectedItems.Add(row);
+        ((TextBox)w.FindName("ValueBox")).Text = "재시도 테스트"; Invoke(w, "StageValues");
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        typeof(MainWindow).GetField("_sample", flags)!.SetValue(w, false);
+        void Refresh() => typeof(MainWindow).GetMethod("UpdatePending", flags)!.Invoke(w, null);
+        Refresh();
+        Check(((Button)w.FindName("ApplyButton")).IsEnabled, "정상 미리보기는 적용 가능");
+        models[0].Snapshot!.RequiresRequery = true; Refresh();
+        Check(!((Button)w.FindName("ApplyButton")).IsEnabled && !((Button)w.FindName("RulesButton")).IsEnabled, "실패 조회값 재적용 및 룰셋 반복 차단");
+        Reject(() => w.PrepareRules(new RuleSet()), "직접 룰셋 호출도 실패 조회값 차단");
+        var restored = JsonSerializer.Deserialize<WorkspaceFile>(JsonSerializer.Serialize(new WorkspaceFile { Models = [models[0].Snapshot!] }))!;
+        Check(restored.Models.Single().RequiresRequery, "작업 저장과 불러오기에서 실패 상태 보존");
+        Check(!JsonSerializer.Deserialize<ModelSnapshot>("{}")!.RequiresRequery, "이전 조회 파일 기본값 호환");
+        var edits = (DataGrid)w.FindName("EditsGrid");
+        var keep = edits.Items.Cast<ValueEdit>().Where(e => e.Original.ModelPath != models[0].Path).ToList();
+        typeof(MainWindow).GetMethod("ResetFailedModelsForRequery", flags)!.Invoke(w, null);
+        Check(models[0].Snapshot == null && models[1].Snapshot != null, "실패 모델만 조회값 초기화");
+        Check(keep.Count > 0 && edits.Items.Cast<ValueEdit>().SequenceEqual(keep), "실패 모델 미적용 변경만 비우고 다른 모델 예정 보존");
+        Check(((Button)w.FindName("ApplyButton")).IsEnabled, "실패 파일 제외 후 정상 파일 변경 적용 가능");
+        Check(!((Button)w.FindName("RulesButton")).IsEnabled, "재조회 완료 전 전체 룰셋 평가 차단");
     }
     private static void FieldSearchTests()
     {

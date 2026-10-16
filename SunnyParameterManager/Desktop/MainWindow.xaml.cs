@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = "Sunny · 매개변수 관리자 " + Protocol.Release;
         ModelsList.ItemsSource = _models; SourceCombo.ItemsSource = _models;
         _worker.Progress = text => StatusText.Text = text;
         _initialized = true;
@@ -100,8 +101,28 @@ public partial class MainWindow : Window
     {
         if (_busy) return;
         if (_sample) { StatusText.Text = "샘플에서는 실제 RVT를 조회하지 않습니다. RVT 추가로 실제 작업을 시작하세요."; return; }
+        if (_worker.NeedsAttention) { MessageBox.Show(this, "반영 여부 확인이 필요한 작업이 있습니다. 작업용 Revit과 복구 파일을 먼저 확인하세요. 기존 변경 예정은 보존합니다."); return; }
+        var failed = _models.Where(m => m.Snapshot?.RequiresRequery == true).ToList();
+        if (failed.Count > 0)
+        {
+            var names = string.Join("\n", failed.Select(m => m.Title));
+            if (MessageBox.Show(this, "실패 원인을 원본 모델에서 확인했나요?\n아래 파일의 미적용 변경만 비우고 다시 조회합니다. 다른 파일의 변경 예정은 유지합니다. 필요하면 먼저 ‘작업 저장’으로 보관하세요.\n\n" + names,
+                "실패 파일 다시 조회", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            ResetFailedModelsForRequery();
+            await ReadRegisteredModels(true);
+            return;
+        }
         if (_edits.Count > 0) { MessageBox.Show(this, "변경 예정 목록이 있습니다. 적용하거나 초기화한 뒤 새로 조회하세요.", "미리보기 보호"); return; }
         await ReadRegisteredModels(false);
+    }
+    private void ResetFailedModelsForRequery()
+    {
+        foreach (var item in _models.Where(m => m.Snapshot?.RequiresRequery == true))
+        {
+            foreach (var key in _edits.Where(p => string.Equals(p.Value.Original.ModelPath, item.Path, StringComparison.OrdinalIgnoreCase)).Select(p => p.Key).ToList()) _edits.Remove(key);
+            item.Snapshot = null; item.Status = "재조회 전";
+        }
+        RefreshFields(); UpdatePending();
     }
     private async Task ReadRegisteredModels(bool onlyUnread)
     {
@@ -241,6 +262,7 @@ public partial class MainWindow : Window
     public void PrepareRules(RuleSet file)
     {
         if (_busy) throw new InvalidOperationException("진행 중인 파일 작업이 끝난 후 불러오세요.");
+        if (_models.Any(m => m.Snapshot?.RequiresRequery == true)) throw new InvalidOperationException("실패한 파일의 원인을 확인하고 다시 조회한 뒤 룰셋을 불러오세요.");
         if (_models.Count == 0 || _models.Any(m => m.Snapshot == null))
             throw new InvalidOperationException("모든 대상 파일을 먼저 읽어야 합니다. 실패하거나 중복된 파일은 ‘파일 관리’에서 제외하세요.");
         var plan = RulePlanner.Plan(file, AllRows(), _edits.Values, _sample);
@@ -278,17 +300,19 @@ public partial class MainWindow : Window
     {
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         PendingText.Text = $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
-        ApplyButton.IsEnabled = !_busy && !_sample && _edits.Count > 0 && !_worker.NeedsAttention;
+        ApplyButton.IsEnabled = !_busy && !_sample && _edits.Count > 0 && !_worker.NeedsAttention && !HasFailedPending();
         ReviewButton.IsEnabled = !_busy && _edits.Count > 0;
         ReviewButton.Content = $"③ 변경 내용 확인 ({_edits.Count:N0})";
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        RulesButton.IsEnabled = !_busy && _models.Count > 0 && _models.All(m => m.Snapshot != null);
+        RulesButton.IsEnabled = !_busy && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery);
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
     }
+    private bool HasFailedPending() => _models.Any(m => m.Snapshot?.RequiresRequery == true && _edits.Values.Any(e => string.Equals(e.Original.ModelPath, m.Path, StringComparison.OrdinalIgnoreCase)));
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
         if (_busy || _sample || _edits.Count == 0) return;
+        if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }
         MainTabs.SelectedIndex = 1;
         var groups = _edits.Values.GroupBy(e => e.Original.ModelPath).ToList();
         var local = groups.Any(g => _models.Single(m => m.Path == g.Key).Snapshot?.Kind == "로컬");
@@ -313,7 +337,12 @@ public partial class MainWindow : Window
                     foreach (var edit in group) _edits.Remove(edit.Original.Key);
                     item.Status = "반영 완료 · 재조회 필요"; item.Snapshot = null; completed++;
                 }
-                else item.Status = result.RequiresAttention ? "반영 여부 확인 필요" : "적용 실패";
+                else
+                {
+                    snapshot.RequiresRequery = true;
+                    item.Status = result.RequiresAttention ? "반영 여부 확인 필요" : "적용 실패 · 원인 확인 후 재조회";
+                    ReportBox.AppendText("같은 변경 재실행을 차단했습니다. 원본의 원인을 확인한 뒤 ‘다시 조회’에서 이 파일만 새로 준비하세요. 기존 변경 목록은 검토/작업 저장용으로 유지합니다.\n");
+                }
                 if (!result.Success || result.RequiresAttention)
                 {
                     ReportBox.AppendText($"나머지 {groups.Count - groups.IndexOf(group) - 1}개 모델은 처리하지 않았습니다.\n"); break;
@@ -347,7 +376,7 @@ public partial class MainWindow : Window
         foreach (var path in file.Paths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var snapshot = file.Models.SingleOrDefault(m => m.Path == path); snapshot?.ConnectCatalogs();
-            _models.Add(new() { Path = path, Snapshot = snapshot, Status = snapshot == null ? "조회 전" : "저장된 조회값 · 적용 전 자동 재검증" });
+            _models.Add(new() { Path = path, Snapshot = snapshot, Status = snapshot == null ? "조회 전" : snapshot.RequiresRequery ? "적용 실패 · 원인 확인 후 재조회" : "저장된 조회값 · 적용 전 자동 재검증" });
         }
         foreach (var edit in file.Edits) { edit.Original = rows[edit.Original.Key]; _edits[edit.Original.Key] = edit; }
         SourceCombo.SelectedIndex = 0; RefreshFields(); UpdatePending(); StatusText.Text = "작업 파일을 불러왔습니다. 실제 파일은 변경하지 않았습니다.";

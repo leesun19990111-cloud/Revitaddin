@@ -91,6 +91,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 Step("변경 전 재검증");
                 var reader = new ParameterReader(doc, metadata);
                 var writes = req.Edits.Select(edit => Prepare(doc, reader, edit)).ToList();
+                using var diagnostics = new TransactionDiagnostics(app, doc);
                 using (var group = new TransactionGroup(doc, "Sunny 매개변수 관리자"))
                 {
                     if (group.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집 묶음을 시작할 수 없습니다.");
@@ -102,7 +103,10 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                         Step("값 적용 중");
                         foreach (var w in writes) w.Set();
                         var committed = tx.Commit();
-                        if (committed != TransactionStatus.Committed) throw new InvalidOperationException("Revit이 변경을 확정하지 못했습니다: " + committed);
+                        if (committed != TransactionStatus.Committed) throw new InvalidOperationException("Revit이 변경을 확정하지 못했습니다: " + committed + "\n" + diagnostics.Details);
+                        Step("확정 결과 재검증");
+                        if (diagnostics.HasErrors)
+                            throw new InvalidOperationException("매개변수 적용 중 Revit 모델 오류가 발생하여 이번 묶음을 취소합니다. 오류 창에서 결합 해제·요소 삭제 등을 선택했더라도 이 작업으로 저장하지 않습니다.\n" + diagnostics.Details + "\n원본에서 문제 요소를 검토한 뒤 다시 조회하세요.");
                         foreach (var w in writes) w.Verify();
                         if (group.Assimilate() != TransactionStatus.Committed) throw new InvalidOperationException("편집 묶음을 확정하지 못했습니다.");
                     }
@@ -205,13 +209,17 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         else throw new InvalidOperationException("지원하지 않는 값입니다.");
         return new WriteAction(setter, () =>
         {
-            var verified = reader.Read(owner, p);
+            var freshOwner = doc.GetElement(expected.OwnerId) ?? throw new InvalidOperationException("확정 후 대상 요소가 없어져 이번 묶음을 취소합니다. 요소 ID: " + expected.ElementId);
+            var freshParameter = ParameterReader.Resolve(freshOwner, expected.ParameterKey) ?? throw new InvalidOperationException("확정 후 대상 매개변수가 없어졌습니다: " + expected.Name + " / 요소 ID: " + expected.ElementId);
+            var verified = reader.Read(freshOwner, freshParameter);
             if (expected.TypeOwnerId != verified.TypeOwnerId || expected.TypeKey != verified.TypeKey)
-                throw new InvalidOperationException("Revit 확정 후 요소의 유형이 달라 이번 묶음을 취소합니다: " + expected.TypeName);
+                throw new InvalidOperationException($"Revit 확정 후 요소의 유형 정보가 달라 이번 묶음을 취소합니다.\n요소 ID: {expected.ElementId} / 항목: {expected.Name}\n적용 전: {expected.Family} / {expected.TypeName} / 유형 식별자 {expected.TypeOwnerId}\n적용 후: {verified.Family} / {verified.TypeName} / 유형 식별자 {verified.TypeOwnerId}\n같은 작업을 반복하지 말고 원본 요소 확인 후 다시 조회하세요.");
+            if (expected.OwnerId != verified.OwnerId || expected.ParameterKey != verified.ParameterKey || expected.DataType != verified.DataType || expected.Storage != verified.Storage)
+                throw new InvalidOperationException("확정 후 대상 매개변수의 식별 정보가 달라 이번 묶음을 취소합니다: " + expected.Name + " / 요소 ID: " + expected.ElementId);
             // 같은 묶음의 다른 수동 편집이 재료를 바꾼 경우도 전체 롤백한다.
-            if (edit.MaterialSource != null) KacRulePlanner.CheckMaterial(edit, reader.ReadMaterial(owner, true));
-            var check = ParameterReader.Raw(p);
-            var same = p.StorageType == StorageType.Double ? Math.Abs(double.Parse(check, Invariant) - double.Parse(raw, Invariant)) <= Math.Max(1e-9, Math.Abs(double.Parse(raw, Invariant)) * 1e-10) : check == raw;
+            if (edit.MaterialSource != null) KacRulePlanner.CheckMaterial(edit, reader.ReadMaterial(freshOwner, true));
+            var check = ParameterReader.Raw(freshParameter);
+            var same = freshParameter.StorageType == StorageType.Double ? Math.Abs(double.Parse(check, Invariant) - double.Parse(raw, Invariant)) <= Math.Max(1e-9, Math.Abs(double.Parse(raw, Invariant)) * 1e-10) : check == raw;
             if (!same) throw new InvalidOperationException("Revit 확정 후 값이 요청과 달라 이번 묶음을 취소합니다: " + expected.Name);
         });
     }

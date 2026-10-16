@@ -5,8 +5,19 @@ namespace Autodesk.Revit.ApplicationServices
 {
  public sealed class Application
  {
+  public Application() { DB.State.App = this; }
+  public event EventHandler<DB.Events.FailuresProcessingEventArgs>? FailuresProcessing;
+  public int Observers => FailuresProcessing?.GetInvocationList().Length ?? 0;
+  public void Raise(DB.Document doc) => FailuresProcessing?.Invoke(this, new(doc));
   public string Username => "테스터";
   public DB.Document OpenDocumentFile(DB.ModelPath path, DB.OpenOptions options) { DB.State.Events.Add("open"); return DB.State.Doc; }
+ }
+}
+namespace Autodesk.Revit.DB.Events
+{
+ public sealed class FailuresProcessingEventArgs(Document doc) : EventArgs
+ {
+  public FailuresAccessor GetFailuresAccessor() => State.UnreadableFailure ? throw new InvalidOperationException("진단 실패") : new(doc);
  }
 }
 namespace Autodesk.Revit.DB
@@ -19,7 +30,24 @@ namespace Autodesk.Revit.DB
   public static bool FailSave, FailSync, FailClose, FailCommit, FailSet, VerifyMismatch, OwnedOther, MaterialChangesAfterSet, TypeChangesAfterSet;
   public static string TypeOwnerId = "type-1";
   public static bool MaterialMissing;
-  public static void Reset() { Doc = new(); Info = new(); Events = []; TypeOwnerId = "type-1"; MaterialMissing = false; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = TypeChangesAfterSet = false; }
+  public static ApplicationServices.Application App = null!;
+  public static FailureSeverity? Failure;
+  public static bool OtherDocFailure, UnreadableFailure, DeletedAfterCommit;
+  public static void Reset() { Doc = new(); Info = new(); Events = []; TypeOwnerId = "type-1"; MaterialMissing = false; Failure = null; OtherDocFailure = UnreadableFailure = DeletedAfterCommit = false; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = TypeChangesAfterSet = false; }
+ }
+ public enum FailureSeverity { Warning, Error, DocumentCorruption }
+ public sealed class FailureMessageAccessor
+ {
+  public FailureSeverity GetSeverity() => State.Failure!.Value;
+  public string GetDescriptionText() => "요소를 결합된 상태로 유지할 수 없습니다.";
+  public IEnumerable<ElementId> GetFailingElementIds() => [new(101), new(102)];
+  public IEnumerable<ElementId> GetAdditionalElementIds() => [new(102), new(103)];
+ }
+ public sealed class FailuresAccessor(Document doc) : IDisposable
+ {
+  public Document GetDocument() => doc;
+  public IEnumerable<FailureMessageAccessor> GetFailureMessages() => State.Failure == null ? [] : [new()];
+  public void Dispose() { }
  }
  public enum StorageType { String, Integer, Double, ElementId }
  public enum BuiltInParameter { ELEM_PARTITION_PARAM = -100 }
@@ -53,7 +81,7 @@ namespace Autodesk.Revit.DB
   public Element Element { get; } = new();
   public bool Missing;
   public ModelPath GetWorksharingCentralModelPath() => new(CentralPathOverride ?? State.Info.CentralPath);
-  public Element? GetElement(string id) => Missing ? null : Element;
+  public Element? GetElement(string id) => Missing || State.DeletedAfterCommit && State.Events.Contains("tx-commit") ? null : Element;
   public object GetUnits() => new();
   public void Save() { State.Events.Add("save"); if (State.FailSave) throw new IOException("테스트 저장 실패"); }
   public void SynchronizeWithCentral(TransactWithCentralOptions transact, SynchronizeWithCentralOptions sync)
@@ -82,7 +110,7 @@ namespace Autodesk.Revit.DB
   public TransactionStatus Start() { State.Events.Add("tx-start"); return TransactionStatus.Started; }
   public FailureOptions GetFailureHandlingOptions() => new();
   public void SetFailureHandlingOptions(FailureOptions options) { }
-  public TransactionStatus Commit() { State.Events.Add("tx-commit"); return State.FailCommit ? TransactionStatus.RolledBack : TransactionStatus.Committed; }
+  public TransactionStatus Commit() { State.Events.Add("tx-commit"); if (State.Failure != null || State.UnreadableFailure) State.App.Raise(State.OtherDocFailure ? new Document() : doc); return State.FailCommit ? TransactionStatus.RolledBack : TransactionStatus.Committed; }
   public void Dispose() { }
  }
  public sealed class TransactionGroup(Document doc, string name) : IDisposable
