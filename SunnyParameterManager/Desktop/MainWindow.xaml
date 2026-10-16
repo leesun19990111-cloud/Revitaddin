@@ -53,13 +53,13 @@
    <TabControl Grid.Column="2" x:Name="MainTabs" Background="White" BorderBrush="#CDD2D7">
     <TabItem Header="값 직접 입력"><Grid Margin="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
      <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="125"/><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-      <StackPanel><TextBlock Text="대상" Margin="0,0,0,5"/><ComboBox x:Name="ScopeCombo" SelectedIndex="0" SelectionChanged="FilterChanged"><ComboBoxItem Content="유형"/><ComboBoxItem Content="인스턴스"/><ComboBoxItem Content="프로젝트 정보"/><ComboBoxItem Content="전체 범위"/></ComboBox></StackPanel>
+      <StackPanel><TextBlock Text="대상" Margin="0,0,0,5"/><ComboBox x:Name="ScopeCombo" SelectedIndex="0" SelectionChanged="FilterChanged"><ComboBoxItem Content="유형"/><ComboBoxItem Content="인스턴스"/><ComboBoxItem Content="프로젝트 정보"/><ComboBoxItem Content="전체 범위"/><ComboBoxItem Content="뷰"/><ComboBoxItem Content="시트"/></ComboBox></StackPanel>
       <StackPanel Grid.Column="1">
        <DockPanel Margin="0,0,8,5"><TextBlock x:Name="FieldSearchStatus" DockPanel.Dock="Right" Foreground="#687785" FontSize="11" TextAlignment="Right"/><TextBlock Text="수정할 항목"/></DockPanel>
        <DockPanel Margin="0,0,8,5">
         <Button x:Name="ClearFieldSearchButton" DockPanel.Dock="Right" Content="×" Click="ClearFieldSearch" Padding="7,0" Margin="4,0,0,0" ToolTip="매개변수 검색 지우기" AutomationProperties.Name="매개변수 검색 지우기"/>
         <Grid>
-         <TextBox x:Name="FieldSearchBox" TextChanged="FieldSearchChanged" MinHeight="31" ToolTip="매개변수 이름 일부를 입력하세요. 영문 대소문자는 구분하지 않습니다. 현재 선택은 유지됩니다." AutomationProperties.Name="매개변수 이름 검색"/>
+         <TextBox x:Name="FieldSearchBox" TextChanged="FieldSearchChanged" MinHeight="31" ToolTip="매개변수 이름 일부를 입력하세요. 영문 대소문자와 공백은 구분하지 않습니다. 현재 선택은 유지됩니다." AutomationProperties.Name="매개변수 이름 검색"/>
          <TextBlock Text="매개변수 검색…" Margin="8,0" VerticalAlignment="Center" Foreground="#77838D" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=FieldSearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
         </Grid>
        </DockPanel>
@@ -70,7 +70,7 @@
      <DockPanel Grid.Row="1" Margin="0,0,0,10"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="전체 선택" Click="SelectEditable" ToolTip="현재 보이는 행 중 편집 가능한 행을 선택합니다."/><Button Content="선택 해제" Click="ClearSelection" Margin="0"/></StackPanel><TextBlock x:Name="CountText" VerticalAlignment="Center" Foreground="#687785"/></DockPanel>
      <DataGrid Grid.Row="2" x:Name="ValuesGrid" SelectionChanged="ValueSelectionChanged" Sorting="ValuesSorting"><DataGrid.Columns>
       <DataGridTextColumn Header="소속 파일" Binding="{Binding ModelTitle}" Width="135"/>
-      <DataGridTextColumn Header="유형 / 대상 이름" Binding="{Binding TypeName}" Width="190"/>
+      <DataGridTextColumn Header="유형 / 뷰·시트 이름" Binding="{Binding TargetName}" Width="190"/>
       <DataGridTextColumn Header="현재 값" Binding="{Binding ValueLabel}" Width="150"/>
       <DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="155"/>
       <DataGridTextColumn Header="카테고리" Binding="{Binding Category}" Width="95"/>
@@ -97,7 +97,7 @@
       <TextBlock Text="작업공유 파일은 중앙모델에 동기화합니다. 저장 전에 한 번 더 확인합니다." TextWrapping="Wrap" Foreground="#687785" Margin="0,0,0,8"/>
       <Button x:Name="ApplyButton" Content="RVT에 저장 · 중앙 동기화" Style="{StaticResource Primary}" Click="ApplyChanges" HorizontalAlignment="Right" Margin="0" MinHeight="40" IsEnabled="False"/>
      </StackPanel>
-     <DataGrid x:Name="EditsGrid"><DataGrid.Columns><DataGridTextColumn Header="소속 파일" Binding="{Binding Model}" Width="140"/><DataGridTextColumn Header="패밀리 / 유형" Binding="{Binding Type}" Width="200"/><DataGridTextColumn Header="항목" Binding="{Binding Field}" Width="120"/><DataGridTextColumn Header="기존 값" Binding="{Binding Before}" Width="140"/><DataGridTextColumn Header="바뀔 값" Binding="{Binding Value}" Width="150"/><DataGridTextColumn Header="입력 근거" Binding="{Binding Reason}" Width="240"/></DataGrid.Columns></DataGrid>
+     <DataGrid x:Name="EditsGrid"><DataGrid.Columns><DataGridTextColumn Header="소속 파일" Binding="{Binding Model}" Width="140"/><DataGridTextColumn Header="패밀리 / 대상 이름" Binding="{Binding Type}" Width="200"/><DataGridTextColumn Header="항목" Binding="{Binding Field}" Width="120"/><DataGridTextColumn Header="기존 값" Binding="{Binding Before}" Width="140"/><DataGridTextColumn Header="바뀔 값" Binding="{Binding Value}" Width="150"/><DataGridTextColumn Header="입력 근거" Binding="{Binding Reason}" Width="240"/></DataGrid.Columns></DataGrid>
     </DockPanel></TabItem>
     <TabItem Header="처리 결과"><DockPanel Margin="12"><Button DockPanel.Dock="Top" Content="기록 폴더 열기" Click="OpenLogs" HorizontalAlignment="Left" Margin="0,0,0,10"/><TextBox x:Name="ReportBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" BorderThickness="0" Text="처음에는 별도 테스트 모델로 확인해 주세요."/></DockPanel></TabItem>
    </TabControl>

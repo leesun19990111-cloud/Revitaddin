@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.2.1";
+    public const string Release = "0.2.2";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -51,6 +51,9 @@ public sealed class ParameterRow
     public string Family { get; set; } = "";
     public string TypeName { get; set; } = "";
     public string TypeOwnerId { get; set; } = "";
+    public string ElementName { get; set; } = "";
+    public string SheetNumber { get; set; } = "";
+    [JsonIgnore] public string TargetName => Scope == "시트" ? (SheetNumber + " · " + ElementName).Trim(' ', '·') : Scope == "뷰" ? ElementName : TypeName;
     public string ParameterKey { get; set; } = "";
     public string Name { get; set; } = "";
     public string DataType { get; set; } = "";
@@ -93,7 +96,7 @@ public sealed class ValueEdit
     public string Reason { get; set; } = "직접 입력";
     public MaterialEvidence? MaterialSource { get; set; }
     [JsonIgnore] public string Model => Original.ModelTitle;
-    [JsonIgnore] public string Type => Original.Family + " : " + Original.TypeName;
+    [JsonIgnore] public string Type => Original.Scope is "뷰" or "시트" ? Original.Scope + " : " + Original.TargetName : Original.Family + " : " + Original.TypeName;
     [JsonIgnore] public string Field => Original.Name;
     [JsonIgnore] public string Before => Original.ValueLabel;
 }

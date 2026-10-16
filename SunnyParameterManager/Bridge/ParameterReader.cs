@@ -24,14 +24,15 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         var result = new List<ParameterRow>();
         var elements = new FilteredElementCollector(doc).WhereElementIsElementType().Cast<Element>()
             .Concat(new FilteredElementCollector(doc).WhereElementIsNotElementType().Cast<Element>())
-            .Where(e => e.Category?.CategoryType == CategoryType.Model && e is not RevitLinkInstance && e is not RevitLinkType)
+            .Where(e => e is View v ? !v.IsTemplate && v.ViewType is not (ViewType.Internal or ViewType.ProjectBrowser or ViewType.SystemBrowser or ViewType.Undefined) :
+                e.Category?.CategoryType == CategoryType.Model && e is not RevitLinkInstance && e is not RevitLinkType)
             .Concat(doc.ProjectInformation == null ? [] : new Element[] { doc.ProjectInformation });
         int errors = 0;
         foreach (var element in elements.DistinctBy(e => e.UniqueId))
         {
             var parameters = element.Parameters.Cast<Parameter>().ToList();
             // 소속 작업세트는 일부 요소의 열거에 없더라도 직접 접근이 지원된다.
-            if (element is not ElementType && element is not ProjectInfo && doc.IsWorkshared)
+            if (element is not ElementType && element is not ProjectInfo && element is not View && doc.IsWorkshared)
             {
                 var workset = element.get_Parameter(BuiltInParameter.ELEM_PARTITION_PARAM);
                 if (workset != null && parameters.All(p => p.Id != workset.Id)) parameters.Add(workset);
@@ -43,7 +44,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             }
         }
         if (errors > 0) Notices.Add($"매개변수 {errors:N0}개는 읽기에 실패하여 제외했습니다.");
-        Notices.Add("모델 카테고리의 유형·인스턴스 및 프로젝트 정보를 조회합니다. 뷰·시트·연결된 모델 내부는 별도 파일 등록 대상입니다.");
+        Notices.Add("모델 유형·인스턴스, 프로젝트 정보, 뷰·시트의 매개변수를 조회합니다. 뷰 템플릿 자체와 내부 뷰는 제외합니다. 링크 내부는 원본 파일을 별도로 등록하세요.");
         return result;
     }
 
@@ -54,14 +55,29 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         var r = new ParameterRow
         {
             ModelPath = model.Path, ModelTitle = model.Title, OwnerId = owner.UniqueId, ElementId = owner.Id.Value.ToString(Invariant),
-            Scope = owner is ProjectInfo ? "프로젝트 정보" : owner is ElementType ? "유형" : "인스턴스",
+            Scope = owner is ProjectInfo ? "프로젝트 정보" : owner is ViewSheet ? "시트" : owner is View ? "뷰" : owner is ElementType ? "유형" : "인스턴스",
             Category = owner is ProjectInfo ? "프로젝트 정보" : owner.Category?.Name ?? "기타",
             CategoryKey = owner is ProjectInfo ? "project" : (owner.Category?.Id.Value ?? 0).ToString(Invariant),
-            Family = type?.FamilyName ?? "", TypeName = owner is ProjectInfo ? "프로젝트 정보" : type?.Name ?? owner.Name ?? "",
+            Family = type?.FamilyName ?? "", TypeName = owner is ProjectInfo ? "프로젝트 정보" : type?.Name ?? (owner is View ? "" : owner.Name ?? ""),
             TypeOwnerId = type?.UniqueId ?? "",
+            ElementName = owner is View ? owner.Name ?? "" : "", SheetNumber = owner is ViewSheet sheet ? sheet.SheetNumber ?? "" : "",
             ParameterKey = Key(p), Name = p.Definition.Name, DataType = spec.TypeId, Storage = p.StorageType.ToString(),
             HasValue = p.HasValue, Raw = Raw(p), Display = Display(p), BlockReason = p.IsReadOnly ? "읽기 전용 — 원본 Revit에서 변경 불가" : ""
         };
+        if (owner is View view)
+        {
+            if (view.IsTemplate) r.BlockReason = "읽기 전용 — 뷰 템플릿 자체는 편집 대상이 아닙니다.";
+            else if (view.ViewTemplateId != ElementId.InvalidElementId)
+            {
+                try
+                {
+                    if (doc.GetElement(view.ViewTemplateId) is not View template) r.BlockReason = "읽기 전용 — 연결된 뷰 템플릿을 확인할 수 없습니다.";
+                    else if (template.GetTemplateParameterIds().Contains(p.Id) && !template.GetNonControlledTemplateParameterIds().Contains(p.Id))
+                        r.BlockReason = "읽기 전용 — 뷰 템플릿에서 제어하는 값입니다.";
+                }
+                catch { r.BlockReason = "읽기 전용 — 뷰 템플릿 제어 여부를 확인하지 못했습니다."; }
+            }
+        }
         if (p.StorageType == StorageType.String) r.Editor = "텍스트";
         else if (p.StorageType == StorageType.Integer && spec == SpecTypeId.Boolean.YesNo)
         {
@@ -69,7 +85,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             r.ChoiceCatalog = "bool";
             model.Catalogs.TryAdd("bool", [new("0", "아니요"), new("1", "예")]);
         }
-        else if (p.Id.Value == (long)BuiltInParameter.ELEM_PARTITION_PARAM && p.StorageType == StorageType.Integer && doc.IsWorkshared)
+        else if (owner is not View && p.Id.Value == (long)BuiltInParameter.ELEM_PARTITION_PARAM && p.StorageType == StorageType.Integer && doc.IsWorkshared)
         {
             r.Editor = "선택"; r.ChoiceCatalog = "workset";
             if (!model.Catalogs.ContainsKey(r.ChoiceCatalog)) model.Catalogs[r.ChoiceCatalog] = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Select(w => new ValueChoice(w.UniqueId.ToString("D"), w.Name)).OrderBy(x => x.Name).ToList();

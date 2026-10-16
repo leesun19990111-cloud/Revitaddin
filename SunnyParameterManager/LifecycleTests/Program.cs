@@ -10,7 +10,7 @@ internal static class Program
  private static void Check(bool ok, string label) { if (!ok) throw new Exception("FAIL " + label); Console.WriteLine("PASS " + label); _count++; }
  private static Request Setup(bool shared = false, bool central = false)
  {
-  State.Reset(); State.Doc.IsWorkshared = State.Info.IsWorkshared = shared; State.Info.CentralPath = shared ? _central : "";
+  State.Reset(); State.Scope = "유형"; State.Doc.IsWorkshared = State.Info.IsWorkshared = shared; State.Info.CentralPath = shared ? _central : "";
   var path = central ? _central : _source;
   var original = new ParameterReader(State.Doc, new ModelSnapshot { Path = path }).ReadAll().Single();
   return new Request { Path = path, CanonicalPath = ModelEngine.Canonical(path), Operation = "적용", Identity = "파일-v2/" + State.Doc.CreationGUID.ToString("D") + "/" + (shared ? "중앙:" + ModelEngine.Canonical(_central).ToUpperInvariant() : "일반"), Confirmed = true, LocalChangesConfirmed = true, Edits = EditPlanner.Stage([original], "새값") };
@@ -47,6 +47,13 @@ internal static class Program
    Check(result.Success && result.Applied == 1 && State.Doc.Element.Parameter.Value == "새값", "일반 파일 변경 성공");
    Check(State.Events.SequenceEqual(new[] { "open", "group-start", "tx-start", "set", "tx-commit", "assimilate", "save", "close" }), "일반 파일 단계 순서");
    Check(File.ReadAllText(result.BackupPath) == "테스트 대역 원본", "변경 전 파일 백업");
+   foreach (var scope in new[] { "뷰", "시트" })
+   {
+    r = Setup(); State.Scope = scope;
+    r.Edits = EditPlanner.Stage(new ParameterReader(State.Doc, new ModelSnapshot { Path = r.Path }).ReadAll(), "새 구분");
+    result = Run(r);
+    Check(result.Success && result.Applied == 1 && State.Doc.Element.Parameter.Value == "새 구분" && State.Events.Contains("save"), scope + " 범위도 실제 저장 엔진의 검증·입력·저장 흐름 통과");
+   }
    r = Setup(true, true); result = Run(r);
    Check(result.Success && State.Events.First() == "create-local" && State.Events.Contains("sync") && result.RecoveryPath != _central, "중앙은 별도 로컬에서 동기화");
    Check(File.Exists(result.RecoveryPath) && result.BackupPath == "", "중앙 원본 경로 직접 덮어쓰기 없음");

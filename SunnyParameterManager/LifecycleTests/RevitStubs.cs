@@ -29,6 +29,7 @@ namespace Autodesk.Revit.DB
   public static List<string> Events = [];
   public static bool FailSave, FailSync, FailClose, FailCommit, FailSet, VerifyMismatch, OwnedOther, MaterialChangesAfterSet, TypeChangesAfterSet;
   public static string TypeOwnerId = "type-1";
+  public static string Scope = "유형";
   public static bool MaterialMissing;
   public static ApplicationServices.Application App = null!;
   public static FailureSeverity? Failure;
@@ -143,7 +144,7 @@ namespace SunnyParameterManager.Bridge
    : new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = State.MaterialChangesAfterSet && State.Events.Contains("set") ? "material-v2" : "material-v1" };
   public List<string> Notices { get; } = [];
   public List<ParameterRow> ReadAll() => [Read(doc.Element, doc.Element.Parameter)];
-  public ParameterRow Read(Element owner, Parameter p) => new() { ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = "유형", TypeName = "W1", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
+  public ParameterRow Read(Element owner, Parameter p) => new() { ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = "W1", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
   internal static Parameter? Resolve(Element owner, string key) => key == "id:1" ? owner.Parameter : null;
   internal static string Raw(Parameter p) => p.Value;
  }

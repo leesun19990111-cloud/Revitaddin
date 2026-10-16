@@ -151,6 +151,7 @@ internal static class Program
             FieldSearchTests();
             FailedApplyTests();
             FolderSearchTests.Run(Check, Reject, Render);
+            ViewEditingTests.Run(Check, Reject, Render);
             Console.WriteLine("화면 렌더: " + RenderOutput);
             Console.WriteLine($"TOTAL {_count} PASS · 실제 Revit/중앙 서버 검증은 별도 필요");
             return 0;

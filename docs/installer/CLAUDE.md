@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.2.2 — 2026-10-16 뷰·시트 매개변수 확장
+
+- 정상 프로젝트 뷰/시트 조회·실제 이름 표시와 직접 입력, 필드 이름 공백 무시 검색. 템플릿 제어/실제 읽기전용은 보호. 기존 룰셋 및 저장 엔진 안전 경계 유지. 새 설치 후 RVT 다시 조회 필요.
+- out_v022 / SunnyParameterManager_Installer_v.0.2.2.zip / App-0.2.2 / Protocol.Release0.2.2. Tests022/Release022/Material022/Reader022/Publish022/Bridge022 및 installer ParameterManager022 격리. 같은 제품 v021만 보관, Sunny Tools v109 유지.
+- 375 Core/룰셋/WPF + 53 lifecycle + 22 재료 리더 + 23 매개변수 리더 API 대역 검사. 최소/기본 뷰 화면 렌더 확인. 실제 설치/사용자 RVT 조회·저장·중앙 동기화는 미검증.
+
 ## 별도 제품 0.2.1 — 2026-10-16 여러 폴더 RVT 검색
 
 - 다중 폴더/하위 폴더의 RVT 파일명 포함 검색, 후보 체크, 백업 제외·중복 방지·취소·접근 실패 안내. 새로 체크한 파일만 기존 조회 경로에 연결한다. 0.2.0 실패 진단/재시도 보호 포함, 실제 모델 수정 경로 불변.

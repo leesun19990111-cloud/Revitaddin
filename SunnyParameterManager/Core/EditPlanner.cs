@@ -35,6 +35,7 @@ public static class EditPlanner
         foreach (var target in targets.DistinctBy(r => r.Key))
         {
             if (string.Equals(target.ModelPath, source.Path, StringComparison.OrdinalIgnoreCase)) { errors.Add("기준 모델 자체가 대상에 포함되어 있습니다."); continue; }
+            if (target.Scope is "뷰" or "시트") { errors.Add("뷰·시트는 이름만으로 모델 간 자동 연결하지 않습니다. 직접 입력을 사용하세요."); continue; }
             if (target.Scope == "인스턴스") { errors.Add("인스턴스는 유형명이 같아도 동일 요소가 아니므로 자동 복사하지 않습니다. 직접 일괄 입력을 사용하세요."); continue; }
             if (!target.Editable) { errors.Add($"{target.TypeName}: {target.BlockReason}"); continue; }
             var candidates = index.GetValueOrDefault(target.TypeKey, []).Where(r => SameParameter(r, target, approveNamedParameters)).ToList();

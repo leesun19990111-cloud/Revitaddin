@@ -189,7 +189,8 @@ public partial class MainWindow : Window
     private void ApplyFieldSearch(string? current)
     {
         var search = FieldSearchBox.Text.Trim();
-        var matches = _fieldNames.Where(n => n.Contains(search, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        static string Compact(string value) => string.Concat(value.Where(c => !char.IsWhiteSpace(c)));
+        var matches = _fieldNames.Where(n => Compact(n).Contains(Compact(search), StringComparison.CurrentCultureIgnoreCase)).ToList();
         var count = matches.Count;
         // 검색만으로 선택/행/입력값을 바꾸지 않는다. 검색 밖의 현재 항목은 맨 위에 남긴다.
         var retained = current != null && !matches.Contains(current);
@@ -214,8 +215,8 @@ public partial class MainWindow : Window
         var search = SearchBox.Text.Trim();
         var model = ModelsList.SelectedItem as ModelItem;
         var rows = AllRows().Where(r => (model == null || r.ModelPath == model.Path) && (scope == "전체 범위" || r.Scope == scope) && (field == null || r.Name == field));
-        if (search.Length > 0) rows = rows.Where(r => new[] { r.ModelTitle, r.Category, r.Family, r.TypeName, r.Display }.Any(s => s.Contains(search, StringComparison.CurrentCultureIgnoreCase)));
-        var visible = rows.OrderBy(r => r.ModelTitle).ThenBy(r => r.Family).ThenBy(r => r.TypeName).ThenBy(r => r.ElementId).ToList();
+        if (search.Length > 0) rows = rows.Where(r => new[] { r.ModelTitle, r.Category, r.Family, r.TypeName, r.TargetName, r.Display }.Any(s => s.Contains(search, StringComparison.CurrentCultureIgnoreCase)));
+        var visible = rows.OrderBy(r => r.ModelTitle).ThenBy(r => r.Family).ThenBy(r => r.TargetName).ThenBy(r => r.ElementId).ToList();
         ValuesGrid.ItemsSource = visible;
         CountText.Text = $"{visible.Count:N0}행 · 편집 가능 {visible.Count(r => r.Editable):N0}행";
         UpdateEditor();
