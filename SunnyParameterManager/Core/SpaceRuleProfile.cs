@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace SunnyParameterManager.Core;
 
-// 공간파일 프로젝트 정보만 지원한다. 업무 엑셀/확정표는 설치 파일과 분리한다.
+// SP 공간파일과 SA 건축파일의 프로젝트 정보만 지원한다. 업무 엑셀/확정표는 설치 파일과 분리한다.
 public sealed class SpaceRuleProfile
 {
     public string Scope { get; set; } = "프로젝트 정보";
@@ -43,7 +43,7 @@ public static class SpaceRulePlanner
         if (string.IsNullOrWhiteSpace(path) || path.Length > 4096) return null;
         var filename = path.Replace('\\', '/').Split('/').Last();
         if (!filename.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase)) return null;
-        var m = Regex.Match(filename[..^4], @"\A(PUS|MWX|CJU)-([0-9]+(?:-[0-9]+)?)[_\-]?([^0-9_\-\s].*)-SP\z",
+        var m = Regex.Match(filename[..^4], @"\A(PUS|MWX|CJU)-([0-9]+(?:-[0-9]+)?)[_\-]?([^0-9_\-\s].*)-(?:SP|SA)\z",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
         return m.Success ? (m.Groups[1].Value.ToUpperInvariant(), Number(m.Groups[2].Value), m.Groups[3].Value) : null;
     }
@@ -92,7 +92,7 @@ public static class SpaceRulePlanner
             var key = identity == null ? ((string Airport, string Number)?)null : (identity.Value.Airport, identity.Value.Number);
             if (key == null)
             {
-                plan.Notes.Add(label + ": 제외 — 파일명이 공항코드-건물번호건물명-SP.rvt 형식이 아닙니다. 파일명을 임의로 추정하지 않습니다.");
+                plan.Notes.Add(label + ": 제외 — 파일명이 공항코드-건물번호건물명-SP.rvt 또는 -SA.rvt 형식이 아닙니다. 파일명을 임의로 추정하지 않습니다.");
                 continue;
             }
             var owners = model.Where(r => r.Scope == "프로젝트 정보").GroupBy(r => r.OwnerId).ToList();
@@ -139,7 +139,7 @@ public static class SpaceRulePlanner
         foreach (var a in assignments.Values)
             foreach (var edit in EditPlanner.Stage([a.Row], a.Value))
             { edit.Reason = a.Reason; plan.Edits.Add(edit); }
-        plan.Notes.Insert(0, $"공간파일 {plan.MatchedOwners:N0}개 · 프로젝트 정보 변경 {plan.Edits.Count:N0}개 · 동일값 {assignments.Count - plan.Edits.Count:N0}개 제외");
+        plan.Notes.Insert(0, $"SP·SA 파일 {plan.MatchedOwners:N0}개 · 프로젝트 정보 변경 {plan.Edits.Count:N0}개 · 동일값 {assignments.Count - plan.Edits.Count:N0}개 제외");
         return plan;
     }
 }

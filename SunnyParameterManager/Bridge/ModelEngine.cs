@@ -19,7 +19,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         var result = new Response { Id = req.Id };
         var removingLinks = req.Operation == "링크 삭제";
         var modifying = req.Operation == "적용" || removingLinks;
-        void Step(string stage) { result.Stage = stage; progress(result); }
+        void Step(string stage) { result.Stage = stage; progress(new Response { Id = result.Id, Stage = stage, RecoveryPath = result.RecoveryPath }); }
         try
         {
             if (req.Operation is not ("조회" or "적용" or "링크 검사" or "링크 삭제")) throw new InvalidOperationException("지원하지 않는 작업입니다.");
@@ -175,6 +175,10 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         }
         catch (Exception ex)
         {
+            if (req.Operation == "조회" && ex is OutOfMemoryException)
+            {
+                result.Success = false; result.Snapshot = null; result.ReadRestartRequired = true;
+            }
             result.Message = (result.Success ? result.Message + "\n후처리 안내: " : "") + (string.IsNullOrEmpty(result.Stage) ? "" : "[" + result.Stage + "] ") + ex.Message + (preserve ? "\n변경 또는 중앙 반영 여부를 확인해야 합니다. 작업용 Revit과 로컬을 보존합니다. 자동 재실행하지 마세요." : "");
             result.RequiresAttention = preserve;
             // 저장/동기화 성공 뒤 닫기만 실패한 경우 이미 성공한 변경을 실패로 거짓 보고하지 않는다.

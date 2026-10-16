@@ -4,9 +4,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, 'SunnyParameterManagerInstaller_out_v023');
-const zip = path.join(root, 'SunnyParameterManager_Installer_v.0.2.3.zip');
-const scratch = path.join(root, 'SunnyParameterManager', 'Build', 'v023');
+const output = path.join(root, 'SunnyParameterManagerInstaller_out_v025');
+const zip = path.join(root, 'SunnyParameterManager_Installer_v.0.2.5.zip');
+const scratch = path.join(root, 'SunnyParameterManager', 'Build', 'v025');
 const extras = ['먼저 읽어주세요.md', '룰셋 파일 안내.md', '연습용.sunnyrules.json', '빌드정보.json'];
 const sha = data => crypto.createHash('sha256').update(data).digest('hex').toUpperCase();
 const files = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(path.join(dir, e.name)) : [path.join(dir, e.name)]);
@@ -27,7 +27,7 @@ function verify() {
   const expected = ['SunnyTools_Install.exe', 'SunnyTools_Install.pdb', ...extras, 'ParameterManager/files.sha256.json', ...Object.keys(hashes).map(n => 'ParameterManager/' + n)];
   if (JSON.stringify([...listed].sort()) !== JSON.stringify([...expected].sort())) throw Error('ZIP 구성 불일치');
   for (const name of expected) {
-    const data = execFileSync('tar', ['-xOf', zip, name], { maxBuffer: 128 * 1024 * 1024, windowsHide: true });
+    const data = execFileSync('tar', ['-xOf', zip, name], { maxBuffer: 128 * 1025 * 1025, windowsHide: true });
     if (sha(data) !== sha(fs.readFileSync(path.join(output, name)))) throw Error('ZIP 해시 불일치: ' + name);
   }
   if (fs.existsSync(path.join(output, 'Payload'))) throw Error('기존 Sunny Tools 페이로드 혼입');
@@ -40,22 +40,24 @@ if (!packageOnly && (fs.existsSync(output) || fs.existsSync(zip))) throw Error('
 if (!packageOnly) {
 fs.mkdirSync(scratch, { recursive: true });
 dotnet(['run', '--project', 'SunnyParameterManager/Tests/SunnyParameterManager.Tests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Tests023/', '-p:OutputPath=bin/Tests023/']);
+  '-p:IntermediateOutputPath=obj/Tests025/', '-p:OutputPath=bin/Tests025/']);
 dotnet(['run', '--project', 'SunnyParameterManager/LifecycleTests/SunnyParameterManager.LifecycleTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Release023/', '-p:OutputPath=bin/Release023/']);
+  '-p:IntermediateOutputPath=obj/Release025/', '-p:OutputPath=bin/Release025/']);
 dotnet(['run', '--project', 'SunnyParameterManager/MaterialTests/SunnyParameterManager.MaterialTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Material023/', '-p:OutputPath=bin/Material023/']);
+  '-p:IntermediateOutputPath=obj/Material025/', '-p:OutputPath=bin/Material025/']);
 dotnet(['run', '--project', 'SunnyParameterManager/ReaderTests/SunnyParameterManager.ReaderTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Reader023/', '-p:OutputPath=bin/Reader023/']);
+  '-p:IntermediateOutputPath=obj/Reader025/', '-p:OutputPath=bin/Reader025/']);
 dotnet(['run', '--project', 'SunnyParameterManager/LinkTests/SunnyParameterManager.LinkTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Links023/', '-p:OutputPath=bin/Links023/']);
+  '-p:IntermediateOutputPath=obj/Links025/', '-p:OutputPath=bin/Links025/']);
+dotnet(['run', '--project', 'SunnyParameterManager/WorkerTests/SunnyParameterManager.WorkerTests.csproj', '-c', 'Release',
+  '-p:IntermediateOutputPath=obj/Worker025/', '-p:OutputPath=bin/Worker025/']);
 dotnet(['publish', 'SunnyParameterManager/Desktop/SunnyParameterManager.Desktop.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Publish023/', '-p:OutputPath=bin/Publish023/', '-o', path.join(scratch, 'Desktop')]);
+  '-p:IntermediateOutputPath=obj/Publish025/', '-p:OutputPath=bin/Publish025/', '-o', path.join(scratch, 'Desktop')]);
 dotnet(['build', 'SunnyParameterManager/Bridge/SunnyParameterManager.Bridge.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Bridge023/', '-p:OutputPath=bin/Bridge023/', '-o', path.join(scratch, 'Bridge')]);
+  '-p:IntermediateOutputPath=obj/Bridge025/', '-p:OutputPath=bin/Bridge025/', '-o', path.join(scratch, 'Bridge')]);
 dotnet(['publish', 'SunnyToolsInstaller/SunnyToolsInstaller.csproj', '-c', 'Release', '-p:ParameterManagerOnly=true',
-  '-p:BaseIntermediateOutputPath=obj/ParameterManager023/', '-p:MSBuildProjectExtensionsPath=obj/ParameterManager023/',
-  '-p:BaseOutputPath=bin/ParameterManager023/', '-o', output]);
+  '-p:BaseIntermediateOutputPath=obj/ParameterManager025/', '-p:MSBuildProjectExtensionsPath=obj/ParameterManager025/',
+  '-p:BaseOutputPath=bin/ParameterManager025/', '-o', output]);
 }
 const payload = path.join(output, 'ParameterManager');
 fs.mkdirSync(path.join(payload, 'Bridge'), { recursive: true });
@@ -78,7 +80,7 @@ for (const file of files(path.join(root, 'SunnyParameterManager'))) {
   if (!/[/\\](bin|obj|Build)[/\\]/.test(file) && /\.(cs|csproj|xaml|cjs)$/.test(file)) sourceChecks[rel(root, file)] = sha(fs.readFileSync(file));
 }
 for (const name of ['Program.cs', 'ParameterManagerInstaller.cs', 'SunnyToolsInstaller.csproj']) sourceChecks['SunnyToolsInstaller/' + name] = sha(fs.readFileSync(path.join(root, 'SunnyToolsInstaller', name)));
-fs.writeFileSync(path.join(output, '빌드정보.json'), JSON.stringify({ version: '0.2.3', builtUtc: new Date().toISOString(), tests: '400 룰셋·core·WPF + 66 lifecycle + 22 재료 리더 + 23 매개변수 리더 + 25 링크 삭제 API 대역 (빌드 전 전체 실행)', liveRevitTested: false, sourceChecks }, null, 2));
+fs.writeFileSync(path.join(output, '빌드정보.json'), JSON.stringify({ version: '0.2.5', builtUtc: new Date().toISOString(), tests: '425 룰셋·core·WPF + 70 lifecycle + 22 재료 리더 + 23 매개변수 리더 + 25 링크 삭제 + 12 작업 프로세스 API 대역 (빌드 전 전체 실행)', liveRevitTested: false, sourceChecks }, null, 2));
 // 보안 제품이 폴더 열거 시 만드는 임시 미끼 파일을 읽거나 배포하지 않는다. 검증한 파일만 지정한다.
 const archiveFiles = ['SunnyTools_Install.exe', 'SunnyTools_Install.pdb', ...extras, 'ParameterManager/files.sha256.json', ...Object.keys(hashes).map(n => 'ParameterManager/' + n)];
 execFileSync('tar', ['-a', '-cf', zip, '-C', output, ...archiveFiles], { stdio: 'inherit', windowsHide: true });

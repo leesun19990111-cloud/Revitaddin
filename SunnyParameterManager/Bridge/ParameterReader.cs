@@ -40,6 +40,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             foreach (var p in parameters)
             {
                 try { if (p.Definition != null) result.Add(Read(element, p)); }
+                catch (OutOfMemoryException) { throw; } // 메모리 오류로 빠진 값을 정상 조회 결과로 넘기지 않는다.
                 catch (Exception ex) { errors++; if (Notices.Count < 5) Notices.Add($"요소 {element.Id.Value}: 일부 매개변수 조회 실패 — {ex.Message}"); }
             }
         }

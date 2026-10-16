@@ -20,10 +20,20 @@ internal static class SpaceRuleTests
         check(SpaceRulePlanner.FileKey("mwx-15시험-sp.RVT") == ("MWX", "15"), "공간 파일명 대소문자");
         check(SpaceRulePlanner.FileKey("PUS-03-02시험-SP.rvt") == ("PUS", "3-2"), "하위 건물번호 별도 식별");
         check(SpaceRulePlanner.FileKey("MWX-150시험-SP.rvt") == ("MWX", "150"), "15와 150 부분 일치 방지");
-        foreach (var invalid in new[] { "MWX-15시험-SA.rvt", "MWX-15시험-SP_사용자.rvt", "MWX-15시험-SP.0001.rvt", "MWX-15시험-SP.rfa", "XXX-15시험-SP.rvt", "접두-MWX-15시험-SP.rvt", "MWX-15-SP.rvt", "MWX-15-1-2시험-SP.rvt", "" })
+        foreach (var invalid in new[] { "MWX-15시험-ME.rvt", "MWX-15시험-SP_사용자.rvt", "MWX-15시험-SP.0001.rvt", "MWX-15시험-SP.rfa", "XXX-15시험-SP.rvt", "접두-MWX-15시험-SP.rvt", "MWX-15-SP.rvt", "MWX-15-1-2시험-SP.rvt", "" })
             check(SpaceRulePlanner.FileKey(invalid) == null, "공간 파일명 미확정 제외 " + invalid);
-        var wrong = Row("공항코드", "MWX-15시험-SA.rvt"); wrong.ModelTitle = fileName;
+        var wrong = Row("공항코드", "MWX-15시험-ME.rvt"); wrong.ModelTitle = fileName;
         check(Plan(file, wrong).Edits.Count == 0, "표시 제목 대신 등록 원본 경로 기준");
+        const string saPath = "MWX-15시험건물-SA.rvt";
+        var saPlan = Plan(file, Row("공항코드", saPath), Row("건축물번호", saPath));
+        check(saPlan.Edits.Count == 2 && saPlan.Edits.Single(e => e.Field == "공항코드").Value == "MWX" && saPlan.Edits.Single(e => e.Field == "건축물번호").Value == "1D999-1", "SA도 기존 공간 룰셋으로 두 프로젝트 정보 입력");
+        check(Plan(file, a, b, Row("공항코드", saPath), Row("건축물번호", saPath)).Edits.Count == 4, "같은 건물 SP·SA를 모델별 독립 적용");
+        check(SpaceRulePlanner.FileKey(@"C:\폴더\cju-004화물터미널-sa.RVT") == ("CJU", "4"), "SA 대소문자·전체 경로·앞자리 0 지원");
+        check(SpaceRulePlanner.FileKey("PUS-03-02시험-SA.rvt") == ("PUS", "3-2"), "SA 하위 건물번호 정확 연결");
+        foreach (var invalidSa in new[] { "MWX-15시험-SA.0001.rvt", "MWX-15시험-SA_사용자.rvt", "MWX-15시험-SAA.rvt", "MWX-15-SA.rvt" })
+            check(SpaceRulePlanner.FileKey(invalidSa) == null, "SA 미확정 파일명 제외 " + invalidSa);
+        var missingSa = File(); missingSa.Space!.Buildings[0].Ownership = "";
+        check(Plan(missingSa, Row("공항코드", saPath), Row("건축물번호", saPath)).Edits.Single().Field == "공항코드", "SA도 소유구분 없으면 건축물번호 보존");
         var type = Row("공항코드"); type.Scope = "유형"; type.OwnerId = "type";
         var instance = Row("건축물번호"); instance.Scope = "인스턴스"; instance.OwnerId = "instance";
         check(Plan(file, a, b, type, instance).Edits.All(e => e.Original.Scope == "프로젝트 정보"), "동명 유형·인스턴스 변경 금지");
@@ -71,6 +81,8 @@ internal static class SpaceRuleTests
         file.Space!.UnresolvedPolicy = "위행상속"; reject(() => Plan(file, a, b), "공간 빈값 상위행 상속 금지"); file = File();
         reject(() => RulePlanner.Parse(JsonSerializer.Serialize(file).Replace("\"Space\":", "\"Spaces\":")), "공간 알 수 없는 속성 차단");
         file.Space!.Buildings[0].NameAliases = ["시험초소A", "시험초소B"];
+        var saAlias = "MWX-19-1시험초소A-SA.rvt";
+        check(Plan(file, Row("공항코드", saAlias), Row("건축물번호", saAlias)).Edits.Single(e => e.Field == "건축물번호").Value == "1D999-1", "SA 초소 확정 별칭도 동일하게 지원");
         var aliasPath = "MWX-19-1시험초소A-SP.rvt";
         check(Plan(file, Row("공항코드",aliasPath), Row("건축물번호",aliasPath)).Edits.Single(e => e.Field == "건축물번호").Value == "1D999-1", "명시한 별칭은 번호보다 우선");
         aliasPath = "MWX-19-2시험 초소 b-SP.rvt";

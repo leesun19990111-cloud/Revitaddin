@@ -13,6 +13,7 @@ public sealed class WorkerClient
     private bool _sending;
     public bool Connected { get; private set; }
     public bool NeedsAttention { get; private set; }
+    public bool CanRestartForRead { get; private set; }
     public string SessionFolder => _folder;
     public Action<string>? Progress { get; set; }
 
@@ -32,6 +33,7 @@ public sealed class WorkerClient
         start.Environment["SUNNY_PARAMETER_TOKEN"] = _token;
         _process = Process.Start(start) ?? throw new InvalidOperationException("작업용 Revit을 시작하지 못했습니다.");
         NeedsAttention = false;
+        CanRestartForRead = false;
         Progress?.Invoke("작업용 Revit 시작 중… 로그인·애드인 확인 창이 나타나면 직접 확인해 주세요. 기존 Revit은 건드리지 않습니다.");
         var watch = Stopwatch.StartNew();
         while (watch.Elapsed < TimeSpan.FromMinutes(3))
@@ -55,7 +57,12 @@ public sealed class WorkerClient
 
     public async Task<Response> Send(Request request)
     {
-        if (!Connected || _process == null || _process.HasExited || NeedsAttention) throw new InvalidOperationException("작업용 Revit을 먼저 연결하세요. 이전 작업 확인이 필요하면 해당 Revit을 확인한 뒤 다시 시작하세요.");
+        if (!_sending && Connected && !NeedsAttention && request.Operation == "조회" && _process is { HasExited: true })
+        {
+            NeedsAttention = true; CanRestartForRead = true;
+            return new Response { Id = request.Id, RequiresAttention = true, CanRestartForRead = true, Message = "다음 파일 조회 전에 작업용 Revit이 종료되었습니다. 새 연결이 필요합니다." };
+        }
+        if (!Connected || _process == null || _process.HasExited || (NeedsAttention && !(request.Operation == "종료" && CanRestartForRead))) throw new InvalidOperationException("작업용 Revit을 먼저 연결하세요. 이전 작업 확인이 필요하면 해당 Revit을 확인한 뒤 다시 시작하세요.");
         if (_sending) throw new InvalidOperationException("진행 중인 작업이 있습니다.");
         _sending = true;
         try
@@ -71,6 +78,8 @@ public sealed class WorkerClient
                     var result = await Task.Run(() => Protocol.Read<Response>(resultPath));
                     if (result.Id != request.Id) throw new InvalidDataException("작업 응답 식별자가 다릅니다.");
                     NeedsAttention |= result.RequiresAttention;
+                    if (request.Operation != "종료") CanRestartForRead = request.Operation == "조회" && result.RequiresAttention && result.CanRestartForRead;
+                    else if (!result.Success) CanRestartForRead = false;
                     result.Snapshot?.ConnectCatalogs();
                     if (request.Operation == "종료") Connected = false;
                     return result;
@@ -84,7 +93,29 @@ public sealed class WorkerClient
             }
             throw new TimeoutException("45분 대기 시간이 지났습니다. 작업용 Revit을 확인하세요. 작업은 강제 취소되지 않았고 자동 재시도하지 않습니다.");
         }
-        catch { NeedsAttention = true; throw; }
+        catch (Exception ex)
+        {
+            // 조회 중 프로세스가 이미 종료된 경우만 새 연결을 허용한다. 살아 있는 프로세스의 응답 손실은 임의로 취소하지 않는다.
+            bool restart = request.Operation == "조회" && !NeedsAttention && _process.HasExited;
+            NeedsAttention = true; CanRestartForRead = restart;
+            if (restart) return new Response { Id = request.Id, RequiresAttention = true, CanRestartForRead = true, Message = "조회 중 작업용 Revit이 종료되었습니다. " + ex.Message };
+            throw;
+        }
         finally { _sending = false; }
+    }
+
+    public async Task RestartForReadFailure(string revitExe)
+    {
+        if (!CanRestartForRead || _sending) throw new InvalidOperationException("조회 전용 재연결을 안전하게 진행할 수 없는 상태입니다.");
+        if (_process is { HasExited: false })
+        {
+            Progress?.Invoke("조회 메모리 정리 · 빈 작업용 Revit을 정상 종료하는 중…");
+            var result = await Send(new Request { Operation = "종료" });
+            if (!result.Success) throw new InvalidOperationException(result.Message);
+            var watch = Stopwatch.StartNew();
+            while (!_process.HasExited && watch.Elapsed < TimeSpan.FromSeconds(30)) await Task.Delay(500);
+            if (!_process.HasExited) throw new InvalidOperationException("작업용 Revit의 종료가 아직 끝나지 않았습니다. 해당 창의 안내를 확인한 뒤 ‘미조회 파일 계속 조회’를 누르세요. 강제 종료하지 않았습니다.");
+        }
+        await Connect(revitExe);
     }
 }

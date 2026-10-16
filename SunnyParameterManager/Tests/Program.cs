@@ -24,6 +24,7 @@ internal static class Program
         {
             KacRuleTests.Run(Check, Reject);
             SpaceRuleTests.Run(Check, Reject);
+            ReadBatchTests.Run(Check);
             var a = Row();
             Check(EditPlanner.Stage([a], "새값").Single().Value == "새값", "텍스트 직접 입력");
             Check(a.Raw == "기존", "미리보기는 원본 불변");

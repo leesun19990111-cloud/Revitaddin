@@ -26,6 +26,14 @@ internal static class Program
    File.WriteAllText(_source, "테스트 대역 원본"); File.WriteAllText(_central, "테스트 대역 중앙");
    var r = Setup(); r.Operation = "조회"; var result = Run(r);
    Check(result.Success && result.Snapshot!.Rows.Count == 1 && State.Events.SequenceEqual(new[] { "open", "close" }), "조회는 저장/트랜잭션 없이 닫기");
+   var progress = new List<Response>();
+   r = Setup(); r.Operation = "조회"; result = new ModelEngine(_root, progress.Add).Run(new App(), r);
+   Check(result.Success && progress.Any(p => p.Stage == "문서 닫기") && progress.All(p => p.Snapshot == null), "조회 진행 기록에는 대용량 전체 결과를 중복 직렬화하지 않기");
+   r = Setup(); r.Operation = "조회"; State.ReadOutOfMemory = true; result = Run(r); State.ReadOutOfMemory = false;
+   Check(!result.Success && result.Snapshot == null && result.ReadRestartRequired && !result.CanRestartForRead, "조회 OOM은 부분 결과 폐기·재시작 필요 표시만 하고 문서 없음 판정은 Worker 담당");
+   Check(State.Events.SequenceEqual(new[] { "open", "close" }), "조회 OOM도 저장 없이 문서 닫기 시도");
+   r = Setup(); r.Operation = "조회"; State.ReadOutOfMemory = true; State.FailClose = true; result = Run(r); State.ReadOutOfMemory = false;
+   Check(result.RequiresAttention && !result.CanRestartForRead && result.ReadRestartRequired, "조회 OOM 후 닫기 실패도 안전 재시작을 추정하지 않기");
    r = Setup(true, true); r.Operation = "조회"; result = Run(r);
    Check(result.Success && result.Snapshot!.Kind == "중앙" && result.Snapshot.Rows.Count == 1 && State.Events.SequenceEqual(new[] { "create-local", "open", "close" }), "파일 기반 중앙 조회는 서버 전용 GUID 없이 읽고 저장하지 않기");
    var centralIdentity = result.Snapshot!.Identity;

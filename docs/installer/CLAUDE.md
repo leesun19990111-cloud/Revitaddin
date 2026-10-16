@@ -1,5 +1,16 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.2.5 — 2026-10-16 SP·SA 프로젝트 정보 룰셋
+
+- 기존 버전3 공간 룰셋으로 SA 건축파일의 공항코드/건축물번호도 입력하도록 파일명 허용 범위 확장. JSON 표 변경 불필요. 0.2.4 조회 계속 기능 포함. 다른 접미사·모호한 연결·읽기전용 보호 유지.
+- out_v025 / SunnyParameterManager_Installer_v.0.2.5.zip / App-0.2.5 / Protocol.Release0.2.5. 모든 빌드 경로 025 격리. 같은 제품 v024만 보관, Sunny Tools v109 유지. Core/WPF425 + lifecycle70 + 재료22 + reader23 + 링크25 + Worker12 구성. 실제 사용자 RVT 적용·설치 미검증.
+
+## 별도 제품 0.2.4 — 2026-10-16 조회 실패 후 계속 확인
+
+- 개별 조회 실패에 나머지 계속 여부 확인, 미시도 파일 계속 조회 버튼. 조회 전용 메모리 실패의 빈 작업용 Revit 정상 재시작만 허용하며 기존 저장/동기화 복구 잠금 유지. JSON 스트림과 경량 진행 기록으로 전송 중 메모리 복제를 줄인다. 선택 매개변수/룰셋 우선 조회는 아직 미구현.
+- out_v024 / SunnyParameterManager_Installer_v.0.2.4.zip / App-0.2.4 / Protocol.Release0.2.4. Tests024/Release024/Material024/Reader024/Links024/Worker024/Publish024/Bridge024 및 installer ParameterManager024 격리. 같은 제품 v023만 보관, Sunny Tools v109 유지.
+- Core/WPF415 + lifecycle70 + 재료22 + reader23 + 링크25 + Worker12 검사 구성. 실제 설치·사용자 RVT 조회·저장·중앙 동기화는 미검증. 기존 실행 중인0.2.3의 잠금을 새 빌드가 소급 해제하지 않는다.
+
 ## 별도 제품 0.2.3 — 2026-10-16 링크·가져오기 완전 제거
 
 - 체크한 등록 모델의 링크 정의/배치·가져오기 제거, 삭제 영향과 종속 요소 표시/추가 승인, 삭제 전 백업, 실제 요청 재검증, 남은 정의 0 확인 후 저장·중앙 동기화. 원본 외부 파일과 패밀리 내부는 변경하지 않는다. 기존 애드인 호스트 링크 해제 경로 불변. 상세 범위/보호는 parameter-manager 문서.

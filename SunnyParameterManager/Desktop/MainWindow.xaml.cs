@@ -16,6 +16,7 @@ public sealed class ModelItem : INotifyPropertyChanged
     private string _status = "조회 전";
     public string Status { get => _status; set { _status = value; PropertyChanged?.Invoke(this, new(nameof(Status))); } }
     public ModelSnapshot? Snapshot { get; set; }
+    public bool ReadFailed { get; set; }
     public event PropertyChangedEventHandler? PropertyChanged;
 }
 
@@ -121,7 +122,7 @@ public partial class MainWindow : Window
     {
         if (_busy) return;
         if (_sample) { StatusText.Text = "샘플에서는 실제 RVT를 조회하지 않습니다. RVT 추가로 실제 작업을 시작하세요."; return; }
-        if (_worker.NeedsAttention) { MessageBox.Show(this, "반영 여부 확인이 필요한 작업이 있습니다. 작업용 Revit과 복구 파일을 먼저 확인하세요. 기존 변경 예정은 보존합니다."); return; }
+        if (_worker.NeedsAttention && !_worker.CanRestartForRead) { MessageBox.Show(this, "작업 완료 여부 확인이 필요합니다. 작업용 Revit과 처리 결과를 먼저 확인하세요. 기존 변경 예정은 보존합니다."); return; }
         var failed = _models.Where(m => m.Snapshot?.RequiresRequery == true).ToList();
         if (failed.Count > 0)
         {
@@ -144,6 +145,13 @@ public partial class MainWindow : Window
         }
         RefreshFields(); UpdatePending();
     }
+    private async void ContinueUnreadModels(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _sample) return;
+        var paths = _models.Where(m => m.Snapshot == null && !m.ReadFailed).Select(m => m.Path).ToList();
+        if (paths.Count == 0) { MessageBox.Show(this, "아직 시도하지 않은 파일이 없습니다. 실패한 파일은 원인을 확인한 뒤 ‘다시 조회’를 사용하세요."); return; }
+        await ReadRegisteredModels(true, paths);
+    }
     private async Task ReadRegisteredModels(bool onlyUnread, IReadOnlyCollection<string>? selectedPaths = null)
     {
         await Run(async () =>
@@ -152,26 +160,45 @@ public partial class MainWindow : Window
             var targets = _models.Where(m => (!onlyUnread || m.Snapshot == null) && (selectedPaths == null || selectedPaths.Contains(m.Path, StringComparer.OrdinalIgnoreCase))).ToList();
             if (targets.Count == 0) { StatusText.Text = "선택한 파일은 이미 읽었습니다."; return; }
             StatusText.Text = "파일을 읽을 준비 중입니다. 처음에는 Revit 시작에 몇 분 걸릴 수 있습니다.";
-            await _worker.Connect(RevitPathBox.Text.Trim());
-            foreach (var item in targets)
+            if (_worker.NeedsAttention)
             {
-                item.Snapshot = null; item.Status = "조회 중…";
-                var result = await _worker.Send(new Request { Operation = "조회", Path = item.Path });
+                if (!_worker.CanRestartForRead) throw new InvalidOperationException("작업 완료 여부를 확인할 수 없어 조회를 멈췄습니다. 작업용 Revit과 처리 결과를 확인하세요. 기존 조회 결과와 변경 예정은 유지됩니다.");
+                if (MessageBox.Show(this, $"조회용 연결을 새로 시작하고 선택한 {targets.Count}개 파일을 조회할까요?\n기존 조회 결과와 변경 예정은 유지합니다. 실패 파일을 자동 재시도하지 않습니다.", "조회 연결 다시 시작", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+                await _worker.RestartForReadFailure(RevitPathBox.Text.Trim());
+            }
+            else await _worker.Connect(RevitPathBox.Text.Trim());
+            var byPath = targets.ToDictionary(m => m.Path, StringComparer.OrdinalIgnoreCase);
+            var batch = await ReadBatch.Run(targets.Select(m => m.Path).ToList(), async path =>
+            {
+                var item = byPath[path];
+                item.Snapshot = null; item.ReadFailed = false; item.Status = "조회 중…";
+                return await _worker.Send(new Request { Operation = "조회", Path = path });
+            }, (path, result) =>
+            {
+                var item = byPath[path];
                 if (result.Success && result.Snapshot != null)
                 {
                     var snapshot = result.Snapshot;
                     var duplicate = _models.Where(m => m != item && m.Snapshot != null).Any(m => string.Equals(ModelIdentityPath(m.Snapshot!), ModelIdentityPath(snapshot), StringComparison.OrdinalIgnoreCase));
-                    if (duplicate) item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다.";
+                    if (duplicate) { item.ReadFailed = true; item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다."; }
                     else { item.Snapshot = snapshot; item.Status = $"{snapshot.Kind} · {snapshot.Rows.Count:N0}개 값"; }
                     ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n" + string.Join("\n", snapshot.Notices) + "\n");
                 }
-                else { item.Status = "조회 실패"; ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n"); }
-                if (result.RequiresAttention) break;
-            }
+                else { item.ReadFailed = true; item.Status = "조회 실패 · 건너뜀"; ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n"); }
+            }, failure => MessageBox.Show(this,
+                $"파일을 조회하지 못했습니다.\n\n{System.IO.Path.GetFileName(failure.Path)}\n{failure.Message}\n\n실패한 파일은 건너뛰고 나머지 {failure.Remaining}개 파일을 계속 조회할까요?" +
+                (failure.RestartRequired ? "\n\n계속하면 빈 작업용 Revit을 정상 종료하고 새로 연결합니다." : "") +
+                "\n‘아니요’를 눌러도 기존 결과와 변경 예정은 유지합니다. 이후 ‘파일 관리 → 미조회 파일 계속 조회’로 이어갈 수 있습니다.",
+                "조회 실패 · 계속 진행 확인", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes,
+                () => _worker.RestartForReadFailure(RevitPathBox.Text.Trim()), message =>
+                {
+                    ReportBox.AppendText("\n" + message + "\n");
+                    MessageBox.Show(this, message, "조회 중단 · 확인 필요", MessageBoxButton.OK, MessageBoxImage.Warning);
+                });
             RefreshFields();
-            StatusText.Text = _models.All(m => m.Snapshot != null)
+            StatusText.Text = batch.Blocked ? $"조회 중단 · 작업용 Revit 확인 필요. 남은 파일 {batch.Remaining}개와 기존 결과·변경 예정은 유지됩니다." : _models.All(m => m.Snapshot != null)
                 ? "파일을 읽었습니다. ‘② 룰셋 불러오기’를 누르거나, 항목과 행을 선택해 직접 입력하세요."
-                : "일부 파일을 읽지 못했습니다. ‘처리 결과’에서 이유를 확인하세요.";
+                : $"이번 조회 실패 {batch.Failed}개 · 남은 파일 {batch.Remaining}개. 처리 결과를 확인하세요. 미조회 파일은 ‘파일 관리 → 미조회 파일 계속 조회’로 이어갈 수 있습니다.";
             if (_models.Any(m => m.Snapshot == null)) MainTabs.SelectedIndex = 2;
         });
     }

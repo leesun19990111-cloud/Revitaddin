@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.2.3";
+    public const string Release = "0.2.5";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -14,11 +14,20 @@ public static class Protocol
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(value, Json));
-        File.Move(temp, path, true);
+        try
+        {
+            // 전체 JSON 문자열을 한꺼번에 만들지 않고 파일로 순차 기록한다.
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                JsonSerializer.Serialize(stream, value, Json);
+            File.Move(temp, path, true);
+        }
+        finally { if (File.Exists(temp)) File.Delete(temp); }
     }
-    public static T Read<T>(string path) => JsonSerializer.Deserialize<T>(File.ReadAllText(path), Json)
-        ?? throw new InvalidDataException("작업 파일의 내용이 비어 있습니다.");
+    public static T Read<T>(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return JsonSerializer.Deserialize<T>(stream, Json) ?? throw new InvalidDataException("작업 파일의 내용이 비어 있습니다.");
+    }
 }
 
 public sealed class ModelSnapshot
@@ -122,6 +131,9 @@ public sealed class Response
     public string Id { get; set; } = "";
     public bool Success { get; set; }
     public bool RequiresAttention { get; set; }
+    // 조회 요청이고 문서가 모두 닫혔음을 작업 프로세스에서 확인한 경우만 허용한다.
+    public bool CanRestartForRead { get; set; }
+    public bool ReadRestartRequired { get; set; }
     public string Stage { get; set; } = "대기";
     public string Message { get; set; } = "";
     public string RecoveryPath { get; set; } = "";
