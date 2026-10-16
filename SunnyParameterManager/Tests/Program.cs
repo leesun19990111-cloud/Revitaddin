@@ -150,6 +150,7 @@ internal static class Program
             Check(edits.Items.Count == 36 && ((TextBox)w.FindName("RuleSummary")).Text.Contains("연습 전용"), "실제 배포 연습용 파일 불러오기");
             FieldSearchTests();
             FailedApplyTests();
+            FolderSearchTests.Run(Check, Reject, Render);
             Console.WriteLine("화면 렌더: " + RenderOutput);
             Console.WriteLine($"TOTAL {_count} PASS · 실제 Revit/중앙 서버 검증은 별도 필요");
             return 0;
@@ -221,7 +222,7 @@ internal static class Program
         Render(w, "field-search", 1080, 700);
     }
     private static void Invoke(MainWindow w, string method) => typeof(MainWindow).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, [w, new RoutedEventArgs()]);
-    private static void Render(MainWindow w, string name, int width, int height)
+    private static void Render(Window w, string name, int width, int height)
     {
         var content = (FrameworkElement)w.Content;
         content.Measure(new Size(width, height)); content.Arrange(new Rect(0, 0, width, height)); content.UpdateLayout();

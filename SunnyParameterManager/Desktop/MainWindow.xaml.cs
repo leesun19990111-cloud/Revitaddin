@@ -67,19 +67,39 @@ public partial class MainWindow : Window
     private async void AddModels(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
-        bool added = false;
+        List<string> added = [];
         Guard(() =>
         {
         var dialog = new OpenFileDialog { Filter = "Revit 모델 (*.rvt)|*.rvt", Multiselect = true, Title = "매개변수를 읽고 수정할 모델 선택" };
         if (dialog.ShowDialog(this) != true) return;
-        if (_sample) { if (!DiscardPending()) return; _edits.Clear(); _models.Clear(); _sample = false; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
-        foreach (var path in dialog.FileNames)
-            if (_models.All(m => !string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) _models.Add(new() { Path = path });
+        added = RegisterModels(dialog.FileNames);
+        });
+        if (added.Count > 0) await ReadRegisteredModels(true, added);
+    }
+    private async void AddModelsFromFolders(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        List<string> added = [];
+        Guard(() =>
+        {
+            var dialog = new FolderSearchWindow(_sample ? [] : _models.Select(m => m.Path)) { Owner = this, Resources = Resources };
+            if (dialog.ShowDialog() == true) added = RegisterModels(dialog.SelectedPaths);
+        });
+        if (added.Count > 0) await ReadRegisteredModels(true, added);
+    }
+    private List<string> RegisterModels(IEnumerable<string> paths)
+    {
+        var selected = paths.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (selected.Count == 0) return [];
+        if (selected.Any(p => !string.Equals(Path.GetExtension(p), ".rvt", StringComparison.OrdinalIgnoreCase) || !File.Exists(p)))
+            throw new InvalidOperationException("존재하지 않거나 RVT가 아닌 파일이 있습니다. 파일을 다시 선택하세요.");
+        if (_sample) { if (!DiscardPending()) return []; _edits.Clear(); _models.Clear(); _sample = false; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
+        List<string> added = [];
+        foreach (var path in selected)
+            if (_models.All(m => !string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) { _models.Add(new() { Path = path }); added.Add(path); }
         if (SourceCombo.SelectedIndex < 0) SourceCombo.SelectedIndex = 0;
         ModelsList.SelectedItem = null; MainTabs.SelectedIndex = 0;
-        RefreshFields(); UpdatePending(); added = true;
-        });
-        if (added) await ReadRegisteredModels(true);
+        RefreshFields(); UpdatePending(); return added;
     }
     private void RemoveModel(object sender, RoutedEventArgs e) => Guard(() =>
     {
@@ -124,12 +144,12 @@ public partial class MainWindow : Window
         }
         RefreshFields(); UpdatePending();
     }
-    private async Task ReadRegisteredModels(bool onlyUnread)
+    private async Task ReadRegisteredModels(bool onlyUnread, IReadOnlyCollection<string>? selectedPaths = null)
     {
         await Run(async () =>
         {
             if (_models.Count == 0) throw new InvalidOperationException("먼저 RVT 파일을 추가하세요.");
-            var targets = _models.Where(m => !onlyUnread || m.Snapshot == null).ToList();
+            var targets = _models.Where(m => (!onlyUnread || m.Snapshot == null) && (selectedPaths == null || selectedPaths.Contains(m.Path, StringComparer.OrdinalIgnoreCase))).ToList();
             if (targets.Count == 0) { StatusText.Text = "선택한 파일은 이미 읽었습니다."; return; }
             StatusText.Text = "파일을 읽을 준비 중입니다. 처음에는 Revit 시작에 몇 분 걸릴 수 있습니다.";
             await _worker.Connect(RevitPathBox.Text.Trim());
