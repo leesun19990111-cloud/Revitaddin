@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.2.3 — 2026-10-16 링크·가져오기 완전 제거
+
+- 체크한 등록 모델의 링크 정의/배치·가져오기 제거, 삭제 영향과 종속 요소 표시/추가 승인, 삭제 전 백업, 실제 요청 재검증, 남은 정의 0 확인 후 저장·중앙 동기화. 원본 외부 파일과 패밀리 내부는 변경하지 않는다. 기존 애드인 호스트 링크 해제 경로 불변. 상세 범위/보호는 parameter-manager 문서.
+- out_v023 / SunnyParameterManager_Installer_v.0.2.3.zip / App-0.2.3 / Protocol.Release0.2.3. Tests023/Release023/Material023/Reader023/Links023/Publish023/Bridge023 및 installer ParameterManager023 격리. 같은 제품 v022만 보관, Sunny Tools v109 유지.
+- 400 Core/WPF + 66 lifecycle + 22 재료 + 23 reader + 25 링크 삭제 대역. 최소/기본 삭제 창 렌더. 실제 설치/사용자 RVT 삭제·저장·중앙 동기화는 미검증.
+
 ## 별도 제품 0.2.2 — 2026-10-16 뷰·시트 매개변수 확장
 
 - 정상 프로젝트 뷰/시트 조회·실제 이름 표시와 직접 입력, 필드 이름 공백 무시 검색. 템플릿 제어/실제 읽기전용은 보호. 기존 룰셋 및 저장 엔진 안전 경계 유지. 새 설치 후 RVT 다시 조회 필요.

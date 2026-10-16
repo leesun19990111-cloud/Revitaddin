@@ -137,6 +137,16 @@ namespace Autodesk.Revit.DB
 namespace SunnyParameterManager.Bridge
 {
  using Autodesk.Revit.DB;
+ internal static class LinkRemovalEngine
+ {
+  internal static void CheckComplete(Document doc, ModelSnapshot model) => State.Events.Add("links-empty");
+  internal sealed record RemovalAction(Action Delete, Action Verify);
+  internal static LinkRemovalPlan Preview(Document doc, ModelSnapshot model) => new() { Model = model,
+   Targets = [new() { UniqueId = "link", ElementId = 55, Revision = "r1", Root = true }],
+   Affected = [new() { UniqueId = "link", ElementId = 55, Revision = "r1" }] };
+  internal static RemovalAction Prepare(Document doc, ModelSnapshot model, LinkRemovalPlan plan, bool approved)
+  { plan.Validate(approved); return new(() => State.Events.Add("delete-links"), () => { State.Events.Add("verify-links"); if (State.VerifyMismatch) throw new InvalidOperationException("링크 제거 결과 불일치"); }); }
+ }
  internal sealed class ParameterReader(Document doc, ModelSnapshot model)
  {
   public MaterialEvidence ReadMaterial(Element owner, bool fresh = false) => State.MaterialMissing && !(State.MaterialChangesAfterSet && State.Events.Contains("set"))

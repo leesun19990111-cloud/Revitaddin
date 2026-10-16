@@ -37,6 +37,7 @@
    <Border Background="White" BorderBrush="#CDD2D7" BorderThickness="1" Padding="12"><DockPanel>
     <StackPanel DockPanel.Dock="Top"><TextBlock Text="선택한 파일" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/><Button Content="모든 파일 함께 보기" Click="ShowAllModels" Margin="0,0,0,10"/></StackPanel>
     <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+     <Button x:Name="RemoveLinksButton" Content="링크·가져오기 완전 제거…" Foreground="#A52C32" BorderBrush="#C66B6B" Click="OpenLinkRemoval" Margin="0,0,0,12" ToolTip="모델을 체크하고 삭제 영향 검사 후 별도 승인합니다. 외부 원본 파일은 삭제하지 않습니다."/>
      <Expander Header="파일 관리" Margin="0,0,0,12"><StackPanel Margin="0,8,0,0"><Button Content="다시 조회" Click="ReadModels" Margin="0,0,0,8"/><Button Content="선택한 파일 제외" Click="RemoveModel" Margin="0"/></StackPanel></Expander>
      <Expander x:Name="CopyExpander" Header="다른 파일에서 값 가져오기"><StackPanel Margin="0,10,0,0">
       <TextBlock Text="값을 가져올 기준 파일"/><ComboBox x:Name="SourceCombo" DisplayMemberPath="Title" Margin="0,6,0,8"/>

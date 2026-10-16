@@ -57,6 +57,29 @@ internal static class Program
    r = Setup(true, true); result = Run(r);
    Check(result.Success && State.Events.First() == "create-local" && State.Events.Contains("sync") && result.RecoveryPath != _central, "중앙은 별도 로컬에서 동기화");
    Check(File.Exists(result.RecoveryPath) && result.BackupPath == "", "중앙 원본 경로 직접 덮어쓰기 없음");
+   Request Removal(bool shared = false, bool central = false)
+   {
+    var request = Setup(shared, central); request.Operation = "링크 삭제"; request.Edits.Clear();
+    request.LinkRemoval = LinkRemovalEngine.Preview(State.Doc, new() { Path = request.Path, CanonicalPath = request.CanonicalPath, Identity = request.Identity });
+    return request;
+   }
+   r = Setup(); r.Operation = "링크 검사"; r.Edits.Clear(); result = Run(r);
+   Check(result.Success && result.LinkRemoval != null && !State.Events.Contains("save") && !State.Events.Contains("sync"), "링크 검사만으로 원본 저장·동기화 없음");
+   r = Removal(); result = Run(r);
+   Check(result.Success && result.Applied == 1 && File.Exists(result.BackupPath) && State.Events.Contains("delete-links") && State.Events.Contains("verify-links") && State.Events.Contains("save"), "링크 삭제의 일반파일 백업·검증·저장");
+   r = Removal(true, true); result = Run(r);
+   Check(result.Success && State.Events.Contains("sync") && State.Events.IndexOf("links-empty") > State.Events.IndexOf("sync") && File.Exists(result.BackupPath) && File.ReadAllText(result.BackupPath) == "테스트 대역 중앙", "중앙 링크 삭제도 삭제 전 로컬 사본 보관·동기화 후 남은 링크 확인");
+   r = Removal(); r.Confirmed = false; result = Run(r); Check(!result.Success && State.Events.Count == 0, "삭제 승인 누락은 모델 열기 전 차단");
+   r = Removal(); r.LinkRemoval = null; result = Run(r); Check(!result.Success && State.Events.Count == 0, "삭제 검사 누락 차단");
+   r = Removal(); r.Edits.Add(new()); result = Run(r); Check(!result.Success && State.Events.Count == 0, "링크 삭제와 매개변수 입력 혼합 차단");
+   r = Removal(); r.LinkRemoval!.Model.Path = "다른 모델"; result = Run(r); Check(!result.Success && State.Events.Count == 0, "다른 모델의 삭제 계획 차단");
+   r = Removal(); r.LinkRemoval!.Affected.Add(new() { UniqueId = "tag", ElementId = 56, Revision = "r1" }); result = Run(r);
+   Check(!result.Success && State.Events.Count == 0, "종속 요소 승인 없이는 파일 열기 전 차단");
+   r = Removal(true); r.LocalChangesConfirmed = false; result = Run(r); Check(!result.Success && State.Events.Count == 0, "기존 로컬 링크 삭제도 미동기화 작업 동반 승인 필요");
+   r = Removal(); State.VerifyMismatch = true; result = Run(r); Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "삭제 결과 불일치 묶음 롤백·저장 금지");
+   r = Removal(); State.Failure = FailureSeverity.Error; result = Run(r); Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "삭제 중 Revit 오류도 묶음 취소");
+   r = Removal(true, true); State.FailSync = true; result = Run(r); Check(!result.Success && result.RequiresAttention && !State.Events.Contains("close") && File.Exists(result.BackupPath), "링크 삭제 후 동기화 실패는 문서·백업 보존");
+   r = Removal(true, true); State.FailClose = true; result = Run(r); Check(result.Success && result.RequiresAttention && result.Applied == 1, "링크 삭제 동기화 성공 후 닫기 실패는 중복 재시도 금지");
    r = Setup(true); r.LocalChangesConfirmed = false; result = Run(r);
    Check(!result.Success && !State.Events.Any(), "기존 로컬의 다른 변경 포함 승인 필수");
    r = Setup(true); State.Info.Username = "다른 사용자"; result = Run(r);

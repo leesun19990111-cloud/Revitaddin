@@ -330,6 +330,23 @@ public partial class MainWindow : Window
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
     }
     private bool HasFailedPending() => _models.Any(m => m.Snapshot?.RequiresRequery == true && _edits.Values.Any(e => string.Equals(e.Original.ModelPath, m.Path, StringComparison.OrdinalIgnoreCase)));
+    private void OpenLinkRemoval(object sender, RoutedEventArgs e) => Guard(() =>
+    {
+        if (_sample || _models.Count == 0) throw new InvalidOperationException("실제 RVT 파일을 먼저 등록하세요. 샘플에서는 삭제하지 않습니다.");
+        if (_worker.NeedsAttention) throw new InvalidOperationException("작업용 Revit의 미확정 결과를 먼저 확인하세요.");
+        if (_edits.Count > 0) throw new InvalidOperationException("매개변수 변경 예정이 남아 있습니다. 먼저 적용하거나 작업 저장 후 변경 목록을 정리하세요. 링크 삭제와 섞어서 처리하지 않습니다.");
+        var dialog = new LinkRemovalWindow(_models.Select(m => m.Path), async request =>
+        {
+            await _worker.Connect(RevitPathBox.Text.Trim()); return await _worker.Send(request);
+        }, (path, response) =>
+        {
+            var item = _models.Single(m => m.Path == path);
+            item.Snapshot = null; item.Status = response.Success ? "링크 삭제 완료 · 재조회 필요" : "링크 삭제 실패 · 재조회 필요";
+            ReportBox.AppendText($"\n{path}\n{response.Message}\n삭제 전 백업: {response.BackupPath}\n복구: {response.RecoveryPath}\n");
+            RefreshFields(); UpdatePending();
+        }) { Owner = this, Resources = Resources };
+        dialog.ShowDialog();
+    });
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
         if (_busy || _sample || _edits.Count == 0) return;
