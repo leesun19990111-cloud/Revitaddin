@@ -23,7 +23,8 @@ namespace Autodesk.Revit.DB
   public StorageType StorageType { get; set; } = StorageType.String;
   public bool IsReadOnly { get; set; } public bool HasValue { get; set; } = true; public bool IsShared { get; set; }
   public Guid GUID { get; set; } = Guid.NewGuid(); public string Value { get; set; } = "기존";
-  public string AsString() => Value; public string AsValueString() => Value; public int AsInteger() => 1; public double AsDouble() => 1; public ElementId AsElementId() => new(1);
+  public bool FailRead { get; set; } public bool FailMemory { get; set; }
+  public string AsString() => FailMemory ? throw new OutOfMemoryException() : FailRead ? throw new InvalidOperationException("값 조회 실패") : Value; public string AsValueString() => Value; public int AsInteger() => 1; public double AsDouble() => 1; public ElementId AsElementId() => new(1);
  }
  public sealed class Category { public CategoryType CategoryType { get; set; } = CategoryType.Model; public ElementId Id { get; set; } = new(1); public string Name { get; set; } = "모델"; }
  public class Element
@@ -75,5 +76,5 @@ namespace Autodesk.Revit.DB
 }
 namespace SunnyParameterManager.Bridge
 {
- internal static class OuterMaterialReader { public static MaterialEvidence Read(Autodesk.Revit.DB.Document doc, Autodesk.Revit.DB.ElementType type) => new(); }
+ internal static class OuterMaterialReader { public static int Calls; public static MaterialEvidence Read(Autodesk.Revit.DB.Document doc, Autodesk.Revit.DB.ElementType type) { Calls++; return new() { Name = "KAC-철근콘크리트", Fingerprint = "test", Basis = "대역" }; } }
 }

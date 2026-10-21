@@ -27,6 +27,7 @@ public sealed class WorkspaceFile
     public List<ModelSnapshot> Models { get; set; } = [];
     public List<string> Paths { get; set; } = [];
     public List<ValueEdit> Edits { get; set; } = [];
+    public RuleSet? LoadedRules { get; set; }
 }
 
 public partial class MainWindow : Window
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, ValueEdit> _edits = [];
     private readonly WorkerClient _worker = new();
     private List<string> _fieldNames = [];
+    private RuleSet? _loadedRules;
     private bool _initialized, _filtering, _busy, _sample, _selecting;
 
     public MainWindow()
@@ -94,7 +96,7 @@ public partial class MainWindow : Window
         if (selected.Count == 0) return [];
         if (selected.Any(p => !string.Equals(Path.GetExtension(p), ".rvt", StringComparison.OrdinalIgnoreCase) || !File.Exists(p)))
             throw new InvalidOperationException("존재하지 않거나 RVT가 아닌 파일이 있습니다. 파일을 다시 선택하세요.");
-        if (_sample) { if (!DiscardPending()) return []; _edits.Clear(); _models.Clear(); _sample = false; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
+        if (_sample) { if (!DiscardPending()) return []; _edits.Clear(); _models.Clear(); _sample = false; _loadedRules = null; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
         List<string> added = [];
         foreach (var path in selected)
             if (_models.All(m => !string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) { _models.Add(new() { Path = path }); added.Add(path); }
@@ -154,6 +156,7 @@ public partial class MainWindow : Window
     }
     private async Task ReadRegisteredModels(bool onlyUnread, IReadOnlyCollection<string>? selectedPaths = null)
     {
+        bool completed = false;
         await Run(async () =>
         {
             if (_models.Count == 0) throw new InvalidOperationException("먼저 RVT 파일을 추가하세요.");
@@ -172,7 +175,7 @@ public partial class MainWindow : Window
             {
                 var item = byPath[path];
                 item.Snapshot = null; item.ReadFailed = false; item.Status = "조회 중…";
-                return await _worker.Send(new Request { Operation = "조회", Path = path });
+                return await _worker.Send(new Request { Operation = "조회", Path = path, Query = _loadedRules == null ? null : QueryPlan.FromRules(_loadedRules) });
             }, (path, result) =>
             {
                 var item = byPath[path];
@@ -181,7 +184,7 @@ public partial class MainWindow : Window
                     var snapshot = result.Snapshot;
                     var duplicate = _models.Where(m => m != item && m.Snapshot != null).Any(m => string.Equals(ModelIdentityPath(m.Snapshot!), ModelIdentityPath(snapshot), StringComparison.OrdinalIgnoreCase));
                     if (duplicate) { item.ReadFailed = true; item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다."; }
-                    else { item.Snapshot = snapshot; item.Status = $"{snapshot.Kind} · {snapshot.Rows.Count:N0}개 값"; }
+                    else { item.Snapshot = snapshot; item.Status = $"{snapshot.Kind} · {(snapshot.Query == null ? "전체" : "룰셋 선택")} 조회 · {snapshot.Rows.Count:N0}개 값"; }
                     ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n" + string.Join("\n", snapshot.Notices) + "\n");
                 }
                 else { item.ReadFailed = true; item.Status = "조회 실패 · 건너뜀"; ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n"); }
@@ -197,10 +200,13 @@ public partial class MainWindow : Window
                 });
             RefreshFields();
             StatusText.Text = batch.Blocked ? $"조회 중단 · 작업용 Revit 확인 필요. 남은 파일 {batch.Remaining}개와 기존 결과·변경 예정은 유지됩니다." : _models.All(m => m.Snapshot != null)
-                ? "파일을 읽었습니다. ‘② 룰셋 불러오기’를 누르거나, 항목과 행을 선택해 직접 입력하세요."
+                ? "파일을 읽었습니다. 룰셋 변경 검토 또는 직접 입력을 진행하세요."
                 : $"이번 조회 실패 {batch.Failed}개 · 남은 파일 {batch.Remaining}개. 처리 결과를 확인하세요. 미조회 파일은 ‘파일 관리 → 미조회 파일 계속 조회’로 이어갈 수 있습니다.";
             if (_models.Any(m => m.Snapshot == null)) MainTabs.SelectedIndex = 2;
+            completed = !batch.Blocked && !_worker.NeedsAttention;
         });
+        if (completed && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery))
+            Guard(() => PrepareRules(_loadedRules));
     }
     private static string ModelIdentityPath(ModelSnapshot s) => s.CentralPath.Length > 0 ? s.CentralPath : s.CanonicalPath;
 
@@ -304,8 +310,28 @@ public partial class MainWindow : Window
         var dialog = new OpenFileDialog { Filter = "Sunny 룰셋 (*.sunnyrules.json)|*.sunnyrules.json|JSON 파일 (*.json)|*.json", Title = "함께 정한 룰셋 파일 선택" };
         if (dialog.ShowDialog(this) != true) return;
         if (new FileInfo(dialog.FileName).Length > 2 * 1024 * 1024) throw new InvalidOperationException("룰셋은 2MB 이하만 지원합니다.");
-        PrepareRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)));
+        SelectRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)));
+        if (_models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery && (m.Snapshot.Query == null || m.Snapshot.Query.Covers(QueryPlan.FromRules(_loadedRules!)))))
+            PrepareRules(_loadedRules!);
     });
+    public void SelectRules(RuleSet file)
+    {
+        if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
+        QueryPlan.FromRules(file);
+        if (file.SampleOnly && !_sample) throw new InvalidOperationException("연습용 룰셋은 샘플 모드에서만 사용하세요.");
+        _loadedRules = file;
+        RuleSummaryPanel.Visibility = Visibility.Collapsed;
+        UpdatePending();
+        StatusText.Text = _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
+            "룰셋 준비 완료. 필요한 항목이 부족하면 ‘파일 관리 → 다시 조회’를 누르세요.";
+    }
+    private void UseFullQuery(object sender, RoutedEventArgs e) => Guard(() =>
+    {
+        _loadedRules = null; UpdatePending();
+        StatusText.Text = "다음 조회부터 전체 항목을 읽습니다. 기존 선택 조회값과 변경 예정은 유지합니다. 전체 항목이 필요하면 ‘파일 관리 → 다시 조회’를 누르세요.";
+    });
+    private void ReviewLoadedRules(object sender, RoutedEventArgs e) => Guard(() =>
+        PrepareRules(_loadedRules ?? throw new InvalidOperationException("룰셋을 먼저 불러오세요.")));
     // 룰셋은 조회된 전체 파일로 평가한다. 그리드의 검색/행 선택 때문에 일부만 조용히 적용하면 안 된다.
     public void PrepareRules(RuleSet file)
     {
@@ -313,7 +339,9 @@ public partial class MainWindow : Window
         if (_models.Any(m => m.Snapshot?.RequiresRequery == true)) throw new InvalidOperationException("실패한 파일의 원인을 확인하고 다시 조회한 뒤 룰셋을 불러오세요.");
         if (_models.Count == 0 || _models.Any(m => m.Snapshot == null))
             throw new InvalidOperationException("모든 대상 파일을 먼저 읽어야 합니다. 실패하거나 중복된 파일은 ‘파일 관리’에서 제외하세요.");
-        var plan = RulePlanner.Plan(file, AllRows(), _edits.Values, _sample);
+        QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), file);
+        var available = _models.SelectMany(m => m.Snapshot!.Owners.Concat(m.Snapshot.Rows));
+        var plan = RulePlanner.Plan(file, available, _edits.Values, _sample);
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
         RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes) +
             "\n※ 불러올 당시의 결과입니다. 이후 제외/직접 입력한 내용은 아래 목록이 최종 기준입니다.";
@@ -352,7 +380,11 @@ public partial class MainWindow : Window
         ReviewButton.IsEnabled = !_busy && _edits.Count > 0;
         ReviewButton.Content = $"③ 변경 내용 확인 ({_edits.Count:N0})";
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        RulesButton.IsEnabled = !_busy && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery);
+        RulesButton.IsEnabled = !_busy;
+        ReviewRulesButton.IsEnabled = !_busy && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery);
+        QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
+            "다음 조회: 룰셋 ‘" + _loadedRules.Name + "’ · " + string.Join(", ", QueryPlan.FromRules(_loadedRules).Names);
+        QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
     }
@@ -421,7 +453,7 @@ public partial class MainWindow : Window
     {
         var dialog = new SaveFileDialog { Filter = "Sunny 작업 파일 (*.spm.json)|*.spm.json", FileName = "매개변수_작업.spm.json" };
         if (dialog.ShowDialog(this) != true) return;
-        Protocol.Write(dialog.FileName, new WorkspaceFile { Sample = _sample, Paths = _models.Select(m => m.Path).ToList(), Models = _models.Where(m => m.Snapshot != null).Select(m => m.Snapshot!).ToList(), Edits = _edits.Values.ToList() });
+        Protocol.Write(dialog.FileName, new WorkspaceFile { Sample = _sample, LoadedRules = _loadedRules, Paths = _models.Select(m => m.Path).ToList(), Models = _models.Where(m => m.Snapshot != null).Select(m => m.Snapshot!).ToList(), Edits = _edits.Values.ToList() });
         StatusText.Text = "조회값과 변경 예정 목록을 저장했습니다. 이 파일에는 모델 경로와 매개변수 값이 포함됩니다.";
     });
     private void LoadWorkspace(object sender, RoutedEventArgs e) => Guard(() =>
@@ -432,12 +464,16 @@ public partial class MainWindow : Window
         if (new FileInfo(dialog.FileName).Length > 256 * 1024 * 1024) throw new InvalidDataException("작업 파일은 256MB 이하만 지원합니다.");
         var file = Protocol.Read<WorkspaceFile>(dialog.FileName);
         if (file.Version != 1) throw new InvalidDataException("지원하지 않는 작업 파일 버전입니다.");
+        if (file.LoadedRules != null) QueryPlan.FromRules(file.LoadedRules);
+        foreach (var model in file.Models) model.Query?.Validate();
+        if (file.Models.Any(m => m.Owners.Any(o => o.Name.Length != 0 || o.ParameterKey.Length != 0 || o.Editable)))
+            throw new InvalidDataException("대상 식별 정보에 편집 값이 섞여 있습니다. RVT를 다시 조회하세요.");
         if (file.Models.Select(m => m.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() != file.Models.Count ||
-            file.Models.Any(m => !file.Paths.Contains(m.Path, StringComparer.OrdinalIgnoreCase) || m.Rows.Any(r => r.ModelPath != m.Path)))
+            file.Models.Any(m => !file.Paths.Contains(m.Path, StringComparer.OrdinalIgnoreCase) || m.Rows.Concat(m.Owners).Any(r => r.ModelPath != m.Path)))
             throw new InvalidDataException("작업 파일의 모델 연결이 일치하지 않습니다.");
         var rows = file.Models.SelectMany(m => m.Rows).ToDictionary(r => r.Key);
         foreach (var edit in file.Edits) if (!rows.ContainsKey(edit.Original.Key)) throw new InvalidDataException("변경 대상이 조회 목록에 없습니다.");
-        _models.Clear(); _edits.Clear(); _sample = file.Sample; RuleSummaryPanel.Visibility = Visibility.Collapsed;
+        _models.Clear(); _edits.Clear(); _sample = file.Sample; _loadedRules = file.LoadedRules; RuleSummaryPanel.Visibility = Visibility.Collapsed;
         foreach (var path in file.Paths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var snapshot = file.Models.SingleOrDefault(m => m.Path == path); snapshot?.ConnectCatalogs();
@@ -454,7 +490,7 @@ public partial class MainWindow : Window
     private void SampleClick(object sender, RoutedEventArgs e) => Guard(() => { if (DiscardPending()) LoadSample(); });
     public void LoadSample()
     {
-        _edits.Clear(); _models.Clear(); _sample = true; RuleSummaryPanel.Visibility = Visibility.Collapsed;
+        _edits.Clear(); _models.Clear(); _sample = true; _loadedRules = null; RuleSummaryPanel.Visibility = Visibility.Collapsed;
         for (int n = 1; n <= 2; n++)
         {
             var m = new ModelSnapshot { Path = $"샘플_건축_{n}.rvt", Title = $"샘플_건축_{n}", Kind = "샘플", Identity = "sample" };

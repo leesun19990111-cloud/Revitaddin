@@ -154,7 +154,7 @@ namespace SunnyParameterManager.Bridge
    ? new() { FallbackAllowed = true, Reason = "유형 재료 없음" }
    : new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = State.MaterialChangesAfterSet && State.Events.Contains("set") ? "material-v2" : "material-v1" };
   public List<string> Notices { get; } = [];
-  public List<ParameterRow> ReadAll() => State.ReadOutOfMemory ? throw new OutOfMemoryException("조회 메모리 대역") : [Read(doc.Element, doc.Element.Parameter)];
+  public List<ParameterRow> ReadAll(QueryPlan? query = null) { model.Query = query; return State.ReadOutOfMemory ? throw new OutOfMemoryException("조회 메모리 대역") : [Read(doc.Element, doc.Element.Parameter)]; }
   public ParameterRow Read(Element owner, Parameter p) => new() { ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = "W1", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
   internal static Parameter? Resolve(Element owner, string key) => key == "id:1" ? owner.Parameter : null;
   internal static string Raw(Parameter p) => p.Value;

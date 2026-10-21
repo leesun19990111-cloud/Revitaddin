@@ -98,11 +98,13 @@ internal static class Program
         try
         {
             _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            QueryTests.Run(Check, Reject);
             var w = new MainWindow();
             Check(((FrameworkElement)w.FindName("WelcomePanel")).Visibility == Visibility.Visible, "첫 화면 파일 선택 안내");
             Check(!((Expander)w.FindName("AdvancedSettings")).IsExpanded && !((Expander)w.FindName("CopyExpander")).IsExpanded, "세부 설정 기본 숨김");
-            Check(!((Button)w.FindName("RulesButton")).IsEnabled, "조회 전 룰셋 적용 방지");
+            Check(((Button)w.FindName("RulesButton")).IsEnabled && !((Button)w.FindName("ReviewRulesButton")).IsEnabled, "조회 전 룰셋 선택 허용·변경 검토 방지");
             Render(w, "welcome", 1320, 820);
+            Render(w, "welcome-1080", 1080, 700);
             w.LoadSample();
             Check(((FrameworkElement)w.FindName("WelcomePanel")).Visibility == Visibility.Collapsed && ((Button)w.FindName("RulesButton")).IsEnabled, "파일 준비 후 룰셋 버튼 사용");
             var grid = (DataGrid)w.FindName("ValuesGrid");
@@ -137,6 +139,8 @@ internal static class Program
             }
             w.LoadSample();
             var rules = new RuleSet { Version = 1, Name = "연습 룰셋", SampleOnly = true, Rules = [new() { Name = "업체명 입력", Match = new() { Scope = "유형", Type = "KAC-W", TypeMatch = "시작" }, Set = [new() { Name = "업체명", DataType = "text", Storage = "String", Value = "연습 업체" }] }] };
+            w.SelectRules(rules);
+            Render(w, "query-ready-1080", 1080, 700);
             ((TextBox)w.FindName("SearchBox")).Text = "해당없음";
             w.PrepareRules(rules);
             Check(edits.Items.Count == 36 && ((TabControl)w.FindName("MainTabs")).SelectedIndex == 1, "룰셋은 검색/선택과 무관하게 등록 파일 전체 평가 후 검토 이동");
@@ -174,7 +178,7 @@ internal static class Program
         Refresh();
         Check(((Button)w.FindName("ApplyButton")).IsEnabled, "정상 미리보기는 적용 가능");
         models[0].Snapshot!.RequiresRequery = true; Refresh();
-        Check(!((Button)w.FindName("ApplyButton")).IsEnabled && !((Button)w.FindName("RulesButton")).IsEnabled, "실패 조회값 재적용 및 룰셋 반복 차단");
+        Check(!((Button)w.FindName("ApplyButton")).IsEnabled && !((Button)w.FindName("ReviewRulesButton")).IsEnabled, "실패 조회값 재적용 및 룰셋 반복 차단");
         Reject(() => w.PrepareRules(new RuleSet()), "직접 룰셋 호출도 실패 조회값 차단");
         var restored = JsonSerializer.Deserialize<WorkspaceFile>(JsonSerializer.Serialize(new WorkspaceFile { Models = [models[0].Snapshot!] }))!;
         Check(restored.Models.Single().RequiresRequery, "작업 저장과 불러오기에서 실패 상태 보존");
@@ -185,7 +189,7 @@ internal static class Program
         Check(models[0].Snapshot == null && models[1].Snapshot != null, "실패 모델만 조회값 초기화");
         Check(keep.Count > 0 && edits.Items.Cast<ValueEdit>().SequenceEqual(keep), "실패 모델 미적용 변경만 비우고 다른 모델 예정 보존");
         Check(((Button)w.FindName("ApplyButton")).IsEnabled, "실패 파일 제외 후 정상 파일 변경 적용 가능");
-        Check(!((Button)w.FindName("RulesButton")).IsEnabled, "재조회 완료 전 전체 룰셋 평가 차단");
+        Check(!((Button)w.FindName("ReviewRulesButton")).IsEnabled, "재조회 완료 전 전체 룰셋 평가 차단");
     }
     private static void FieldSearchTests()
     {

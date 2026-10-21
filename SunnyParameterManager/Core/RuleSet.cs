@@ -78,7 +78,7 @@ public static class RulePlanner
         else if (element.ValueKind == JsonValueKind.Array) foreach (var item in element.EnumerateArray()) CheckProperties(item);
     }
 
-    private static void Validate(RuleSet? file)
+    public static void Validate(RuleSet? file)
     {
         if (file?.Version == 3)
         {

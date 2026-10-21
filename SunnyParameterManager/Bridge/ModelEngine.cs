@@ -23,6 +23,11 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         try
         {
             if (req.Operation is not ("조회" or "적용" or "링크 검사" or "링크 삭제")) throw new InvalidOperationException("지원하지 않는 작업입니다.");
+            if (req.Query != null)
+            {
+                if (req.Operation != "조회") throw new InvalidOperationException("선택 조회 조건은 조회 요청에만 사용할 수 있습니다.");
+                req.Query.Validate();
+            }
             if (req.Operation == "적용" && (!req.Confirmed || req.Edits.Count == 0)) throw new InvalidOperationException("변경 확인이 없거나 변경 내용이 없습니다.");
             if (removingLinks)
             {
@@ -101,7 +106,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             {
                 Step("매개변수 읽기");
                 var reader = new ParameterReader(doc, metadata);
-                metadata.Rows = reader.ReadAll();
+                metadata.Rows = reader.ReadAll(req.Query);
                 metadata.Notices = reader.Notices;
                 if (metadata.Kind == "로컬") metadata.Notices.Add("기존 로컬을 적용하면 이 파일에 저장된 미동기화 변경도 중앙에 포함됩니다.");
                 result.Snapshot = metadata;

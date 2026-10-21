@@ -19,17 +19,25 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         return result;
     }
 
-    public List<ParameterRow> ReadAll()
+    public List<ParameterRow> ReadAll(QueryPlan? query = null)
     {
+        query?.Validate(); model.Query = query; model.Owners.Clear();
         var result = new List<ParameterRow>();
-        var elements = new FilteredElementCollector(doc).WhereElementIsElementType().Cast<Element>()
-            .Concat(new FilteredElementCollector(doc).WhereElementIsNotElementType().Cast<Element>())
+        // 프로젝트 정보만 필요하면 모델 전체의 요소 수집을 하지 않는다.
+        var elements = (query == null || query.Scopes.Contains("유형") ? new FilteredElementCollector(doc).WhereElementIsElementType().Cast<Element>() : Enumerable.Empty<Element>())
+            .Concat(query == null || query.Scopes.Contains("인스턴스") ? new FilteredElementCollector(doc).WhereElementIsNotElementType().Cast<Element>() : Enumerable.Empty<Element>())
             .Where(e => e is View v ? !v.IsTemplate && v.ViewType is not (ViewType.Internal or ViewType.ProjectBrowser or ViewType.SystemBrowser or ViewType.Undefined) :
                 e.Category?.CategoryType == CategoryType.Model && e is not RevitLinkInstance && e is not RevitLinkType)
-            .Concat(doc.ProjectInformation == null ? [] : new Element[] { doc.ProjectInformation });
+            .Concat(doc.ProjectInformation == null || query != null && !query.Scopes.Contains("프로젝트 정보") ? [] : new Element[] { doc.ProjectInformation });
         int errors = 0;
         foreach (var element in elements.DistinctBy(e => e.UniqueId))
         {
+            if (query != null)
+            {
+                var owner = Describe(element, query.IncludeOuterMaterial);
+                if (!query.Scopes.Contains(owner.Scope)) continue;
+                model.Owners.Add(owner);
+            }
             var parameters = element.Parameters.Cast<Parameter>().ToList();
             // 소속 작업세트는 일부 요소의 열거에 없더라도 직접 접근이 지원된다.
             if (element is not ElementType && element is not ProjectInfo && element is not View && doc.IsWorkshared)
@@ -39,20 +47,25 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             }
             foreach (var p in parameters)
             {
-                try { if (p.Definition != null) result.Add(Read(element, p)); }
+                try
+                {
+                    if (p.Definition != null && (query == null || query.Includes(p.Definition.Name, Key(p))))
+                        result.Add(Read(element, p, query == null || query.IncludeOuterMaterial));
+                }
                 catch (OutOfMemoryException) { throw; } // 메모리 오류로 빠진 값을 정상 조회 결과로 넘기지 않는다.
+                catch (Exception ex) when (query != null) { throw new InvalidOperationException($"요소 {element.Id.Value}: 선택 항목 조회 실패. 누락으로 간주하지 않고 해당 파일 조회를 중단합니다. {ex.Message}", ex); }
                 catch (Exception ex) { errors++; if (Notices.Count < 5) Notices.Add($"요소 {element.Id.Value}: 일부 매개변수 조회 실패 — {ex.Message}"); }
             }
         }
         if (errors > 0) Notices.Add($"매개변수 {errors:N0}개는 읽기에 실패하여 제외했습니다.");
-        Notices.Add("모델 유형·인스턴스, 프로젝트 정보, 뷰·시트의 매개변수를 조회합니다. 뷰 템플릿 자체와 내부 뷰는 제외합니다. 링크 내부는 원본 파일을 별도로 등록하세요.");
+        Notices.Add(query == null ? "모델 유형·인스턴스, 프로젝트 정보, 뷰·시트의 매개변수를 조회합니다. 뷰 템플릿 자체와 내부 뷰는 제외합니다. 링크 내부는 원본 파일을 별도로 등록하세요." :
+            "룰셋 선택 조회: " + string.Join(", ", query.Names) + ". 다른 항목은 미조회이며 빈 값이 아닙니다. 링크 내부는 원본 파일을 별도로 등록하세요.");
         return result;
     }
 
-    public ParameterRow Read(Element owner, Parameter p)
+    private ParameterRow Describe(Element owner, bool material)
     {
         var type = owner as ElementType ?? doc.GetElement(owner.GetTypeId()) as ElementType;
-        var spec = p.Definition.GetDataType();
         var r = new ParameterRow
         {
             ModelPath = model.Path, ModelTitle = model.Title, OwnerId = owner.UniqueId, ElementId = owner.Id.Value.ToString(Invariant),
@@ -62,9 +75,18 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             Family = type?.FamilyName ?? "", TypeName = owner is ProjectInfo ? "프로젝트 정보" : type?.Name ?? (owner is View ? "" : owner.Name ?? ""),
             TypeOwnerId = type?.UniqueId ?? "",
             ElementName = owner is View ? owner.Name ?? "" : "", SheetNumber = owner is ViewSheet sheet ? sheet.SheetNumber ?? "" : "",
-            ParameterKey = Key(p), Name = p.Definition.Name, DataType = spec.TypeId, Storage = p.StorageType.ToString(),
-            HasValue = p.HasValue, Raw = Raw(p), Display = Display(p), BlockReason = p.IsReadOnly ? "읽기 전용 — 원본 Revit에서 변경 불가" : ""
+            BlockReason = "대상 식별 정보 — 값 편집 불가"
         };
+        if (material && owner is ElementType && KacRulePlanner.TypeCode(r.TypeName).Length > 0) r.OuterMaterial = ReadMaterial(owner);
+        return r;
+    }
+
+    public ParameterRow Read(Element owner, Parameter p, bool material = true)
+    {
+        var r = Describe(owner, material);
+        var spec = p.Definition.GetDataType();
+        r.ParameterKey = Key(p); r.Name = p.Definition.Name; r.DataType = spec.TypeId; r.Storage = p.StorageType.ToString();
+        r.HasValue = p.HasValue; r.Raw = Raw(p); r.Display = Display(p); r.BlockReason = p.IsReadOnly ? "읽기 전용 — 원본 Revit에서 변경 불가" : "";
         if (owner is View view)
         {
             if (view.IsTemplate) r.BlockReason = "읽기 전용 — 뷰 템플릿 자체는 편집 대상이 아닙니다.";
@@ -106,7 +128,6 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         }
         else if (r.BlockReason.Length == 0) r.BlockReason = "표시 전용 — 이 참조/전용 열거값 편집기는 첫 버전에서 미지원";
         r.Choices = model.Catalogs.GetValueOrDefault(r.ChoiceCatalog, []);
-        if (owner is ElementType && KacRulePlanner.TypeCode(r.TypeName).Length > 0) r.OuterMaterial = ReadMaterial(owner);
         return r;
     }
 

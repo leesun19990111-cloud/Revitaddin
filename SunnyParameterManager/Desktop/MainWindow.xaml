@@ -14,13 +14,14 @@
  <Border Background="#F2F2F3" Padding="16"><Grid>
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel Margin="0,0,0,10"><TextBlock Text="SUNNY / 매개변수 관리자" FontSize="25" FontWeight="SemiBold" Foreground="#243A50"/>
-   <TextBlock Text="1  파일 선택     →     2  값 입력 또는 룰셋 불러오기     →     3  확인하고 저장" Foreground="#687785" Margin="0,6,0,0"/>
+   <TextBlock x:Name="QuerySummary" Text="룰셋 먼저 불러오기 → RVT 선택·선택 조회 → 변경 검토 → 저장" TextTrimming="CharacterEllipsis" Foreground="#687785" Margin="0,6,0,0"/>
   </StackPanel>
   <StackPanel Grid.Row="1" Margin="0,0,0,8" x:Name="TopActions">
    <DockPanel>
-    <Button Content="① RVT 파일 선택" Click="AddModels" Style="{StaticResource Primary}"/>
+    <Button x:Name="RulesButton" Content="룰셋 먼저 불러오기" Click="LoadRules" ToolTip="파일 선택 전에 불러오면 룰셋에 필요한 매개변수만 읽습니다. 기존 조회값이 충분하면 변경 내용을 검토합니다."/>
+    <Button Content="RVT 파일 선택" Click="AddModels" Style="{StaticResource Primary}"/>
     <Button x:Name="FolderSearchButton" Content="폴더에서 RVT 찾기" Click="AddModelsFromFolders" ToolTip="여러 폴더와 하위 폴더에서 파일명 검색 후 체크한 파일만 추가합니다."/>
-    <Button x:Name="RulesButton" Content="② 룰셋 불러오기" Click="LoadRules" IsEnabled="False" ToolTip="등록한 모든 파일 대상입니다. 검색·행 선택과 무관하며 아직 저장하지 않습니다."/>
+    <Button x:Name="ReviewRulesButton" Content="룰셋 변경 검토" Click="ReviewLoadedRules" IsEnabled="False" ToolTip="등록한 모든 파일을 대상으로 변경을 준비합니다. 실제 저장은 하지 않습니다."/>
     <TextBlock x:Name="FileSummary" VerticalAlignment="Center" Foreground="#687785" Text="수정할 파일을 고르면 자동으로 읽어옵니다."/>
    </DockPanel>
    <Expander x:Name="AdvancedSettings" Header="연결 설정 · 작업 보관" Margin="0,10,0,0" Foreground="#687785">
@@ -28,7 +29,7 @@
      <DockPanel><Button DockPanel.Dock="Right" Content="작업용 Revit 종료" Click="StopWorker"/><Button DockPanel.Dock="Right" Content="연결 확인" Click="ConnectWorker"/>
       <TextBlock Text="Revit 2026 경로" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBox x:Name="RevitPathBox" Text="C:\Program Files\Autodesk\Revit 2026\Revit.exe"/>
      </DockPanel>
-     <WrapPanel Margin="0,10,0,0"><Button Content="작업 불러오기" Click="LoadWorkspace"/><Button Content="작업 저장" Click="SaveWorkspace"/><Button Content="샘플로 연습하기" Click="SampleClick"/></WrapPanel>
+     <WrapPanel Margin="0,10,0,0"><Button Content="작업 불러오기" Click="LoadWorkspace"/><Button Content="작업 저장" Click="SaveWorkspace"/><Button Content="샘플로 연습하기" Click="SampleClick"/><Button Content="룰셋 해제 · 전체 조회로 전환" Click="UseFullQuery"/></WrapPanel>
     </StackPanel></Border>
    </Expander>
   </StackPanel>
@@ -103,15 +104,16 @@
     <TabItem Header="처리 결과"><DockPanel Margin="12"><Button DockPanel.Dock="Top" Content="기록 폴더 열기" Click="OpenLogs" HorizontalAlignment="Left" Margin="0,0,0,10"/><TextBox x:Name="ReportBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" BorderThickness="0" Text="처음에는 별도 테스트 모델로 확인해 주세요."/></DockPanel></TabItem>
    </TabControl>
    <Border x:Name="WelcomePanel" Grid.ColumnSpan="3" Background="White" BorderBrush="#CDD2D7" BorderThickness="1">
-    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="650" Margin="30">
-     <TextBlock Text="어떤 파일의 값을 바꿀까요?" FontSize="28" Foreground="#243A50" FontWeight="SemiBold"/>
-     <TextBlock Text="중앙모델·로컬·일반 RVT를 여러 개 선택할 수 있습니다.&#10;파일을 미리 열어둘 필요는 없습니다. 필요한 Revit을 자동으로 연결합니다." FontSize="15" Foreground="#687785" TextWrapping="Wrap" Margin="0,14,0,24" LineHeight="25"/>
-     <Button Content="수정할 RVT 파일 선택" Click="AddModels" Style="{StaticResource Primary}" HorizontalAlignment="Left" Padding="25,13" FontSize="16"/>
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="650" Margin="20">
+     <TextBlock Text="룰셋부터 불러오면 더 가볍게 조회해요" FontSize="25" Foreground="#243A50" FontWeight="SemiBold"/>
+     <TextBlock Text="중앙모델·로컬·일반 RVT를 여러 개 선택할 수 있습니다.&#10;파일을 미리 열어둘 필요는 없습니다. 필요한 Revit을 자동으로 연결합니다." FontSize="14" Foreground="#687785" TextWrapping="Wrap" Margin="0,10,0,16" LineHeight="23"/>
+     <Button Content="1. 룰셋 먼저 불러오기" Click="LoadRules" Style="{StaticResource Primary}" HorizontalAlignment="Left" Padding="25,10" FontSize="16" Margin="0,0,0,10"/>
+     <Button Content="2. 수정할 RVT 파일 선택" Click="AddModels" HorizontalAlignment="Left" Padding="25,10" FontSize="16"/>
      <Button Content="여러 폴더에서 파일명으로 찾기" Click="AddModelsFromFolders" HorizontalAlignment="Left" Padding="25,10" Margin="0,10,0,0"/>
-     <TextBlock Text="파일을 읽거나 룰셋을 불러오는 것만으로는 값이 바뀌지 않습니다." Foreground="#687785" Margin="0,15,0,24"/>
-     <Separator Background="#E4E8EC" Margin="0,0,0,20"/>
-     <TextBlock Text="룰셋이 있다면, 파일을 읽은 뒤 ‘② 룰셋 불러오기’를 누르세요.&#10;룰셋이 없어도 목록에서 직접 값을 입력할 수 있습니다." TextWrapping="Wrap" Foreground="#526474" LineHeight="23"/>
-     <Button Content="먼저 샘플로 연습하기" Click="SampleClick" HorizontalAlignment="Left" Margin="0,18,0,0"/>
+     <TextBlock Text="파일을 읽거나 룰셋을 불러오는 것만으로는 값이 바뀌지 않습니다." Foreground="#687785" Margin="0,10,0,12"/>
+     <Separator Background="#E4E8EC" Margin="0,0,0,12"/>
+     <TextBlock Text="룰셋이 있으면 필요한 항목과 판단 근거만 읽습니다.&#10;룰셋 없이 파일을 선택하면 기존처럼 전체 항목을 조회합니다." TextWrapping="Wrap" Foreground="#526474" LineHeight="23"/>
+     <Button Content="먼저 샘플로 연습하기" Click="SampleClick" HorizontalAlignment="Left" Margin="0,10,0,0"/>
     </StackPanel>
    </Border>
   </Grid>

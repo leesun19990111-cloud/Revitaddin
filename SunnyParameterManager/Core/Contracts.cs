@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.2.5";
+    public const string Release = "0.2.6";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -42,6 +42,9 @@ public sealed class ModelSnapshot
     public DateTime ReadAt { get; set; } = DateTime.UtcNow;
     // 적용 실패한 조회값은 원인 확인·재조회 전 다시 적용하지 않는다. 작업 파일에도 보존한다.
     public bool RequiresRequery { get; set; }
+    public QueryPlan? Query { get; set; }
+    // 선택 필드가 없는 대상도 누락 진단/실제 유형 연결에 남긴다. 편집 목록에는 섞지 않는다.
+    public List<ParameterRow> Owners { get; set; } = [];
     public List<ParameterRow> Rows { get; set; } = [];
     public List<string> Notices { get; set; } = [];
     public Dictionary<string, List<ValueChoice>> Catalogs { get; set; } = [];
@@ -119,6 +122,7 @@ public sealed class Request
     public string Path { get; set; } = "";
     public string Identity { get; set; } = "";
     public string CanonicalPath { get; set; } = "";
+    public QueryPlan? Query { get; set; }
     public bool Confirmed { get; set; }
     public bool LocalChangesConfirmed { get; set; }
     public List<ValueEdit> Edits { get; set; } = [];
