@@ -57,10 +57,18 @@ public partial class MainWindow : Window
     private async Task Run(Func<Task> action)
     {
         if (_busy) return;
-        _busy = true; WorkspacePanel.IsEnabled = false; TopActions.IsEnabled = false; ApplyButton.IsEnabled = false; ReviewButton.IsEnabled = false;
+        SetBusyState(true);
         try { await action(); }
         catch (Exception ex) { StatusText.Text = ex.Message; ReportBox.AppendText("\n" + DateTime.Now.ToString("HH:mm:ss") + " · " + ex.Message + "\n"); MessageBox.Show(this, ex.Message, "Sunny 매개변수 관리자", MessageBoxButton.OK, MessageBoxImage.Warning); }
-        finally { _busy = false; WorkspacePanel.IsEnabled = true; TopActions.IsEnabled = true; UpdatePending(); }
+        finally { SetBusyState(false); RefreshRows(); UpdatePending(); }
+    }
+    private void SetBusyState(bool busy)
+    {
+        _busy = busy;
+        // 목록 자체는 활성 상태로 두어 휠·스크롤바·키보드 탐색을 허용한다.
+        // 파일/룰셋 변경과 입력·저장은 조회 중에도 계속 잠근다.
+        TopActions.IsEnabled = MainTabs.IsEnabled = FileActions.IsEnabled = WelcomePanel.IsEnabled = ShowAllModelsButton.IsEnabled = !busy;
+        if (busy) { ApplyButton.IsEnabled = false; ReviewButton.IsEnabled = false; }
     }
     private bool DiscardPending()
     {
@@ -261,7 +269,7 @@ public partial class MainWindow : Window
         ValueBox.Clear(); ChoiceCombo.SelectedItem = null; RefreshRows();
     }
     private void SearchChanged(object sender, TextChangedEventArgs e) { if (_initialized) RefreshRows(); }
-    private void ModelSelectionChanged(object sender, SelectionChangedEventArgs e) { if (_initialized) RefreshRows(); }
+    private void ModelSelectionChanged(object sender, SelectionChangedEventArgs e) { if (_initialized && !_busy) RefreshRows(); }
     private void ShowAllModels(object sender, RoutedEventArgs e) => Guard(() => { ModelsList.SelectedItem = null; RefreshRows(); });
     private void SelectEditable(object sender, RoutedEventArgs e) => Guard(() =>
     {
@@ -384,8 +392,14 @@ public partial class MainWindow : Window
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         RulesButton.IsEnabled = !_busy;
         ReviewRulesButton.IsEnabled = !_busy && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery);
+        RulesButton.Content = _loadedRules == null ? "룰셋 먼저 불러오기" : "룰셋 바꾸기";
+        WelcomeRulesButton.Content = _loadedRules == null ? "1. 룰셋 먼저 불러오기" : "선택한 룰셋 바꾸기";
+        WelcomeRulesPanel.Visibility = _loadedRules == null ? Visibility.Collapsed : Visibility.Visible;
+        WelcomeRulesName.Text = _loadedRules?.Name ?? "";
+        QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
+        QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "다음 조회: 룰셋 ‘" + _loadedRules.Name + "’ · " + (_loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");

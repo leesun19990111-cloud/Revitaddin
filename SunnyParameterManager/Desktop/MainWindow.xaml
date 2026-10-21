@@ -15,7 +15,7 @@
  <Border Background="#F2F2F3" Padding="16"><Grid>
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel Margin="0,0,0,10"><TextBlock Text="SUNNY / 매개변수 관리자" FontSize="25" FontWeight="SemiBold" Foreground="#243A50"/>
-   <TextBlock x:Name="QuerySummary" Text="룰셋 먼저 불러오기 → RVT 선택·선택 조회 → 변경 검토 → 저장" TextTrimming="CharacterEllipsis" Foreground="#687785" Margin="0,6,0,0"/>
+   <TextBlock x:Name="QuerySummary" Text="룰셋 먼저 불러오기 → RVT 선택·선택 조회 → 변경 검토 → 저장" TextTrimming="CharacterEllipsis" Foreground="#687785" Margin="0,6,0,0" AutomationProperties.LiveSetting="Polite"/>
   </StackPanel>
   <StackPanel Grid.Row="1" Margin="0,0,0,8" x:Name="TopActions">
    <DockPanel>
@@ -37,8 +37,8 @@
   <Grid Grid.Row="2" x:Name="WorkspacePanel">
    <Grid.ColumnDefinitions><ColumnDefinition Width="225" MinWidth="195"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <Border Background="White" BorderBrush="#CDD2D7" BorderThickness="1" Padding="12"><DockPanel>
-    <StackPanel DockPanel.Dock="Top"><TextBlock Text="선택한 파일" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/><Button Content="모든 파일 함께 보기" Click="ShowAllModels" Margin="0,0,0,10"/></StackPanel>
-    <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+    <StackPanel DockPanel.Dock="Top"><TextBlock Text="선택한 파일" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/><Button x:Name="ShowAllModelsButton" Content="모든 파일 함께 보기" Click="ShowAllModels" Margin="0,0,0,10"/></StackPanel>
+    <StackPanel x:Name="FileActions" DockPanel.Dock="Bottom" Margin="0,12,0,0">
      <Button x:Name="RemoveLinksButton" Content="링크·가져오기 완전 제거…" Foreground="#A52C32" BorderBrush="#C66B6B" Click="OpenLinkRemoval" Margin="0,0,0,12" ToolTip="모델을 체크하고 삭제 영향 검사 후 별도 승인합니다. 외부 원본 파일은 삭제하지 않습니다."/>
      <Expander x:Name="FileManagement" Header="파일 관리" Margin="0,0,0,12"><StackPanel Margin="0,8,0,0"><Button Content="미조회 파일 계속 조회" Click="ContinueUnreadModels" Margin="0,0,0,8"/><Button Content="다시 조회" Click="ReadModels" Margin="0,0,0,8"/><Button Content="선택한 파일 제외" Click="RemoveModel" Margin="0"/></StackPanel></Expander>
      <Expander x:Name="CopyExpander" Header="다른 파일에서 값 가져오기"><StackPanel Margin="0,10,0,0">
@@ -105,10 +105,17 @@
     <TabItem Header="처리 결과"><DockPanel Margin="12"><Button DockPanel.Dock="Top" Content="기록 폴더 열기" Click="OpenLogs" HorizontalAlignment="Left" Margin="0,0,0,10"/><TextBox x:Name="ReportBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" BorderThickness="0" Text="처음에는 별도 테스트 모델로 확인해 주세요."/></DockPanel></TabItem>
    </TabControl>
    <Border x:Name="WelcomePanel" Grid.ColumnSpan="3" Background="White" BorderBrush="#CDD2D7" BorderThickness="1">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalContentAlignment="Center">
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="650" Margin="20">
      <TextBlock Text="룰셋부터 불러오면 더 가볍게 조회해요" FontSize="25" Foreground="#243A50" FontWeight="SemiBold"/>
      <TextBlock Text="중앙모델·로컬·일반 RVT를 여러 개 선택할 수 있습니다.&#10;파일을 미리 열어둘 필요는 없습니다. 필요한 Revit을 자동으로 연결합니다." FontSize="14" Foreground="#687785" TextWrapping="Wrap" Margin="0,10,0,16" LineHeight="23"/>
-     <Button Content="1. 룰셋 먼저 불러오기" Click="LoadRules" Style="{StaticResource Primary}" HorizontalAlignment="Left" Padding="25,10" FontSize="16" Margin="0,0,0,10"/>
+     <Border x:Name="WelcomeRulesPanel" Visibility="Collapsed" Background="#EAF3ED" BorderBrush="#83AB90" BorderThickness="1" Padding="12" Margin="0,0,0,12">
+      <StackPanel><TextBlock Text="✓ 룰셋 선택 완료" FontWeight="SemiBold" Foreground="#28643D"/>
+       <TextBlock x:Name="WelcomeRulesName" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,5,0,5"/>
+       <TextBlock Text="이제 아래에서 RVT 파일을 선택하세요. 필요한 항목만 조회합니다.&#10;아직 모델에는 적용하지 않았습니다." TextWrapping="Wrap" Foreground="#526474"/>
+      </StackPanel>
+     </Border>
+     <Button x:Name="WelcomeRulesButton" Content="1. 룰셋 먼저 불러오기" Click="LoadRules" Style="{StaticResource Primary}" HorizontalAlignment="Left" Padding="25,10" FontSize="16" Margin="0,0,0,10"/>
      <Button Content="2. 수정할 RVT 파일 선택" Click="AddModels" HorizontalAlignment="Left" Padding="25,10" FontSize="16"/>
      <Button Content="여러 폴더에서 파일명으로 찾기" Click="AddModelsFromFolders" HorizontalAlignment="Left" Padding="25,10" Margin="0,10,0,0"/>
      <TextBlock Text="파일을 읽거나 룰셋을 불러오는 것만으로는 값이 바뀌지 않습니다." Foreground="#687785" Margin="0,10,0,12"/>
@@ -116,6 +123,7 @@
      <TextBlock Text="룰셋이 있으면 필요한 항목과 판단 근거만 읽습니다.&#10;룰셋 없이 파일을 선택하면 기존처럼 전체 항목을 조회합니다." TextWrapping="Wrap" Foreground="#526474" LineHeight="23"/>
      <Button Content="먼저 샘플로 연습하기" Click="SampleClick" HorizontalAlignment="Left" Margin="0,10,0,0"/>
     </StackPanel>
+    </ScrollViewer>
    </Border>
   </Grid>
   <Grid Grid.Row="3" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
