@@ -67,6 +67,7 @@ internal static class CleanupWriter
                 else
                 {
                     var p = ParameterReader.Resolve(after, before.ParameterKey) ?? throw new InvalidOperationException("확정 후 매개변수가 없어졌습니다.");
+                    EditPlanner.CheckGroupFresh(before, reader.Read(after, p, false));
                     if (ParameterReader.Raw(p) != raw || p.StorageType.ToString() != before.Storage || p.Definition.GetDataType().TypeId != before.DataType || p.Definition.Name != before.Name)
                         throw new InvalidOperationException("확정 후 요청값/매개변수 식별 불일치: " + before.Name);
                     if (before.IdentityDataParameter != (p.Definition.GetGroupTypeId() == GroupTypeId.IdentityData))

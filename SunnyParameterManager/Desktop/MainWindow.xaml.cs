@@ -384,6 +384,7 @@ public partial class MainWindow : Window
     private void ClearEdits(object sender, RoutedEventArgs e) => Guard(() => { if (!DiscardPending()) return; _edits.Clear(); UpdatePending(); });
     private void UpdatePending()
     {
+        RefreshGroupRestrictions();
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         PendingText.Text = $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
         ApplyButton.IsEnabled = !_busy && !_sample && _edits.Count > 0 && !_worker.NeedsAttention && !HasFailedPending();
@@ -403,6 +404,16 @@ public partial class MainWindow : Window
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
+    }
+    private void GroupSearchChanged(object sender, TextChangedEventArgs e) { if (_initialized) RefreshGroupRestrictions(); }
+    private void RefreshGroupRestrictions()
+    {
+        var rows = _models.Where(m => m.Snapshot != null).SelectMany(m => m.Snapshot!.Rows)
+            .Where(r => r.GroupEdit?.Reason.Length > 0).ToList();
+        GroupRestrictionsTab.Header = $"그룹 제한 항목 ({rows.Count:N0})";
+        var search = GroupSearchBox.Text.Trim();
+        GroupRestrictionsGrid.ItemsSource = rows.Where(r => search.Length == 0 ||
+            string.Join(" ", r.ModelTitle, r.GroupEdit!.Name, r.GroupEdit.ElementId, r.ElementId, r.TargetName, r.Name, r.GroupEdit.Reason).Contains(search, StringComparison.CurrentCultureIgnoreCase)).ToList();
     }
     private bool HasFailedPending() => _models.Any(m => m.Snapshot?.RequiresRequery == true && _edits.Values.Any(e => string.Equals(e.Original.ModelPath, m.Path, StringComparison.OrdinalIgnoreCase)));
     private void OpenLinkRemoval(object sender, RoutedEventArgs e) => Guard(() =>
@@ -431,6 +442,8 @@ public partial class MainWindow : Window
         var local = groups.Any(g => _models.Single(m => m.Path == g.Key).Snapshot?.Kind == "로컬");
         var summary = string.Join("\n", groups.Select(g => $"{Path.GetFileName(g.Key)}: {g.Count():N0}건"));
         var text = "아래 변경을 실제 RVT에 저장하고, 작업공유 모델은 중앙에 동기화할까요?\n\n" + summary +
+            "\n\n그룹 제한 항목은 변경 목록에서 제외하며 현재 값을 유지합니다. ‘그룹 제한 항목’ 탭을 검토한 뒤 진행하세요. 그룹 해제나 매개변수 설정 변경은 하지 않습니다." +
+            "\n\n작업공유 모델은 중앙 동기화 후 현재 사용자의 차용 요소·모든 작업세트 소유권을 반환합니다. 같은 모델을 다른 Revit/로컬에서 편집 중이면 먼저 그 작업을 동기화하고 닫으세요. 반환 확인 실패 시 나머지 모델은 중단합니다." +
             "\n\n모델별 순차 처리이며 여러 모델을 한 번에 되돌릴 수 없습니다. 유형 값은 그 유형을 사용하는 모든 요소에 영향을 줍니다. 작업세트/치수/재료 변경은 모델 동작에 영향을 줄 수 있습니다.\n운영 모델 적용 전 별도 테스트 중앙에서 검증해 주세요." +
             (local ? "\n\n주의: 기존 로컬에 저장된 다른 미동기화 작업도 중앙에 함께 반영됩니다." : "");
         if (MessageBox.Show(this, text, "실제 파일 변경 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;

@@ -1,5 +1,14 @@
 # 독립 매개변수 관리자
 
+## 2026-10-21 · 0.2.9 그룹 제한 사전 검사 / 중앙 소유권 반환 필수
+
+- 사용자 그룹 오류 결과에서 Applied0/이번 변경 미저장/RequiresAttention false 확인. 특정 하나의 필드가 원인이라고 단정하지 않는다. 그룹 해제/설정 변경 없이 제한 항목 목록화 및 가능한 항목만 적용하도록 승인받았다. 이어 사용자가 중앙 저장 후 자신이 차용자로 남아 협업을 막는 문제를 보고하고 반환 필수를 명시했다. 기존 RelinquishOptions(false)가 직접 원인이며 아래 과거 ‘일괄 반납 없음’ 정책을 이번 승인으로 변경한다. 개인 세션/RVT는 Git·배포 금지.
+- ParameterReader는 Element.GroupId와 Group 식별/유형/이름, InternalDefinition.VariesAcrossGroups를 GroupEditEvidence에 보관. 유형 자체에는 구성원 제한 적용하지 않음. 사용자 필드는 기존 VariesAcrossGroups=true만 허용, 실제 IsReadOnly 유지. 기본 속성/중첩 그룹/확인 불가 보수적 제외, OOM 전파. 그룹 해제·SetAllowVaryBetweenGroups·오류 무시 API 금지.
+- 공통 BlockReason/Editable로 직접 입력·복사·모든 룰셋 제한. CleanupPlanner Notes에는 변경 필요한 제외 필드 상세 기록. UI 그룹 제한 탭은 조회 제한 필드 전체(동일값 포함)를 가상화·검색·열 조절·선택 사유로 표시. 새 버전 후 재조회 필수. 기존 처리 결과 탭 인덱스 보존. CheckGroupFresh는 적용 전 및 일반/정리 Writer 확정 후 그룹 소속/허용 근거 동일성 검사. 조회 후 변경은 묵시적 건너뛰기가 아니라 승인 재검토로 차단. 미지정 false는 지정 false와 합치지 않음.
+- 동기화의 RelinquishOptions(true)로 모든 카테고리 반환. 동기화 성공 뒤 OwnershipRelease.Complete는 별도 RelinquishOwnership(true, NoWait) 호출하고 전체 유형/비유형 요소 ID의 OwnedByCurrentUser와 필터 없는 전체 작업세트 IsEditable을 검사한다. 매개변수 전체 재조회/대량 진단 문자열 없이 예시12건만 기록. GetCheckoutStatus는 로컬 캐시여서 중앙 반환 API를 대신하거나 영구 무소유 증명으로 표현하면 안 됨. 다른 사용자의 권한 강탈/이름 사칭/자동 재동기화 금지.
+- Response 및 경량 progress의 CentralSynchronized/OwnershipReleased로 두 단계를 구분. 중앙 반영 직후 Applied 기록. 반환 호출/검사 실패는 Success=false, RequiresAttention=true, 실제 반영 수 보존, 문서·복구 로컬 유지, 나머지 모델 중단, ‘중앙 반영 완료 · 소유권 반환 확인 필요’ 안내. 같은 변경 재실행 차단 유지. 동기화 실패 시 반환 강행하지 않음. 편집 시작 후 미저장 롤백은 잔존 차용권 반환 시도하되 실패하면 보존·확인 요청. 조회/사전 식별 실패는 반환 부작용 없음. 링크 삭제도 공통 수명과 승인 안내 적용.
+- Core/WPF474+lifecycle94+재료22+reader95+링크25+worker12=722검사 구성. 그룹 Reader24/WPF8/저장경계3 및 반환경계13 추가. 실제 Revit2026 API 빌드·최소/기본 창 렌더 검사, 사용자 RVT 쓰기/동기화·업데이트 설치 미실행. 029 격리 배포, 같은 제품028만 보관, Sunny Tools v109/사용자 변경 보존. 이미 남은 차용권은 설치만으로 해제하지 않으며 원래 로컬 미동기화 작업부터 검토.
+
 ## 2026-10-21 · 0.2.8 조회 중 파일 탐색 / 룰셋 선택 피드백
 
 - Run이 WorkspacePanel 전체를 비활성화하여 ListBox 스크롤까지 차단하던 문제. SetBusyState에서 상단/파일 작업/편집 탭/시작 작업/전체 보기만 잠그고 파일 목록과 분할선은 활성 유지. 탐색 중 ModelSelectionChanged는 행 재생성하지 않고 finally에서 선택한 파일 기준 RefreshRows. 기존 Guard/재진입/닫기/저장 보호 불변, 조회 대상 목록과 룰셋 변경은 계속 금지.
@@ -186,7 +195,7 @@ UIApplication을 장기 보관하지 않는다. DB 호출은 ExternalEvent.Execu
 5. 인스턴스 자동 대응은 없다. 사용자 선택 집합에 직접 입력만 허용. 모델 간 원시 ElementId는 복사하지 않고 이름과 대상 UniqueId 또는 작업세트 GUID를 재검증한다.
 6. 전체 입력을 검증하고 단일 문서 묶음 트랜잭션에서 수정한다. 수정 후 요청값과 실제값이 다르면 묶음 롤백. 수식·실제 읽기전용은 해제하지 않는다.
 7. 문서 변경 확정 이후 저장·동기화 실패는 열린 문서/로컬을 보존하고 나머지 모델 중단. 결과 불명 시 재시도·자동 닫기 금지. sync 성공 뒤 close만 실패하면 Success=true + RequiresAttention=true로 **이미 반영한 변경을 실패로 잘못 재시도하지 않게** 한다.
-8. 소유권 강제 취득/일괄 반납 없음. 중앙 lock callback은 대기하지 않음. 다른 사용자의 로컬은 최신 내용 가져오기가 필요함을 안내한다. 다중 모델은 원자적 일괄 성공/롤백이 아니다.
+8. 소유권 강제 취득 없음. **0.2.9 사용자 승인으로 중앙 동기화 후 현재 사용자의 모든 차용 요소·작업세트 반환 필수**(상단 변경 기록 참조). 중앙 lock callback은 대기하지 않음. 다른 사용자의 로컬은 최신 내용 가져오기가 필요함을 안내한다. 다중 모델은 원자적 일괄 성공/롤백이 아니다.
 9. 요청 인증·버전·Guid 검사 후 요청파일을 claimed로 옮겨 한 번만 소비한다. 응답 불명/45분 timeout이면 세션 잠금, 프로세스 강제 종료 없음.
 10. 일반파일/기존 로컬은 변경 전 백업. 중앙은 별도 새 로컬을 유지하며 중앙 서버 백업과 같다고 안내하지 않는다. 기록/로컬에 실제 프로젝트 데이터가 있으므로 git에 넣지 않는다.
 

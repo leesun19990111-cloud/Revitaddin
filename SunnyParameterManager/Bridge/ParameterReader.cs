@@ -140,7 +140,41 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         }
         else if (r.BlockReason.Length == 0) r.BlockReason = "표시 전용 — 이 참조/전용 열거값 편집기는 첫 버전에서 미지원";
         r.Choices = model.Catalogs.GetValueOrDefault(r.ChoiceCatalog, []);
+        r.GroupEdit = ReadGroup(owner, p);
+        if (r.GroupEdit?.Reason.Length > 0)
+            r.BlockReason = $"그룹 제한 — {r.GroupEdit.Name} (그룹 ID {r.GroupEdit.ElementId}): {r.GroupEdit.Reason}";
         return r;
+    }
+
+    private GroupEditEvidence? ReadGroup(Element owner, Parameter p)
+    {
+        // 유형은 그룹 구성원의 개별 값이 아니다. 유형 자체의 편집 가능 여부는 기존 검사 유지.
+        if (owner is ElementType) return null;
+        var evidence = new GroupEditEvidence { Name = "확인 불가", ElementId = "확인 불가" };
+        try
+        {
+            var id = owner.GroupId;
+            if (id == ElementId.InvalidElementId) return null;
+            evidence.ElementId = id.Value.ToString(Invariant);
+            if (doc.GetElement(id) is not Group group)
+                throw new InvalidOperationException("소속 그룹을 찾을 수 없습니다.");
+            evidence.Identity = group.UniqueId + "/" + group.GetTypeId().Value.ToString(Invariant);
+            evidence.Name = group.Name;
+            // 중첩 그룹의 상위 구속까지 보장하지 못하므로 추정 편집하지 않는다.
+            if (group.GroupId != ElementId.InvalidElementId)
+                evidence.Reason = "중첩 그룹 내부입니다. 원본의 그룹 편집에서 검토하세요.";
+            else if (p.Id.Value <= 0)
+                evidence.Reason = "Revit 기본 속성의 그룹 내부 개별 수정은 지원하지 않습니다.";
+            else if (p.Definition is InternalDefinition definition)
+            {
+                evidence.CanVary = definition.VariesAcrossGroups;
+                if (!evidence.CanVary) evidence.Reason = "그룹 인스턴스 간 값이 정렬되는 매개변수입니다. 원본의 그룹 편집에서 검토하세요.";
+            }
+            else evidence.Reason = "그룹 인스턴스별 값 변경 허용 여부를 확인하지 못했습니다.";
+        }
+        catch (OutOfMemoryException) { throw; }
+        catch (Exception ex) { evidence.Reason = "그룹 편집 가능 여부 확인 실패: " + ex.Message; }
+        return evidence;
     }
 
     internal static string Key(Parameter p) => p.IsShared ? "guid:" + p.GUID.ToString("D") : (p.Id.Value < 0 ? "builtin:" : "id:") + p.Id.Value.ToString(Invariant);

@@ -66,9 +66,15 @@ public static class EditPlanner
 
     public static void CheckFresh(ParameterRow expected, ParameterRow actual)
     {
+        CheckGroupFresh(expected, actual);
         if (expected.OwnerId != actual.OwnerId || expected.ParameterKey != actual.ParameterKey || expected.Scope != actual.Scope ||
             expected.Name != actual.Name || expected.DataType != actual.DataType || expected.Storage != actual.Storage || expected.Editor != actual.Editor ||
             expected.TypeKey != actual.TypeKey || expected.TypeOwnerId != actual.TypeOwnerId || expected.Unit != actual.Unit || expected.HasValue != actual.HasValue || expected.Raw != actual.Raw || !actual.Editable)
             throw new InvalidOperationException($"{expected.TypeName} / {expected.Name}: 조회 후 대상·값·단위 또는 편집 권한이 달라졌습니다. 다시 조회하세요.");
+    }
+    public static void CheckGroupFresh(ParameterRow expected, ParameterRow actual)
+    {
+        if (expected.GroupEdit != actual.GroupEdit || actual.GroupEdit?.Reason.Length > 0)
+            throw new InvalidOperationException($"요소 {expected.ElementId} / {expected.Name}: 그룹 소속·개별 편집 허용 여부가 달라졌거나 그룹 수정이 제한됩니다. 다시 조회하여 그룹 제한 항목을 확인하세요.");
     }
 }

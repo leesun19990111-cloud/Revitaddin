@@ -21,7 +21,8 @@ namespace Autodesk.Revit.DB
   public static class Int { public static ForgeTypeId Integer { get; } = new("int"); }
   public static class Reference { public static ForgeTypeId Material { get; } = new("material"); }
  }
- public sealed class Definition { public string Name { get; set; } = "뷰 구분-1"; public ForgeTypeId Spec { get; set; } = new("text"); public ForgeTypeId Group { get; set; } = new("other"); public ForgeTypeId GetDataType() => Spec; public ForgeTypeId GetGroupTypeId() => Group; }
+ public class Definition { public string Name { get; set; } = "뷰 구분-1"; public ForgeTypeId Spec { get; set; } = new("text"); public ForgeTypeId Group { get; set; } = new("other"); public ForgeTypeId GetDataType() => Spec; public ForgeTypeId GetGroupTypeId() => Group; }
+ public class InternalDefinition : Definition { public bool VariesAcrossGroups { get; set; } }
  public sealed class Parameter
  {
   public ElementId Id { get; set; } = new(42); public Definition Definition { get; set; } = new();
@@ -40,11 +41,15 @@ namespace Autodesk.Revit.DB
   public ElementId Id { get; } = new(++_next); public string UniqueId { get; } = Guid.NewGuid().ToString();
   public virtual string Name { get; set; } = "대상"; public Category? Category { get; set; } = new();
   public Guid VersionGuid { get; set; } = Guid.NewGuid();
+  public bool FailGroupRead { get; set; }
+  private ElementId _groupId = ElementId.InvalidElementId;
+  public ElementId GroupId { get => FailGroupRead ? throw new InvalidOperationException("그룹 조회 실패") : _groupId; set => _groupId = value; }
   public List<Parameter> Parameters { get; } = [new()]; public ElementId TypeId { get; set; } = ElementId.InvalidElementId;
   public ElementId GetTypeId() => TypeId;
   public Parameter? get_Parameter(BuiltInParameter id) => Parameters.SingleOrDefault(p => p.Id.Value == (long)id);
  }
  public class ElementType : Element { public string FamilyName { get; set; } = "패밀리"; public bool CanBeRenamed { get; set; } = true; }
+ public class Group : Element { }
  public class Family { public bool IsInPlace { get; set; } }
  public class FamilySymbol : ElementType { public Family Family { get; } = new(); }
  public class HostObjAttributes : ElementType { public CompoundStructure? Structure { get; set; } = new(); public CompoundStructure? GetCompoundStructure() => Structure; }

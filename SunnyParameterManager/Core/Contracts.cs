@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.2.8";
+    public const string Release = "0.2.9";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -80,6 +80,7 @@ public sealed class ParameterRow
     public MaterialEvidence? OuterMaterial { get; set; }
     public CleanupEvidence? Cleanup { get; set; }
     public bool IdentityDataParameter { get; set; }
+    public GroupEditEvidence? GroupEdit { get; set; }
     [JsonIgnore] public List<ValueChoice> Choices { get; set; } = [];
     [JsonIgnore] public bool Editable => BlockReason.Length == 0 && Editor.Length > 0;
     [JsonIgnore] public string Key => JsonSerializer.Serialize(new[] { ModelPath.ToUpperInvariant(), OwnerId, ParameterKey });
@@ -90,6 +91,15 @@ public sealed class ParameterRow
 }
 
 public sealed record ValueChoice(string Key, string Name);
+// 그룹 설정을 바꾸지 않고 개별 편집 가능 여부와 소속을 재검증하는 근거.
+public sealed record GroupEditEvidence
+{
+    public string Identity { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string ElementId { get; set; } = "";
+    public bool CanVary { get; set; }
+    public string Reason { get; set; } = "";
+}
 // 조회 때 확인한 재료와 근거. 실제 저장 때 같은 근거인지 다시 검사한다.
 public sealed class MaterialEvidence
 {
@@ -146,6 +156,8 @@ public sealed class Response
     public string RecoveryPath { get; set; } = "";
     public string BackupPath { get; set; } = "";
     public int Applied { get; set; }
+    public bool CentralSynchronized { get; set; }
+    public bool OwnershipReleased { get; set; }
     public ModelSnapshot? Snapshot { get; set; }
     public LinkRemovalPlan? LinkRemoval { get; set; }
 }

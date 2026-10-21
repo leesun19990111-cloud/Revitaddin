@@ -32,10 +32,14 @@ namespace Autodesk.Revit.DB
   public static string Scope = "유형";
   public static bool MaterialMissing;
   public static bool ReadOutOfMemory;
+  public static GroupEditEvidence? GroupEdit;
+  public static bool GroupChangesAfterSet;
+  public static bool FailRelinquish, LeaveBorrowed, LeaveWorkset, FailOwnershipCheck;
+  public static HashSet<long> OwnedIds = [];
   public static ApplicationServices.Application App = null!;
   public static FailureSeverity? Failure;
   public static bool OtherDocFailure, UnreadableFailure, DeletedAfterCommit;
-  public static void Reset() { Doc = new(); Info = new(); Events = []; TypeOwnerId = "type-1"; MaterialMissing = false; Failure = null; OtherDocFailure = UnreadableFailure = DeletedAfterCommit = false; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = TypeChangesAfterSet = false; }
+  public static void Reset() { FailRelinquish = LeaveBorrowed = LeaveWorkset = FailOwnershipCheck = false; OwnedIds = []; GroupEdit = null; GroupChangesAfterSet = false; Doc = new(); Info = new(); Events = []; TypeOwnerId = "type-1"; MaterialMissing = false; Failure = null; OtherDocFailure = UnreadableFailure = DeletedAfterCommit = false; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = TypeChangesAfterSet = false; }
  }
  public enum FailureSeverity { Warning, Error, DocumentCorruption }
  public sealed class FailureMessageAccessor
@@ -53,7 +57,7 @@ namespace Autodesk.Revit.DB
  }
  public enum StorageType { String, Integer, Double, ElementId }
  public enum BuiltInParameter { ELEM_PARTITION_PARAM = -100 }
- public enum CheckoutStatus { OwnedByOtherUser, NotOwned }
+ public enum CheckoutStatus { OwnedByOtherUser, OwnedByCurrentUser, NotOwned }
  public enum TransactionStatus { Uninitialized, Started, Committed, RolledBack }
  public enum DetachFromCentralOption { DoNotDetach }
  public enum WorksetConfigurationOption { OpenAllWorksets }
@@ -66,7 +70,7 @@ namespace Autodesk.Revit.DB
   public StorageType StorageType { get; set; } = StorageType.String;
   public Definition Definition { get; } = new();
   public string Value { get; set; } = "기존";
-  public bool Set(string v) { State.Events.Add("set"); if (State.FailSet) return false; Value = State.VerifyMismatch ? "다른값" : v; return true; }
+  public bool Set(string v) { State.Events.Add("set"); if (State.Doc.IsWorkshared) State.OwnedIds.Add(10); if (State.FailSet) return false; Value = State.VerifyMismatch ? "다른값" : v; return true; }
   public bool Set(int v) => Set(v.ToString());
   public bool Set(double v) => Set(v.ToString(System.Globalization.CultureInfo.InvariantCulture));
   public bool Set(ElementId v) => Set(v.Value.ToString());
@@ -87,7 +91,7 @@ namespace Autodesk.Revit.DB
   public object GetUnits() => new();
   public void Save() { State.Events.Add("save"); if (State.FailSave) throw new IOException("테스트 저장 실패"); }
   public void SynchronizeWithCentral(TransactWithCentralOptions transact, SynchronizeWithCentralOptions sync)
-  { State.Events.Add("sync"); if (!sync.SaveLocalBefore || !sync.SaveLocalAfter || sync.Relinquish!.All || transact.Callback!.ShouldWaitForLockAvailability()) throw new Exception("동기화 옵션 오류"); if (State.FailSync) throw new IOException("테스트 동기화 실패"); }
+  { State.Events.Add("sync"); if (!sync.SaveLocalBefore || !sync.SaveLocalAfter || !sync.Relinquish!.All || transact.Callback!.ShouldWaitForLockAvailability()) throw new Exception("동기화 옵션 오류"); if (State.FailSync) throw new IOException("테스트 동기화 실패"); }
   public bool Close(bool save) { State.Events.Add(save ? "close-save" : "close"); return !State.FailClose; }
  }
  public sealed class BasicFileInfo : IDisposable
@@ -102,7 +106,22 @@ namespace Autodesk.Revit.DB
  public static class WorksharingUtils
  {
   public static void CreateNewLocal(ModelPath central, ModelPath local) { State.Events.Add("create-local"); File.Copy(central.Path, local.Path, false); }
-  public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id) => State.OwnedOther ? CheckoutStatus.OwnedByOtherUser : CheckoutStatus.NotOwned;
+  public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id) => State.FailOwnershipCheck && State.Events.Contains("relinquish") ? throw new IOException("반환 확인 실패") : State.OwnedOther || id.Value == 30 ? CheckoutStatus.OwnedByOtherUser : State.OwnedIds.Contains(id.Value) ? CheckoutStatus.OwnedByCurrentUser : CheckoutStatus.NotOwned;
+  public static RelinquishedItems RelinquishOwnership(Document doc, RelinquishOptions all, TransactWithCentralOptions access)
+  {
+   State.Events.Add("relinquish"); if (!all.All || access.Callback!.ShouldWaitForLockAvailability()) throw new Exception("반환 옵션 오류");
+   if (State.FailRelinquish) throw new IOException("중앙 반환 실패");
+   if (!State.LeaveBorrowed) State.OwnedIds.Clear(); return new();
+  }
+ }
+ public sealed class RelinquishedItems : IDisposable { public void Dispose() { } }
+ public sealed class FilteredElementCollector(Document doc) : IDisposable
+ {
+  private bool _types;
+  public FilteredElementCollector WhereElementIsElementType() { _types = true; return this; }
+  public FilteredElementCollector WhereElementIsNotElementType() { _types = false; return this; }
+  public ICollection<ElementId> ToElementIds() => _types ? [new(20)] : [new(10), new(30)];
+  public void Dispose() { }
  }
  public sealed class OpenOptions : IDisposable { public DetachFromCentralOption DetachFromCentralOption { get; set; } public void SetOpenWorksetsConfiguration(WorksetConfiguration config) { } public void Dispose() { } }
  public sealed class WorksetConfiguration(WorksetConfigurationOption option) { }
@@ -125,14 +144,14 @@ namespace Autodesk.Revit.DB
   public void RollBack() { State.Events.Add("rollback"); doc.Element.Parameter.Value = _original; _status = TransactionStatus.RolledBack; }
   public void Dispose() { }
  }
- public sealed class RelinquishOptions(bool all) { public bool All => all; }
+ public sealed class RelinquishOptions(bool all) : IDisposable { public bool All => all; public void Dispose() { } }
  public interface ICentralLockedCallback { bool ShouldWaitForLockAvailability(); }
  public sealed class SynchronizeWithCentralOptions : IDisposable
  { public bool SaveLocalBefore { get; set; } public bool SaveLocalAfter { get; set; } public string Comment { get; set; } = ""; public RelinquishOptions? Relinquish; public void SetRelinquishOptions(RelinquishOptions r) => Relinquish = r; public void Dispose() { } }
  public sealed class TransactWithCentralOptions : IDisposable { public ICentralLockedCallback? Callback; public void SetLockCallback(ICentralLockedCallback callback) => Callback = callback; public void Dispose() { } }
- public sealed class Workset { public Guid UniqueId { get; } = Guid.NewGuid(); public WorksetId Id { get; } = new(); }
+ public sealed class Workset { public Guid UniqueId { get; } = Guid.NewGuid(); public WorksetId Id { get; } = new(); public string Name => "프로젝트 표준"; public bool IsEditable => State.LeaveWorkset; }
  public sealed class WorksetId { public int IntegerValue => 1; }
- public sealed class FilteredWorksetCollector(Document doc) : List<Workset> { public FilteredWorksetCollector OfKind(WorksetKind kind) => this; }
+ public sealed class FilteredWorksetCollector(Document doc) : List<Workset>([new()]), IDisposable { public FilteredWorksetCollector OfKind(WorksetKind kind) => this; public void Dispose() { } }
  public static class UnitFormatUtils { public static bool TryParse(object units, object spec, string value, out double number) => double.TryParse(value, out number); }
 }
 namespace SunnyParameterManager.Bridge
@@ -166,7 +185,7 @@ namespace SunnyParameterManager.Bridge
    : new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = State.MaterialChangesAfterSet && State.Events.Contains("set") ? "material-v2" : "material-v1" };
   public List<string> Notices { get; } = [];
   public List<ParameterRow> ReadAll(QueryPlan? query = null) { model.Query = query; return State.ReadOutOfMemory ? throw new OutOfMemoryException("조회 메모리 대역") : [Read(doc.Element, doc.Element.Parameter)]; }
-  public ParameterRow Read(Element owner, Parameter p) => new() { ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = "W1", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
+  public ParameterRow Read(Element owner, Parameter p) => new() { GroupEdit = State.GroupChangesAfterSet && State.Events.Contains("set") ? new() { Identity = "변경된그룹", Reason = "그룹 제한" } : State.GroupEdit, ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = "W1", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
   internal static Parameter? Resolve(Element owner, string key) => key == "id:1" ? owner.Parameter : null;
   internal static string Raw(Parameter p) => p.Value;
  }

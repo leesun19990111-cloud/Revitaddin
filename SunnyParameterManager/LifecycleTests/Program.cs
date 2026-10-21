@@ -61,6 +61,37 @@ internal static class Program
    Check(result.Success && result.Applied == 1 && State.Doc.Element.Parameter.Value == "새값", "일반 파일 변경 성공");
    Check(State.Events.SequenceEqual(new[] { "open", "group-start", "tx-start", "set", "tx-commit", "assimilate", "save", "close" }), "일반 파일 단계 순서");
    Check(File.ReadAllText(result.BackupPath) == "테스트 대역 원본", "변경 전 파일 백업");
+   r = Setup(true, true); State.GroupEdit = new() { Identity = "새 그룹", Reason = "그룹 편집 필요" }; result = Run(r);
+   Check(!result.Success && !State.Events.Contains("tx-start") && !State.Events.Contains("sync"), "새 그룹 제한은 트랜잭션·중앙 동기화 전에 차단");
+   r = Setup(true, true); State.GroupChangesAfterSet = true; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save") && !State.Events.Contains("sync") && State.Doc.Element.Parameter.Value == "기존", "확정 후 그룹 변화는 전체 묶음 롤백·저장 및 동기화 금지");
+   r = Setup(true, true); State.GroupEdit = new() { Identity = "그룹", CanVary = true };
+   r.Edits[0].Original.GroupEdit = State.GroupEdit with { }; result = Run(r);
+   Check(result.Success && State.Events.Contains("sync"), "변화 없는 그룹별 허용 근거는 기존 중앙 동기화 경계 통과");
+   Check(result.CentralSynchronized && result.OwnershipReleased && State.OwnedIds.Count == 0 && State.Events.IndexOf("relinquish") > State.Events.IndexOf("sync") && State.Events.IndexOf("close") > State.Events.IndexOf("relinquish"), "동기화→소유권 반환→확인→닫기 및 별도 완료 상태");
+   r = Setup(true, true); State.OwnedIds.Add(20); result = Run(r);
+   Check(result.Success && !State.OwnedIds.Contains(20), "이번 대상 이외 기존 현재 사용자 유형 소유권도 반환");
+   r = Setup(true); result = Run(r);
+   Check(result.Success && result.CentralSynchronized && result.OwnershipReleased, "기존 로컬 적용도 중앙 동기화와 모든 소유권 반환");
+   r = Setup(true, true); State.FailRelinquish = true; result = Run(r);
+   Check(!result.Success && result.CentralSynchronized && !result.OwnershipReleased && result.Applied == 1 && result.RequiresAttention && !State.Events.Contains("close") && State.Events.Count(s => s == "sync") == 1, "동기화 성공 후 반환 통신 실패는 중앙 반영 사실 보존·문서 유지·재실행 금지");
+   Check(result.Stage.Contains("소유권 반환 확인 필요") && result.Message.Contains("동기화 자체는 완료"), "소유권 실패를 중앙 미저장으로 오표시하지 않음");
+   r = Setup(true, true); State.LeaveBorrowed = true; State.OwnedIds.Add(20); result = Run(r);
+   Check(!result.Success && result.RequiresAttention && result.Message.Contains("요소 2개") && result.Message.Contains("20"), "반환 호출 성공해도 유형·인스턴스 잔존 시 완료 금지");
+   r = Setup(true, true); State.LeaveWorkset = true; result = Run(r);
+   Check(!result.Success && result.RequiresAttention && result.Message.Contains("프로젝트 표준") && result.Message.Contains("작업세트 1개"), "사용자 작업세트 외 표준 작업세트 잔존도 차단");
+   r = Setup(true, true); State.FailOwnershipCheck = true; result = Run(r);
+   Check(!result.Success && result.RequiresAttention && !result.OwnershipReleased && !State.Events.Contains("close"), "반환 뒤 검사 오류도 정상 완료로 추정하지 않음");
+   r = Setup(true, true); State.FailSync = true; result = Run(r);
+   Check(!result.Success && !result.CentralSynchronized && !State.Events.Contains("relinquish"), "동기화 실패는 미반영 변경 보존하고 반환 강행하지 않음");
+   r = Setup(true, true); State.FailSet = true; result = Run(r);
+   Check(!result.Success && !result.RequiresAttention && result.OwnershipReleased && State.Events.IndexOf("relinquish") > State.Events.IndexOf("rollback") && State.OwnedIds.Count == 0 && !State.Events.Contains("sync"), "변경 롤백 후 남은 차용권은 저장 없이 반환");
+   r = Setup(true, true); State.FailSet = State.FailRelinquish = true; result = Run(r);
+   Check(!result.Success && result.RequiresAttention && !State.Events.Contains("close") && result.Message.Contains("미저장 작업 취소 후 소유권"), "롤백 후 반환 실패도 문서 보존·확인 요청");
+   r = Setup(true, true); State.Doc.CreationGUID = Guid.NewGuid(); result = Run(r);
+   Check(!result.Success && !State.Events.Contains("relinquish"), "대상 모델 식별 실패는 소유권 반환 부작용 없음");
+   r = Setup(); result = Run(r);
+   Check(result.Success && !result.CentralSynchronized && !result.OwnershipReleased && !State.Events.Contains("relinquish"), "일반 비작업공유 파일은 소유권 API 호출 없음");
    foreach (var scope in new[] { "뷰", "시트" })
    {
     r = Setup(); State.Scope = scope;

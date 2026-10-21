@@ -103,6 +103,21 @@
      <DataGrid x:Name="EditsGrid"><DataGrid.Columns><DataGridTextColumn Header="소속 파일" Binding="{Binding Model}" Width="140" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="패밀리 / 대상 이름" Binding="{Binding Type}" Width="200" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="항목" Binding="{Binding Field}" Width="120"/><DataGridTextColumn Header="기존 값" Binding="{Binding Before}" Width="140" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="바뀔 값" Binding="{Binding Value}" Width="150" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="입력 근거" Binding="{Binding Reason}" Width="240" ElementStyle="{StaticResource ReviewText}"/></DataGrid.Columns></DataGrid>
     </DockPanel></TabItem>
     <TabItem Header="처리 결과"><DockPanel Margin="12"><Button DockPanel.Dock="Top" Content="기록 폴더 열기" Click="OpenLogs" HorizontalAlignment="Left" Margin="0,0,0,10"/><TextBox x:Name="ReportBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" BorderThickness="0" Text="처음에는 별도 테스트 모델로 확인해 주세요."/></DockPanel></TabItem>
+    <TabItem x:Name="GroupRestrictionsTab" Header="그룹 제한 항목 (0)"><DockPanel Margin="12">
+     <TextBlock DockPanel.Dock="Top" Text="조회된 값 중 그룹 때문에 수정에서 제외되는 항목입니다. 현재 값은 유지합니다.&#10;그룹 해제·그룹별 값 변경 설정은 자동 변경하지 않습니다. 기존 값이 목표와 같아 변경이 필요 없는 항목도 포함됩니다." TextWrapping="Wrap" Foreground="#8A4D24" Margin="0,0,0,10"/>
+     <TextBox DockPanel.Dock="Top" x:Name="GroupSearchBox" TextChanged="GroupSearchChanged" Margin="0,0,0,10" ToolTip="모델·그룹·유형·요소 ID·매개변수 검색" AutomationProperties.Name="그룹 제한 항목 검색"/>
+     <TextBlock DockPanel.Dock="Bottom" Margin="0,10,0,0" Text="{Binding SelectedItem.BlockReason, ElementName=GroupRestrictionsGrid}" TextWrapping="Wrap" Foreground="#8A4D24" MinHeight="38"/>
+     <DataGrid x:Name="GroupRestrictionsGrid"><DataGrid.Columns>
+      <DataGridTextColumn Header="소속 파일" Binding="{Binding ModelTitle}" Width="150" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="그룹명" Binding="{Binding GroupEdit.Name}" Width="150" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="그룹 ID" Binding="{Binding GroupEdit.ElementId}" Width="85"/>
+      <DataGridTextColumn Header="요소 ID" Binding="{Binding ElementId}" Width="90"/>
+      <DataGridTextColumn Header="유형명" Binding="{Binding TargetName}" Width="170" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="매개변수" Binding="{Binding Name}" Width="120"/>
+      <DataGridTextColumn Header="유지할 현재 값" Binding="{Binding ValueLabel}" Width="110"/>
+      <DataGridTextColumn Header="제외 사유" Binding="{Binding GroupEdit.Reason}" Width="380" ElementStyle="{StaticResource ReviewText}"/>
+     </DataGrid.Columns></DataGrid>
+    </DockPanel></TabItem>
    </TabControl>
    <Border x:Name="WelcomePanel" Grid.ColumnSpan="3" Background="White" BorderBrush="#CDD2D7" BorderThickness="1">
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalContentAlignment="Center">

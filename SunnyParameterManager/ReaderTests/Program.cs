@@ -106,4 +106,5 @@ slimKac = new() { Path = "A", Title = "A" }; slimKac.Rows = new ParameterReader(
 slimPlan = RulePlanner.Plan(kacRules, slimKac.Owners.Concat(slimKac.Rows), [], false);
 Check(slimPlan.Edits.Any(e => e.Original.Scope == "인스턴스" && e.Field == "재료명" && e.Value == "철근콘크리트"), "유형에 대상 매개변수 없어도 인스턴스 재료명 실제 유형으로 판단");
 CleanupTests.Run(Check);
+GroupTests.Run(Check);
 Console.WriteLine($"TOTAL {count} PASS · 실제 ParameterReader/CleanupWriter의 API 대역 검사; RVT 저장 검증 아님");

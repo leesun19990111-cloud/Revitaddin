@@ -110,6 +110,7 @@ public partial class LinkRemovalWindow : Window
         var message = "아래 모델의 모든 링크·가져오기 정의와 승인한 종속 요소를 완전히 삭제하고 저장할까요?\n\n" +
             string.Join("\n", chosen.Select(m => m.Path + " — 삭제 " + m.Plan!.Affected.Count + "개")) +
             "\n\n언로드가 아니며 파일을 다시 열어도 삭제 상태입니다. 외부 원본 파일은 보존합니다. 작업공유 모델은 중앙에 동기화됩니다. 여러 모델 전체를 한 번에 되돌릴 수 없습니다. 복원은 보관된 삭제 전 파일을 검토하여 별도로 진행해야 합니다." +
+            "\n현재 사용자의 차용 요소·모든 작업세트 소유권도 반환합니다. 같은 모델의 다른 로컬 작업은 먼저 동기화하고 닫으세요. 반환 확인 실패 시 다음 모델 처리를 중단합니다." +
             (local ? "\n\n주의: 기존 로컬에 저장된 다른 미동기화 작업도 함께 중앙에 반영됩니다." : "");
         if (MessageBox.Show(this, message, "링크 완전 삭제 최종 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         SetBusy(true); DetailsTabs.SelectedIndex = 1;

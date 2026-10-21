@@ -16,10 +16,11 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         Document? doc = null;
         Mutex? gate = null;
         bool locked = false, preserve = false;
+        bool editingStarted = false;
         var result = new Response { Id = req.Id };
         var removingLinks = req.Operation == "링크 삭제";
         var modifying = req.Operation == "적용" || removingLinks;
-        void Step(string stage) { result.Stage = stage; progress(new Response { Id = result.Id, Stage = stage, RecoveryPath = result.RecoveryPath }); }
+        void Step(string stage) { result.Stage = stage; progress(new Response { Id = result.Id, Stage = stage, RecoveryPath = result.RecoveryPath, Applied = result.Applied, CentralSynchronized = result.CentralSynchronized, OwnershipReleased = result.OwnershipReleased }); }
         try
         {
             if (req.Operation is not ("조회" or "적용" or "링크 검사" or "링크 삭제")) throw new InvalidOperationException("지원하지 않는 작업입니다.");
@@ -136,6 +137,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     {
                         using var tx = new Transaction(doc, removingLinks ? "모든 링크·가져오기 완전 제거" : "선택한 매개변수 값 변경");
                         if (tx.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집을 시작할 수 없습니다.");
+                        editingStarted = true;
                         tx.SetFailureHandlingOptions(tx.GetFailureHandlingOptions().SetForcedModalHandling(true));
                         Step(removingLinks ? "승인한 링크·가져오기 삭제 중" : "값 적용 중");
                         foreach (var w in writes) w.Set();
@@ -157,10 +159,15 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 {
                     Step("중앙 동기화 중 — 중단 시 결과 확인 필요");
                     using var sync = new SynchronizeWithCentralOptions { SaveLocalBefore = true, SaveLocalAfter = true, Comment = "Sunny Parameter Manager " + req.Id };
-                    sync.SetRelinquishOptions(new RelinquishOptions(false));
+                    using var relinquish = new RelinquishOptions(true);
+                    sync.SetRelinquishOptions(relinquish);
                     using var transact = new TransactWithCentralOptions();
                     transact.SetLockCallback(new NoWait());
                     doc.SynchronizeWithCentral(transact, sync);
+                    result.CentralSynchronized = true;
+                    result.Applied = removingLinks ? req.LinkRemoval!.Affected.Count : writes.Count;
+                    OwnershipRelease.Complete(doc, Step);
+                    result.OwnershipReleased = true;
                 }
                 if (removingLinks)
                 {
@@ -169,9 +176,9 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 }
                 result.Applied = removingLinks ? req.LinkRemoval!.Affected.Count : writes.Count;
                 result.Success = true;
-                result.Message = doc.IsWorkshared ? "중앙 동기화가 완료되었습니다. 다른 사용자의 로컬은 최신 내용 가져오기가 필요합니다. 소유권은 자동으로 일괄 반납하지 않았습니다." : "파일 저장이 완료되었습니다.";
+                result.Message = doc.IsWorkshared ? "중앙 동기화 및 차용 요소·모든 작업세트 소유권 반환 호출이 완료되었습니다. 반환 후 검사에서 현재 사용자 소유권 잔존이 발견되지 않았습니다. 다른 사용자의 로컬은 최신 내용 가져오기가 필요합니다." : "파일 저장이 완료되었습니다.";
                 if (removingLinks) result.Message = $"링크 정의·가져오기 완전 제거 및 승인한 종속 요소 삭제: 총 {result.Applied:N0}개. 외부 원본 파일은 변경하지 않았습니다.\n" + result.Message;
-                Step(doc.IsWorkshared ? "중앙 동기화 완료" : "저장 완료");
+                Step(doc.IsWorkshared ? "중앙 동기화·소유권 반환 완료" : "저장 완료");
                 preserve = false;
             }
             Step("문서 닫기");
@@ -181,11 +188,19 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         }
         catch (Exception ex)
         {
+            // 저장 전 실패도 롤백 뒤 획득한 차용권이 남을 수 있다. 동기화 실패 문서는 여기서 반환하지 않는다.
+            if (editingStarted && !preserve && doc?.IsWorkshared == true)
+            {
+                try { OwnershipRelease.Complete(doc, _ => { }); result.OwnershipReleased = true; }
+                catch (Exception releaseError) { preserve = true; result.Message += "\n미저장 작업 취소 후 소유권 반환 확인 실패: " + releaseError.Message + "\n"; }
+            }
             if (req.Operation == "조회" && ex is OutOfMemoryException)
             {
                 result.Success = false; result.Snapshot = null; result.ReadRestartRequired = true;
             }
-            result.Message = (result.Success ? result.Message + "\n후처리 안내: " : "") + (string.IsNullOrEmpty(result.Stage) ? "" : "[" + result.Stage + "] ") + ex.Message + (preserve ? "\n변경 또는 중앙 반영 여부를 확인해야 합니다. 작업용 Revit과 로컬을 보존합니다. 자동 재실행하지 마세요." : "");
+            result.Message = result.Message + (result.Success ? "\n후처리 안내: " : "") + (string.IsNullOrEmpty(result.Stage) ? "" : "[" + result.Stage + "] ") + ex.Message +
+                (result.CentralSynchronized && !result.OwnershipReleased ? "\n중앙 동기화 자체는 완료되었습니다. 소유권 반환/잔존 확인이 끝나지 않았습니다. 변경을 다시 적용하지 마세요." : "") +
+                (preserve ? "\n변경 또는 소유권 반환 상태를 확인해야 합니다. 작업용 Revit과 로컬을 보존합니다. 자동 재실행하지 마세요." : "");
             result.RequiresAttention = preserve;
             // 저장/동기화 성공 뒤 닫기만 실패한 경우 이미 성공한 변경을 실패로 거짓 보고하지 않는다.
             if (!preserve && doc != null)
@@ -193,7 +208,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 try { if (!doc.Close(false)) result.RequiresAttention = true; }
                 catch { result.RequiresAttention = true; }
             }
-            if (!result.Success) result.Stage = preserve ? "반영 결과 확인 필요" : "실패 — 이번 변경 미저장";
+            if (!result.Success) result.Stage = result.CentralSynchronized && !result.OwnershipReleased ? "중앙 반영 완료 · 소유권 반환 확인 필요" : preserve ? "반영 결과 확인 필요" : "실패 — 이번 변경 미저장";
         }
         finally { if (locked) gate?.ReleaseMutex(); gate?.Dispose(); }
         return result;
@@ -259,6 +274,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             var freshOwner = doc.GetElement(expected.OwnerId) ?? throw new InvalidOperationException("확정 후 대상 요소가 없어져 이번 묶음을 취소합니다. 요소 ID: " + expected.ElementId);
             var freshParameter = ParameterReader.Resolve(freshOwner, expected.ParameterKey) ?? throw new InvalidOperationException("확정 후 대상 매개변수가 없어졌습니다: " + expected.Name + " / 요소 ID: " + expected.ElementId);
             var verified = reader.Read(freshOwner, freshParameter);
+            EditPlanner.CheckGroupFresh(expected, verified);
             if (expected.TypeOwnerId != verified.TypeOwnerId || expected.TypeKey != verified.TypeKey)
                 throw new InvalidOperationException($"Revit 확정 후 요소의 유형 정보가 달라 이번 묶음을 취소합니다.\n요소 ID: {expected.ElementId} / 항목: {expected.Name}\n적용 전: {expected.Family} / {expected.TypeName} / 유형 식별자 {expected.TypeOwnerId}\n적용 후: {verified.Family} / {verified.TypeName} / 유형 식별자 {verified.TypeOwnerId}\n같은 작업을 반복하지 말고 원본 요소 확인 후 다시 조회하세요.");
             if (expected.OwnerId != verified.OwnerId || expected.ParameterKey != verified.ParameterKey || expected.DataType != verified.DataType || expected.Storage != verified.Storage)
