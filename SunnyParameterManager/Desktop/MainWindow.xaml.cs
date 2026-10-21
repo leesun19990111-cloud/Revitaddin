@@ -352,6 +352,7 @@ public partial class MainWindow : Window
     }
     private void StageValues(object sender, RoutedEventArgs e) => Guard(() =>
     {
+        if (_edits.Values.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리 변경을 먼저 적용하거나 제외한 뒤 직접 입력하세요. 두 작업은 별도로 검증합니다.");
         var selected = ValuesGrid.SelectedItems.Cast<ParameterRow>().ToList();
         if (selected.Select(r => r.FieldKey).Distinct().Count() > 1) throw new InvalidOperationException("같은 이름·자료형·범위의 매개변수만 함께 입력하세요.");
         var value = ChoiceCombo.Visibility == Visibility.Visible ? ChoiceCombo.Text : ValueBox.Text;
@@ -362,6 +363,7 @@ public partial class MainWindow : Window
     });
     private void CopyValues(object sender, RoutedEventArgs e) => Guard(() =>
     {
+        if (_edits.Values.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리 변경을 먼저 적용하거나 제외한 뒤 복사하세요.");
         if (SourceCombo.SelectedItem is not ModelItem source || source.Snapshot == null) throw new InvalidOperationException("조회가 완료된 기준 모델을 선택하세요.");
         var selected = ValuesGrid.SelectedItems.Cast<ParameterRow>().ToList();
         if (selected.Count == 0) throw new InvalidOperationException("값을 받을 대상 행을 선택하세요.");
@@ -383,7 +385,7 @@ public partial class MainWindow : Window
         RulesButton.IsEnabled = !_busy;
         ReviewRulesButton.IsEnabled = !_busy && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery);
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "다음 조회: 룰셋 ‘" + _loadedRules.Name + "’ · " + string.Join(", ", QueryPlan.FromRules(_loadedRules).Names);
+            "다음 조회: 룰셋 ‘" + _loadedRules.Name + "’ · " + (_loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");

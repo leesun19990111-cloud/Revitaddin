@@ -7,7 +7,7 @@ internal static class ParameterManagerInstaller
 {
     internal static int Run()
     {
-        Console.WriteLine("=== Sunny 매개변수 관리자 0.2.6 · Revit 2026 연결 모듈 설치 ===");
+        Console.WriteLine("=== Sunny 매개변수 관리자 0.2.7 · Revit 2026 연결 모듈 설치 ===");
         Console.WriteLine("기존 Sunny Tools 애드인은 변경하지 않습니다.");
         try
         {
@@ -29,7 +29,7 @@ internal static class ParameterManagerInstaller
             if (!Directory.Exists(desktopRuntime) || !Directory.GetDirectories(desktopRuntime).Any(p => Path.GetFileName(p).StartsWith("8.")))
                 throw new InvalidOperationException(".NET 8 데스크톱 런타임(x64)이 필요합니다. Microsoft 공식 런타임을 설치한 뒤 다시 실행하세요.");
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var target = Path.Combine(local, "SunnyTools", "ParameterManager", "App-0.2.6-" + DateTime.Now.ToString("yyyyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
+            var target = Path.Combine(local, "SunnyTools", "ParameterManager", "App-0.2.7-" + DateTime.Now.ToString("yyyyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
             Directory.CreateDirectory(target);
             foreach (var pair in hashes)
             {

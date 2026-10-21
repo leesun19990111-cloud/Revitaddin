@@ -5,18 +5,23 @@ namespace Autodesk.Revit.DB
  public enum CategoryType { Model, Annotation, Internal }
  public enum ViewType { Undefined, FloorPlan, CeilingPlan, Elevation, Section, Detail, DraftingView, Legend, Schedule, ThreeD, DrawingSheet, Internal, ProjectBrowser, SystemBrowser }
  public enum StorageType { String, Integer, Double, ElementId }
- public enum BuiltInParameter { ELEM_PARTITION_PARAM = -100 }
+ public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053 }
  public enum WorksetKind { UserWorkset }
+ public enum CheckoutStatus { NotOwned, OwnedByOtherUser }
+ public static class WorksharingUtils { public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id) => doc.OtherOwner ? CheckoutStatus.OwnedByOtherUser : CheckoutStatus.NotOwned; }
+ public static class GroupTypeId { public static ForgeTypeId IdentityData { get; } = new("identity"); }
+ public static class UnitTypeId { public static ForgeTypeId Millimeters { get; } = new("mm"); }
  public sealed record ElementId(long Value) { public static ElementId InvalidElementId { get; } = new(-1); }
  public sealed record ForgeTypeId(string TypeId);
  public static class SpecTypeId
  {
+  public static ForgeTypeId Length { get; } = new("length");
   public static ForgeTypeId Number { get; } = new("number");
   public static class Boolean { public static ForgeTypeId YesNo { get; } = new("bool"); }
   public static class Int { public static ForgeTypeId Integer { get; } = new("int"); }
   public static class Reference { public static ForgeTypeId Material { get; } = new("material"); }
  }
- public sealed class Definition { public string Name { get; set; } = "뷰 구분-1"; public ForgeTypeId Spec { get; set; } = new("text"); public ForgeTypeId GetDataType() => Spec; }
+ public sealed class Definition { public string Name { get; set; } = "뷰 구분-1"; public ForgeTypeId Spec { get; set; } = new("text"); public ForgeTypeId Group { get; set; } = new("other"); public ForgeTypeId GetDataType() => Spec; public ForgeTypeId GetGroupTypeId() => Group; }
  public sealed class Parameter
  {
   public ElementId Id { get; set; } = new(42); public Definition Definition { get; set; } = new();
@@ -24,7 +29,9 @@ namespace Autodesk.Revit.DB
   public bool IsReadOnly { get; set; } public bool HasValue { get; set; } = true; public bool IsShared { get; set; }
   public Guid GUID { get; set; } = Guid.NewGuid(); public string Value { get; set; } = "기존";
   public bool FailRead { get; set; } public bool FailMemory { get; set; }
-  public string AsString() => FailMemory ? throw new OutOfMemoryException() : FailRead ? throw new InvalidOperationException("값 조회 실패") : Value; public string AsValueString() => Value; public int AsInteger() => 1; public double AsDouble() => 1; public ElementId AsElementId() => new(1);
+  public bool Set(string v) { if (IsReadOnly) throw new InvalidOperationException(); Value = v; return true; }
+  public bool Set(int v) => Set(v.ToString());
+  public string AsString() => FailMemory ? throw new OutOfMemoryException() : FailRead ? throw new InvalidOperationException("값 조회 실패") : Value; public string AsValueString() => Value; public int AsInteger() => int.TryParse(Value, out var n) ? n : 1; public double AsDouble() => double.TryParse(Value, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 1; public ElementId AsElementId() => new(1);
  }
  public sealed class Category { public CategoryType CategoryType { get; set; } = CategoryType.Model; public ElementId Id { get; set; } = new(1); public string Name { get; set; } = "모델"; }
  public class Element
@@ -32,11 +39,16 @@ namespace Autodesk.Revit.DB
   private static long _next;
   public ElementId Id { get; } = new(++_next); public string UniqueId { get; } = Guid.NewGuid().ToString();
   public virtual string Name { get; set; } = "대상"; public Category? Category { get; set; } = new();
+  public Guid VersionGuid { get; set; } = Guid.NewGuid();
   public List<Parameter> Parameters { get; } = [new()]; public ElementId TypeId { get; set; } = ElementId.InvalidElementId;
   public ElementId GetTypeId() => TypeId;
   public Parameter? get_Parameter(BuiltInParameter id) => Parameters.SingleOrDefault(p => p.Id.Value == (long)id);
  }
- public class ElementType : Element { public string FamilyName { get; set; } = "패밀리"; }
+ public class ElementType : Element { public string FamilyName { get; set; } = "패밀리"; public bool CanBeRenamed { get; set; } = true; }
+ public class Family { public bool IsInPlace { get; set; } }
+ public class FamilySymbol : ElementType { public Family Family { get; } = new(); }
+ public class HostObjAttributes : ElementType { public CompoundStructure? Structure { get; set; } = new(); public CompoundStructure? GetCompoundStructure() => Structure; }
+ public class CompoundStructure : IDisposable { public double Width { get; set; } = 1; public bool IsVerticallyCompound { get; set; } public bool Homogeneous { get; set; } = true; public int VariableLayerIndex { get; set; } = -1; public bool IsVerticallyHomogeneous() => Homogeneous; public double GetWidth() => Width; public void Dispose() { } }
  public sealed class ProjectInfo : Element { }
  public sealed class RevitLinkType : ElementType { }
  public sealed class RevitLinkInstance : Element { }
@@ -55,8 +67,10 @@ namespace Autodesk.Revit.DB
  public sealed class Document
  {
   public List<Element> Elements { get; } = []; public ProjectInfo? ProjectInformation { get; set; } public bool IsWorkshared { get; set; }
+  public bool OtherOwner { get; set; } public List<Workset> Worksets { get; } = [];
+  public Element? GetElement(string id) => Elements.FirstOrDefault(e => e.UniqueId == id);
   public Element? GetElement(ElementId id) => Elements.FirstOrDefault(e => e.Id == id);
-  public Units GetUnits() => new(); public WorksetTable GetWorksetTable() => new();
+  public Units GetUnits() => new(); public WorksetTable GetWorksetTable() => new(Worksets);
  }
  public sealed class FilteredElementCollector(Document doc) : IEnumerable<Element>
  {
@@ -68,11 +82,11 @@ namespace Autodesk.Revit.DB
  }
  public sealed class Units { public FormatOptions GetFormatOptions(ForgeTypeId id) => new(); }
  public sealed class FormatOptions { public ForgeTypeId GetUnitTypeId() => new("unit"); }
- public static class UnitUtils { public static bool IsMeasurableSpec(ForgeTypeId id) => false; }
+ public static class UnitUtils { public static bool IsMeasurableSpec(ForgeTypeId id) => false; public static double ConvertFromInternalUnits(double value, ForgeTypeId unit) => value * 304.8; }
  public sealed record WorksetId(int IntegerValue);
- public sealed class Workset { public string Name { get; set; } = "작업세트"; public Guid UniqueId { get; } = Guid.NewGuid(); }
- public sealed class WorksetTable { public Workset? GetWorkset(WorksetId id) => new(); }
- public sealed class FilteredWorksetCollector(Document doc) : List<Workset> { public FilteredWorksetCollector OfKind(WorksetKind kind) => this; }
+ public sealed class Workset { public string Name { get; set; } = "작업세트"; public Guid UniqueId { get; } = Guid.NewGuid(); public WorksetId Id { get; set; } = new(1); }
+ public sealed class WorksetTable(List<Workset> items) { public Workset? GetWorkset(WorksetId id) => items.FirstOrDefault(w => w.Id == id) ?? new(); }
+ public sealed class FilteredWorksetCollector(Document doc) : List<Workset>(doc.Worksets) { public FilteredWorksetCollector OfKind(WorksetKind kind) => this; }
 }
 namespace SunnyParameterManager.Bridge
 {

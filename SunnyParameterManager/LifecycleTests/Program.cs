@@ -164,6 +164,16 @@ internal static class Program
    Check(!result.Success && !State.Events.Contains("tx-start"), "ND 계획 후 재료 지정 시 쓰기 전 차단");
    r = Setup(); r.Edits[0].Value = "ND"; r.Edits[0].MaterialSource = new() { FallbackAllowed = true, Reason = "유형 재료 없음" }; State.MaterialMissing = State.MaterialChangesAfterSet = true; result = Run(r);
    Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save") && State.Doc.Element.Parameter.Value == "기존", "ND 확정 중 재료 발견 시 묶음 롤백");
+   r = Setup(true, true); r.Edits[0].KacCleanup = true; result = Run(r);
+   Check(result.Success && State.Events.IndexOf("cleanup-prepare") < State.Events.IndexOf("tx-start") && State.Events.IndexOf("cleanup-verify") < State.Events.IndexOf("save") && State.Events.Contains("sync"), "정리 전용 검증 후 기존 중앙 저장 수명 재사용");
+   r = Setup(true, true); r.Edits[0].KacCleanup = true; r.Confirmed = false; result = Run(r);
+   Check(!result.Success && !State.Events.Contains("open"), "유형 정리도 최종 승인 전 파일 열기 금지");
+   r = Setup(true, true); r.Edits[0].KacCleanup = true; State.VerifyMismatch = true; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save") && !State.Events.Contains("sync"), "정리 확정 재검증 실패는 전체 묶음 취소");
+   r = Setup(true, true); r.Edits[0].KacCleanup = true; State.FailSync = true; result = Run(r);
+   Check(result.RequiresAttention && !State.Events.Contains("close") && State.Events.Count(e => e == "sync") == 1, "정리 중앙 동기화 실패도 로컬 보존·자동 재시도 금지");
+   r = Setup(true, true); r.Edits[0].KacCleanup = true; State.Failure = FailureSeverity.Error; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "정리 중 Revit 오류를 억제하지 않고 묶음 취소");
    Console.WriteLine($"TOTAL {_count} PASS · API 대역 제어 흐름 검사이며 실제 Revit 검증 아님");
    Console.WriteLine("테스트 기록: " + _root); return 0;
   }

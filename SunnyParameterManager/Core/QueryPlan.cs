@@ -8,6 +8,7 @@ public sealed class QueryPlan
     public List<string> Names { get; set; } = [];
     public List<string> Keys { get; set; } = [];
     public bool IncludeOuterMaterial { get; set; }
+    public bool IncludeCleanup { get; set; }
 
     public void Validate()
     {
@@ -15,19 +16,28 @@ public sealed class QueryPlan
             Scopes.Any(s => s is not ("유형" or "인스턴스" or "프로젝트 정보")) || Names.Count is < 1 or > 50000 ||
             Names.Any(string.IsNullOrWhiteSpace) || Keys.Count > 50000 || Keys.Any(string.IsNullOrWhiteSpace))
             throw new InvalidOperationException("선택 조회 범위가 올바르지 않습니다. 룰셋을 다시 불러오세요.");
+        if (IncludeCleanup && (!Scopes.Contains("유형") || !Scopes.Contains("인스턴스")))
+            throw new InvalidOperationException("유형 정리는 유형·인스턴스 전체 근거 조회가 필요합니다.");
     }
     public bool Includes(string name, string key) => Names.Contains(name, StringComparer.Ordinal) || Keys.Contains(key, StringComparer.OrdinalIgnoreCase);
     public bool Covers(QueryPlan required)
     {
         Validate(); required.Validate();
         return required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
-            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial);
+            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup);
     }
     public static QueryPlan FromRules(RuleSet rules)
     {
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
-        if (rules.Version == 3)
+        if (rules.Version == 4)
+        {
+            plan.Scopes = ["유형", "인스턴스"];
+            plan.Names = ["유형명 정리", .. CleanupPlanner.Flags];
+            plan.Keys = [CleanupPlanner.WorksetKey, CleanupPlanner.RoomKey, KacRulePlanner.IfcInstanceKey];
+            plan.IncludeCleanup = true;
+        }
+        else if (rules.Version == 3)
         {
             plan.Scopes = ["프로젝트 정보"]; plan.Names = ["공항코드", "건축물번호"];
         }
@@ -52,7 +62,7 @@ public sealed class QueryPlan
     {
         var required = FromRules(rules);
         foreach (var model in models)
-            if (model.Query != null && !model.Query.Covers(required))
+            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true)
                 throw new InvalidOperationException(model.Title + ": 이 룰셋에 필요한 항목을 아직 조회하지 않았습니다. 변경 예정을 적용하거나 정리한 뒤 ‘다시 조회’를 누르세요. 미조회 값은 빈 값이나 ND로 처리하지 않습니다.");
     }
 }

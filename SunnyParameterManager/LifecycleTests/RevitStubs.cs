@@ -138,6 +138,17 @@ namespace Autodesk.Revit.DB
 namespace SunnyParameterManager.Bridge
 {
  using Autodesk.Revit.DB;
+ internal static class CleanupWriter
+ {
+  internal sealed record Write(Action Set, Action Verify);
+  internal static List<Write> Prepare(Document doc, ModelSnapshot model, List<ValueEdit> edits)
+  {
+   // 이 프로젝트는 저장/실패 경계를 검사한다. 실제 정리 Writer는 ReaderTests에서 링크해 검사한다.
+   if (edits.Any(e => !e.KacCleanup)) throw new InvalidOperationException("혼합 요청 거부");
+   State.Events.Add("cleanup-prepare");
+   return [new(() => doc.Element.Parameter.Set(edits[0].Value), () => { State.Events.Add("cleanup-verify"); if (State.VerifyMismatch) throw new InvalidOperationException("정리 결과 불일치"); })];
+  }
+ }
  internal static class LinkRemovalEngine
  {
   internal static void CheckComplete(Document doc, ModelSnapshot model) => State.Events.Add("links-empty");

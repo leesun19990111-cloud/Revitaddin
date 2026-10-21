@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.2.6";
+    public const string Release = "0.2.7";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -78,6 +78,8 @@ public sealed class ParameterRow
     public string BlockReason { get; set; } = "";
     public string ChoiceCatalog { get; set; } = "";
     public MaterialEvidence? OuterMaterial { get; set; }
+    public CleanupEvidence? Cleanup { get; set; }
+    public bool IdentityDataParameter { get; set; }
     [JsonIgnore] public List<ValueChoice> Choices { get; set; } = [];
     [JsonIgnore] public bool Editable => BlockReason.Length == 0 && Editor.Length > 0;
     [JsonIgnore] public string Key => JsonSerializer.Serialize(new[] { ModelPath.ToUpperInvariant(), OwnerId, ParameterKey });
@@ -107,6 +109,7 @@ public sealed class ValueEdit
     public string ReferenceKey { get; set; } = "";
     public string Reason { get; set; } = "직접 입력";
     public MaterialEvidence? MaterialSource { get; set; }
+    public bool KacCleanup { get; set; }
     [JsonIgnore] public string Model => Original.ModelTitle;
     [JsonIgnore] public string Type => Original.Scope is "뷰" or "시트" ? Original.Scope + " : " + Original.TargetName : Original.Family + " : " + Original.TypeName;
     [JsonIgnore] public string Field => Original.Name;

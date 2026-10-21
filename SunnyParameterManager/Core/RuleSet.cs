@@ -12,6 +12,7 @@ public sealed class RuleSet
     public List<ParameterRule> Rules { get; set; } = [];
     public KacRuleProfile? Kac { get; set; }
     public SpaceRuleProfile? Space { get; set; }
+    public bool Cleanup { get; set; }
 }
 
 public sealed class ParameterRule
@@ -80,6 +81,12 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Cleanup == true || file?.Version == 4)
+        {
+            if (file.Version != 4 || !file.Cleanup || string.IsNullOrWhiteSpace(file.Name) || file.Kac != null || file.Space != null || file.Rules == null || file.Rules.Count != 0)
+                throw new InvalidOperationException("유형 정리 룰셋은 버전4와 Cleanup만 사용하며 기존 룰셋과 혼합할 수 없습니다.");
+            return;
+        }
         if (file?.Version == 3)
         {
             SpaceRulePlanner.Validate(file);
@@ -120,6 +127,8 @@ public static class RulePlanner
     {
         Validate(file);
         if (file.SampleOnly && !sample) throw new InvalidOperationException("연습용 룰셋은 실제 모델에 사용할 수 없습니다.");
+        if (file.Version != 4 && pending.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
+        if (file.Version == 4) return CleanupPlanner.Plan(available, pending);
         if (file.Version == 2) return KacRulePlanner.Plan(file, available, pending, sample);
         if (file.Version == 3) return SpaceRulePlanner.Plan(file, available, pending);
         var owners = available.GroupBy(r => (r.ModelPath, r.OwnerId, r.Scope)).Select(g => g.ToList()).ToList();

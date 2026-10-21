@@ -30,13 +30,17 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
                 e.Category?.CategoryType == CategoryType.Model && e is not RevitLinkInstance && e is not RevitLinkType)
             .Concat(doc.ProjectInformation == null || query != null && !query.Scopes.Contains("프로젝트 정보") ? [] : new Element[] { doc.ProjectInformation });
         int errors = 0;
+        var cleanup = query?.IncludeCleanup == true ? new CleanupReader(doc) : null;
         foreach (var element in elements.DistinctBy(e => e.UniqueId))
         {
             if (query != null)
             {
                 var owner = Describe(element, query.IncludeOuterMaterial);
                 if (!query.Scopes.Contains(owner.Scope)) continue;
+                if (cleanup != null) owner.Cleanup = cleanup.Evidence(element);
                 model.Owners.Add(owner);
+                if (cleanup != null && element is ElementType && CleanupPlanner.IsKac(owner.TypeName))
+                    result.Add(cleanup.NameRow(owner));
             }
             var parameters = element.Parameters.Cast<Parameter>().ToList();
             // 소속 작업세트는 일부 요소의 열거에 없더라도 직접 접근이 지원된다.
@@ -50,7 +54,15 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
                 try
                 {
                     if (p.Definition != null && (query == null || query.Includes(p.Definition.Name, Key(p))))
-                        result.Add(Read(element, p, query == null || query.IncludeOuterMaterial));
+                    {
+                        var row = Read(element, p, query == null || query.IncludeOuterMaterial);
+                        if (cleanup != null)
+                        {
+                            row.Cleanup = cleanup.Evidence(element);
+                            row.IdentityDataParameter = p.Definition.GetGroupTypeId() == GroupTypeId.IdentityData;
+                        }
+                        result.Add(row);
+                    }
                 }
                 catch (OutOfMemoryException) { throw; } // 메모리 오류로 빠진 값을 정상 조회 결과로 넘기지 않는다.
                 catch (Exception ex) when (query != null) { throw new InvalidOperationException($"요소 {element.Id.Value}: 선택 항목 조회 실패. 누락으로 간주하지 않고 해당 파일 조회를 중단합니다. {ex.Message}", ex); }

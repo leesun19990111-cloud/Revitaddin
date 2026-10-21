@@ -126,6 +126,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     var removal = LinkRemovalEngine.Prepare(doc, metadata, req.LinkRemoval!, req.DependentsConfirmed);
                     writes = [new(removal.Delete, removal.Verify)];
                 }
+                else if (req.Edits.Any(e => e.KacCleanup)) writes = CleanupWriter.Prepare(doc, metadata, req.Edits).Select(w => new WriteAction(w.Set, w.Verify)).ToList();
                 else writes = req.Edits.Select(edit => Prepare(doc, reader, edit)).ToList();
                 using var diagnostics = new TransactionDiagnostics(app, doc);
                 using (var group = new TransactionGroup(doc, "Sunny 매개변수 관리자"))
