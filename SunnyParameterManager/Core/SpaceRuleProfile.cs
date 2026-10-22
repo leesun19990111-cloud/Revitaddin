@@ -7,6 +7,8 @@ public sealed class SpaceRuleProfile
 {
     public string Scope { get; set; } = "프로젝트 정보";
     public string UnresolvedPolicy { get; set; } = "건축물번호유지-확인필요";
+    // 명시한 룰셋만 누락값을 대체한다. 미등록/중복 건물과 비어 있지 않은 형식 오류는 제외한다.
+    public string MissingBuildingNumberValue { get; set; } = "";
     public string Source { get; set; } = "";
     public string SourceSha256 { get; set; } = "";
     public List<SpaceBuilding> Buildings { get; set; } = [];
@@ -52,7 +54,7 @@ public static class SpaceRulePlanner
     {
         var p = file.Space;
         if (file.Version != 3 || string.IsNullOrWhiteSpace(file.Name) || file.Kac != null || file.Rules == null || file.Rules.Count != 0 ||
-            p == null || p.Scope != "프로젝트 정보" || p.UnresolvedPolicy != "건축물번호유지-확인필요" || string.IsNullOrWhiteSpace(p.Source) ||
+            p == null || p.Scope != "프로젝트 정보" || p.UnresolvedPolicy != "건축물번호유지-확인필요" || p.MissingBuildingNumberValue is not ("" or "ND") || string.IsNullOrWhiteSpace(p.Source) ||
             !Format(p.SourceSha256, @"\A[0-9a-fA-F]{64}\z") || p.Buildings == null || p.Buildings.Count is < 1 or > 5000)
             throw new InvalidOperationException("버전3 공간파일 룰셋의 프로젝트 정보 범위·유지 정책·출처·건물 표를 확인하세요. 다른 규칙과 혼합할 수 없습니다.");
         var rows = new HashSet<int>();
@@ -109,6 +111,16 @@ public static class SpaceRulePlanner
             if (aliasMatched) plan.Notes.Add($"{label}: 확정 별칭 '{identity.Value.Name}' → {entry!.Name} ({entry.Airport}-{entry.Number}).");
             var building = entry == null ? null : BuildingValue(entry);
             var source = entry == null ? "파일명" : profile.Source + " / " + entry.SourceRow + "행";
+            var missingReason = "";
+            if (entry != null && profile.MissingBuildingNumberValue == "ND" &&
+                (string.IsNullOrWhiteSpace(entry.ManagementCode) || string.IsNullOrWhiteSpace(entry.Ownership)))
+            {
+                missingReason = string.Join("·", new[] {
+                    string.IsNullOrWhiteSpace(entry.ManagementCode) ? "건축물 관리코드" : "",
+                    string.IsNullOrWhiteSpace(entry.Ownership) ? "소유구분" : "" }.Where(s => s.Length > 0)) + " 누락 → ND";
+                building = "ND";
+                plan.Notes.Add($"{label}: {missingReason}. 건축물번호의 기존 값도 ND로 교체합니다. ({source})");
+            }
             if (building == null)
             {
                 var why = entry != null ? "건축물 관리코드 또는 소유구분 숫자 누락/형식 확인" : matches == null ? "엑셀에 건물번호 없음" : "동일 건물번호가 여러 행에 존재";
@@ -128,7 +140,8 @@ public static class SpaceRulePlanner
                 { errors.Add(fieldLabel + ": 지원하는 텍스트 매개변수가 아닙니다."); return; }
                 var error = EditPlanner.Validate(row, value);
                 if (error.Length > 0) { errors.Add(fieldLabel + ": " + error); return; }
-                assignments.Add(row.Key, (row, value, $"룰셋: {file.Name} / {source} / {key.Value.Airport}-{key.Value.Number}"));
+                assignments.Add(row.Key, (row, value, $"룰셋: {file.Name} / {source} / {key.Value.Airport}-{key.Value.Number}" +
+                    (name == "건축물번호" && missingReason.Length > 0 ? " / " + missingReason : "")));
             }
         }
         foreach (var edit in pending)

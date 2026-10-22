@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.3.0 — 2026-10-22 건축물번호 누락 ND 룰셋
+
+- 버전3 Space의 명시적 MissingBuildingNumberValue ND 정책 지원. 기존 정책 호환 유지. Protocol/설치 표기/App-0.3.0 및 빌드030 격리. 756건 검사와 실제 Revit2026 API 빌드 통과, out_v030/ZIP 프로그램13개·전체20개 해시 일치. 개인 신·구 룰셋 외부 입력 각516검사도 통과. 개인 데이터/룰셋/엑셀/RVT는 Git·Payload에 넣지 않는다.
+- 같은 별도 제품029 폴더·ZIP만 Old_Versions 보관. Sunny Tools v109, 사용자 설치본, 실제 RVT 불변. 설치 후 새 프로젝트정보 룰셋 선택·조회·미리보기 필요. 실제 사용자 중앙 저장은 실행하지 않았다. 기존 그룹 제한·중앙 반환 안전장치는 그대로 유지한다.
+
+
 ## 별도 제품 0.2.9 — 2026-10-21 그룹 제한 / 중앙 소유권 반환
 
 - 그룹 개별 편집 제한 검사·검토 탭 및 중앙 동기화 후 차용 요소/모든 작업세트 반환 보완. Protocol/설치 표기/App-0.2.9와 빌드029 격리. 722건 Core/WPF/API대역 검사·실제 Revit API 빌드 후 out_v029와 SunnyParameterManager_Installer_v.0.2.9.zip 구성·해시 검증.

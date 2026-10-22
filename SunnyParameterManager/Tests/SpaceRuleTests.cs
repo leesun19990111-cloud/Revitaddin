@@ -94,6 +94,60 @@ internal static class SpaceRuleTests
         file.Space.Buildings[0].NameAliases.Add("시험 초소 a");
         reject(() => Plan(file,a,b), "별칭 정규화 중복 차단");
 
+        // ND는 누락된 출처 값에 대한 명시적 선택 정책이며 기존 룰셋의 유지 동작은 바꾸지 않는다.
+        file = File(); a = Row("공항코드"); b = Row("건축물번호");
+        file.Space!.MissingBuildingNumberValue = "ND";
+        check(RulePlanner.Parse(JsonSerializer.Serialize(file)).Space!.MissingBuildingNumberValue == "ND", "ND 정책 JSON 왕복");
+        check(Plan(file, a, b).Edits.Single(e => e.Field == "건축물번호").Value == "1D999-1", "ND 정책 정상값 보존");
+        file.Space.Buildings[0].Ownership = "0";
+        check(Plan(file, a, b).Edits.Single(e => e.Field == "건축물번호").Value == "1D999-0", "ND 정책 소유구분 0은 유효");
+        foreach (var suffix in new[] { "SP", "SA" })
+        foreach (var blank in new[] { "", " \t" })
+        foreach (var kind in new[] { "관리코드", "소유구분", "둘다" })
+        {
+            file = File(); file.Space!.MissingBuildingNumberValue = "ND";
+            if (kind != "소유구분") file.Space.Buildings[0].ManagementCode = blank;
+            if (kind != "관리코드") file.Space.Buildings[0].Ownership = blank;
+            var path = "MWX-15시험건물-" + suffix + ".rvt";
+            var numberRow = Row("건축물번호", path);
+            var result = Plan(file, Row("공항코드", path), numberRow);
+            check(result.Edits.Count == 2 && result.Edits.Single(e => e.Field == "건축물번호").Value == "ND" &&
+                result.Edits.Single(e => e.Field == "건축물번호").Reason.Contains("누락 → ND") &&
+                result.Edits.Single(e => e.Field == "공항코드").Value == "MWX" && numberRow.Raw == "기존",
+                "ND 누락 대체 및 원본 불변 " + suffix + kind + blank.Length);
+        }
+        file.Space!.Buildings[0].NameAliases = ["시험초소A"];
+        check(Plan(file, Row("공항코드", saAlias), Row("건축물번호", saAlias)).Edits.Single(e => e.Field == "건축물번호").Value == "ND", "확정 별칭 누락도 ND");
+        b.Raw = b.Display = "ND";
+        check(Plan(file, a, b).Edits.All(e => e.Field != "건축물번호"), "이미 ND면 중복 변경 없음");
+        b = Row("건축물번호"); b.BlockReason = "읽기 전용";
+        reject(() => Plan(file, a, b), "ND 읽기전용 우회 금지"); b.BlockReason = "";
+        reject(() => Plan(file, a), "ND 대상 필드 부재 차단");
+        reject(() => Plan(file, a, b, duplicateField), "ND 동명 필드 모호성 차단");
+        pending = EditPlanner.Stage([b], "수동");
+        reject(() => RulePlanner.Plan(file, [a, b], pending, false), "ND 수동 변경 충돌 차단");
+        check(pending.Single().Value == "수동", "ND 충돌 기존 변경 유지");
+        file.Space.Buildings[0].Number = "16";
+        check(Plan(file, a, b).Edits.Count == 1 && Plan(file, a, b).Notes.Any(n => n.Contains("확인 필요")), "ND 미등록 건물 추정 금지");
+        file.Space.Buildings[0].Number = "15";
+        duplicate = File().Space!.Buildings[0]; duplicate.SourceRow = 6; file.Space.Buildings.Add(duplicate);
+        check(Plan(file, a, b).Edits.Count == 1, "ND 중복 건물 추정 금지");
+        foreach (var invalid in new[] { "PUS1D999", "MWX", "MWX1D999!" })
+        {
+            file = File(); file.Space!.MissingBuildingNumberValue = "ND"; file.Space.Buildings[0].ManagementCode = invalid;
+            check(Plan(file, a, b).Edits.Count == 1, "ND 비어있지 않은 관리코드 오류 유지 " + invalid);
+        }
+        foreach (var invalid in new[] { "세관", "1.0", "-1" })
+        {
+            file = File(); file.Space!.MissingBuildingNumberValue = "ND"; file.Space.Buildings[0].Ownership = invalid;
+            check(Plan(file, a, b).Edits.Count == 1, "ND 비어있지 않은 소유구분 오류 유지 " + invalid);
+        }
+        foreach (var invalid in new string?[] { null, "nd", " ND ", "임의값" })
+        {
+            file = File(); file.Space!.MissingBuildingNumberValue = invalid!;
+            reject(() => Plan(file, a, b), "ND 이외 대체 정책 거부 " + invalid);
+        }
+
         // 개인 업무 표는 저장소에 넣지 않고 선택한 외부 파일로 별도 검증한다.
         var actualPath = Environment.GetEnvironmentVariable("SUNNY_SPACE_RULE_TEST_FILE");
         if (!string.IsNullOrEmpty(actualPath))
@@ -101,10 +155,13 @@ internal static class SpaceRuleTests
             var actual = RulePlanner.Parse(System.IO.File.ReadAllText(actualPath));
             var count = 0;
             foreach (var group in actual.Space!.Buildings.GroupBy(e => (e.Airport, e.Number)))
+            foreach (var suffix in new[] { "SP", "SA" })
             {
-                var entry = group.First(); var path = entry.Airport + "-" + entry.Number + "검증건물-SP.rvt";
+                var entry = group.First(); var path = entry.Airport + "-" + entry.Number + "검증건물-" + suffix + ".rvt";
                 var result = Plan(actual, Row("공항코드", path), Row("건축물번호", path));
                 var expected = group.Count() == 1 ? SpaceRulePlanner.BuildingValue(entry) : null;
+                if (group.Count() == 1 && actual.Space.MissingBuildingNumberValue == "ND" &&
+                    (string.IsNullOrWhiteSpace(entry.ManagementCode) || string.IsNullOrWhiteSpace(entry.Ownership))) expected = "ND";
                 if (result.Edits.Count != (expected == null ? 1 : 2) || result.Edits.Single(e => e.Field == "공항코드").Value != entry.Airport ||
                     expected != null && result.Edits.Single(e => e.Field == "건축물번호").Value != expected || expected == null && !result.Notes.Any(n => n.Contains("확인 필요")))
                     throw new Exception("실제 공간 표 계획 불일치: " + path);
