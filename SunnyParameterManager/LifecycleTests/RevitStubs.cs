@@ -188,7 +188,7 @@ namespace SunnyParameterManager.Bridge
  internal static class CleanupWriter
  {
   internal sealed record Write(Action Set, Action Verify);
-  internal static List<Write> Prepare(Document doc, ModelSnapshot model, List<ValueEdit> edits)
+  internal static List<Write> Prepare(Document doc, ModelSnapshot model, List<ValueEdit> edits, RuleSet rules)
   {
    // 이 프로젝트는 저장/실패 경계를 검사한다. 실제 정리 Writer는 ReaderTests에서 링크해 검사한다.
    if (edits.Any(e => !e.KacCleanup)) throw new InvalidOperationException("혼합 요청 거부");

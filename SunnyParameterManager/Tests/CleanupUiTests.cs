@@ -15,7 +15,7 @@ internal static class CleanupUiTests
   if (!string.IsNullOrWhiteSpace(actualFile))
   {
    var actual = RulePlanner.Parse(System.IO.File.ReadAllText(actualFile));
-   check(actual.Cleanup && actual.Version == 4 && QueryPlan.FromRules(actual).IncludeCleanup, "전달한 최신 유형·작업세트 정리 룰셋 호환");
+   check(actual.Cleanup && actual.Version == 4 && actual.PreserveWorksets.SequenceEqual(["00_외장"]) && QueryPlan.FromRules(actual).IncludeCleanup, "전달한 외장 유지 유형·작업세트 정리 룰셋 호환");
   }
   check(q.IncludeCleanup && !q.IncludeOuterMaterial && q.Keys.Contains(CleanupPlanner.WorksetKey), "정리 룰셋 최소 필드·두께 근거 조회 계획");
   var w = new MainWindow(); w.SelectRules(rules);

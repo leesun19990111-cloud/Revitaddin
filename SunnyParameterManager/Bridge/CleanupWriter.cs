@@ -7,12 +7,16 @@ namespace SunnyParameterManager.Bridge;
 internal static class CleanupWriter
 {
     internal sealed record Write(Action Set, Action Verify);
-    internal static List<Write> Prepare(Document doc, ModelSnapshot model, List<ValueEdit> edits)
+    // 기존 대역 검사는 기본 고정 정책으로 검증한다. 실제 적용 요청은 항상 선택 룰셋을 전달한다.
+    internal static List<Write> Prepare(Document doc, ModelSnapshot model, List<ValueEdit> edits) => Prepare(doc, model, edits, CleanupPlanner.Rules());
+    internal static List<Write> Prepare(Document doc, ModelSnapshot model, List<ValueEdit> edits, RuleSet rules)
     {
+        RulePlanner.Validate(rules);
+        if (rules.Version != 4) throw new InvalidOperationException("유형 정리 룰셋을 다시 선택하고 변경을 검토하세요.");
         if (edits.Any(e => !e.KacCleanup || e.Mode != "입력" || e.MaterialSource != null)) throw new InvalidOperationException("유형 정리와 다른 종류의 변경을 섞어 적용할 수 없습니다.");
         var reader = new ParameterReader(doc, model);
-        model.Rows = reader.ReadAll(QueryPlan.FromRules(CleanupPlanner.Rules())); model.ConnectCatalogs();
-        var fresh = CleanupPlanner.Plan(model.Owners.Concat(model.Rows), []).Edits.ToDictionary(e => e.Original.Key);
+        model.Rows = reader.ReadAll(QueryPlan.FromRules(rules)); model.ConnectCatalogs();
+        var fresh = CleanupPlanner.Plan(model.Owners.Concat(model.Rows), [], rules.PreserveWorksets).Edits.ToDictionary(e => e.Original.Key);
         var approvedNames = edits.Where(e => e.Original.ParameterKey == CleanupPlanner.NameKey).ToDictionary(e => e.Original.OwnerId, e => e.Value);
         var actions = new List<Write>();
         var finalNames = new Lazy<Dictionary<(long Category, string Name), int>>(() => new FilteredElementCollector(doc).WhereElementIsElementType().Cast<ElementType>()

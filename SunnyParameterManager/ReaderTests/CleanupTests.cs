@@ -8,7 +8,7 @@ internal static class CleanupTests
  {
   void Reject(Action a, string name) { bool failed = false; try { a(); } catch (InvalidOperationException) { failed = true; } check(failed, name); }
   Parameter P(string name, long id, string value, ForgeTypeId? spec = null, bool identity = false) => new() { Id = new(id), Definition = new() { Name = name, Spec = spec ?? new("text"), Group = identity ? GroupTypeId.IdentityData : new("other") }, StorageType = spec == SpecTypeId.Boolean.YesNo || id == -1002053 ? StorageType.Integer : StorageType.String, Value = value };
-  var doc = new Document { IsWorkshared = true }; doc.Worksets.Add(new() { Name = "01_건축", Id = new(11) }); doc.Worksets.Add(new() { Name = "02_구조", Id = new(12) }); doc.Worksets.Add(new() { Name = "09_매스", Id = new(19) });
+  var doc = new Document { IsWorkshared = true }; doc.Worksets.Add(new() { Name = "01_건축", Id = new(11) }); doc.Worksets.Add(new() { Name = "02_구조", Id = new(12) }); doc.Worksets.Add(new() { Name = "09_매스", Id = new(19) }); doc.Worksets.Add(new() { Name = "00_외장", Id = new(20) });
   var type = new HostObjAttributes { Name = "KAC-A-CE7410_CW02_THK21(설명)", Category = new() { Id = new(-2000011) } }; type.Parameters.Clear(); type.Structure!.Width = 76.5 / 304.8; doc.Elements.Add(type);
   var inst = new Element { TypeId = type.Id, Category = type.Category }; inst.Parameters.Clear();
   inst.Parameters.Add(P("Workset", -1002053, "12")); inst.Parameters.Add(P("Room Bounding", -1001007, "1", SpecTypeId.Boolean.YesNo));
@@ -25,6 +25,22 @@ internal static class CleanupTests
   foreach (var a in actions) a.Set(); foreach (var a in actions) a.Verify();
   check(type.Name == "KAC-A-CE7410_CW02-T76.5(설명)" && inst.Parameters[0].Value == "11" && inst.Parameters[1].Value == "0" && inst.Parameters[2].Value == "1" && inst.Parameters[3].Value == "0" && inst.Parameters[4].Value == "1", "실제 Writer 전체 적용·재검증 대역");
   check(Plan(Read()).Edits.Count == 0, "재검토 시 동일 값 반복 쓰기 없음");
+  var exteriorRules = RulePlanner.Parse("{\"Version\":4,\"Name\":\"외장 유지\",\"Cleanup\":true,\"PreserveWorksets\":[\"00_외장\"]}");
+  inst.Parameters[0].Value = "20"; inst.Parameters[1].Value = "1";
+  var exteriorModel = Read();
+  var oldExteriorPlan = Plan(exteriorModel);
+  var exteriorPlan = RulePlanner.Plan(exteriorRules, exteriorModel.Owners.Concat(exteriorModel.Rows), [], false);
+  check(oldExteriorPlan.Edits.Any(e => e.Original.ParameterKey == CleanupPlanner.WorksetKey) &&
+        exteriorPlan.Edits.All(e => e.Original.ParameterKey != CleanupPlanner.WorksetKey) &&
+        exteriorPlan.Notes.Any(n => n.Contains("00_외장 작업세트 유지: 1개")), "외장 작업세트만 새 룰셋에서 유지·안내");
+  Reject(() => CleanupWriter.Prepare(doc, new() { Path = exteriorModel.Path }, oldExteriorPlan.Edits, exteriorRules), "이전 룰셋의 외장 변경을 새 룰셋으로 적용 차단");
+  var exteriorActions = CleanupWriter.Prepare(doc, new() { Path = exteriorModel.Path }, exteriorPlan.Edits, exteriorRules);
+  foreach (var a in exteriorActions) a.Set(); foreach (var a in exteriorActions) a.Verify();
+  check(inst.Parameters[0].Value == "20" && inst.Parameters[1].Value == "0", "저장 직전 재판정에서도 외장 유지·다른 정리 적용");
+  inst.Parameters[0].Value = "11";
+  check(RulePlanner.Plan(exteriorRules, Read().Owners.Concat(Read().Rows), [], false).Edits.All(e => e.Original.ParameterKey != CleanupPlanner.WorksetKey), "외장 이외 기존 정상 작업세트 불변");
+  Reject(() => RulePlanner.Parse("{\"Version\":4,\"Name\":\"오류\",\"Cleanup\":true,\"PreserveWorksets\":[\"01_건축\"]}"), "허용하지 않은 작업세트 예외 거부");
+  Reject(() => RulePlanner.Parse("{\"Version\":1,\"Name\":\"오류\",\"PreserveWorksets\":[\"00_외장\"]}"), "다른 버전의 외장 예외 거부");
   Reject(() => CleanupWriter.Prepare(doc, new() { Path = m.Path }, plan.Edits), "이전 조회 변경 재적용 차단");
   inst.Parameters[0].Value = "12"; m = Read(); plan = Plan(m);
   doc.OtherOwner = true; Reject(() => CleanupWriter.Prepare(doc, new() { Path = m.Path }, plan.Edits), "다른 사용자 소유권 차단"); doc.OtherOwner = false;

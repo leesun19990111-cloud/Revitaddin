@@ -508,7 +508,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
@@ -544,8 +544,8 @@ public partial class MainWindow : Window
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
         if (_busy || _sample || _loadedRules?.MaterialAudit == true || _edits.Count == 0) return;
-        try { ValidateRemovalApproval(); }
-        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "삭제 승인 확인", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        try { ValidateRemovalApproval(); ValidateCleanupApproval(); }
+        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "적용 전 검증", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }
         MainTabs.SelectedIndex = 1;
         var groups = _edits.Values.GroupBy(e => e.Original.ModelPath).ToList();
@@ -571,7 +571,7 @@ public partial class MainWindow : Window
                 if (_stopRequested) { ReportBox.AppendText($"사용자 중지로 나머지 {groups.Count - groups.IndexOf(group)}개 모델은 처리하지 않았습니다. 변경 예정은 유지합니다.\n"); break; }
                 var item = _models.Single(m => m.Path == group.Key);
                 var snapshot = item.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.");
-                var result = await _worker.Send(new Request { Operation = "적용", Path = item.Path, Identity = snapshot.Identity, CanonicalPath = snapshot.CanonicalPath, Confirmed = true, LocalChangesConfirmed = local, Edits = group.ToList() });
+                var result = await _worker.Send(new Request { Operation = "적용", Path = item.Path, Identity = snapshot.Identity, CanonicalPath = snapshot.CanonicalPath, Confirmed = true, LocalChangesConfirmed = local, Edits = group.ToList(), CleanupRules = group.Any(e => e.KacCleanup) ? _loadedRules : null });
                 ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {item.Title}\n{result.Stage} · {result.Message}\n작업/복구 경로: {result.RecoveryPath}\n변경 전 파일 백업: {result.BackupPath}\n");
                 if (result.Success)
                 {
@@ -605,6 +605,17 @@ public partial class MainWindow : Window
         if (_loadedRules?.Spec?.RemoveOnly != true && !_edits.Values.Any(e => e.DefinitionFix?.Action == SpecRulePlanner.ActionRemove)) return;
         if (_loadedRules?.Spec?.RemoveOnly != true) throw new InvalidOperationException("삭제 전용 룰셋을 불러온 뒤 변경 내용을 다시 검토하세요.");
         SpecRulePlanner.Plan(_loadedRules, _models.Select(m => m.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.")), _edits.Values);
+    }
+
+    private void ValidateCleanupApproval()
+    {
+        if (!_edits.Values.Any(e => e.KacCleanup)) return;
+        if (_loadedRules?.Version != 4) throw new InvalidOperationException("유형 정리 룰셋을 다시 선택하고 변경 내용을 검토하세요.");
+        var available = _models.SelectMany(m => (m.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.")).Owners.Concat(m.Snapshot.Rows));
+        var expected = RulePlanner.Plan(_loadedRules, available, [], _sample).Edits.ToDictionary(e => e.Original.Key);
+        foreach (var edit in _edits.Values)
+            if (!edit.KacCleanup || !expected.TryGetValue(edit.Original.Key, out var proposed) || proposed.Value != edit.Value || proposed.ReferenceKey != edit.ReferenceKey)
+                throw new InvalidOperationException("유형 정리 룰셋과 변경 목록이 일치하지 않습니다. 기존 작업세트 변경을 제외하고 룰셋으로 다시 검토하세요.");
     }
 
     private void SaveWorkspace(object sender, RoutedEventArgs e) => Guard(() =>

@@ -146,7 +146,8 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     writes = [new(removal.Delete, removal.Verify)];
                 }
                 else if (req.Edits.Any(e => e.DefinitionFix != null)) writes = DefinitionFixer.Prepare(app, doc, req.Edits);
-                else if (req.Edits.Any(e => e.KacCleanup)) writes = CleanupWriter.Prepare(doc, metadata, req.Edits).Select(w => new WriteAction(w.Set, w.Verify)).ToList();
+                else if (req.Edits.Any(e => e.KacCleanup)) writes = CleanupWriter.Prepare(doc, metadata, req.Edits,
+                    req.CleanupRules ?? throw new InvalidOperationException("유형 정리 룰셋이 적용 요청에 없습니다. 룰셋을 다시 불러와 검토하세요.")).Select(w => new WriteAction(w.Set, w.Verify)).ToList();
                 else writes = PrepareAll(app, doc, reader, req.Edits);
                 var stairNames = removingLinks ? [] : StairTypeNames.Capture(doc, req.Edits);
                 using var diagnostics = new TransactionDiagnostics(app, doc);

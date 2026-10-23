@@ -14,6 +14,8 @@ public sealed class RuleSet
     public SpaceRuleProfile? Space { get; set; }
     public SpecRuleProfile? Spec { get; set; }
     public bool Cleanup { get; set; }
+    // 버전4 정리에서 현재 작업세트를 유지할 정확한 이름. 비어 있으면 기존 정책 그대로다.
+    public List<string> PreserveWorksets { get; set; } = [];
     public bool MaterialAudit { get; set; }
 }
 
@@ -83,6 +85,10 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.PreserveWorksets == null || file.PreserveWorksets.Count > 1 ||
+            file.PreserveWorksets.Any(n => n != "00_외장") ||
+            file.PreserveWorksets.Count > 0 && file.Version != 4)
+            throw new InvalidOperationException("작업세트 유지 예외는 버전4에서 00_외장 하나만 지정할 수 있습니다.");
         if (file?.Version == 6 || file?.MaterialAudit == true)
         {
             if (file.Version != 6 || !file.MaterialAudit || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
@@ -144,7 +150,7 @@ public static class RulePlanner
         if (file.Version == 5) throw new InvalidOperationException("속성규격 룰셋은 모델별 매개변수 정의로 평가합니다.");
         if (pending.Any(e => e.DefinitionFix != null)) throw new InvalidOperationException("매개변수 정의 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
         if (file.Version != 4 && pending.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
-        if (file.Version == 4) return CleanupPlanner.Plan(available, pending);
+        if (file.Version == 4) return CleanupPlanner.Plan(available, pending, file.PreserveWorksets);
         if (file.Version == 2) return KacRulePlanner.Plan(file, available, pending, sample);
         if (file.Version == 3) return SpaceRulePlanner.Plan(file, available, pending);
         var owners = available.GroupBy(r => (r.ModelPath, r.OwnerId, r.Scope)).Select(g => g.ToList()).ToList();
