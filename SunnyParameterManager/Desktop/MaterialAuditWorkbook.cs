@@ -13,13 +13,34 @@ public static class MaterialAuditWorkbook
     private static readonly string[] Headers =
     [
         "모델 파일", "카테고리", "패밀리", "유형명", "유형 요소 ID", "문제", "확인 범위",
-        "재료 매개변수·층", "재료 이름", "배치 요소 수", "예시 요소 ID", "상세"
+        "재료 매개변수·층", "현재 재료명", "배치 요소 수", "예시 요소 ID", "상세"
     ];
+    public const string ReportFileName = "KAC_재료_유형인스턴스_점검결과.xlsx";
+
+    public static string PathForRule(string rulePath)
+    {
+        if (string.IsNullOrWhiteSpace(rulePath) || !File.Exists(rulePath))
+            throw new InvalidOperationException("재료 점검 룰셋 파일을 다시 선택하세요. 엑셀은 그 룰셋과 같은 폴더에 저장됩니다.");
+        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, ReportFileName);
+    }
 
     public static void Save(string path, IEnumerable<MaterialAuditItem> items)
     {
         var rows = items.ToList();
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var fullPath = Path.GetFullPath(path);
+        var folder = Path.GetDirectoryName(fullPath)!;
+        Directory.CreateDirectory(folder);
+        var temporary = Path.Combine(folder, "." + Path.GetFileName(fullPath) + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            WriteWorkbook(temporary, rows);
+            File.Move(temporary, fullPath, true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static void WriteWorkbook(string path, List<MaterialAuditItem> rows)
+    {
         using var file = File.Create(path);
         using var zip = new ZipArchive(file, ZipArchiveMode.Create);
         Write(zip, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"utf-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/><Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/></Types>");
@@ -38,7 +59,8 @@ public static class MaterialAuditWorkbook
         for (var i = 0; i < rows.Count; i++)
         {
             var item = rows[i];
-            var values = new[] { item.Model, item.Category, item.Family, item.TypeName, item.TypeId, item.Issue,
+            var issue = item.Issue == "KAC- 이외 재료" && item.Material.Length > 0 ? $"{item.Issue}: {item.Material}" : item.Issue;
+            var values = new[] { item.Model, item.Category, item.Family, item.TypeName, item.TypeId, issue,
                 item.Scope, item.Slot, item.Material, item.ElementCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 item.ExampleElementId, item.Detail };
             xml.Write($"<row r=\"{i + 2}\">");

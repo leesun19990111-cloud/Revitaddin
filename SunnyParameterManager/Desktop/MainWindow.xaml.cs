@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private readonly WorkerClient _worker = new();
     private List<string> _fieldNames = [];
     private RuleSet? _loadedRules;
+    private string? _loadedRulePath;
     private bool _initialized, _filtering, _busy, _sample, _selecting;
     private bool _stopRequested;
 
@@ -120,7 +121,7 @@ public partial class MainWindow : Window
         if (selected.Count == 0) return [];
         if (selected.Any(p => !string.Equals(Path.GetExtension(p), ".rvt", StringComparison.OrdinalIgnoreCase) || !File.Exists(p)))
             throw new InvalidOperationException("존재하지 않거나 RVT가 아닌 파일이 있습니다. 파일을 다시 선택하세요.");
-        if (_sample) { if (!DiscardPending()) return []; _edits.Clear(); _models.Clear(); _sample = false; _loadedRules = null; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
+        if (_sample) { if (!DiscardPending()) return []; _edits.Clear(); _models.Clear(); _sample = false; _loadedRules = null; _loadedRulePath = null; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
         List<string> added = [];
         foreach (var path in selected)
             if (_models.All(m => !string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) { _models.Add(new() { Path = path }); added.Add(path); }
@@ -373,13 +374,13 @@ public partial class MainWindow : Window
         var dialog = new OpenFileDialog { Filter = "Sunny 룰셋 (*.sunnyrules.json)|*.sunnyrules.json|JSON 파일 (*.json)|*.json", Title = "함께 정한 룰셋 파일 선택" };
         if (dialog.ShowDialog(this) != true) return;
         if (new FileInfo(dialog.FileName).Length > 2 * 1024 * 1024) throw new InvalidOperationException("룰셋은 2MB 이하만 지원합니다.");
-        SelectRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)));
+        SelectRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)), dialog.FileName);
         if (_models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery &&
             (!_loadedRules!.MaterialAudit || m.Snapshot.MaterialAuditItems != null) &&
             (m.Snapshot.Query == null || m.Snapshot.Query.Covers(QueryPlan.FromRules(_loadedRules!)))))
             PrepareRules(_loadedRules!);
     });
-    public void SelectRules(RuleSet file)
+    public void SelectRules(RuleSet file, string? sourcePath = null)
     {
         if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
         QueryPlan.FromRules(file);
@@ -389,6 +390,7 @@ public partial class MainWindow : Window
         if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
             throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
         _loadedRules = file;
+        _loadedRulePath = file.MaterialAudit ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
         StatusText.Text = _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
@@ -396,7 +398,7 @@ public partial class MainWindow : Window
     }
     private void UseFullQuery(object sender, RoutedEventArgs e) => Guard(() =>
     {
-        _loadedRules = null; UpdatePending();
+        _loadedRules = null; _loadedRulePath = null; UpdatePending();
         StatusText.Text = "다음 조회부터 전체 항목을 읽습니다. 기존 선택 조회값과 변경 예정은 유지합니다. 전체 항목이 필요하면 ‘파일 관리 → 다시 조회’를 누르세요.";
     });
     private void ReviewLoadedRules(object sender, RoutedEventArgs e) => Guard(() =>
@@ -411,13 +413,13 @@ public partial class MainWindow : Window
         QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), file);
         if (file.MaterialAudit)
         {
+            if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 재료 점검 룰셋을 다시 불러오세요.");
             var findings = _models.SelectMany(m => m.Snapshot!.MaterialAuditItems!).ToList();
-            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Reports");
-            var path = Path.Combine(folder, $"KAC_재료_점검_{DateTime.Now:yyyyMMdd_HHmmss_fff}.xlsx");
+            var path = MaterialAuditWorkbook.PathForRule(_loadedRulePath ?? "");
             MaterialAuditWorkbook.Save(path, findings);
             RuleSummary.Text = $"읽기 전용 재료 점검 완료 · {_models.Count:N0}개 모델 · {findings.Count:N0}개 확인 항목\n" +
                 $"인스턴스 재료 매개변수 {findings.Count(x => x.Issue == "인스턴스 재료 매개변수"):N0}건 · KAC- 이외 재료 {findings.Count(x => x.Issue == "KAC- 이외 재료"):N0}건 · 확인 필요 {findings.Count(x => x.Issue == "재료 확인 필요"):N0}건\n" +
-                "유형별로 묶은 결과이며 배치 요소 수와 예시 ID를 함께 기록했습니다. RVT는 변경하지 않았습니다.\n엑셀 파일: " + path;
+                "실제 배치된 유형만 묶었으며 배치 요소 수와 예시 ID를 함께 기록했습니다. RVT는 변경하지 않았습니다.\n같은 파일명으로 이전 보고서를 교체했습니다. 엑셀 파일: " + path;
             RuleSummaryPanel.Visibility = Visibility.Visible;
             ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
             StatusText.Text = "재료 점검 엑셀을 저장했습니다: " + path;
@@ -647,7 +649,7 @@ public partial class MainWindow : Window
                 edit.AddParameter == null ? !rows.ContainsKey(edit.Original.Key) :
                 rows.ContainsKey(edit.Original.Key) || !owners.Any(o => o.ModelPath == edit.Original.ModelPath && o.OwnerId == edit.Original.OwnerId && o.Scope == "프로젝트 정보"))
                 throw new InvalidDataException("변경 대상이 조회 목록에 없습니다.");
-        _models.Clear(); _edits.Clear(); _sample = file.Sample; _loadedRules = file.LoadedRules; RuleSummaryPanel.Visibility = Visibility.Collapsed;
+        _models.Clear(); _edits.Clear(); _sample = file.Sample; _loadedRules = file.LoadedRules; _loadedRulePath = null; RuleSummaryPanel.Visibility = Visibility.Collapsed;
         foreach (var path in file.Paths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var snapshot = file.Models.SingleOrDefault(m => m.Path == path); snapshot?.ConnectCatalogs();
@@ -664,7 +666,7 @@ public partial class MainWindow : Window
     private void SampleClick(object sender, RoutedEventArgs e) => Guard(() => { if (DiscardPending()) LoadSample(); });
     public void LoadSample()
     {
-        _edits.Clear(); _models.Clear(); _sample = true; _loadedRules = null; RuleSummaryPanel.Visibility = Visibility.Collapsed;
+        _edits.Clear(); _models.Clear(); _sample = true; _loadedRules = null; _loadedRulePath = null; RuleSummaryPanel.Visibility = Visibility.Collapsed;
         for (int n = 1; n <= 2; n++)
         {
             var m = new ModelSnapshot { Path = $"샘플_건축_{n}.rvt", Title = $"샘플_건축_{n}", Kind = "샘플", Identity = "sample" };
