@@ -14,8 +14,7 @@ internal static class DefinitionRemoval
             throw new InvalidOperationException("삭제 전용 요청이 중복되거나 남길 정의와 삭제할 정의가 겹칩니다.");
         foreach (var proof in proofs) Check(doc, proof);
         var definitionsBefore = DefinitionReader.Read(doc, false).Definitions.ToDictionary(d => d.Key);
-        using var collector = new FilteredElementCollector(doc);
-        var idsBefore = collector.ToElementIds().Select(id => id.Value).ToHashSet();
+        var idsBefore = AllElementIds(doc);
         var removedKeys = proofs.Select(p => p.Source.Key).ToHashSet();
         var allowedIds = proofs.Select(p => long.Parse(p.Source.ElementId, System.Globalization.CultureInfo.InvariantCulture)).ToHashSet();
         var projectValues = ProjectValues(doc, removedKeys);
@@ -31,8 +30,7 @@ internal static class DefinitionRemoval
                 throw new InvalidOperationException("삭제 대상이 프로젝트 정보에 남아 있어 이번 묶음을 취소합니다.");
             if (projectValues != ProjectValues(doc, removedKeys))
                 throw new InvalidOperationException("삭제 확정 후 다른 프로젝트 정보 값이 달라져 이번 묶음을 취소합니다.");
-            using var checkCollector = new FilteredElementCollector(doc);
-            var idsAfter = checkCollector.ToElementIds().Select(id => id.Value).ToHashSet();
+            var idsAfter = AllElementIds(doc);
             if (idsAfter.Except(idsBefore).Any() || idsBefore.Except(idsAfter).Any(id => !allowedIds.Contains(id)))
                 throw new InvalidOperationException("승인한 매개변수 이외의 요소가 추가·삭제되어 이번 묶음을 취소합니다.");
         }
@@ -54,6 +52,15 @@ internal static class DefinitionRemoval
             }, writes.Count == 0 ? VerifyAll : () => { }));
         }
         return writes;
+    }
+
+    private static HashSet<long> AllElementIds(Document doc)
+    {
+        // Revit은 필터가 없는 collector의 ToElementIds/순회를 허용하지 않는다.
+        // 유형과 배치 요소를 각각 필터링해 기존의 전체 요소 보존 검사를 유지한다.
+        using var types = new FilteredElementCollector(doc).WhereElementIsElementType();
+        using var instances = new FilteredElementCollector(doc).WhereElementIsNotElementType();
+        return types.ToElementIds().Concat(instances.ToElementIds()).Select(id => id.Value).ToHashSet();
     }
 
     private static string ProjectValues(Document doc, HashSet<string> excluded)

@@ -28,11 +28,11 @@ namespace Autodesk.Revit.DB
   public ElementId Id { get; set; } = new(42); public Definition Definition { get; set; } = new();
   public StorageType StorageType { get; set; } = StorageType.String;
   public bool IsReadOnly { get; set; } public bool HasValue { get; set; } = true; public bool IsShared { get; set; }
-  public Guid GUID { get; set; } = Guid.NewGuid(); public string Value { get; set; } = "기존";
+  public Guid GUID { get; set; } = Guid.NewGuid(); public string Value { get; set; } = "기존"; public ElementId MaterialId { get; set; } = new(1);
   public bool FailRead { get; set; } public bool FailMemory { get; set; }
   public bool Set(string v) { if (IsReadOnly) throw new InvalidOperationException(); Value = v; return true; }
   public bool Set(int v) => Set(v.ToString());
-  public string AsString() => FailMemory ? throw new OutOfMemoryException() : FailRead ? throw new InvalidOperationException("값 조회 실패") : Value; public string AsValueString() => Value; public int AsInteger() => int.TryParse(Value, out var n) ? n : 1; public double AsDouble() => double.TryParse(Value, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 1; public ElementId AsElementId() => new(1);
+  public string AsString() => FailMemory ? throw new OutOfMemoryException() : FailRead ? throw new InvalidOperationException("값 조회 실패") : Value; public string AsValueString() => Value; public int AsInteger() => int.TryParse(Value, out var n) ? n : 1; public double AsDouble() => double.TryParse(Value, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 1; public ElementId AsElementId() => MaterialId;
  }
  public sealed class Category { public CategoryType CategoryType { get; set; } = CategoryType.Model; public ElementId Id { get; set; } = new(1); public string Name { get; set; } = "모델"; }
  public class Element
@@ -45,6 +45,8 @@ namespace Autodesk.Revit.DB
   private ElementId _groupId = ElementId.InvalidElementId;
   public ElementId GroupId { get => FailGroupRead ? throw new InvalidOperationException("그룹 조회 실패") : _groupId; set => _groupId = value; }
   public List<Parameter> Parameters { get; } = [new()]; public ElementId TypeId { get; set; } = ElementId.InvalidElementId;
+  public List<ElementId> MaterialIds { get; } = []; public List<ElementId> PaintMaterialIds { get; } = [];
+  public ICollection<ElementId> GetMaterialIds(bool returnPaintMaterials) => returnPaintMaterials ? PaintMaterialIds : MaterialIds;
   public ElementId GetTypeId() => TypeId;
   public Parameter? get_Parameter(BuiltInParameter id) => Parameters.SingleOrDefault(p => p.Id.Value == (long)id);
  }
@@ -53,7 +55,7 @@ namespace Autodesk.Revit.DB
  public class Family { public bool IsInPlace { get; set; } }
  public class FamilySymbol : ElementType { public Family Family { get; } = new(); }
  public class HostObjAttributes : ElementType { public CompoundStructure? Structure { get; set; } = new(); public CompoundStructure? GetCompoundStructure() => Structure; }
- public class CompoundStructure : IDisposable { public double Width { get; set; } = 1; public bool IsVerticallyCompound { get; set; } public bool Homogeneous { get; set; } = true; public int VariableLayerIndex { get; set; } = -1; public bool IsVerticallyHomogeneous() => Homogeneous; public double GetWidth() => Width; public void Dispose() { } }
+ public class CompoundStructure : IDisposable { public double Width { get; set; } = 1; public bool IsVerticallyCompound { get; set; } public bool Homogeneous { get; set; } = true; public int VariableLayerIndex { get; set; } = -1; public List<ElementId> LayerMaterials { get; } = []; public int LayerCount => LayerMaterials.Count; public ElementId GetMaterialId(int index) => LayerMaterials[index]; public bool IsVerticallyHomogeneous() => Homogeneous; public double GetWidth() => Width; public void Dispose() { } }
  public sealed class ProjectInfo : Element { }
  public sealed class RevitLinkType : ElementType { }
  public sealed class RevitLinkInstance : Element { }

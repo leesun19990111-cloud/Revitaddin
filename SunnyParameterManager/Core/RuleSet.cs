@@ -14,6 +14,7 @@ public sealed class RuleSet
     public SpaceRuleProfile? Space { get; set; }
     public SpecRuleProfile? Spec { get; set; }
     public bool Cleanup { get; set; }
+    public bool MaterialAudit { get; set; }
 }
 
 public sealed class ParameterRule
@@ -82,6 +83,13 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 6 || file?.MaterialAudit == true)
+        {
+            if (file.Version != 6 || !file.MaterialAudit || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
+                file.Kac != null || file.Space != null || file.Spec != null || file.Cleanup || file.SampleOnly)
+                throw new InvalidOperationException("재료 점검 룰셋은 버전6과 MaterialAudit만 사용합니다.");
+            return;
+        }
         if (file?.Version == 5 || file?.Spec != null)
         {
             SpecRulePlanner.Validate(file!);

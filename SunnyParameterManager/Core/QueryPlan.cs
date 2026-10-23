@@ -10,6 +10,7 @@ public sealed class QueryPlan
     public bool IncludeOuterMaterial { get; set; }
     public bool IncludeCleanup { get; set; }
     public bool IncludeDefinitions { get; set; }
+    public bool IncludeMaterialAudit { get; set; }
 
     public void Validate()
     {
@@ -25,13 +26,19 @@ public sealed class QueryPlan
     {
         Validate(); required.Validate();
         return required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
-            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions);
+            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit);
     }
     public static QueryPlan FromRules(RuleSet rules)
     {
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
-        if (rules.Version == 5)
+        if (rules.Version == 6)
+        {
+            plan.Scopes = ["유형", "인스턴스"];
+            plan.Names = ["재료"];
+            plan.IncludeMaterialAudit = true;
+        }
+        else if (rules.Version == 5)
         {
             // 정의 목록이 본체다. 프로젝트 정보만 함께 읽어 요소 전체 수집을 피한다.
             plan.Scopes = ["프로젝트 정보"];
@@ -71,7 +78,7 @@ public sealed class QueryPlan
     {
         var required = FromRules(rules);
         foreach (var model in models)
-            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeDefinitions && model.Definitions == null)
+            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeDefinitions && model.Definitions == null || required.IncludeMaterialAudit && model.MaterialAuditItems == null)
                 throw new InvalidOperationException(model.Title + ": 이 룰셋에 필요한 항목을 아직 조회하지 않았습니다. 변경 예정을 적용하거나 정리한 뒤 ‘다시 조회’를 누르세요. 미조회 값은 빈 값이나 ND로 처리하지 않습니다.");
     }
 }

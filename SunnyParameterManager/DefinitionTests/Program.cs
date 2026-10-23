@@ -23,6 +23,7 @@ internal static class Program
             Keeper = Add("건축물번호", 10, false); Source = Add("건축물 번호", 11, shared);
             Structure = Add("구조", 12, false); Other = Add("공항코드", 13, false);
             Doc.Elements.Add(new() { Id = new(999), Category = new() { Id = new(2), BuiltInCategory = BuiltInCategory.OST_Walls } });
+            Doc.Elements.Add(new ElementType { Id = new(998), Category = new() { Id = new(2), BuiltInCategory = BuiltInCategory.OST_Walls } });
         }
         public InternalDefinition Add(string name, long id, bool shared)
         {
@@ -51,6 +52,7 @@ internal static class Program
     {
         try
         {
+            Reject(() => new FilteredElementCollector(new Document()).ToElementIds(), "Revit 대역도 필터 없는 수집을 거부");
             var f = new Fixture(); var edits = f.Plan();
             Check(edits.Count == 2 && edits.All(e => e.DefinitionFix!.Removal!.Source.ValueCount == 1), "실제 정의 리더가 두 삭제 대상의 기존 값·지문을 수집");
             f.Apply(edits);
@@ -88,7 +90,7 @@ internal static class Program
             Reject(() => f.Apply(edits), "Revit 연결 제거 거부 전파");
             f = new(); edits = f.Plan(); f.Doc.CascadeDelete = true;
             Reject(() => f.Apply(edits), "종속 요소 동반 삭제 차단");
-            foreach (var mutation in new[] { "다른 값", "남길 값", "다른 정의", "추가 요소", "삭제 요소", "삭제 대상 재등장" })
+            foreach (var mutation in new[] { "다른 값", "남길 값", "다른 정의", "추가 요소", "삭제 요소", "추가 유형", "삭제 유형", "삭제 대상 재등장" })
             {
                 f = new(); edits = f.Plan(); writes = DefinitionRemoval.Prepare(f.Doc, edits);
                 foreach (var w in writes) w.Set();
@@ -99,6 +101,8 @@ internal static class Program
                     case "다른 정의": f.Other.Group = new("자동 변경"); break;
                     case "추가 요소": f.Doc.Elements.Add(new() { Id = new(888) }); break;
                     case "삭제 요소": f.Doc.Elements.RemoveAll(e => e.Id.Value == 999); break;
+                    case "추가 유형": f.Doc.Elements.Add(new ElementType { Id = new(887) }); break;
+                    case "삭제 유형": f.Doc.Elements.RemoveAll(e => e.Id.Value == 998); break;
                     case "삭제 대상 재등장": f.Add("구조", 12, false); break;
                 }
                 Reject(writes[0].Verify, "확정 후 승인 외 변경 차단: " + mutation);

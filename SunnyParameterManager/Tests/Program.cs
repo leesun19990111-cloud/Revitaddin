@@ -26,6 +26,7 @@ internal static class Program
             SpaceRuleTests.Run(Check, Reject);
             SpecRuleTests.Run(Check, Reject);
             SpecRemoveOnlyTests.Run(Check, Reject);
+            MaterialAuditTests.Run(Check, Reject);
             ReadBatchTests.Run(Check);
             Check(!ApplyContinuation.CanOffer(new()), "구버전 응답은 다음 적용 승인 불가");
             Check(ApplyContinuation.CanOffer(new() { CanContinueAfterPreflightFailure = true }), "검증된 사전 실패만 다음 적용 승인 후보");

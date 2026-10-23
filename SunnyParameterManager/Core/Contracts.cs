@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.3.7";
+    public const string Release = "0.3.8";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -50,7 +50,25 @@ public sealed class ModelSnapshot
     public Dictionary<string, List<ValueChoice>> Catalogs { get; set; } = [];
     // 속성규격 룰셋(버전5)으로 조회할 때만 채운다. 매개변수 정의(바인딩) 목록.
     public DefinitionSnapshot? Definitions { get; set; }
+    public List<MaterialAuditItem>? MaterialAuditItems { get; set; }
     public void ConnectCatalogs() { foreach (var row in Rows) row.Choices = Catalogs.GetValueOrDefault(row.ChoiceCatalog, []); }
+}
+
+// 실제 유형과 배치 요소에서 확인한 재료 이상 항목. 같은 유형/재료/슬롯은 개수로 묶는다.
+public sealed class MaterialAuditItem
+{
+    public string Model { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string Family { get; set; } = "";
+    public string TypeName { get; set; } = "";
+    public string TypeId { get; set; } = "";
+    public string Issue { get; set; } = "";
+    public string Scope { get; set; } = "";
+    public string Slot { get; set; } = "";
+    public string Material { get; set; } = "";
+    public int ElementCount { get; set; }
+    public string ExampleElementId { get; set; } = "";
+    public string Detail { get; set; } = "";
 }
 
 public sealed class ParameterRow

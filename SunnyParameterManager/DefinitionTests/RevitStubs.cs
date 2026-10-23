@@ -41,6 +41,7 @@ namespace Autodesk.Revit.DB
         public List<Parameter> Parameters { get; } = [];
         public Parameter? get_Parameter(InternalDefinition d) => Parameters.SingleOrDefault(p => p.Definition.Id == d.Id);
     }
+    public class ElementType : Element { }
     public class ParameterElement : Element { }
     public sealed class SharedParameterElement : ParameterElement { public Guid GuidValue { get; } = Guid.NewGuid(); }
     public class ElementBinding { public List<Category> Categories { get; set; } = []; }
@@ -91,12 +92,13 @@ namespace Autodesk.Revit.DB
     public sealed class FilteredElementCollector(Document doc) : IEnumerable<Element>, IDisposable
     {
         private IEnumerable<Element> _items = doc.Elements;
-        public FilteredElementCollector WherePasses(ElementMulticategoryFilter f) { _items = _items.Where(e => f.Ids.Contains(e.Category.Id)); return this; }
-        public FilteredElementCollector WherePasses(ElementParameterFilter f) { _items = _items.Where(e => e.Parameters.Any(p => p.Definition.Id == f.Id && p.HasValue)); return this; }
-        public FilteredElementCollector WhereElementIsElementType() { _items = []; return this; }
-        public FilteredElementCollector WhereElementIsNotElementType() => this;
-        public ICollection<ElementId> ToElementIds() => _items.Select(e => e.Id).ToList();
-        public IEnumerator<Element> GetEnumerator() => _items.GetEnumerator();
+        private bool _filtered;
+        public FilteredElementCollector WherePasses(ElementMulticategoryFilter f) { _filtered = true; _items = _items.Where(e => f.Ids.Contains(e.Category.Id)); return this; }
+        public FilteredElementCollector WherePasses(ElementParameterFilter f) { _filtered = true; _items = _items.Where(e => e.Parameters.Any(p => p.Definition.Id == f.Id && p.HasValue)); return this; }
+        public FilteredElementCollector WhereElementIsElementType() { _filtered = true; _items = _items.Where(e => e is ElementType); return this; }
+        public FilteredElementCollector WhereElementIsNotElementType() { _filtered = true; _items = _items.Where(e => e is not ElementType); return this; }
+        public ICollection<ElementId> ToElementIds() => _filtered ? _items.Select(e => e.Id).ToList() : throw new InvalidOperationException("The collector does not have a filter applied.");
+        public IEnumerator<Element> GetEnumerator() => _filtered ? _items.GetEnumerator() : throw new InvalidOperationException("The collector does not have a filter applied.");
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
         public void Dispose() { }
     }

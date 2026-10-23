@@ -1,5 +1,13 @@
 # 독립 매개변수 관리자
 
+## 2026-10-23 · 0.3.8 읽기 전용 KAC 재료 점검
+
+- 사용자 요청: 유형 대신 인스턴스 매개변수에서 재료를 선택하는 배치 요소, 실제 재료 이름이 정확히 `KAC-`로 시작하지 않는 모델/유형을 XLSX로 정리. 원본 RVT에는 쓰지 않는다. 개인 버전6 `MaterialAudit=true`, Rules=[] 룰셋은 `C:\Users\User\Desktop\룰셋`에 별도 제공하며 Git/설치 제외.
+- QueryPlan `IncludeMaterialAudit`는 일반 전체·KAC 선택 조회를 재사용하지 않고 반드시 새 조회를 요구한다. ParameterReader 별도 read-only branch에서 유형 재료 매개변수·복합구조 층·형상, 배치 인스턴스 재료 매개변수·형상·페인트를 수집한다. 무효 재료 ID는 비표준 사용으로 오판하지 않는다. 실제 참조가 있으나 Material 조회 실패는 `재료 확인 필요`로 분리. 배치 없는 유형의 인스턴스 슬롯은 프로젝트에서 관찰 불가능하다.
+- 결과는 동일 모델/유형/문제/범위/슬롯/재료별로 수량·예시 ID를 묶어 `%LOCALAPPDATA%\SunnyTools\ParameterManager\Reports\KAC_재료_점검_*.xlsx`에 저장한다. XML은 ZipArchive에 스트리밍으로 기록하고 CSV 수식 평가 경로를 쓰지 않는다. 변경 예정이 남으면 룰셋 선택 차단; 읽기 전용 룰셋에서 적용 버튼과 직접 Apply 경로 잠금. 실제 중앙/로컬 저장·동기화 없음.
+- Core/WPF의 룰셋·조회범위·XLSX 구조 검사와 실제 ReaderTests 대역의 슬롯·복합구조·페인트 검사, 기존 전체 회귀, Revit2026 API 빌드 및 ZIP 집합/해시를 배포에서 검증. 실제 사용자 RVT 조회와 보고서 내용의 현장 확인은 별도. 038 격리 빌드, Protocol·설치 표기 0.3.8, 같은 제품037만 보관, Sunny Tools v109·사용자 설치본 불변.
+- 같은 배포에서 사용자 로그의 여러 모델 `[변경 전 재검증] The collector does not have a filter applied`를 수정. 원인은 `DefinitionRemoval.Prepare/VerifyAll`의 `new FilteredElementCollector(doc).ToElementIds()` 두 곳. `WhereElementIsElementType`와 `WhereElementIsNotElementType` 각각으로 필터 후 ID 합집합을 사용해 전체 요소 보존 검사를 유지. DefinitionTests 대역도 필터 없는 ToElementIds/순회를 거부하고 추가·삭제 유형을 검증한다. 기존 실패 파일 자동 재실행 금지, 새 버전 설치 후 개별 재조회·재검토 필요. 실제 중앙 삭제 성공은 아직 미검증.
+
 ## 2026-10-23 · 0.3.7 정확한 이름 안전 삭제 / 구조 추가
 
 - 사용자 승인: 기존 삭제 전용을 보완하고 정확한 `건축물 번호`, 프로젝트 정보에만 연결된 `구조`를 삭제. `건축물번호` 유지, 값 이동 없음. 이전 0.3.6의 Legacy·공백 정규화 삭제 경로는 폐기. 새 opt-in `RemovalSafetyVersion=1`, `RemovalTargets(Name/KeepName?/Categories)` 사용. `Parameters=[]`, 추가/병합과 혼합 금지. 카테고리는 OST_ProjectInformation 하나만 허용. KeepName은 유일하고 프로젝트 정보에도 연결되어 있어야 하며 구조는 keeper 불필요. 구버전 파서도 새 속성을 거부한다. 개인 룰셋·원본·진단 기록은 Git/설치 제외.

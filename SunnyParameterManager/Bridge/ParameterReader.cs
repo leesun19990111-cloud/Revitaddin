@@ -22,6 +22,12 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
     public List<ParameterRow> ReadAll(QueryPlan? query = null)
     {
         query?.Validate(); model.Query = query; model.Owners.Clear();
+        if (query?.IncludeMaterialAudit == true)
+        {
+            model.MaterialAuditItems = MaterialAuditReader.Read(doc, System.IO.Path.GetFileName(model.Path));
+            Notices.Add($"재료 점검: 유형·배치 요소에서 확인할 항목 {model.MaterialAuditItems.Count:N0}건. RVT는 변경하지 않았습니다.");
+            return [];
+        }
         var result = new List<ParameterRow>();
         // 프로젝트 정보만 필요하면 모델 전체의 요소 수집을 하지 않는다.
         var elements = (query == null || query.Scopes.Contains("유형") ? new FilteredElementCollector(doc).WhereElementIsElementType().Cast<Element>() : Enumerable.Empty<Element>())

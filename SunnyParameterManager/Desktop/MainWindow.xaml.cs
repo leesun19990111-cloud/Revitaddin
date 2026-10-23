@@ -243,7 +243,9 @@ public partial class MainWindow : Window
                     var snapshot = result.Snapshot;
                     var duplicate = _models.Where(m => m != item && m.Snapshot != null).Any(m => string.Equals(ModelIdentityPath(m.Snapshot!), ModelIdentityPath(snapshot), StringComparison.OrdinalIgnoreCase));
                     if (duplicate) { item.ReadFailed = true; item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다."; }
-                    else { item.Snapshot = snapshot; item.Status = $"{snapshot.Kind} · {(snapshot.Query == null ? "전체" : "룰셋 선택")} 조회 · {snapshot.Rows.Count:N0}개 값" + (snapshot.Definitions == null ? "" : $" · 정의 {snapshot.Definitions.Definitions.Count:N0}개"); }
+                    else { item.Snapshot = snapshot; item.Status = snapshot.MaterialAuditItems != null
+                        ? $"{snapshot.Kind} · 재료 점검 · {snapshot.MaterialAuditItems.Count:N0}개 확인 항목"
+                        : $"{snapshot.Kind} · {(snapshot.Query == null ? "전체" : "룰셋 선택")} 조회 · {snapshot.Rows.Count:N0}개 값" + (snapshot.Definitions == null ? "" : $" · 정의 {snapshot.Definitions.Definitions.Count:N0}개"); }
                     ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n" + string.Join("\n", snapshot.Notices) + "\n");
                 }
                 else { item.ReadFailed = true; item.Status = "조회 실패 · 건너뜀"; ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n"); }
@@ -372,7 +374,9 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         if (new FileInfo(dialog.FileName).Length > 2 * 1024 * 1024) throw new InvalidOperationException("룰셋은 2MB 이하만 지원합니다.");
         SelectRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)));
-        if (_models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery && (m.Snapshot.Query == null || m.Snapshot.Query.Covers(QueryPlan.FromRules(_loadedRules!)))))
+        if (_models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery &&
+            (!_loadedRules!.MaterialAudit || m.Snapshot.MaterialAuditItems != null) &&
+            (m.Snapshot.Query == null || m.Snapshot.Query.Covers(QueryPlan.FromRules(_loadedRules!)))))
             PrepareRules(_loadedRules!);
     });
     public void SelectRules(RuleSet file)
@@ -380,6 +384,8 @@ public partial class MainWindow : Window
         if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
         QueryPlan.FromRules(file);
         if (file.SampleOnly && !_sample) throw new InvalidOperationException("연습용 룰셋은 샘플 모드에서만 사용하세요.");
+        if (file.MaterialAudit && _edits.Count > 0)
+            throw new InvalidOperationException("재료 점검은 읽기 전용입니다. 기존 변경 예정을 먼저 적용·제외하거나 작업 파일로 보관한 뒤 불러오세요.");
         if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
             throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
         _loadedRules = file;
@@ -403,6 +409,22 @@ public partial class MainWindow : Window
         if (_models.Count == 0 || _models.Any(m => m.Snapshot == null))
             throw new InvalidOperationException("모든 대상 파일을 먼저 읽어야 합니다. 실패하거나 중복된 파일은 ‘파일 관리’에서 제외하세요.");
         QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), file);
+        if (file.MaterialAudit)
+        {
+            var findings = _models.SelectMany(m => m.Snapshot!.MaterialAuditItems!).ToList();
+            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Reports");
+            var path = Path.Combine(folder, $"KAC_재료_점검_{DateTime.Now:yyyyMMdd_HHmmss_fff}.xlsx");
+            MaterialAuditWorkbook.Save(path, findings);
+            RuleSummary.Text = $"읽기 전용 재료 점검 완료 · {_models.Count:N0}개 모델 · {findings.Count:N0}개 확인 항목\n" +
+                $"인스턴스 재료 매개변수 {findings.Count(x => x.Issue == "인스턴스 재료 매개변수"):N0}건 · KAC- 이외 재료 {findings.Count(x => x.Issue == "KAC- 이외 재료"):N0}건 · 확인 필요 {findings.Count(x => x.Issue == "재료 확인 필요"):N0}건\n" +
+                "유형별로 묶은 결과이며 배치 요소 수와 예시 ID를 함께 기록했습니다. RVT는 변경하지 않았습니다.\n엑셀 파일: " + path;
+            RuleSummaryPanel.Visibility = Visibility.Visible;
+            ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
+            StatusText.Text = "재료 점검 엑셀을 저장했습니다: " + path;
+            MainTabs.SelectedIndex = 2;
+            UpdatePending();
+            return;
+        }
         var available = _models.SelectMany(m => m.Snapshot!.Owners.Concat(m.Snapshot.Rows));
         // 속성규격(버전5)은 값이 아니라 모델별 매개변수 정의 목록으로 평가한다.
         var plan = file.Version == 5 ? SpecRulePlanner.Plan(file, _models.Select(m => m.Snapshot!), _edits.Values) : RulePlanner.Plan(file, available, _edits.Values, _sample);
@@ -473,7 +495,7 @@ public partial class MainWindow : Window
         RefreshGroupRestrictions();
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         PendingText.Text = $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
-        ApplyButton.IsEnabled = !_busy && !_sample && _edits.Count > 0 && !_worker.NeedsAttention && !HasFailedPending();
+        ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _edits.Count > 0 && !_worker.NeedsAttention && !HasFailedPending();
         ReviewButton.IsEnabled = !_busy && _edits.Count > 0;
         ReviewButton.Content = $"③ 변경 내용 확인 ({_edits.Count:N0})";
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -521,7 +543,7 @@ public partial class MainWindow : Window
     });
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
-        if (_busy || _sample || _edits.Count == 0) return;
+        if (_busy || _sample || _loadedRules?.MaterialAudit == true || _edits.Count == 0) return;
         try { ValidateRemovalApproval(); }
         catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "삭제 승인 확인", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }
