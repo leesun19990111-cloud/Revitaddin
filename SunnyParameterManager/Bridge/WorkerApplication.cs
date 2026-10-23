@@ -92,6 +92,13 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
                 _readRestartAllowed = result.CanRestartForRead;
                 result.Message += "\n조회 중 메모리가 부족했습니다. 불완전한 조회 결과는 사용하지 않습니다.";
             }
+            if (result.CanContinueAfterPreflightFailure)
+            {
+                bool empty = !HasDocuments(ui);
+                result.CanContinueAfterPreflightFailure = req.Operation == "적용" && !result.Success && !result.RequiresAttention &&
+                    !result.CentralSynchronized && result.Applied == 0 && empty;
+                if (!empty) result.RequiresAttention = true;
+            }
             _attention |= result.RequiresAttention;
             Protocol.Write(Path.Combine(_folder, req.Id + ".result.json"), result);
         }

@@ -70,6 +70,12 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             }
         }
         if (errors > 0) Notices.Add($"매개변수 {errors:N0}개는 읽기에 실패하여 제외했습니다.");
+        if (query?.IncludeDefinitions == true)
+        {
+            model.Definitions = DefinitionReader.Read(doc);
+            Notices.Add($"매개변수 정의 {model.Definitions.Definitions.Count:N0}개(연결 가능 카테고리 {model.Definitions.AllCategories.Count:N0}개)를 읽었습니다." +
+                (model.Definitions.Definitions.Any(d => d.ValueCount < 0) ? " 일부 정의는 값 존재 여부를 확인하지 못해 제거·전환 대상에서 제외됩니다." : ""));
+        }
         Notices.Add(query == null ? "모델 유형·인스턴스, 프로젝트 정보, 뷰·시트의 매개변수를 조회합니다. 뷰 템플릿 자체와 내부 뷰는 제외합니다. 링크 내부는 원본 파일을 별도로 등록하세요." :
             "룰셋 선택 조회: " + string.Join(", ", query.Names) + ". 다른 항목은 미조회이며 빈 값이 아닙니다. 링크 내부는 원본 파일을 별도로 등록하세요.");
         return result;
@@ -99,6 +105,8 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         var spec = p.Definition.GetDataType();
         r.ParameterKey = Key(p); r.Name = p.Definition.Name; r.DataType = spec.TypeId; r.Storage = p.StorageType.ToString();
         r.HasValue = p.HasValue; r.Raw = Raw(p); r.Display = Display(p); r.BlockReason = p.IsReadOnly ? "읽기 전용 — 원본 Revit에서 변경 불가" : "";
+        // Revit의 ‘기타’ 그룹은 빈 식별자이므로 조회 누락("")과 구분해 별도 표시값으로 남긴다.
+        if (owner is ProjectInfo) r.ParameterGroup = p.Definition.GetGroupTypeId()?.TypeId is { Length: > 0 } g ? g : SharedParameterAddition.OtherGroup;
         if (owner is View view)
         {
             if (view.IsTemplate) r.BlockReason = "읽기 전용 — 뷰 템플릿 자체는 편집 대상이 아닙니다.";

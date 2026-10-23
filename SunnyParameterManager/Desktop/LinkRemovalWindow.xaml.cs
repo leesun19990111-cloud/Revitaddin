@@ -24,6 +24,7 @@ public partial class LinkRemovalWindow : Window
     private readonly Func<Request, Task<Response>> _send;
     private readonly Action<string, Response> _removed;
     private bool _ready, _busy, _blocked;
+    private bool _stopRequested;
     public LinkRemovalWindow(IEnumerable<string> paths, Func<Request, Task<Response>> send, Action<string, Response> removed)
     {
         _send = send; _removed = removed;
@@ -56,7 +57,16 @@ public partial class LinkRemovalWindow : Window
     private void SetBusy(bool busy)
     {
         _busy = busy; ModelsGrid.IsEnabled = ScanActions.IsEnabled = ConfirmText.IsEnabled = DependentApproval.IsEnabled = !busy && !_blocked;
+        if (busy) { _stopRequested = false; StopTaskButton.Content = "작업중지"; }
+        StopTaskButton.IsEnabled = busy;
         UpdateApproval();
+    }
+    private void RequestTaskStop(object sender, RoutedEventArgs e)
+    {
+        if (!_busy || _stopRequested) return;
+        _stopRequested = true; StopTaskButton.IsEnabled = false; StopTaskButton.Content = "중지 요청됨";
+        SummaryText.Text = "중지 요청됨 — 현재 파일 처리를 마친 뒤 다음 파일부터 중지합니다. 강제 종료하지 마세요.";
+        LogBox.AppendText("\n사용자 작업중지 요청. 현재 파일의 검사·저장·동기화·소유권 반환 결과를 기다립니다.\n");
     }
     private async void ScanClick(object sender, RoutedEventArgs e) => await ScanSelected();
     internal async Task ScanSelected()
@@ -68,6 +78,7 @@ public partial class LinkRemovalWindow : Window
         {
             foreach (var item in selected)
             {
+                if (_stopRequested) break;
                 item.Status = "삭제 영향 검사 중…";
                 var response = await _send(new() { Operation = "링크 검사", Path = item.Path });
                 LogBox.AppendText($"\n{item.Path}\n{response.Message}\n");
@@ -84,6 +95,7 @@ public partial class LinkRemovalWindow : Window
             foreach (var duplicate in plans.GroupBy(m => m.Plan!.Model.CentralPath.Length > 0 ? m.Plan.Model.CentralPath : m.Plan.Model.CanonicalPath, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
                 foreach (var item in duplicate) { item.Plan!.BlockReason = "같은 중앙/실제 파일을 두 번 선택했습니다. 하나만 선택하고 다시 검사하세요."; item.Status = item.Plan.BlockReason; }
             Present();
+            if (_stopRequested) SummaryText.Text = "검사 중지 · 미처리 모델이 있습니다. 삭제하려면 선택한 모델 전체를 다시 검사하세요.";
         }
         catch (Exception ex) { _blocked = true; LogBox.AppendText("\n검사 중단: " + ex.Message); SummaryText.Text = "검사를 완료하지 못했습니다. 기록과 작업용 Revit을 확인하세요."; }
         finally { SetBusy(false); }
@@ -118,6 +130,7 @@ public partial class LinkRemovalWindow : Window
         {
             foreach (var item in chosen)
             {
+                if (_stopRequested) { LogBox.AppendText("사용자 중지로 나머지 모델은 삭제하지 않았습니다.\n"); break; }
                 var plan = item.Plan!;
                 var response = await _send(new() { Operation = "링크 삭제", Path = item.Path, Identity = plan.Model.Identity, CanonicalPath = plan.Model.CanonicalPath,
                     Confirmed = true, DependentsConfirmed = DependentApproval.IsChecked == true, LocalChangesConfirmed = local, LinkRemoval = plan });
@@ -126,7 +139,7 @@ public partial class LinkRemovalWindow : Window
                 item.Status = response.Success ? "삭제·저장 완료 · 재검사 필요" : "실패 · 기록 확인";
                 if (!response.Success || response.RequiresAttention) { _blocked |= response.RequiresAttention; LogBox.AppendText("나머지 모델은 처리하지 않았습니다.\n"); break; }
             }
-            SummaryText.Text = "처리가 끝났습니다. 모델별 결과와 복구 경로를 확인하세요.";
+            SummaryText.Text = (_stopRequested ? "중지 요청 처리 종료. " : "처리가 끝났습니다. ") + "모델별 결과와 복구 경로를 확인하세요.";
         }
         catch (Exception ex) { _blocked = true; LogBox.AppendText("\n응답 확인 필요: " + ex.Message + "\n자동 재실행하지 마세요."); }
         finally

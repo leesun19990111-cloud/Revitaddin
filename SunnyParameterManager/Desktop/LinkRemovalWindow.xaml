@@ -17,7 +17,7 @@
   </DataGrid>
   <DockPanel Grid.Row="2" Margin="0,10"><StackPanel x:Name="ScanActions" DockPanel.Dock="Left" Orientation="Horizontal">
    <Button Content="모델 전체 체크" Click="SelectAll"/><Button Content="체크 해제" Click="ClearAll"/><Button x:Name="ScanButton" Content="② 삭제 영향 검사" Click="ScanClick"/>
-  </StackPanel><TextBlock x:Name="SummaryText" Text="삭제할 모델을 체크하세요." VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
+  </StackPanel><Button x:Name="StopTaskButton" DockPanel.Dock="Right" Content="작업중지" Click="RequestTaskStop" IsEnabled="False" Foreground="#9A3E44" BorderBrush="#A6595D" ToolTip="현재 파일 처리를 마친 뒤 다음 파일부터 중지합니다."/><TextBlock x:Name="SummaryText" Text="삭제할 모델을 체크하세요." VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
   <TabControl Grid.Row="3" x:Name="DetailsTabs"><TabItem Header="삭제 대상과 종속 요소">
    <DataGrid x:Name="DetailsGrid"><DataGrid.Columns>
     <DataGridTextColumn Header="모델" Binding="{Binding Model}" Width="160"/><DataGridTextColumn Header="분류" Binding="{Binding Kind}" Width="220"/>

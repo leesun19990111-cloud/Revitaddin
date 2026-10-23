@@ -51,5 +51,18 @@ internal static class LinkRemovalTests
         ((LinkRemovalModel)((DataGrid)failed.FindName("ModelsGrid")).Items[0]).Selected = true; Scan(failed);
         check(!((Button)failed.FindName("ScanButton")).IsEnabled && !((Button)failed.FindName("DeleteButton")).IsEnabled, "미확정 응답은 재검사·삭제 잠금");
         check(requests.All(r => r.LinkRemoval == null && r.Edits.Count == 0), "삭제 검사와 매개변수 변경 요청 분리");
+        LinkRemovalWindow? stoppable = null; int stopCalls = 0;
+        stoppable = new LinkRemovalWindow(["중지 A.rvt", "중지 B.rvt"], r =>
+        {
+            stopCalls++;
+            check(((Button)stoppable!.FindName("StopTaskButton")).IsEnabled, "링크 검사 중 작업중지 버튼 활성");
+            typeof(LinkRemovalWindow).GetMethod("RequestTaskStop", flags)!.Invoke(stoppable, [stoppable, new RoutedEventArgs()]);
+            return Task.FromResult(new Response { Success = true, LinkRemoval = Plan(r.Path) });
+        }, (_, _) => throw new Exception("삭제 금지")) { Resources = main.Resources };
+        var stopModels = ((DataGrid)stoppable.FindName("ModelsGrid")).Items.Cast<LinkRemovalModel>().ToList();
+        foreach (var m in stopModels) m.Selected = true;
+        Scan(stoppable);
+        check(stopCalls == 1 && stopModels[0].Plan != null && stopModels[1].Plan == null, "링크 검사 중지는 현재 결과 보존·다음 파일 미전송");
+        check(!((Button)stoppable.FindName("DeleteButton")).IsEnabled && ((TextBlock)stoppable.FindName("SummaryText")).Text.Contains("검사 중지"), "부분 검사 중지 후 전체 삭제 승인 불가");
     }
 }

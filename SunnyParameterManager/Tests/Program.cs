@@ -24,7 +24,19 @@ internal static class Program
         {
             KacRuleTests.Run(Check, Reject);
             SpaceRuleTests.Run(Check, Reject);
+            SpecRuleTests.Run(Check, Reject);
+            SpecRemoveOnlyTests.Run(Check, Reject);
             ReadBatchTests.Run(Check);
+            Check(!ApplyContinuation.CanOffer(new()), "구버전 응답은 다음 적용 승인 불가");
+            Check(ApplyContinuation.CanOffer(new() { CanContinueAfterPreflightFailure = true }), "검증된 사전 실패만 다음 적용 승인 후보");
+            foreach (var blocked in new Response[] {
+                new() { CanContinueAfterPreflightFailure = true, RequiresAttention = true },
+                new() { CanContinueAfterPreflightFailure = true, CentralSynchronized = true },
+                new() { CanContinueAfterPreflightFailure = true, Applied = 1 },
+                new() { CanContinueAfterPreflightFailure = true, Success = true },
+                new() { CanContinueAfterPreflightFailure = true, ReadRestartRequired = true },
+                new() { CanContinueAfterPreflightFailure = true, CanRestartForRead = true } })
+                Check(!ApplyContinuation.CanOffer(blocked), "불명·반영·조회 응답은 계속 적용 금지");
             var a = Row();
             Check(EditPlanner.Stage([a], "새값").Single().Value == "새값", "텍스트 직접 입력");
             Check(a.Raw == "기존", "미리보기는 원본 불변");
@@ -80,6 +92,17 @@ internal static class Program
             }
             copy = Clone(b); copy.HasValue = false; Reject(() => EditPlanner.CheckFresh(b, copy), "최신성 검사 값 유무");
             copy = Clone(b); copy.BlockReason = "읽기전용"; Reject(() => EditPlanner.CheckFresh(b, copy), "최신성 검사 권한");
+            string FreshMessage(ParameterRow current) { try { EditPlanner.CheckFresh(b, current); return ""; } catch (InvalidOperationException ex) { return ex.Message; } }
+            copy = Clone(b); copy.Raw = "다른 작업자의 값"; var detail = FreshMessage(copy);
+            Check(detail.Contains("원래 값") && detail.Contains("기존") && detail.Contains("다른 작업자의 값") && detail.Contains("요소 ID"), "최신성 실패는 조회 당시·현재 값·요소 번호 표시");
+            copy = Clone(b); copy.TypeOwnerId = "새 유형 식별자"; detail = FreshMessage(copy);
+            Check(detail.Contains("소속 유형 식별자") && detail.Contains("새 유형 식별자"), "동명 다른 유형의 식별자 변경 사유 표시");
+            copy = Clone(b); copy.HasValue = false; detail = FreshMessage(copy);
+            Check(detail.Contains("지정 여부") && detail.Contains("미지정"), "빈 값과 미지정 차이 진단");
+            copy = Clone(b); copy.BlockReason = "그룹 제한 아님, 실제 읽기전용"; detail = FreshMessage(copy);
+            Check(detail.Contains(copy.BlockReason), "현재 편집 차단 근거 표시");
+            copy = Clone(b); copy.Raw = new string('x', 2000); detail = FreshMessage(copy);
+            Check(detail.Contains("…") && detail.Length < 700, "대량 원래 값 진단 길이 제한");
             var model = new ModelSnapshot { Rows = [n], Catalogs = new() { ["workset"] = [new("x", "작업세트1")] } }; n.ChoiceCatalog = "workset";
             var roundtrip = JsonSerializer.Deserialize<ModelSnapshot>(JsonSerializer.Serialize(model))!; roundtrip.ConnectCatalogs();
             Check(roundtrip.Rows[0].Choices.Single().Key == "x", "IPC 선택 목록 재연결");
@@ -161,6 +184,7 @@ internal static class Program
             CleanupUiTests.Run(Check, Reject, Render);
             BusyUiTests.Run(Check, Reject, Render);
             GroupUiTests.Run(Check, Render);
+            RemovalUiTests.Run(Check, Reject);
             Console.WriteLine("화면 렌더: " + RenderOutput);
             Console.WriteLine($"TOTAL {_count} PASS · 실제 Revit/중앙 서버 검증은 별도 필요");
             return 0;

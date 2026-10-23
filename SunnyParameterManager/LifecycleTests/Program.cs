@@ -11,6 +11,8 @@ internal static class Program
  private static Request Setup(bool shared = false, bool central = false)
  {
   State.Reset(); State.Scope = "유형"; State.Doc.IsWorkshared = State.Info.IsWorkshared = shared; State.Info.CentralPath = shared ? _central : "";
+  State.InfoFailures = State.InfoCalls = State.InfoDisposals = 0; State.InfoRead = null; State.InfoOutOfMemory = false;
+  State.RegenerateStairName = State.FailNameRestore = false;
   var path = central ? _central : _source;
   var original = new ParameterReader(State.Doc, new ModelSnapshot { Path = path }).ReadAll().Single();
   return new Request { Path = path, CanonicalPath = ModelEngine.Canonical(path), Operation = "적용", Identity = "파일-v2/" + State.Doc.CreationGUID.ToString("D") + "/" + (shared ? "중앙:" + ModelEngine.Canonical(_central).ToUpperInvariant() : "일반"), Confirmed = true, LocalChangesConfirmed = true, Edits = EditPlanner.Stage([original], "새값") };
@@ -24,8 +26,27 @@ internal static class Program
    _source = Path.Combine(_root, "normal.rvt"); _central = Path.Combine(_root, "central.rvt");
    // 실제 RVT가 아닌 대역 검사용 텍스트 파일. 사용자 파일은 사용하지 않는다.
    File.WriteAllText(_source, "테스트 대역 원본"); File.WriteAllText(_central, "테스트 대역 중앙");
+   StairNameTests.Run(Check);
    var r = Setup(); r.Operation = "조회"; var result = Run(r);
    Check(result.Success && result.Snapshot!.Rows.Count == 1 && State.Events.SequenceEqual(new[] { "open", "close" }), "조회는 저장/트랜잭션 없이 닫기");
+   r = Setup(); State.InfoFailures = 2; int waits = 0;
+   using (ModelEngine.ReadFileInfo(_source, _ => { }, _ => waits++)) { }
+   Check(State.InfoCalls == 3 && waits == 2 && !State.Events.Any(), "기본정보 일시 실패만 3회 읽기 재확인·모델 열기/쓰기 없음");
+   r = Setup(); State.InfoFailures = 10; result = Run(r);
+   Check(!result.Success && result.CanContinueAfterPreflightFailure && State.InfoCalls == 3 && !State.Events.Any() && result.Message.Contains("형식이 잘못됐다고 단정") && result.Message.Contains("원본 오류"), "반복 기본정보 실패는 명확한 진단·수정 전 차단");
+   r = Setup(); State.InfoOutOfMemory = true; result = Run(r);
+   Check(!result.Success && !result.CanContinueAfterPreflightFailure && State.InfoCalls == 1, "기본정보 OOM은 재시도/다음 적용 허용 금지");
+   r = Setup(); State.Info.IsInProgress = true; waits = 0;
+   using (ModelEngine.ReadFileInfo(_source, _ => { }, _ => { waits++; State.Info.IsInProgress = false; })) { }
+   Check(waits == 1 && State.InfoCalls == 2 && State.InfoDisposals == 2, "저장 중 기본정보 폐기·재확인 후에만 반환");
+   r = Setup(); State.Info.IsInProgress = true; result = Run(r);
+   Check(!result.Success && State.InfoCalls == 3 && State.InfoDisposals == 3 && !State.Events.Any(), "계속 저장 중인 파일은 열지 않음");
+   r = Setup(); State.InfoRead = () => { if (State.InfoCalls == 1) File.AppendAllText(_source, "변경"); };
+   waits = 0; using (ModelEngine.ReadFileInfo(_source, _ => { }, _ => waits++)) { }
+   Check(waits == 1 && State.InfoCalls == 2, "정보 추출 도중 파일 크기 변경은 재확인");
+   File.WriteAllText(_source, "테스트 대역 원본");
+   r = Setup(true); State.OwnedOther = true; r.Operation = "조회"; result = Run(r);
+   Check(result.Success && result.Snapshot!.Notices.Any(n => n.Contains("다른작업자") && n.Contains("요소 ID: 10")) && !State.Events.Contains("set"), "조회 때 소유 사용자·요소 번호 사전 안내");
    r = Setup(); r.Operation = "조회"; r.Query = new() { Scopes = ["유형"], Names = ["업체명"] }; result = Run(r);
    Check(result.Success && result.Snapshot!.Query!.Names.Single() == "업체명" && State.Events.SequenceEqual(new[] { "open", "close" }), "선택 조회 조건 전달·스냅샷 보존·저장 없음");
    r = Setup(); r.Operation = "조회"; r.Query = new(); result = Run(r);
@@ -61,6 +82,21 @@ internal static class Program
    Check(result.Success && result.Applied == 1 && State.Doc.Element.Parameter.Value == "새값", "일반 파일 변경 성공");
    Check(State.Events.SequenceEqual(new[] { "open", "group-start", "tx-start", "set", "tx-commit", "assimilate", "save", "close" }), "일반 파일 단계 순서");
    Check(File.ReadAllText(result.BackupPath) == "테스트 대역 원본", "변경 전 파일 백업");
+   r = Setup(true, true); r.Edits[0].DefinitionFix = new() { Action = SpecRulePlanner.ActionRemove }; result = Run(r);
+   Check(!result.Success && File.Exists(result.BackupPath) && !State.Events.Contains("tx-start") && !State.Events.Contains("sync"), "중앙 정의 삭제도 실제 편집 전 별도 작업 로컬 백업·잘못된 요청 미저장");
+   Request StairRequest()
+   {
+    var request = Setup(); State.Doc.Types["type-1"] = new Autodesk.Revit.DB.Architecture.StairsRunType { Name = "KAC-S-ST1110_ND-T150" };
+    request.Edits = EditPlanner.Stage(new ParameterReader(State.Doc, new() { Path = request.Path }).ReadAll(), "새값");
+    State.RegenerateStairName = true; return request;
+   }
+   r = StairRequest(); result = Run(r);
+   Check(result.Success && State.Doc.Types["type-1"].Name == "KAC-S-ST1110_ND-T150" && State.Events.IndexOf("stair-name-preserve") < State.Events.IndexOf("save"), "실제 저장 엔진은 계단 이름 보존 후 기존 값·유형 검증·저장");
+   Check(result.Message.Contains("계단진행 유형 1개") && State.Events.Count(s => s == "tx-commit") == 2, "계단 이름 보존은 한 번만 수행하고 완료 기록에 표시");
+   r = StairRequest(); State.FailNameRestore = true; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save") && State.Doc.Element.Parameter.Value == "기존" && State.Doc.Types["type-1"].Name == "KAC-S-ST1110_ND-T150", "이름 보존 실패는 전체 값·이름 롤백하고 저장 금지");
+   r = StairRequest(); State.TypeChangesAfterSet = true; result = Run(r);
+   Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "이름 보존 성공해도 실제 소속 유형 변경은 여전히 차단");
    r = Setup(true, true); State.GroupEdit = new() { Identity = "새 그룹", Reason = "그룹 편집 필요" }; result = Run(r);
    Check(!result.Success && !State.Events.Contains("tx-start") && !State.Events.Contains("sync"), "새 그룹 제한은 트랜잭션·중앙 동기화 전에 차단");
    r = Setup(true, true); State.GroupChangesAfterSet = true; result = Run(r);
@@ -129,6 +165,9 @@ internal static class Program
    Check(!result.Success && !State.Events.Any(), "기존 로컬의 다른 변경 포함 승인 필수");
    r = Setup(true); State.Info.Username = "다른 사용자"; result = Run(r);
    Check(!result.Success && !State.Events.Any(), "다른 사용자 로컬 차단");
+   Check(result.Message.Contains("파일 사용자: 다른 사용자") && result.Message.Contains("현재 Revit 사용자: 테스터") && result.Message.Contains("중앙 경로"), "보관 로컬은 사용자와 원래 중앙 안내·사칭 우회 없음");
+   r = Setup(true); State.Info.CentralPath = Path.Combine(_root, "이동된중앙.rvt"); result = Run(r);
+   Check(!result.Success && result.Message.Contains("기록된 중앙 경로") && result.Message.Contains("선택 파일") && !State.Events.Contains("open"), "선택 파일 존재해도 기록된 중앙 부재는 구분해서 안내");
    r = Setup(); r.Confirmed = false; result = Run(r);
    Check(!result.Success && !State.Events.Any(), "실제 변경 명시 확인 필수");
    r = Setup(); State.Info.IsSavedInCurrentVersion = false; result = Run(r);
@@ -141,14 +180,23 @@ internal static class Program
    Check(!result.Success && State.Events.SequenceEqual(new[] { "open", "close" }), "문서 교체 시 편집 전 중단");
    r = Setup(); State.Doc.Element.Parameter.Value = "외부 변경"; result = Run(r);
    Check(!result.Success && !State.Events.Contains("tx-start") && State.Doc.Element.Parameter.Value == "외부 변경", "최신값 덮어쓰기 차단");
+   Check(result.Message.Contains("원래 값") && result.Message.Contains("외부 변경") && result.Message.Contains("1개 변경 항목"), "적용 전 불일치 집계와 실제 전후 값 안내");
+   r = Setup(); State.Doc.Missing = true;
+   for (var i = 0; i < 20; i++) r.Edits.Add(new() { Original = new() { ModelPath = r.Path, OwnerId = "없음" + i, ElementId = i.ToString(), Name = "필드" + i }, Value = "x" });
+   result = Run(r);
+   Check(!result.Success && result.Message.Contains("21개 변경 항목") && result.Message.Contains("외 9개") && result.CanContinueAfterPreflightFailure && !State.Events.Contains("set"), "여러 삭제 대상을 묶어 보고·예시12건 제한·쓰기 없음");
    r = Setup(); r.Edits.Add(r.Edits[0]); result = Run(r);
    Check(!result.Success && !State.Events.Contains("set"), "중복 요청 대상 차단");
    r = Setup(); State.Doc.Missing = true; result = Run(r);
    Check(!result.Success && !State.Events.Contains("tx-start"), "삭제된 요소 차단");
    r = Setup(true); State.OwnedOther = true; result = Run(r);
    Check(!result.Success && !State.Events.Contains("tx-start"), "다른 사용자 소유권 강제 취득 금지");
+   Check(result.CanContinueAfterPreflightFailure && result.Message.Contains("다른작업자") && result.Message.Contains("반환") && State.Events.Contains("close"), "소유권 차단은 문서 닫기 후 다음 모델 승인 후보");
+   r = Setup(true); State.OwnedOther = true; State.FailClose = true; result = Run(r);
+   Check(!result.CanContinueAfterPreflightFailure && result.RequiresAttention, "소유권 차단 뒤 문서 닫기 실패는 계속 금지");
    r = Setup(); State.FailSet = true; result = Run(r);
    Check(!result.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "입력 거부 시 전체 롤백");
+   Check(!result.CanContinueAfterPreflightFailure, "편집 시작 후 실패는 보수적 중단 유지");
    r = Setup(); State.FailCommit = true; result = Run(r);
    Check(!result.Success && State.Doc.Element.Parameter.Value == "기존" && !State.Events.Contains("save"), "확정 거부 시 원래 값 보존");
    r = Setup(); State.VerifyMismatch = true; result = Run(r);

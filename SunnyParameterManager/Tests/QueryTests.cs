@@ -18,6 +18,10 @@ internal static class QueryTests
         var space = new RuleSet { Version = 3, Name = "공간", Space = new() { Source = "표", SourceSha256 = new('a', 64), Buildings = [new() { Airport = "MWX", Number = "15", Name = "시험", ManagementCode = "MWX1D99", Ownership = "1", SourceRow = 1 }] } };
         var sq = QueryPlan.FromRules(space);
         check(sq.Names.Count == 2 && sq.Scopes.SequenceEqual(new[] { "프로젝트 정보" }) && !sq.IncludeOuterMaterial, "공항·건물 룰셋은 프로젝트 정보 두 항목만");
+        space.Space!.MapAssetNumber = true;
+        var aq = QueryPlan.FromRules(space);
+        check(aq.Names.Contains("자산번호") && !sq.Covers(aq) && aq.Covers(sq), "자산번호 옵션 변경 시 미조회 식별");
+        space.Space.MapAssetNumber = false;
         var kac = new RuleSet { Version = 2, Name = "KAC", Kac = new() { ManufacturerInfo = "KAC-v1.0", Company = "ND", MaterialPolicy = "외측-상단-천장하단-단일재료", UnresolvedPolicy = "기존값유지-확인필요", Classification = [new() { Code = "CL1210" }], Ifc = [new() { Prefix = "CL", Value = "IfcColumn", Source = "표" }] } };
         var kq = QueryPlan.FromRules(kac);
         check(kq.Names.Count == 6 && kq.Keys.Count == 2 && kq.IncludeOuterMaterial && kq.Scopes.Count == 2, "KAC 여섯 항목·실제 IFC 키·반대 범위·외측 재료 근거");

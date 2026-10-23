@@ -12,6 +12,7 @@ public sealed class RuleSet
     public List<ParameterRule> Rules { get; set; } = [];
     public KacRuleProfile? Kac { get; set; }
     public SpaceRuleProfile? Space { get; set; }
+    public SpecRuleProfile? Spec { get; set; }
     public bool Cleanup { get; set; }
 }
 
@@ -81,6 +82,11 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 5 || file?.Spec != null)
+        {
+            SpecRulePlanner.Validate(file!);
+            return;
+        }
         if (file?.Cleanup == true || file?.Version == 4)
         {
             if (file.Version != 4 || !file.Cleanup || string.IsNullOrWhiteSpace(file.Name) || file.Kac != null || file.Space != null || file.Rules == null || file.Rules.Count != 0)
@@ -127,6 +133,8 @@ public static class RulePlanner
     {
         Validate(file);
         if (file.SampleOnly && !sample) throw new InvalidOperationException("연습용 룰셋은 실제 모델에 사용할 수 없습니다.");
+        if (file.Version == 5) throw new InvalidOperationException("속성규격 룰셋은 모델별 매개변수 정의로 평가합니다.");
+        if (pending.Any(e => e.DefinitionFix != null)) throw new InvalidOperationException("매개변수 정의 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
         if (file.Version != 4 && pending.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
         if (file.Version == 4) return CleanupPlanner.Plan(available, pending);
         if (file.Version == 2) return KacRulePlanner.Plan(file, available, pending, sample);

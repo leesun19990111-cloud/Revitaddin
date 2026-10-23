@@ -49,12 +49,20 @@ internal static class BusyUiTests
    list.SelectedIndex = 1;
    check(ReferenceEquals(beforeRows, grid.ItemsSource), "조회 중 목록 탐색은 편집 행을 재생성하지 않음");
    render(w, "files-during-query-1080", 1080, 700);
+   check(Control<Button>("StopTaskButton").IsEnabled, "작업 중 잠긴 편집 영역 밖 중지 버튼 활성");
+   Call("RequestTaskStop");
+   check(!Control<Button>("StopTaskButton").IsEnabled && Control<Button>("StopTaskButton").Content.ToString() == "중지 요청됨" && Control<TextBlock>("StopStatusText").Visibility == Visibility.Visible, "중지 요청 상태 즉시 표시·중복 요청 차단");
+   check(Control<TextBlock>("StopStatusText").Text.Contains("소유권 반환") && list.IsEnabled && !Control<TabControl>("MainTabs").IsEnabled, "중지 요청 중 현재 작업 보호·목록 스크롤 유지");
+   render(w, "stop-requested-1080", 1080, 700);
    return Task.CompletedTask;
   })])!;
   task.GetAwaiter().GetResult();
   check(Control<TabControl>("MainTabs").IsEnabled && Control<StackPanel>("FileActions").IsEnabled && Control<StackPanel>("TopActions").IsEnabled, "작업 종료 후 조작 복원");
   check(grid.Items.Cast<ParameterRow>().All(r => r.ModelPath == models[1].Path) && grid.Items.Count > 0, "작업 종료 후 선택 파일과 표시 행 일치");
   check(Control<TextBlock>("QuerySummary").Text.Contains(rules.Name), "조회 후에도 선택 룰셋 이름 유지");
+  check(!Control<Button>("StopTaskButton").IsEnabled && Control<TextBlock>("StopStatusText").Text.Contains("미처리 파일"), "중지 처리 종료 후 미처리 항목 보존 안내");
+  var nextTask = (Task)run.Invoke(w, [new Func<Task>(() => { check(Control<Button>("StopTaskButton").IsEnabled && Control<TextBlock>("StopStatusText").Visibility == Visibility.Collapsed, "새 작업 시작 시 이전 중지 요청 초기화"); return Task.CompletedTask; })])!;
+  nextTask.GetAwaiter().GetResult();
   w.Close();
  }
  private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject

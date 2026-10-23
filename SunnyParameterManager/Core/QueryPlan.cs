@@ -9,6 +9,7 @@ public sealed class QueryPlan
     public List<string> Keys { get; set; } = [];
     public bool IncludeOuterMaterial { get; set; }
     public bool IncludeCleanup { get; set; }
+    public bool IncludeDefinitions { get; set; }
 
     public void Validate()
     {
@@ -24,13 +25,20 @@ public sealed class QueryPlan
     {
         Validate(); required.Validate();
         return required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
-            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup);
+            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions);
     }
     public static QueryPlan FromRules(RuleSet rules)
     {
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
-        if (rules.Version == 4)
+        if (rules.Version == 5)
+        {
+            // 정의 목록이 본체다. 프로젝트 정보만 함께 읽어 요소 전체 수집을 피한다.
+            plan.Scopes = ["프로젝트 정보"];
+            plan.Names = rules.Spec!.RemoveOnly ? rules.Spec.RemovalTargets.SelectMany(t => new[] { t.Name, t.KeepName }).Where(n => n.Length > 0).Distinct().ToList() : rules.Spec.Parameters.Select(p => p.Name).Distinct().ToList();
+            plan.IncludeDefinitions = true;
+        }
+        else if (rules.Version == 4)
         {
             plan.Scopes = ["유형", "인스턴스"];
             plan.Names = ["유형명 정리", .. CleanupPlanner.Flags];
@@ -40,6 +48,7 @@ public sealed class QueryPlan
         else if (rules.Version == 3)
         {
             plan.Scopes = ["프로젝트 정보"]; plan.Names = ["공항코드", "건축물번호"];
+            if (rules.Space!.MapAssetNumber) plan.Names.Add("자산번호");
         }
         else if (rules.Version == 2)
         {
@@ -62,7 +71,7 @@ public sealed class QueryPlan
     {
         var required = FromRules(rules);
         foreach (var model in models)
-            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true)
+            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeDefinitions && model.Definitions == null)
                 throw new InvalidOperationException(model.Title + ": 이 룰셋에 필요한 항목을 아직 조회하지 않았습니다. 변경 예정을 적용하거나 정리한 뒤 ‘다시 조회’를 누르세요. 미조회 값은 빈 값이나 ND로 처리하지 않습니다.");
     }
 }

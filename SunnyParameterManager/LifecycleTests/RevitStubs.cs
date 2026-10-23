@@ -1,6 +1,8 @@
 // 실제 ModelEngine.cs의 제어 흐름만 검사하는 API 대역. 실제 Revit 저장/동기화 검증을 대신하지 않는다.
 using SunnyParameterManager.Core;
 
+namespace Autodesk.Revit.Exceptions { public class InvalidOperationException(string message) : Exception(message); }
+
 namespace Autodesk.Revit.ApplicationServices
 {
  public sealed class Application
@@ -32,6 +34,10 @@ namespace Autodesk.Revit.DB
   public static string Scope = "유형";
   public static bool MaterialMissing;
   public static bool ReadOutOfMemory;
+  public static int InfoFailures, InfoCalls, InfoDisposals;
+  public static Action? InfoRead;
+  public static bool InfoOutOfMemory;
+  public static bool RegenerateStairName, FailNameRestore;
   public static GroupEditEvidence? GroupEdit;
   public static bool GroupChangesAfterSet;
   public static bool FailRelinquish, LeaveBorrowed, LeaveWorkset, FailOwnershipCheck;
@@ -75,7 +81,9 @@ namespace Autodesk.Revit.DB
   public bool Set(double v) => Set(v.ToString(System.Globalization.CultureInfo.InvariantCulture));
   public bool Set(ElementId v) => Set(v.Value.ToString());
  }
- public class Element { public ElementId Id { get; } = new(10); public Parameter Parameter { get; } = new(); }
+ public class Element { public ElementId Id { get; set; } = new(10); public string UniqueId { get; set; } = "type-1"; public virtual string Name { get; set; } = "기존 이름"; public Category? Category { get; set; } = new(); public Parameter Parameter { get; } = new(); }
+ public class Category { public ElementId Id { get; set; } = new(-2000919); }
+ public class ElementType : Element { public string FamilyName { get; set; } = "일체형 계단진행"; public bool CanBeRenamed { get; set; } = true; }
  public sealed class Material : Element { }
  public sealed class Document
  {
@@ -85,9 +93,10 @@ namespace Autodesk.Revit.DB
   public Guid WorksharingCentralGUID => throw new InvalidOperationException("The current document is a file-based model.");
   public string? CentralPathOverride;
   public Element Element { get; } = new();
+  public Dictionary<string, Element> Types { get; } = [];
   public bool Missing;
   public ModelPath GetWorksharingCentralModelPath() => new(CentralPathOverride ?? State.Info.CentralPath);
-  public Element? GetElement(string id) => Missing || State.DeletedAfterCommit && State.Events.Contains("tx-commit") ? null : Element;
+  public Element? GetElement(string id) => Missing || State.DeletedAfterCommit && State.Events.Contains("tx-commit") ? null : Types.GetValueOrDefault(id, Element);
   public object GetUnits() => new();
   public void Save() { State.Events.Add("save"); if (State.FailSave) throw new IOException("테스트 저장 실패"); }
   public void SynchronizeWithCentral(TransactWithCentralOptions transact, SynchronizeWithCentralOptions sync)
@@ -98,13 +107,20 @@ namespace Autodesk.Revit.DB
  {
   public bool IsSavedInCurrentVersion = true, IsInProgress, IsWorkshared;
   public string Format = "2026", CentralPath = "", Username = "테스터";
-  public static BasicFileInfo Extract(string path) => State.Info;
-  public void Dispose() { }
+  public static BasicFileInfo Extract(string path)
+  {
+   State.InfoCalls++; State.InfoRead?.Invoke();
+   if (State.InfoOutOfMemory) throw new OutOfMemoryException();
+   if (State.InfoCalls <= State.InfoFailures) throw new Autodesk.Revit.Exceptions.InvalidOperationException("The file is a newer format file");
+   return State.Info;
+  }
+  public void Dispose() { State.InfoDisposals++; }
  }
  public sealed record ModelPath(string Path);
  public static class ModelPathUtils { public static ModelPath ConvertUserVisiblePathToModelPath(string p) => new(p); public static string ConvertModelPathToUserVisiblePath(ModelPath p) => p.Path; }
  public static class WorksharingUtils
  {
+  public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id, out string owner) { var status = GetCheckoutStatus(doc, id); owner = status == CheckoutStatus.OwnedByOtherUser ? "다른작업자" : ""; return status; }
   public static void CreateNewLocal(ModelPath central, ModelPath local) { State.Events.Add("create-local"); File.Copy(central.Path, local.Path, false); }
   public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id) => State.FailOwnershipCheck && State.Events.Contains("relinquish") ? throw new IOException("반환 확인 실패") : State.OwnedOther || id.Value == 30 ? CheckoutStatus.OwnedByOtherUser : State.OwnedIds.Contains(id.Value) ? CheckoutStatus.OwnedByCurrentUser : CheckoutStatus.NotOwned;
   public static RelinquishedItems RelinquishOwnership(Document doc, RelinquishOptions all, TransactWithCentralOptions access)
@@ -131,17 +147,25 @@ namespace Autodesk.Revit.DB
   public TransactionStatus Start() { State.Events.Add("tx-start"); return TransactionStatus.Started; }
   public FailureOptions GetFailureHandlingOptions() => new();
   public void SetFailureHandlingOptions(FailureOptions options) { }
-  public TransactionStatus Commit() { State.Events.Add("tx-commit"); if (State.Failure != null || State.UnreadableFailure) State.App.Raise(State.OtherDocFailure ? new Document() : doc); return State.FailCommit ? TransactionStatus.RolledBack : TransactionStatus.Committed; }
+  public TransactionStatus Commit()
+  {
+   State.Events.Add("tx-commit");
+   if (State.RegenerateStairName && name == "선택한 매개변수 값 변경") foreach (var t in doc.Types.Values) t.Name = "KAC-S-ST1110_ND-T1";
+   if (name == "계단진행 유형의 승인한 이름 보존") { State.Events.Add("stair-name-preserve"); if (State.FailNameRestore) return TransactionStatus.RolledBack; }
+   if (State.Failure != null || State.UnreadableFailure) State.App.Raise(State.OtherDocFailure ? new Document() : doc);
+   return State.FailCommit ? TransactionStatus.RolledBack : TransactionStatus.Committed;
+  }
   public void Dispose() { }
  }
  public sealed class TransactionGroup(Document doc, string name) : IDisposable
  {
   private TransactionStatus _status;
   private string _original = "";
-  public TransactionStatus Start() { _original = doc.Element.Parameter.Value; State.Events.Add("group-start"); return _status = TransactionStatus.Started; }
+  private Dictionary<string, string> _names = [];
+  public TransactionStatus Start() { _original = doc.Element.Parameter.Value; _names = doc.Types.ToDictionary(p => p.Key, p => p.Value.Name); State.Events.Add("group-start"); return _status = TransactionStatus.Started; }
   public TransactionStatus GetStatus() => _status;
   public TransactionStatus Assimilate() { State.Events.Add("assimilate"); return _status = TransactionStatus.Committed; }
-  public void RollBack() { State.Events.Add("rollback"); doc.Element.Parameter.Value = _original; _status = TransactionStatus.RolledBack; }
+  public void RollBack() { State.Events.Add("rollback"); doc.Element.Parameter.Value = _original; foreach (var pair in _names) doc.Types[pair.Key].Name = pair.Value; _status = TransactionStatus.RolledBack; }
   public void Dispose() { }
  }
  public sealed class RelinquishOptions(bool all) : IDisposable { public bool All => all; public void Dispose() { } }
@@ -153,6 +177,10 @@ namespace Autodesk.Revit.DB
  public sealed class WorksetId { public int IntegerValue => 1; }
  public sealed class FilteredWorksetCollector(Document doc) : List<Workset>([new()]), IDisposable { public FilteredWorksetCollector OfKind(WorksetKind kind) => this; public void Dispose() { } }
  public static class UnitFormatUtils { public static bool TryParse(object units, object spec, string value, out double number) => double.TryParse(value, out number); }
+}
+namespace Autodesk.Revit.DB.Architecture
+{
+ public sealed class StairsRunType : Autodesk.Revit.DB.ElementType { }
 }
 namespace SunnyParameterManager.Bridge
 {
@@ -185,7 +213,7 @@ namespace SunnyParameterManager.Bridge
    : new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = State.MaterialChangesAfterSet && State.Events.Contains("set") ? "material-v2" : "material-v1" };
   public List<string> Notices { get; } = [];
   public List<ParameterRow> ReadAll(QueryPlan? query = null) { model.Query = query; return State.ReadOutOfMemory ? throw new OutOfMemoryException("조회 메모리 대역") : [Read(doc.Element, doc.Element.Parameter)]; }
-  public ParameterRow Read(Element owner, Parameter p) => new() { GroupEdit = State.GroupChangesAfterSet && State.Events.Contains("set") ? new() { Identity = "변경된그룹", Reason = "그룹 제한" } : State.GroupEdit, ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = "W1", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
+  public ParameterRow Read(Element owner, Parameter p) => new() { GroupEdit = State.GroupChangesAfterSet && State.Events.Contains("set") ? new() { Identity = "변경된그룹", Reason = "그룹 제한" } : State.GroupEdit, ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = doc.Types.GetValueOrDefault(State.TypeOwnerId)?.Name ?? "W1", Family = (doc.Types.GetValueOrDefault(State.TypeOwnerId) as ElementType)?.FamilyName ?? "", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
   internal static Parameter? Resolve(Element owner, string key) => key == "id:1" ? owner.Parameter : null;
   internal static string Raw(Parameter p) => p.Value;
  }

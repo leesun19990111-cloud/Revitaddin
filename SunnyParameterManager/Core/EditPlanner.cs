@@ -67,10 +67,32 @@ public static class EditPlanner
     public static void CheckFresh(ParameterRow expected, ParameterRow actual)
     {
         CheckGroupFresh(expected, actual);
-        if (expected.OwnerId != actual.OwnerId || expected.ParameterKey != actual.ParameterKey || expected.Scope != actual.Scope ||
-            expected.Name != actual.Name || expected.DataType != actual.DataType || expected.Storage != actual.Storage || expected.Editor != actual.Editor ||
-            expected.TypeKey != actual.TypeKey || expected.TypeOwnerId != actual.TypeOwnerId || expected.Unit != actual.Unit || expected.HasValue != actual.HasValue || expected.Raw != actual.Raw || !actual.Editable)
-            throw new InvalidOperationException($"{expected.TypeName} / {expected.Name}: 조회 후 대상·값·단위 또는 편집 권한이 달라졌습니다. 다시 조회하세요.");
+        var changes = new List<string>();
+        void Compare(string label, string before, string after)
+        {
+            if (before != after) changes.Add($"{label}: 조회 당시 [{Brief(before)}] → 현재 [{Brief(after)}]");
+        }
+        Compare("요소 식별자", expected.OwnerId, actual.OwnerId);
+        Compare("매개변수 식별자", expected.ParameterKey, actual.ParameterKey);
+        Compare("범위", expected.Scope, actual.Scope);
+        Compare("항목명", expected.Name, actual.Name);
+        Compare("자료형", expected.DataType, actual.DataType);
+        Compare("저장 형식", expected.Storage, actual.Storage);
+        Compare("입력 형식", expected.Editor, actual.Editor);
+        Compare("카테고리·패밀리·유형명", expected.TypeKey, actual.TypeKey);
+        Compare("소속 유형 식별자", expected.TypeOwnerId, actual.TypeOwnerId);
+        Compare("단위", expected.Unit, actual.Unit);
+        Compare("값 지정 여부", expected.HasValue ? "지정" : "미지정", actual.HasValue ? "지정" : "미지정");
+        Compare("원래 값", expected.Raw, actual.Raw);
+        if (!actual.Editable) changes.Add("현재 편집 불가: " + Brief(actual.BlockReason));
+        if (changes.Count > 0)
+            throw new InvalidOperationException($"{expected.TypeName} / {expected.Name} / 요소 ID: {expected.ElementId}: 조회 이후 변경되어 덮어쓰지 않았습니다.\n" +
+                string.Join("\n", changes) + "\n이 파일만 다시 조회하고 새 변경 목록을 검토하세요. 기존 값으로 강제 덮어쓰거나 다른 요소에 이름으로 대체하지 않습니다.");
+    }
+    private static string Brief(string value)
+    {
+        var text = value.Replace('\r', ' ').Replace('\n', ' ');
+        return text.Length == 0 ? "빈 값" : text.Length > 160 ? text[..160] + "…" : text;
     }
     public static void CheckGroupFresh(ParameterRow expected, ParameterRow actual)
     {

@@ -1,18 +1,19 @@
 namespace SunnyParameterManager.Core;
 
 public sealed record ReadFailure(string Path, string Message, int Remaining, bool RestartRequired);
-public sealed record ReadBatchResult(int Attempted, int Failed, int Remaining, bool Blocked);
+public sealed record ReadBatchResult(int Attempted, int Failed, int Remaining, bool Blocked, bool Stopped = false);
 
 // 조회 전용 순차 큐. 실패 파일은 재시도하지 않고, 사용자 승인 이후에만 다음 파일로 간다.
 public static class ReadBatch
 {
     public static async Task<ReadBatchResult> Run(IReadOnlyList<string> paths,
         Func<string, Task<Response>> read, Action<string, Response> received,
-        Func<ReadFailure, bool> confirm, Func<Task> restart, Action<string> blocked)
+        Func<ReadFailure, bool> confirm, Func<Task> restart, Action<string> blocked, Func<bool>? stopRequested = null)
     {
         int failed = 0;
         for (int i = 0; i < paths.Count; i++)
         {
+            if (stopRequested?.Invoke() == true) return new(i, failed, paths.Count - i, false, true);
             Response result;
             try { result = await read(paths[i]); }
             catch (Exception ex) { result = new() { RequiresAttention = true, Message = "조회 응답을 확인하지 못했습니다. " + ex.Message }; }
@@ -26,6 +27,7 @@ public static class ReadBatch
                 blocked("작업용 Revit에 문서가 남아 있거나 작업 완료 여부를 확인할 수 없어 계속 조회하지 않습니다.\n" + result.Message);
                 return new(i + 1, failed, remaining, true);
             }
+            if (stopRequested?.Invoke() == true) return new(i + 1, failed, remaining, false, true);
             if (!result.Success || result.RequiresAttention || result.ReadRestartRequired)
             {
                 if (remaining == 0 || !confirm(new(paths[i], result.Message, remaining, result.CanRestartForRead)))

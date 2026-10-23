@@ -47,6 +47,19 @@ internal static class ReadBatchTests
         check(result.Blocked && calls.Count == 1 && prompts.Count == 0, "결과 누락 응답을 조회 성공으로 사용하지 않음");
         result = ReadBatch.Run(["A", "B"], _ => throw new IOException("응답 손실"), (_, _) => { }, _ => throw new Exception("승인 금지"), () => throw new Exception("재시작 금지"), blocked.Add).GetAwaiter().GetResult();
         check(result.Blocked && result.Remaining == 1, "연결 상태 미확인 예외는 안전 중단");
+        bool stop = true; int sent = 0, savedResults = 0, stopPrompts = 0;
+        Task<ReadBatchResult> StopBatch(Response response) => ReadBatch.Run(["A", "B"], _ => { sent++; stop = true; return Task.FromResult(response); },
+            (_, _) => savedResults++, _ => { stopPrompts++; return true; }, () => throw new Exception("중지 중 재시작 금지"), _ => { }, () => stop);
+        result = StopBatch(Good()).GetAwaiter().GetResult();
+        check(result.Stopped && result.Remaining == 2 && sent == 0, "조회 전 중지 요청은 첫 파일도 보내지 않음");
+        stop = false; result = StopBatch(Good()).GetAwaiter().GetResult();
+        check(result.Stopped && result.Attempted == 1 && result.Remaining == 1 && savedResults == 1 && sent == 1, "진행 중 중지는 현재 결과 보존 후 다음 파일 차단");
+        stop = false; result = StopBatch(new() { Message = "조회 실패" }).GetAwaiter().GetResult();
+        check(result.Stopped && result.Failed == 1 && stopPrompts == 0, "중지 요청 시 일반 실패 계속 팝업을 띄우지 않음");
+        stop = false; result = StopBatch(new() { RequiresAttention = true }).GetAwaiter().GetResult();
+        check(result.Blocked && !result.Stopped, "중지 요청보다 결과 불명 보호가 우선");
+        stop = false; result = StopBatch(restart).GetAwaiter().GetResult();
+        check(result.Stopped && !result.Blocked && stopPrompts == 0, "중지 요청 후 조회 메모리 실패도 자동 재시작하지 않음");
         string dir = Path.Combine(Path.GetTempPath(), "sunny-protocol-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try

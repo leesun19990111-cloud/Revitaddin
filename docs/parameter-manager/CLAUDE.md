@@ -1,5 +1,64 @@
 # 독립 매개변수 관리자
 
+## 2026-10-23 · 0.3.7 정확한 이름 안전 삭제 / 구조 추가
+
+- 사용자 승인: 기존 삭제 전용을 보완하고 정확한 `건축물 번호`, 프로젝트 정보에만 연결된 `구조`를 삭제. `건축물번호` 유지, 값 이동 없음. 이전 0.3.6의 Legacy·공백 정규화 삭제 경로는 폐기. 새 opt-in `RemovalSafetyVersion=1`, `RemovalTargets(Name/KeepName?/Categories)` 사용. `Parameters=[]`, 추가/병합과 혼합 금지. 카테고리는 OST_ProjectInformation 하나만 허용. KeepName은 유일하고 프로젝트 정보에도 연결되어 있어야 하며 구조는 keeper 불필요. 구버전 파서도 새 속성을 거부한다. 개인 룰셋·원본·진단 기록은 Git/설치 제외.
+- RemoveOnly 조기 반환이 pending 검사를 건너뛰어 이전 정의 정리까지 누적되던 결함 수정. 선택 시 일반 변경 보존·교체 거부, 계획 시 동일 키·값·모드·전체 정의 근거 비교, 최종 적용 시 선택된 삭제 룰셋으로 승인 재검증. 작업 파일로 불러온 이전 삭제도 재조회/재검토 필요. 다른 일반 규격/값 변경과 양방향 혼합 차단 유지.
+- DefinitionReader는 실제 VersionGuid와 요소별 기존 원시값의 정렬 SHA256을 조회. 알 수 없는 바인딩 카테고리는 버리지 않고 category-id로 남겨 단독 연결 오판 방지. 새 DefinitionRemoval은 실제 삭제 직전에도 정의 UID/ID/키/이름/버전/자료형/그룹/바인딩/전체 카테고리/값 수·지문과 keeper·소유권을 재확인한다. 변경이면 자동 추정하지 않고 재조회 요구. 공유 요소는 연결만 제거, 비공유 요소만 Delete하며 종속 삭제 차단.
+- 확정 후 삭제 바인딩/프로젝트 정보 필드 부재, 모든 미삭제 정의 메타데이터·keeper 값, 다른 프로젝트 정보의 값/존재/자료형, 전체 요소 ID 차이를 확인하고 승인 외 변화는 기존 TransactionGroup 롤백 경로로 전파. 오류 억제/강제 소유권/자동 재동기화 없음. 중앙 정의 삭제도 새 작업 로컬의 편집 전 사본을 Backups에 보관. 기존 반환·저장 결과 불명 보존·작업중지 경계 유지.
+- DefinitionTests는 실제 DefinitionReader/DefinitionRemoval을 API 대역에 링크해 계획→삭제·전후 변경·소유권·종속 삭제를 검사(실제 Autodesk DB 검증 아님). SpecRuleTests의 System.IO 누락도 수정. 실제 Revit2026 API 빌드, Core/WPF 및 기존 수명/리더/재료/링크/Worker 회귀를 배포에서 실행. 실제 사용자 RVT·중앙 저장/동기화·설치 실행은 하지 않는다.
+- Protocol/설치 표기/App-0.3.7, 037 격리 빌드. 이번 설치 exe는 Windows에서 정식 publish하며 바이너리 문자열 교체 없음. ZIP은 명시 파일만 .NET UTF8 이름/플래그로 생성·집합/해시 검증하여 이전 tar의 한글명 추출 실패 방지. 이전 같은 제품036만 아카이브, SunnyTools109·사용자 설치본 불변.
+
+## 2026-10-23 · 0.3.6 속성규격 삭제 전용
+
+- 사용자 요청: 다른 검사는 빼고 "카테고리가 프로젝트 정보만인 `건축물 번호`(띄어쓰기)만 삭제, `건축물번호`는 유지"하는 룰셋.
+- `SpecRuleProfile.RemoveOnly`(AddMissing·MergeDuplicates 끔, 항목마다 개별 Categories와 Legacy 필수). 계획: 규격 이름 정의가 정확히 1개인 모델에서 Legacy 이름(공백·대소문자 무시 포함) 정의 중 카테고리 집합이 규격 Categories와 **정확히 같은** 것만 `중복 삭제`. 남길 정의 없음/여러 개, 다른 카테고리 포함은 보고만. 값은 옮기지 않는다(사용자 지시).
+- Bridge `DefinitionFixer` ActionRemove: 조회 당시 요소 UniqueId·이름 재확인, 남길 정의 존재 확인 → `ParameterBindings.Remove` + 비공유 ParameterElement 삭제 → 확정 후 삭제 대상 연결 없음·남길 정의 존재 재검증. 개인 룰셋 `KAC_건축물번호_띄어쓰기_삭제.sunnyrules.json`은 Git/설치 제외. harness 181, Reader95, Material22, Links25, Worker17 통과, Lifecycle 빌드. 실제 Revit 미검증.
+
+## 2026-10-22 · 0.3.5 속성규격 매개변수 검사·정리 (룰셋 버전5)
+
+- 사용자 요청: `From.심_속성규격_매개변수.xlsx`(C 이름, D 유형, E 데이터 유형, F 그룹, G 카테고리)로 중복 매개변수와 규격 일치 여부를 검사하고 수정·정리하는 룰셋. 사용자 결정: D열은 `유형`만 유형 매개변수·나머지는 인스턴스, G열 `all`=매개변수를 연결할 수 있는 **모든 카테고리**, 수정 범위는 **중복 병합까지**, 없는 매개변수는 **다른 조회 모델의 같은 이름 공유 GUID**로 추가.
+- Core `SpecRuleProfile`/`SpecRulePlanner`: Version5+`Spec`(Source/SHA256/MergeDuplicates/AddMissing/Parameters). 항목은 Name, Legacy(엑셀 `새←이전`, `(← 이전)`), Binding, DataType(문자·길이·면적·체적·예/아니요), Group(기타·문자·치수·ID 데이터·IFC 매개변수·일반·데이터·가시성), AllCategories/Categories/ExcludeCategories(OST_ 이름), SourceRow. 다른 룰셋과 혼합 금지, 값 변경 edits와 혼합 금지(양방향).
+- `Claim`: 정의를 규격에 배정 — 같은 이름+같은 데이터 유형 > 이전 이름 > 같은 이름(자료형 다름) > 공백·대소문자 무시 이름. 예: 텍스트 `구조`(프로젝트 정보)는 `건축물구조`의 이전 이름, 예/아니요 `구조`는 규격 `구조`.
+- 기준 GUID: 모든 조회 모델에서 같은 이름·데이터 유형 공유 매개변수 GUID를 모델 수로 세어 최다가 유일할 때만 사용(동률이면 추가·병합 안 함).
+- 정리 항목: 매개변수 추가(기준 GUID, 규격 유형/카테고리/그룹), 유형/인스턴스 전환(값 있는 요소 0일 때만), 카테고리 추가(제거 없음), 그룹 변경, 중복 병합·제거(기준과 유형/인스턴스·자료형이 같거나 값 없음일 때). 보고만: 데이터 유형 불일치, 값 있는 정의 전환, 규격 밖/제외 카테고리 연결, 기준 미정 중복, 규격 외 중복, 연결 불가 카테고리, GUID 없음. 정리 행은 Scope `매개변수 정의` 합성 행(OwnerId `def:<항목>:<키>`)으로 기존 변경 목록/적용/동기화 경로를 그대로 쓴다.
+- Bridge `DefinitionReader`: ParameterBindings 전체(이름·GUID/요소·자료형·그룹·바인딩·카테고리 OST 이름), `AllowsBoundParameters` 최상위 카테고리 목록, HasValue 필터 기반 값 있는 요소 수(실패 −1 → 제거/전환 금지, 빈 문자열 제외, 프로젝트 정보 직접 확인). QueryPlan.IncludeDefinitions(Scopes=프로젝트 정보만).
+- Bridge `DefinitionFixer`: 적용 직전 요소 UniqueId·이름·값 있는 요소 수가 조회와 같은지 확인, 병합은 대상 카테고리 연결·저장 형식·같은 요소 다른 값 충돌을 쓰기 전에 모두 검사(충돌 시 그 모델 전체 보류). 순서 추가→전환→카테고리→그룹→병합. 추가는 SharedParameterAdder와 같은 임시 공유 파일 방식, 카테고리/전환은 `ReInsert`(현재 그룹 유지), 그룹은 `SetGroupTypeId`, 병합은 빈 대상에만 값 Set 후 `ParameterBindings.Remove` + 비공유 ParameterElement 삭제(공유 요소는 패밀리 공유 가능성 때문에 남김). 확정 후 정의 상태·기존 값 지문(요소별 원시값)·옮긴 값을 재검증, 다르면 묶음 롤백.
+- Desktop: 버전5는 `SpecRulePlanner.Plan(모델 스냅숏)`으로 평가, 요약 40줄+전체는 처리 결과와 `%LOCALAPPDATA%\SunnyTools\ParameterManager\Reports\속성규격검사_*.csv`(UTF-8 BOM). 직접 입력/값 복사와 섞기 금지, 적용 확인창에 정의 정리 건수·병합 설명, 작업 파일 복원 허용.
+- 개인 룰셋 `KAC_속성규격_매개변수검사정리.sunnyrules.json`(111항목)은 Git/설치 제외. 시험: Spec 48(+개인 룰셋 2) 포함 harness 177, Reader95(정의 조회 대역 스텁), Material22, Links25, Worker17 통과, Lifecycle 빌드(정의 정리 스텁). **실제 Revit에서 ReInsert/Remove/값 이동은 미검증** — 이 세션 중 작업용 PC의 Revit 응답 없음. 테스트 중앙/사본으로 먼저 확인.
+
+## 2026-10-22 · 0.3.4 선택한 파일만 다시 조회
+
+- 사용자 요청: CJU SP 9개 모델이 `건축물번호` 대신 `건축물 번호`(띄어쓰기)만 가져 Space 룰셋이 ‘매개변수 0개’로 전체 보류된 뒤, 원본 정리 후 해당 파일만 다시 읽을 수 있게 해 달라는 요청. 이름이 다른 매개변수를 같은 것으로 추정 연결하지 않는 기존 원칙은 유지한다(사용자도 처리 방식 선택 대신 재조회 기능을 요청).
+- MainWindow: 파일 관리 ‘선택한 파일만 다시 조회’ 버튼과 ModelsList 오른쪽 버튼 메뉴(선택 재조회/선택 제외). 선택 0개면 안내만. 선택 파일의 변경 예정·RequiresRequery 여부를 확인창(기본 아니요)에 표시하고, 승인 시 해당 파일 변경만 제거·Snapshot/ReadFailed 초기화 후 기존 `ReadRegisteredModels(false, paths)` 경로로 조회한다. 다른 파일의 조회값·변경 예정 보존. 기존 NeedsAttention/CanRestartForRead, ReadBatch 실패 계속 질문, 작업중지, 모든 파일 조회 완료 시 룰셋 자동 재준비 규칙 그대로.
+- 0.3.2·0.3.3은 Claude 세션에서 만든 중간 배포(아래). 0.3.4는 Core·Desktop·Bridge를 SDK 10.0.113(Linux, EnableWindowsTargeting, 사용자 NuGet 캐시의 RevitAPI 2026.4.10/WindowsDesktop.App.Ref 8.0.31/AppHost 8.0.31)로 전체 재빌드. 설치 exe는 런타임 팩 접근이 없어 0.3.1 게시본의 표기 문자열 2곳(제목·App 폴더명)만 0.3.4로 교체했고 소스(ParameterManagerInstaller.cs)도 0.3.4로 갱신했다 — 다음 Windows 빌드에서 `build-release.cjs`로 정식 재게시 권장.
+- 실행 검사: Space 135 + 개인 룰셋 외부 입력 150 + Material22 + Reader95 + Links25 + Worker17. Lifecycle(Windows 경로 API)·WPF Tests는 빌드만 확인, 실행 못 함. 실제 Revit/WPF 동작 미검증. git 커밋은 이 세션에서 실행 불가(장치 셸 없음).
+
+## 2026-10-22 · 0.3.3 없는 자산번호 공유 매개변수 추가 / 파일 다중 선택 제외
+
+- 사용자 요청: 자산번호 룰셋 실행 시 `자산번호`가 없는 모델에 프로젝트 표준 전송처럼 매개변수를 넣고 값 입력. 실제 조회에서 자산번호는 공유 매개변수(GUID 94bccf19-2f58-4de5-b719-c27c099aeb34, 텍스트), 공항코드 6af023fb…, 건축물번호 cf5750fe…, 그룹은 모두 ‘기타’.
+- Space 선택 속성 `AddMissingAssetParameter`(MapAssetNumber 필수). Planner는 함께 조회한 모델들의 자산번호 행이 GUID·텍스트·그룹 하나로 일치할 때만 `SharedParameterAddition`을 만든다. 기준 없음/비공유/정의 여러 개/그룹 미기록(0.3.3 이전 조회)은 그 모델의 자산번호만 확인 필요로 건너뛰고 다른 항목은 적용. 같은 GUID 다른 이름·수동 변경 충돌은 기존처럼 전체 보류. 합성 행(ParameterKey guid:…, Owner=ProjectInfo)을 기존 변경 목록으로 보여준다.
+- ParameterRow.ParameterGroup: ProjectInfo 매개변수의 GetGroupTypeId(빈 값=‘기타’는 `(기타)` 표시값). Bridge `SharedParameterAdder`: 적용 전 ProjectInfo UniqueId·같은 GUID SharedParameterElement 부재·동명 매개변수 부재·내장 그룹·소유권 확인 → 같은 묶음 Tx 안에서 임시 공유 매개변수 파일(원래 SharedParametersFilename 복원, 파일 삭제)로 같은 GUID ExternalDefinition 생성 → ProjectInformation 인스턴스 바인딩 Insert → Set. 확정 후 GUID·이름·자료형·그룹·값·바인딩(프로젝트 정보 단독 인스턴스) 재검증, 실패 시 기존처럼 묶음 롤백. 기존 매개변수/정의는 바꾸지 않는다. Lifecycle 대역에는 호출 시 실패하는 스텁만 추가.
+- MainWindow ModelsList SelectionMode=Extended, 선택 제외 다중 처리(여러 개/변경 예정 있으면 확인), Delete 키, 다중 선택 시 값 목록 필터. 작업 파일 복원은 추가 변경을 Owners로 검증. 적용 확인창에 매개변수 추가 모델 수 표시.
+- 실제 조회 기록 56개 모델 시뮬레이션에서 자산번호 없는 김해 SP 17개가 추가 계획으로 잡힘. 실제 Revit 바인딩 동작 미검증.
+
+## 2026-10-22 · 0.3.2 프로젝트정보 자산번호 규칙
+
+- 사용자 요청: SP·SA 프로젝트정보 룰셋에 `공항별 자료현황조사_261016.xlsx` F열 자산번호 매핑. 사용자 확정: 건물표 전체를 261016 기준으로 재생성(무안 19-1 이후 번호가 바뀜, 181개 건물), 복수 번호는 첫 값, 빈칸/숫자 아님은 ND.
+- Space 선택 속성 `MapAssetNumber`·`MissingAssetNumberValue`("" 또는 ND)와 건물별 `AssetNumber`(숫자만). 끄면 기존과 동일. QueryPlan에 자산번호 추가. 자산번호 필드 부재/읽기전용/모호성은 기존 Space 규칙대로 전체 보류(0.3.3에서 추가 옵션 도입). 사용자 요청으로 자산번호 없는 모델용 `KAC_프로젝트정보_SP_SA_건축물번호_261016` 룰셋(자산번호 제외)도 별도 전달. 개인 룰셋·엑셀은 Git/설치 제외.
+- 이 중간 배포는 Core.dll만 교체해 Protocol.Release를 0.3.1로 둠(const 인라인으로 Desktop/Bridge 버전 불일치 방지). 0.3.3부터 전체 재빌드.
+
+## 2026-10-22 · 0.3.1 실패 기록 재점검 / 계단진행 이름 보존 / 안전 작업중지
+
+- 10/21~10/22 09:34 실패 기록19건을 확인: 다른 사용자 소유4, 경로 없음6, 다른 사용자 보관 로컬2, 그룹3, 조회 후 요소 부재1, 조회 정보 불일치1, 기본정보 추출1, 확정 후 계단진행 이름 재생성1. 개인 로그/모델/룰셋은 Git·설치에 넣지 않는다. 경로 부재의 실제 이동 원인·과거 소유 사용자·과거 일반 최신성 실패의 상세 필드는 기록만으로 확정할 수 없으므로 단정하지 않는다.
+- BasicFileInfo 오류 모델은 나중에 읽기 전용 재확인 시 실제2026/current/workshared/inProgress=false. 원래 오류 뒤 수정 시각 변화도 있어 일시 읽기/저장 경쟁 가능성이 있지만 확정 원인 아님. ReadFileInfo는 크기·mtime·IsInProgress 검사와 최대3회/500ms 읽기 재시도만. OOM 전파, 형식 우회/열기·저장·동기화 재시도 금지. 중앙 경로와 선택 경로, 다른 사용자 로컬의 기록 사용자/현재 사용자를 구분하여 안내한다. 중앙 재지정/이름 사칭/권한 강탈 금지.
+- 조회 때 소유 사용자(out owner API)·ID 예시12개/전체개수 안내, 모든 룰셋 변경 검토에도 전달. 쓰기 전 전체 대상 소유권 재확인, 기존 개별 검사 유지. GetCheckoutStatus는 캐시임을 명시한다. 일반 PrepareAll은 InvalidOperationException을 최대12예시와 전체변경수로 모으고 쓰기 전 차단, OOM/다른 예외는 즉시 전파. CheckFresh는 검사조건 불변으로 전후 필드/원시값(160자 제한)/요소ID를 표시. 삭제 요소를 동명 대상으로 대체하지 않는다.
+- 계단진행 이름: 실패 로컬을 DetachAndPreserveWorksets + 닫힌 작업세트로 열어 진단. 단순 Regenerate는 유지, 제작정보 또는 IFC 텍스트 Set의 Commit은 같은 UniqueId의 `…T150`을 `…T1`로 재생성, 별도 Tx로 원래 Name을 쓰면 보존됨을 재현. 모든 진단 TransactionGroup 롤백·Close(false), 중앙/로컬 저장 없음. 내부 Revit 처리와 외부 updater 중 세부 주체는 미확정이며 단순 IFC 룰셋 값 오류로 단정하지 않는다.
+- StairTypeNames는 **StairsRunType만** 실제 유형ID/ID/패밀리/카테고리 확인 후 기존 이름, 또는 Cleanup의 명시 승인 이름을 저장 전 같은 TransactionGroup 안에서 한 번 보존한다. 반환 후 전체 기존 검증과 오류 진단을 다시 실행한다. 다른 시스템 유형·변경된 유형 ID·복원 불가·충돌·재생성 반복은 롤백하며 타입 검사를 완화하지 않는다. 성공 메시지에 보존한 유형 수 표시. 미요청 유형 이름/형상 수리로 범위 확장하지 않는다.
+- 적용 전 실패/반영0/문서닫힘일 때만 Worker가 CanContinueAfterPreflightFailure를 최종 발급. Desktop은 다음 승인 모델 계속 여부 Yes/No 기본No. 실패 변경은 RequiresRequery로 보관. 저장·동기화·반환 실패/문서잔존/OOM/편집시작 후 실패는 자동 계속 금지. 링크 삭제에는 이 적용 계속 정책을 넓히지 않는다.
+- 사용자 추가 요청 작업중지: MainWindow와 링크 검사/삭제 창에 별도 버튼. 현재 요청의 응답·저장·동기화·반환 완료까지 기다리는 협력적 파일 경계 중지, 다음 요청 전 플래그 검사. Worker.Send 취소/강제 프로세스 종료/중간 tx중단 없음. ReadBatch는 결과 불명 차단을 중지보다 우선하며 현재 결과 보존, 남은 미조회 유지, 자동 룰셋 평가도 생략. 적용은 미처리 edits 보존, 실패 계속 팝업도 중지 요청이 있으면 생략. 다음 작업에서 플래그 초기화. 중지와 완료/실패 기록을 구분한다. 연결 시작 중 누르면 연결 응답까지 기다린다.
+- 최신 업무 룰셋의 매핑/ND/범위는 변경할 근거가 없어 유지하고 공통 실행부로 v1~v4 모두 보호한다. KAC7항목/SpaceND/Cleanup 실제 개인 파일 외부 입력 검증. 818검사=Core/WPF535+Lifecycle124+Material22+Reader95+Links25+Worker17, 실제2026 API 빌드/최소창 중지 상태 렌더 검증. 실제 수정본 전체 중앙 저장·동기화와 협업 서버 부하 검증은 별도. 031격리/같은 제품030만 보관, SunnyTools109/설치본 불변.
+
 ## 2026-10-22 · 0.3.0 프로젝트정보 건축물번호 누락 ND
 
 - 사용자가 KAC 프로젝트정보 룰셋에서 관리코드 또는 소유구분이 없는 건물의 건축물번호를 ND로 입력하도록 변경 승인. 기존 버전3 Space에 선택 속성 MissingBuildingNumberValue("" 또는 "ND"만)를 추가. 생략은 기존 유지 정책이며 null/임의값 거부. 버전2 KAC 7항목/유형정리와 혼합하지 않는다.

@@ -61,6 +61,15 @@ internal static class Program
             Check(!result.CanRestartForRead && ModelEngine.Calls == 0, "사용자가 연 문서 있는 작업용 Revit에 조회하지 않음");
             Reset(); ModelEngine.Result = new() { Message = "일반 실패" }; result = Run("조회");
             Check(!result.RequiresAttention && !result.CanRestartForRead, "일반 조회 실패는 빈 세션을 불필요하게 잠그지 않음");
+            Reset(); ModelEngine.Result = new() { CanContinueAfterPreflightFailure = true }; result = Run("적용");
+            Check(result.CanContinueAfterPreflightFailure && !result.RequiresAttention, "사전 실패 뒤 실제 문서 없음 확인 시 계속 후보");
+            Reset(); ModelEngine.Result = new() { CanContinueAfterPreflightFailure = true }; ModelEngine.LeaveDocument = true; result = Run("적용");
+            Check(!result.CanContinueAfterPreflightFailure && result.RequiresAttention, "사전 실패라도 문서 잔존 시 전체 중단");
+            result = Run("적용"); Check(result.RequiresAttention && ModelEngine.Calls == 1, "잔존 문서 후 후속 적용 차단");
+            Reset(); ModelEngine.Result = new() { CanContinueAfterPreflightFailure = true }; result = Run("조회");
+            Check(!result.CanContinueAfterPreflightFailure, "조회 응답은 적용 계속 승인 불가");
+            Reset(); ModelEngine.Result = new() { CanContinueAfterPreflightFailure = true, CentralSynchronized = true }; result = Run("적용");
+            Check(!result.CanContinueAfterPreflightFailure, "중앙 반영된 응답은 사전 실패로 오인 금지");
             Console.WriteLine($"PASS {count} worker 안전 경계 검사"); return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

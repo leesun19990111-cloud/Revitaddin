@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace SunnyParameterManager.Desktop;
 
@@ -38,6 +39,7 @@ public partial class MainWindow : Window
     private List<string> _fieldNames = [];
     private RuleSet? _loadedRules;
     private bool _initialized, _filtering, _busy, _sample, _selecting;
+    private bool _stopRequested;
 
     public MainWindow()
     {
@@ -60,15 +62,29 @@ public partial class MainWindow : Window
         SetBusyState(true);
         try { await action(); }
         catch (Exception ex) { StatusText.Text = ex.Message; ReportBox.AppendText("\n" + DateTime.Now.ToString("HH:mm:ss") + " · " + ex.Message + "\n"); MessageBox.Show(this, ex.Message, "Sunny 매개변수 관리자", MessageBoxButton.OK, MessageBoxImage.Warning); }
-        finally { SetBusyState(false); RefreshRows(); UpdatePending(); }
+        finally
+        {
+            SetBusyState(false); RefreshRows(); UpdatePending();
+            if (_stopRequested) StopStatusText.Text = "중지 요청 처리 종료 · 미처리 파일과 변경 예정은 유지합니다. 처리 결과를 확인하세요.";
+        }
     }
     private void SetBusyState(bool busy)
     {
         _busy = busy;
+        if (busy) { _stopRequested = false; StopStatusText.Text = ""; StopStatusText.Visibility = Visibility.Collapsed; }
+        StopTaskButton.IsEnabled = busy; StopTaskButton.Content = "작업중지";
         // 목록 자체는 활성 상태로 두어 휠·스크롤바·키보드 탐색을 허용한다.
         // 파일/룰셋 변경과 입력·저장은 조회 중에도 계속 잠근다.
         TopActions.IsEnabled = MainTabs.IsEnabled = FileActions.IsEnabled = WelcomePanel.IsEnabled = ShowAllModelsButton.IsEnabled = !busy;
         if (busy) { ApplyButton.IsEnabled = false; ReviewButton.IsEnabled = false; }
+    }
+    private void RequestTaskStop(object sender, RoutedEventArgs e)
+    {
+        if (!_busy || _stopRequested) return;
+        _stopRequested = true; StopTaskButton.IsEnabled = false; StopTaskButton.Content = "중지 요청됨";
+        StopStatusText.Text = "중지 요청됨 — 현재 파일의 조회·저장·동기화·소유권 반환을 마무리한 뒤 멈춥니다.";
+        StopStatusText.Visibility = Visibility.Visible;
+        ReportBox.AppendText("\n사용자가 작업중지를 요청했습니다. 진행 중인 파일은 안전하게 마무리하며 다음 파일은 시작하지 않습니다. Revit을 강제 종료하지 마세요.\n");
     }
     private bool DiscardPending()
     {
@@ -109,17 +125,32 @@ public partial class MainWindow : Window
         foreach (var path in selected)
             if (_models.All(m => !string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) { _models.Add(new() { Path = path }); added.Add(path); }
         if (SourceCombo.SelectedIndex < 0) SourceCombo.SelectedIndex = 0;
-        ModelsList.SelectedItem = null; MainTabs.SelectedIndex = 0;
+        ModelsList.UnselectAll(); MainTabs.SelectedIndex = 0;
         RefreshFields(); UpdatePending(); return added;
     }
     private void RemoveModel(object sender, RoutedEventArgs e) => Guard(() =>
     {
-        if (ModelsList.SelectedItem is not ModelItem item) return;
-        var count = _edits.Values.Count(v => v.Original.ModelPath == item.Path);
-        if (count > 0 && MessageBox.Show(this, $"이 모델의 변경 예정 {count}건도 제거할까요?", "모델 제거", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
-        foreach (var key in _edits.Where(p => p.Value.Original.ModelPath == item.Path).Select(p => p.Key).ToList()) _edits.Remove(key);
-        _models.Remove(item); RefreshFields(); UpdatePending();
+        // Ctrl·Shift로 선택한 여러 파일을 한 번에 목록에서 제외한다. 실제 RVT 파일은 건드리지 않는다.
+        var items = ModelsList.SelectedItems.Cast<ModelItem>().ToList();
+        if (items.Count == 0) return;
+        var paths = items.Select(i => i.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var count = _edits.Values.Count(v => paths.Contains(v.Original.ModelPath));
+        if (items.Count > 1 || count > 0)
+        {
+            var text = items.Count > 1 ? $"선택한 파일 {items.Count:N0}개를 목록에서 제외할까요?" : "선택한 파일을 목록에서 제외할까요?";
+            if (count > 0) text += $"\n\n이 파일들의 변경 예정 {count:N0}건도 함께 제거됩니다.";
+            text += "\n\n실제 RVT 파일은 변경·삭제하지 않습니다.";
+            if (MessageBox.Show(this, text, "파일 제외", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        }
+        foreach (var key in _edits.Where(p => paths.Contains(p.Value.Original.ModelPath)).Select(p => p.Key).ToList()) _edits.Remove(key);
+        foreach (var item in items) _models.Remove(item);
+        RefreshFields(); UpdatePending();
     });
+    private void ModelsListKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete || _busy) return;
+        e.Handled = true; RemoveModel(sender, new RoutedEventArgs());
+    }
 
     private async void ConnectWorker(object sender, RoutedEventArgs e) => await Run(async () => await _worker.Connect(RevitPathBox.Text.Trim()));
     private async void StopWorker(object sender, RoutedEventArgs e) => await Run(async () =>
@@ -145,6 +176,26 @@ public partial class MainWindow : Window
         }
         if (_edits.Count > 0) { MessageBox.Show(this, "변경 예정 목록이 있습니다. 적용하거나 초기화한 뒤 새로 조회하세요.", "미리보기 보호"); return; }
         await ReadRegisteredModels(false);
+    }
+    // 목록에서 Ctrl·Shift로 고른 파일만 다시 읽는다. 다른 파일의 조회값·변경 예정은 그대로 둔다.
+    private async void ReadSelectedModels(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        if (_sample) { StatusText.Text = "샘플에서는 실제 RVT를 조회하지 않습니다. RVT 추가로 실제 작업을 시작하세요."; return; }
+        if (_worker.NeedsAttention && !_worker.CanRestartForRead) { MessageBox.Show(this, "작업 완료 여부 확인이 필요합니다. 작업용 Revit과 처리 결과를 먼저 확인하세요. 기존 변경 예정은 보존합니다."); return; }
+        var items = ModelsList.SelectedItems.Cast<ModelItem>().ToList();
+        if (items.Count == 0) { MessageBox.Show(this, "왼쪽 파일 목록에서 다시 조회할 파일을 선택하세요. Ctrl(개별)·Shift(범위)로 여러 개를 고를 수 있습니다.", "선택한 파일만 다시 조회"); return; }
+        var paths = items.Select(i => i.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var pending = _edits.Where(p => paths.Contains(p.Value.Original.ModelPath)).Select(p => p.Key).ToList();
+        var failed = items.Count(i => i.Snapshot?.RequiresRequery == true);
+        var text = $"선택한 파일 {items.Count:N0}개만 다시 조회할까요?\n다른 파일의 조회값과 변경 예정은 그대로 유지합니다.";
+        if (pending.Count > 0) text += $"\n\n이 파일들의 변경 예정 {pending.Count:N0}건은 이전 조회값 기준이라 비우고 다시 조회합니다. 필요하면 먼저 ‘작업 저장’으로 보관하세요.";
+        if (failed > 0) text += $"\n\n적용 실패로 재조회가 필요한 파일 {failed:N0}개가 포함되어 있습니다. 원본 모델에서 실패 원인을 확인했는지 점검하세요.";
+        if (MessageBox.Show(this, text, "선택한 파일만 다시 조회", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        foreach (var key in pending) _edits.Remove(key);
+        foreach (var item in items) { item.Snapshot = null; item.ReadFailed = false; item.Status = "재조회 전"; }
+        RefreshFields(); UpdatePending();
+        await ReadRegisteredModels(false, paths);
     }
     private void ResetFailedModelsForRequery()
     {
@@ -192,7 +243,7 @@ public partial class MainWindow : Window
                     var snapshot = result.Snapshot;
                     var duplicate = _models.Where(m => m != item && m.Snapshot != null).Any(m => string.Equals(ModelIdentityPath(m.Snapshot!), ModelIdentityPath(snapshot), StringComparison.OrdinalIgnoreCase));
                     if (duplicate) { item.ReadFailed = true; item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다."; }
-                    else { item.Snapshot = snapshot; item.Status = $"{snapshot.Kind} · {(snapshot.Query == null ? "전체" : "룰셋 선택")} 조회 · {snapshot.Rows.Count:N0}개 값"; }
+                    else { item.Snapshot = snapshot; item.Status = $"{snapshot.Kind} · {(snapshot.Query == null ? "전체" : "룰셋 선택")} 조회 · {snapshot.Rows.Count:N0}개 값" + (snapshot.Definitions == null ? "" : $" · 정의 {snapshot.Definitions.Definitions.Count:N0}개"); }
                     ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n" + string.Join("\n", snapshot.Notices) + "\n");
                 }
                 else { item.ReadFailed = true; item.Status = "조회 실패 · 건너뜀"; ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n"); }
@@ -205,13 +256,15 @@ public partial class MainWindow : Window
                 {
                     ReportBox.AppendText("\n" + message + "\n");
                     MessageBox.Show(this, message, "조회 중단 · 확인 필요", MessageBoxButton.OK, MessageBoxImage.Warning);
-                });
+                }, () => _stopRequested);
             RefreshFields();
-            StatusText.Text = batch.Blocked ? $"조회 중단 · 작업용 Revit 확인 필요. 남은 파일 {batch.Remaining}개와 기존 결과·변경 예정은 유지됩니다." : _models.All(m => m.Snapshot != null)
+            StatusText.Text = batch.Blocked ? $"조회 중단 · 작업용 Revit 확인 필요. 남은 파일 {batch.Remaining}개와 기존 결과·변경 예정은 유지됩니다." : batch.Stopped
+                ? $"조회 중지 · 처리 {batch.Attempted}개 / 실패 {batch.Failed}개 / 미처리 {batch.Remaining}개. ‘미조회 파일 계속 조회’로 이어갈 수 있습니다."
+                : _models.All(m => m.Snapshot != null)
                 ? "파일을 읽었습니다. 룰셋 변경 검토 또는 직접 입력을 진행하세요."
                 : $"이번 조회 실패 {batch.Failed}개 · 남은 파일 {batch.Remaining}개. 처리 결과를 확인하세요. 미조회 파일은 ‘파일 관리 → 미조회 파일 계속 조회’로 이어갈 수 있습니다.";
             if (_models.Any(m => m.Snapshot == null)) MainTabs.SelectedIndex = 2;
-            completed = !batch.Blocked && !_worker.NeedsAttention;
+            completed = !batch.Blocked && !batch.Stopped && !_worker.NeedsAttention;
         });
         if (completed && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery))
             Guard(() => PrepareRules(_loadedRules));
@@ -254,8 +307,8 @@ public partial class MainWindow : Window
         var scope = (ScopeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "전체 범위";
         var field = FieldCombo.SelectedItem as string;
         var search = SearchBox.Text.Trim();
-        var model = ModelsList.SelectedItem as ModelItem;
-        var rows = AllRows().Where(r => (model == null || r.ModelPath == model.Path) && (scope == "전체 범위" || r.Scope == scope) && (field == null || r.Name == field));
+        var selectedModels = ModelsList.SelectedItems.Cast<ModelItem>().Select(m => m.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rows = AllRows().Where(r => (selectedModels.Count == 0 || selectedModels.Contains(r.ModelPath)) && (scope == "전체 범위" || r.Scope == scope) && (field == null || r.Name == field));
         if (search.Length > 0) rows = rows.Where(r => new[] { r.ModelTitle, r.Category, r.Family, r.TypeName, r.TargetName, r.Display }.Any(s => s.Contains(search, StringComparison.CurrentCultureIgnoreCase)));
         var visible = rows.OrderBy(r => r.ModelTitle).ThenBy(r => r.Family).ThenBy(r => r.TargetName).ThenBy(r => r.ElementId).ToList();
         ValuesGrid.ItemsSource = visible;
@@ -270,7 +323,7 @@ public partial class MainWindow : Window
     }
     private void SearchChanged(object sender, TextChangedEventArgs e) { if (_initialized) RefreshRows(); }
     private void ModelSelectionChanged(object sender, SelectionChangedEventArgs e) { if (_initialized && !_busy) RefreshRows(); }
-    private void ShowAllModels(object sender, RoutedEventArgs e) => Guard(() => { ModelsList.SelectedItem = null; RefreshRows(); });
+    private void ShowAllModels(object sender, RoutedEventArgs e) => Guard(() => { ModelsList.UnselectAll(); RefreshRows(); });
     private void SelectEditable(object sender, RoutedEventArgs e) => Guard(() =>
     {
         _selecting = true;
@@ -327,6 +380,8 @@ public partial class MainWindow : Window
         if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
         QueryPlan.FromRules(file);
         if (file.SampleOnly && !_sample) throw new InvalidOperationException("연습용 룰셋은 샘플 모드에서만 사용하세요.");
+        if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
+            throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
         _loadedRules = file;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
@@ -349,17 +404,48 @@ public partial class MainWindow : Window
             throw new InvalidOperationException("모든 대상 파일을 먼저 읽어야 합니다. 실패하거나 중복된 파일은 ‘파일 관리’에서 제외하세요.");
         QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), file);
         var available = _models.SelectMany(m => m.Snapshot!.Owners.Concat(m.Snapshot.Rows));
-        var plan = RulePlanner.Plan(file, available, _edits.Values, _sample);
+        // 속성규격(버전5)은 값이 아니라 모델별 매개변수 정의 목록으로 평가한다.
+        var plan = file.Version == 5 ? SpecRulePlanner.Plan(file, _models.Select(m => m.Snapshot!), _edits.Values) : RulePlanner.Plan(file, available, _edits.Values, _sample);
+        foreach (var item in _models)
+        foreach (var notice in item.Snapshot!.Notices.Where(n => n.StartsWith("다른 사용자 소유로 감지된 대상", StringComparison.Ordinal)))
+            plan.Notes.Add($"조회 당시 소유권 안내 — {item.Title}\n{notice}\n실제 적용할 대상은 저장 직전에 다시 확인합니다.");
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
-        RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes) +
+        RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes.Take(file.Version == 5 ? 40 : int.MaxValue)) +
+            (file.Version == 5 && plan.Notes.Count > 40 ? $"\n… 확인 항목 전체 {plan.Notes.Count:N0}줄은 ‘처리 결과’ 탭과 검사 결과 파일(CSV)에서 확인하세요." : "") +
             "\n※ 불러올 당시의 결과입니다. 이후 제외/직접 입력한 내용은 아래 목록이 최종 기준입니다.";
         RuleSummaryPanel.Visibility = Visibility.Visible;
-        ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
+        ReportBox.AppendText("\n" + (file.Version == 5 ? $"불러온 룰셋: {file.Name}\n" + string.Join("\n", plan.Notes) : RuleSummary.Text) + "\n");
+        if (file.Version == 5) SaveSpecReport(file, plan);
         UpdatePending(); MainTabs.SelectedIndex = 1;
         StatusText.Text = $"룰셋으로 {plan.Edits.Count:N0}개 변경을 준비했습니다. 기존 값과 바뀔 값을 확인하세요. 아직 저장하지 않았습니다.";
     }
+    // 속성규격 검사 결과를 엑셀에서 열 수 있는 CSV로 남긴다. 모델은 바꾸지 않는다.
+    private void SaveSpecReport(RuleSet file, RulePlan plan)
+    {
+        try
+        {
+            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Reports");
+            Directory.CreateDirectory(folder);
+            var path = Path.Combine(folder, $"속성규격검사_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+            static string Csv(string v) => "\"" + (v ?? "").Replace("\"", "\"\"") + "\"";
+            var lines = new List<string> { "구분,모델,매개변수,내용,현재,변경 후,근거" };
+            foreach (var e in plan.Edits)
+                lines.Add(string.Join(",", Csv("정리 예정 · " + e.Original.TypeName), Csv(e.Model), Csv(e.Field), Csv(e.Original.TypeName), Csv(e.Before), Csv(e.Value), Csv(e.Reason)));
+            foreach (var note in plan.Notes)
+            {
+                var text = note.StartsWith("[확인] ", StringComparison.Ordinal) ? note[5..] : note;
+                var slash = note.StartsWith("[확인] ", StringComparison.Ordinal) ? text.IndexOf(" / ", StringComparison.Ordinal) : -1;
+                lines.Add(string.Join(",", Csv(note.StartsWith("[확인] ", StringComparison.Ordinal) ? "확인 필요(보고만)" : "요약"), Csv(slash > 0 ? text[..slash] : ""), Csv(""), Csv(slash > 0 ? text[(slash + 3)..] : text), Csv(""), Csv(""), Csv(file.Name)));
+            }
+            File.WriteAllLines(path, lines, new System.Text.UTF8Encoding(true));
+            ReportBox.AppendText($"검사 결과 파일: {path}\n");
+            StatusText.Text = "속성규격 검사 결과를 저장했습니다: " + path;
+        }
+        catch (Exception ex) { ReportBox.AppendText("검사 결과 파일 저장 실패: " + ex.Message + "\n"); }
+    }
     private void StageValues(object sender, RoutedEventArgs e) => Guard(() =>
     {
+        if (_edits.Values.Any(e => e.DefinitionFix != null)) throw new InvalidOperationException("매개변수 정의 정리를 먼저 적용하거나 제외한 뒤 직접 입력하세요.");
         if (_edits.Values.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리 변경을 먼저 적용하거나 제외한 뒤 직접 입력하세요. 두 작업은 별도로 검증합니다.");
         var selected = ValuesGrid.SelectedItems.Cast<ParameterRow>().ToList();
         if (selected.Select(r => r.FieldKey).Distinct().Count() > 1) throw new InvalidOperationException("같은 이름·자료형·범위의 매개변수만 함께 입력하세요.");
@@ -371,7 +457,7 @@ public partial class MainWindow : Window
     });
     private void CopyValues(object sender, RoutedEventArgs e) => Guard(() =>
     {
-        if (_edits.Values.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리 변경을 먼저 적용하거나 제외한 뒤 복사하세요.");
+        if (_edits.Values.Any(e => e.KacCleanup || e.DefinitionFix != null)) throw new InvalidOperationException("유형 정리·정의 정리 변경을 먼저 적용하거나 제외한 뒤 복사하세요.");
         if (SourceCombo.SelectedItem is not ModelItem source || source.Snapshot == null) throw new InvalidOperationException("조회가 완료된 기준 모델을 선택하세요.");
         var selected = ValuesGrid.SelectedItems.Cast<ParameterRow>().ToList();
         if (selected.Count == 0) throw new InvalidOperationException("값을 받을 대상 행을 선택하세요.");
@@ -400,7 +486,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
@@ -436,6 +522,8 @@ public partial class MainWindow : Window
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
         if (_busy || _sample || _edits.Count == 0) return;
+        try { ValidateRemovalApproval(); }
+        catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "삭제 승인 확인", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }
         MainTabs.SelectedIndex = 1;
         var groups = _edits.Values.GroupBy(e => e.Original.ModelPath).ToList();
@@ -445,7 +533,11 @@ public partial class MainWindow : Window
             "\n\n그룹 제한 항목은 변경 목록에서 제외하며 현재 값을 유지합니다. ‘그룹 제한 항목’ 탭을 검토한 뒤 진행하세요. 그룹 해제나 매개변수 설정 변경은 하지 않습니다." +
             "\n\n작업공유 모델은 중앙 동기화 후 현재 사용자의 차용 요소·모든 작업세트 소유권을 반환합니다. 같은 모델을 다른 Revit/로컬에서 편집 중이면 먼저 그 작업을 동기화하고 닫으세요. 반환 확인 실패 시 나머지 모델은 중단합니다." +
             "\n\n모델별 순차 처리이며 여러 모델을 한 번에 되돌릴 수 없습니다. 유형 값은 그 유형을 사용하는 모든 요소에 영향을 줍니다. 작업세트/치수/재료 변경은 모델 동작에 영향을 줄 수 있습니다.\n운영 모델 적용 전 별도 테스트 중앙에서 검증해 주세요." +
-            (local ? "\n\n주의: 기존 로컬에 저장된 다른 미동기화 작업도 중앙에 함께 반영됩니다." : "");
+            (local ? "\n\n주의: 기존 로컬에 저장된 다른 미동기화 작업도 중앙에 함께 반영됩니다." : "") +
+            (_edits.Values.Any(v => v.DefinitionFix?.Action == SpecRulePlanner.ActionRemove) ? "\n\n삭제 전용: " + string.Join(" · ", _edits.Values.Select(v => v.Original.Name).Distinct()) +
+                "\n정확한 이름이며 프로젝트 정보에만 연결된 항목을 삭제합니다. 삭제 항목의 값은 다른 매개변수로 옮기지 않습니다. 건축물번호와 다른 카테고리에도 연결된 구조는 유지합니다. 삭제 전 복구 사본을 보관합니다." :
+                _edits.Values.Any(v => v.DefinitionFix != null) ? $"\n\n매개변수 정의 정리 {_edits.Values.Count(v => v.DefinitionFix != null):N0}건(그룹·카테고리·유형/인스턴스·공유 매개변수 추가·중복 병합). 중복 병합은 값을 기준 매개변수로 옮긴 뒤 이전 매개변수 연결을 제거하며, 같은 요소에 다른 값이 있으면 그 모델 전체를 보류합니다. 확정 후 값 보존을 다시 검사합니다." : "") +
+            (_edits.Values.Any(v => v.AddParameter != null) ? $"\n\n매개변수 추가: {_edits.Values.Where(v => v.AddParameter != null).Select(v => v.Original.ModelPath).Distinct().Count():N0}개 모델의 프로젝트 정보에 공유 매개변수 ‘{string.Join("·", _edits.Values.Where(v => v.AddParameter != null).Select(v => v.AddParameter!.Name).Distinct())}’를 새로 추가한 뒤 값을 입력합니다(다른 모델과 같은 GUID·그룹)." : "");
         if (MessageBox.Show(this, text, "실제 파일 변경 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         await Run(async () =>
         {
@@ -454,6 +546,7 @@ public partial class MainWindow : Window
             int completed = 0;
             foreach (var group in groups)
             {
+                if (_stopRequested) { ReportBox.AppendText($"사용자 중지로 나머지 {groups.Count - groups.IndexOf(group)}개 모델은 처리하지 않았습니다. 변경 예정은 유지합니다.\n"); break; }
                 var item = _models.Single(m => m.Path == group.Key);
                 var snapshot = item.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.");
                 var result = await _worker.Send(new Request { Operation = "적용", Path = item.Path, Identity = snapshot.Identity, CanonicalPath = snapshot.CanonicalPath, Confirmed = true, LocalChangesConfirmed = local, Edits = group.ToList() });
@@ -471,11 +564,25 @@ public partial class MainWindow : Window
                 }
                 if (!result.Success || result.RequiresAttention)
                 {
+                    var remaining = groups.Count - groups.IndexOf(group) - 1;
+                    if (!_stopRequested && remaining > 0 && ApplyContinuation.CanOffer(result) && !_worker.NeedsAttention &&
+                        MessageBox.Show(this, $"{item.Title}\n{result.Message}\n\n이 파일은 변경 시작 전에 중단되었고 작업 문서는 닫혔습니다. " +
+                            $"실패한 파일은 재시도하지 않고, 처음 승인한 나머지 {remaining}개 모델의 변경을 계속 적용할까요?\n" +
+                            "실패 파일의 변경 예정은 보관하며 원인 해결 후 다시 조회해야 합니다.", "나머지 모델 계속 적용", MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                    { ReportBox.AppendText("사용자 승인으로 실패 파일을 제외하고 나머지 모델을 계속 처리합니다.\n"); continue; }
                     ReportBox.AppendText($"나머지 {groups.Count - groups.IndexOf(group) - 1}개 모델은 처리하지 않았습니다.\n"); break;
                 }
             }
-            RefreshFields(); StatusText.Text = $"완료 {completed}/{groups.Count}개 모델 · 처리 결과를 확인하세요. 성공한 모델은 다시 조회할 수 있습니다.";
+            RefreshFields(); StatusText.Text = (_stopRequested ? "중지 요청 처리 종료 · " : "") + $"완료 {completed}/{groups.Count}개 모델 · 처리 결과를 확인하세요. 성공한 모델은 다시 조회할 수 있습니다.";
         });
+    }
+
+    private void ValidateRemovalApproval()
+    {
+        if (_loadedRules?.Spec?.RemoveOnly != true && !_edits.Values.Any(e => e.DefinitionFix?.Action == SpecRulePlanner.ActionRemove)) return;
+        if (_loadedRules?.Spec?.RemoveOnly != true) throw new InvalidOperationException("삭제 전용 룰셋을 불러온 뒤 변경 내용을 다시 검토하세요.");
+        SpecRulePlanner.Plan(_loadedRules, _models.Select(m => m.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.")), _edits.Values);
     }
 
     private void SaveWorkspace(object sender, RoutedEventArgs e) => Guard(() =>
@@ -501,14 +608,19 @@ public partial class MainWindow : Window
             file.Models.Any(m => !file.Paths.Contains(m.Path, StringComparer.OrdinalIgnoreCase) || m.Rows.Concat(m.Owners).Any(r => r.ModelPath != m.Path)))
             throw new InvalidDataException("작업 파일의 모델 연결이 일치하지 않습니다.");
         var rows = file.Models.SelectMany(m => m.Rows).ToDictionary(r => r.Key);
-        foreach (var edit in file.Edits) if (!rows.ContainsKey(edit.Original.Key)) throw new InvalidDataException("변경 대상이 조회 목록에 없습니다.");
+        var owners = file.Models.SelectMany(m => m.Owners).ToList();
+        foreach (var edit in file.Edits)
+            if (edit.DefinitionFix != null ? file.Models.SingleOrDefault(m => m.Path == edit.Original.ModelPath)?.Definitions == null || edit.Original.Scope != SpecRulePlanner.DefinitionScope :
+                edit.AddParameter == null ? !rows.ContainsKey(edit.Original.Key) :
+                rows.ContainsKey(edit.Original.Key) || !owners.Any(o => o.ModelPath == edit.Original.ModelPath && o.OwnerId == edit.Original.OwnerId && o.Scope == "프로젝트 정보"))
+                throw new InvalidDataException("변경 대상이 조회 목록에 없습니다.");
         _models.Clear(); _edits.Clear(); _sample = file.Sample; _loadedRules = file.LoadedRules; RuleSummaryPanel.Visibility = Visibility.Collapsed;
         foreach (var path in file.Paths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var snapshot = file.Models.SingleOrDefault(m => m.Path == path); snapshot?.ConnectCatalogs();
             _models.Add(new() { Path = path, Snapshot = snapshot, Status = snapshot == null ? "조회 전" : snapshot.RequiresRequery ? "적용 실패 · 원인 확인 후 재조회" : "저장된 조회값 · 적용 전 자동 재검증" });
         }
-        foreach (var edit in file.Edits) { edit.Original = rows[edit.Original.Key]; _edits[edit.Original.Key] = edit; }
+        foreach (var edit in file.Edits) { if (edit.AddParameter == null && edit.DefinitionFix == null) edit.Original = rows[edit.Original.Key]; _edits[edit.Original.Key] = edit; }
         SourceCombo.SelectedIndex = 0; RefreshFields(); UpdatePending(); StatusText.Text = "작업 파일을 불러왔습니다. 실제 파일은 변경하지 않았습니다.";
     });
     private void OpenLogs(object sender, RoutedEventArgs e) => Guard(() =>
@@ -531,7 +643,7 @@ public partial class MainWindow : Window
                 }
             m.ConnectCatalogs(); _models.Add(new() { Path = m.Path, Snapshot = m, Status = "샘플 데이터 · 파일 변경 없음" });
         }
-        ModelsList.SelectedItem = null; SourceCombo.SelectedIndex = 0; ScopeCombo.SelectedIndex = 0; MainTabs.SelectedIndex = 0; SearchBox.Clear(); FieldSearchBox.Clear();
+        ModelsList.UnselectAll(); SourceCombo.SelectedIndex = 0; ScopeCombo.SelectedIndex = 0; MainTabs.SelectedIndex = 0; SearchBox.Clear(); FieldSearchBox.Clear();
         RefreshFields(); UpdatePending(); StatusText.Text = "샘플 모드 · 선택·입력·기준값 복사·작업 저장을 시험할 수 있습니다. 실제 RVT에는 적용되지 않습니다.";
     }
     private void OnClosing(object? sender, CancelEventArgs e)

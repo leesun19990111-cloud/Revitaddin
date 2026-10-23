@@ -1,5 +1,32 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.3.7 — 2026-10-23 정확한 이름·프로젝트 정보 안전 삭제
+
+- 상세는 parameter-manager 문서. 두 정확한 이름의 단독 카테고리 삭제, 이전 pending 혼합 차단, 정의/값 전후 검증, 중앙 새 로컬 사전 백업. 개인 룰셋은 설치/Git 제외.
+- Protocol·설치 표기·App-0.3.7 및037 격리 경로. Windows dotnet으로 설치 exe를 정식 게시하며 이전 Linux 세션의 문자열 교체 방식 사용 금지. `build-release.cjs`에서 Core/WPF·Lifecycle·Material·Reader·Links·Worker·Definition 검사를 모두 실행한다.
+- `package-release.ps1`은 명시 페이로드/설치/문서 파일만 UTF8 ZipArchive로 생성하고 정확한 엔트리 집합·각 SHA256을 검증. 이전 tar ZIP의 한글 파일명 플래그 누락/추출 실패 수정. 보안 미끼 파일 열람/포함 금지. 같은 제품036만 Old_Versions 보관, SunnyTools109와 설치본/RVT 불변. 실제 RVT 삭제·저장·동기화/설치 실행은 미검증.
+
+## 별도 제품 0.3.6 — 2026-10-23 속성규격 삭제 전용
+
+- 룰셋 버전5 `RemoveOnly` 추가(상세 parameter-manager 문서). Protocol/설치 표기/App-0.3.6, build-release.cjs 036 경로. out_v036 exe는 0.3.5 게시본의 표기 문자열만 0.3.6으로 교체. 0.3.5·0.3.4 산출물은 Old_Versions로 이동 대상.
+
+## 별도 제품 0.3.5 — 2026-10-22 속성규격 매개변수 검사·정리
+
+- 룰셋 버전5(속성규격) 정의 조회·정리 추가. 상세는 parameter-manager 문서. Protocol.Release/설치 표기/App-0.3.5, build-release.cjs 035 격리 경로.
+- out_v035는 Linux SDK 10.0.113 재빌드 페이로드와 0.3.4 설치 exe의 표기 문자열(0.3.4→0.3.5)만 바꾼 exe(설치 로직 0.3.1과 동일). 다음 Windows 배포 때 `node SunnyParameterManager/build-release.cjs`로 정식 게시할 것. 0.3.4 폴더·zip은 Old_Versions로 이동. 개인 룰셋·엑셀·검사 CSV는 패키지/Git 제외.
+
+## 별도 제품 0.3.4 — 2026-10-22 선택한 파일만 다시 조회
+
+- 선택 파일 재조회(버튼·오른쪽 메뉴) 추가, 0.3.2 자산번호 규칙·0.3.3 공유 매개변수 추가/다중 선택 제외 포함. 상세는 parameter-manager 문서.
+- Protocol.Release/설치 표기/App-0.3.4, build-release.cjs 034 격리 경로로 갱신. 이번 out_v034는 Linux SDK 10.0.113 재빌드 페이로드(13개 해시 검증, ZIP 20개)와 0.3.1 설치 exe의 표기 문자열 2곳만 0.3.4로 바꾼 exe를 사용했다(런타임 팩 미접근). 다음 Windows 배포 때 `node SunnyParameterManager/build-release.cjs`로 정식 게시할 것.
+- 0.3.2(out_v032, Core만 교체)·0.3.3(out_v033) 중간 산출물과 0.3.1·0.3.0은 루트에서 `Old_Versions/`로 옮겨야 한다 — 이 세션은 장치에서 파일 이동/삭제와 git 실행을 할 수 없어 사용자/다음 세션 작업으로 남김. Sunny Tools v109 불변. 개인 룰셋·로그·RVT는 패키지/Git 제외.
+
+## 별도 제품 0.3.1 — 2026-10-22 실패 예방 / 안전 작업중지
+
+- 기본정보 제한 재확인·소유 사용자/요소/최신값 상세 진단·사전 실패 후 계속 승인, 동일 계단진행 유형의 승인 이름 보존, 파일 경계 작업중지. 최신 개인 룰셋 매핑과 정책은 그대로이며 공통 실행부 보호. 상세는 parameter-manager 문서.
+- Protocol/설치 표기/App-0.3.1 및031빌드 격리. Core/WPF535+Lifecycle124+Material22+Reader95+Links25+Worker17=818검사, actual2026 API 빌드 및 중지 최소창 렌더. 분리 로컬 진단은 전체 롤백·저장 없이 닫았고 수정본의 중앙 저장/동기화는 미검증. 사용자 설치본·실제 중앙 불변. 개인 로그·진단 보고서·룰셋·RVT는 패키지/Git 제외.
+- out_v031/ZIP은 프로그램13개·전체20개 해시 검증. 이전 같은 제품030만 Old_Versions 보관, Sunny Tools v109 유지. 0.3.1 설치 후 모델 재조회 필수. 작업중지는 현재 파일의 저장/반환을 끝내고 다음 파일부터 멈추며 즉시 강제 종료가 아님.
+
 ## 별도 제품 0.3.0 — 2026-10-22 건축물번호 누락 ND 룰셋
 
 - 버전3 Space의 명시적 MissingBuildingNumberValue ND 정책 지원. 기존 정책 호환 유지. Protocol/설치 표기/App-0.3.0 및 빌드030 격리. 756건 검사와 실제 Revit2026 API 빌드 통과, out_v030/ZIP 프로그램13개·전체20개 해시 일치. 개인 신·구 룰셋 외부 입력 각516검사도 통과. 개인 데이터/룰셋/엑셀/RVT는 Git·Payload에 넣지 않는다.
