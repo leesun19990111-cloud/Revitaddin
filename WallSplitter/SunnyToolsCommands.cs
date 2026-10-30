@@ -59,6 +59,8 @@ namespace WallSplitter
         {
             ("벽체 분리", typeof(SplitWallCommand).FullName!),
             ("바닥 분리", typeof(SplitFloorCommand).FullName!),
+            ("벽 한 층 분리", typeof(SplitWallOneLayerCommand).FullName!),
+            ("바닥 한 층 분리", typeof(SplitFloorOneLayerCommand).FullName!),
             ("벽체/바닥 분리 설정", typeof(SettingsCommand).FullName!),
             ("단일/복수 전환 (벽체/바닥 분리)", typeof(ToggleTypeAssignmentPersistenceCommand).FullName!),
             ("NAMER", typeof(NamerCommand).FullName!),

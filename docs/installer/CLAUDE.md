@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## Sunny Tools v110 — 2026-10-30 벽·바닥 한 층 분리
+
+- 벽/바닥 분리 패널에 한 층 분리 버튼을 각각 추가한다. 양 끝 레이어 중 하나만 새 요소로 만들고 원본은 남은 레이어를 유지한다. 지원 범위와 원본 위치 이동은 wall-floor-split 문서 참조. 기존 전체 분리 버튼·별도 매개변수 관리자 0.4.0은 변경하지 않는다.
+- Revit 2023~2027 `obj/bin/iso110<year>` 격리 Release 빌드 오류 0. 2025 API 패키지 버전은 오프라인 빌드를 위해 캐시된 2025.4.60으로 고정해 호출했다. 설치기 `obj/bin/iso110` 격리 게시 후 5개 연도별 DLL을 새 `Payload`에 명시 복사했다. 연도별 DLL 11/11/2/2/2개, Clipper 포함·Autodesk API DLL 제외, 원본 출력→Payload 및 Payload→ZIP의 30개 파일 집합·SHA-256 일치. 실제 Revit 모델 형상 테스트와 사용자 설치는 아직 수행하지 않았다.
+- 산출물 `SunnyToolsInstaller_out_v110`, `SunnyTools_Installer_v.1.1.0.zip`(36,533,300 bytes). ZIP SHA-256 `DC79AC978A7EA0552D57578E2AF5F27E1307DBC98EEC16AB2EBEEEA631FAA8B0`, EXE SHA-256 `34E0FB0B057F9D9285B54FC7ED86C41DACB2AB589FA9D894DD4F672CFF54B11F`. 이전 v109 폴더·ZIP은 `Old_Versions/`에 보관한다.
+
 ## 별도 제품 0.4.0 — 2026-10-23 배치 유형 재료 점검 보고서
 
 - Version6 읽기 전용 재료 점검의 실제 이름 표시·미배치 유형 제외·룰셋 폴더 단일 XLSX 저장을 반영한다. 개인 룰셋·실제 보고서·RVT는 설치 ZIP과 Git 제외. 상세는 parameter-manager 문서.

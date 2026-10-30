@@ -73,6 +73,15 @@ namespace WallSplitter
                 button.Image = RibbonIcons.SplitWall(16);
             }
 
+            var oneWallData = new PushButtonData("WallSplitter_SplitWallOneLayer", "한 층\n분리", assemblyPath,
+                typeof(SplitWallOneLayerCommand).FullName);
+            if (panel.AddItem(oneWallData) is PushButton oneWallButton)
+            {
+                oneWallButton.ToolTip = "벽의 외측 첫 층 또는 내측 마지막 층만 새 벽으로 떼어냅니다. 원본 벽에는 나머지 층을 유지합니다. 문·창·개구부와 편집된 프로파일이 있는 벽은 제외합니다.";
+                oneWallButton.LargeImage = RibbonIcons.ExtractWallLayer(32);
+                oneWallButton.Image = RibbonIcons.ExtractWallLayer(16);
+            }
+
             // "설정"/"단일·복수" 토글은 완전히 공유되는 하나의 설정이지만, 벽체 분리 패널에서만 접근할 수 있으면
             // 바닥 분리 작업 중엔 안 보여서 "바닥 분리에는 설정이 안 붙어 있다"고 느껴질 수 있어 두 패널에 각각 붙인다.
             NamingSettings currentSettings = NamingSettings.Load();
@@ -92,6 +101,15 @@ namespace WallSplitter
                 floorButton.ToolTip = "복합 바닥을 레이어별 단일 바닥으로 분리합니다 (벽체 분리와 이름/유형 지정 방식을 공유합니다).\n미리 바닥을 선택해 둔 상태로 누르면 그 바닥들을 바로 분리하고, 아무것도 선택하지 않은 상태로 누르면 바닥을 직접 고를 수 있습니다.";
                 floorButton.LargeImage = RibbonIcons.SplitFloor(32);
                 floorButton.Image = RibbonIcons.SplitFloor(16);
+            }
+
+            var oneFloorData = new PushButtonData("WallSplitter_SplitFloorOneLayer", "한 층\n분리", assemblyPath,
+                typeof(SplitFloorOneLayerCommand).FullName);
+            if (floorPanel.AddItem(oneFloorData) is PushButton oneFloorButton)
+            {
+                oneFloorButton.ToolTip = "바닥의 맨 위 또는 맨 아래 한 층만 새 바닥으로 떼어냅니다. 원본 바닥에는 나머지 층을 유지합니다. 형태 편집과 호스트된 개구부가 있는 바닥은 제외합니다.";
+                oneFloorButton.LargeImage = RibbonIcons.ExtractFloorLayer(32);
+                oneFloorButton.Image = RibbonIcons.ExtractFloorLayer(16);
             }
 
             AddSettingsStack(floorPanel, assemblyPath, "_Floor", currentSettings);

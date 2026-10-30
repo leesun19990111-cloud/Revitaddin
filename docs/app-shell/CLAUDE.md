@@ -1,5 +1,9 @@
 # 리본/앱 시작 (App.cs)
 
+## 2026-10-30 — 한 층 분리 버튼
+
+벽체/바닥 분리 패널에 각각 별도 `한 층 분리` 버튼을 추가했다. 명령은 `SplitWallOneLayerCommand`/`SplitFloorOneLayerCommand`, 아이콘은 `RibbonIcons.ExtractWallLayer`/`ExtractFloorLayer`이며 `SunnyToolsCommands.All`에도 등록한다. 기존 전체 분리 버튼과 공유 설정 버튼은 유지한다.
+
 ## 2026-10-13 v100
 
 NAMER 패널에 독립 `일람표 에디터` 버튼(`WallSplitter_ScheduleEditor` → `ScheduleEditorCommand`) 추가. 격자 한 열/여러 행을 강조한 `RibbonIcons.ScheduleEditor(16/32)` 코드 아이콘 사용. 다른 버튼/등록 순서의 기존 기능은 유지. 기능 제한/안전 정책은 `docs/schedule-editor/CLAUDE.md` 참고.

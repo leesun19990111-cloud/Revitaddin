@@ -124,6 +124,31 @@ namespace WallSplitter
 
         public static BitmapSource SplitFloor(int size) => SplitMember(size, vertical: false);
 
+        public static BitmapSource ExtractWallLayer(int size) => ExtractEdge(size, vertical: true);
+
+        public static BitmapSource ExtractFloorLayer(int size) => ExtractEdge(size, vertical: false);
+
+        private static BitmapSource ExtractEdge(int size, bool vertical) => Draw(size, drawing =>
+        {
+            double margin = Margin(size);
+            var box = new Rect(margin, margin, size - margin * 2, size - margin * 2);
+            double split = vertical ? box.Left + box.Width * 0.28 : box.Top + box.Height * 0.28;
+            Pen edge = OutlinePen(size);
+            Pen cut = Stroke(Accent, Math.Max(1.2, size / 13.0), round: false);
+            if (vertical)
+            {
+                drawing.DrawRectangle(Accent, edge, new Rect(box.Left, box.Top, split - box.Left, box.Height));
+                drawing.DrawRectangle(Fill, edge, new Rect(split, box.Top, box.Right - split, box.Height));
+                drawing.DrawLine(cut, new Point(split, box.Top - size * 0.07), new Point(split, box.Bottom + size * 0.07));
+            }
+            else
+            {
+                drawing.DrawRectangle(Accent, edge, new Rect(box.Left, box.Top, box.Width, split - box.Top));
+                drawing.DrawRectangle(Fill, edge, new Rect(box.Left, split, box.Width, box.Bottom - split));
+                drawing.DrawLine(cut, new Point(box.Left - size * 0.07, split), new Point(box.Right + size * 0.07, split));
+            }
+        });
+
         private static BitmapSource SplitMember(int size, bool vertical) => Draw(size, drawing =>
         {
             double margin = Margin(size);
