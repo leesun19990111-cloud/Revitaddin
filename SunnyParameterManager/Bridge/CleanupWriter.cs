@@ -12,6 +12,7 @@ internal static class CleanupWriter
     internal static List<Write> Prepare(Document doc, ModelSnapshot model, List<ValueEdit> edits, RuleSet rules)
     {
         RulePlanner.Validate(rules);
+        if (rules.Version == 7) return TypeCodeWriter.Prepare(doc, model, edits);
         if (rules.Version != 4) throw new InvalidOperationException("유형 정리 룰셋을 다시 선택하고 변경을 검토하세요.");
         if (edits.Any(e => !e.KacCleanup || e.Mode != "입력" || e.MaterialSource != null)) throw new InvalidOperationException("유형 정리와 다른 종류의 변경을 섞어 적용할 수 없습니다.");
         var reader = new ParameterReader(doc, model);

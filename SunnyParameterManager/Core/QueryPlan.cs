@@ -11,6 +11,7 @@ public sealed class QueryPlan
     public bool IncludeCleanup { get; set; }
     public bool IncludeDefinitions { get; set; }
     public bool IncludeMaterialAudit { get; set; }
+    public bool IncludeTypeCodeFix { get; set; }
 
     public void Validate()
     {
@@ -20,19 +21,27 @@ public sealed class QueryPlan
             throw new InvalidOperationException("선택 조회 범위가 올바르지 않습니다. 룰셋을 다시 불러오세요.");
         if (IncludeCleanup && (!Scopes.Contains("유형") || !Scopes.Contains("인스턴스")))
             throw new InvalidOperationException("유형 정리는 유형·인스턴스 전체 근거 조회가 필요합니다.");
+        if (IncludeTypeCodeFix && (Scopes.Count != 1 || Scopes[0] != "유형"))
+            throw new InvalidOperationException("유형 코드 보정은 유형 범위만 조회합니다.");
     }
     public bool Includes(string name, string key) => Names.Contains(name, StringComparer.Ordinal) || Keys.Contains(key, StringComparer.OrdinalIgnoreCase);
     public bool Covers(QueryPlan required)
     {
         Validate(); required.Validate();
         return required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
-            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit);
+            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit) && (!required.IncludeTypeCodeFix || IncludeTypeCodeFix);
     }
     public static QueryPlan FromRules(RuleSet rules)
     {
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
-        if (rules.Version == 6)
+        if (rules.Version == 7)
+        {
+            plan.Scopes = ["유형"];
+            plan.Names = ["유형명 정리"];
+            plan.IncludeTypeCodeFix = true;
+        }
+        else if (rules.Version == 6)
         {
             plan.Scopes = ["유형", "인스턴스"];
             plan.Names = ["재료"];
@@ -78,7 +87,7 @@ public sealed class QueryPlan
     {
         var required = FromRules(rules);
         foreach (var model in models)
-            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeDefinitions && model.Definitions == null || required.IncludeMaterialAudit && model.MaterialAuditItems == null)
+            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeTypeCodeFix && model.Query?.IncludeTypeCodeFix != true || required.IncludeDefinitions && model.Definitions == null || required.IncludeMaterialAudit && model.MaterialAuditItems == null)
                 throw new InvalidOperationException(model.Title + ": 이 룰셋에 필요한 항목을 아직 조회하지 않았습니다. 변경 예정을 적용하거나 정리한 뒤 ‘다시 조회’를 누르세요. 미조회 값은 빈 값이나 ND로 처리하지 않습니다.");
     }
 }

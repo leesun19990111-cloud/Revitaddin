@@ -17,6 +17,7 @@ public sealed class RuleSet
     // 버전4 정리에서 현재 작업세트를 유지할 정확한 이름. 비어 있으면 기존 정책 그대로다.
     public List<string> PreserveWorksets { get; set; } = [];
     public bool MaterialAudit { get; set; }
+    public bool TypeCodeFix { get; set; }
 }
 
 public sealed class ParameterRule
@@ -50,6 +51,7 @@ public sealed class RulePlan
 {
     public List<ValueEdit> Edits { get; } = [];
     public List<string> Notes { get; } = [];
+    public List<TypeCodeFinding> TypeCodeFindings { get; } = [];
     public int MatchedOwners { get; set; }
 }
 
@@ -85,6 +87,14 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 7 || file?.TypeCodeFix == true)
+        {
+            if (file.Version != 7 || !file.TypeCodeFix || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
+                file.Kac != null || file.Space != null || file.Spec != null || file.Cleanup || file.MaterialAudit ||
+                file.SampleOnly || file.PreserveWorksets?.Count != 0)
+                throw new InvalidOperationException("세 자리 유형 코드 보정 룰셋은 버전7과 TypeCodeFix만 사용합니다.");
+            return;
+        }
         if (file?.PreserveWorksets == null || file.PreserveWorksets.Count > 1 ||
             file.PreserveWorksets.Any(n => n != "00_외장") ||
             file.PreserveWorksets.Count > 0 && file.Version != 4)
@@ -149,8 +159,9 @@ public static class RulePlanner
         if (file.SampleOnly && !sample) throw new InvalidOperationException("연습용 룰셋은 실제 모델에 사용할 수 없습니다.");
         if (file.Version == 5) throw new InvalidOperationException("속성규격 룰셋은 모델별 매개변수 정의로 평가합니다.");
         if (pending.Any(e => e.DefinitionFix != null)) throw new InvalidOperationException("매개변수 정의 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
-        if (file.Version != 4 && pending.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
+        if (file.Version is not (4 or 7) && pending.Any(e => e.KacCleanup)) throw new InvalidOperationException("유형 정리와 다른 룰셋은 별도로 적용하세요. 기존 변경은 보존했습니다.");
         if (file.Version == 4) return CleanupPlanner.Plan(available, pending, file.PreserveWorksets);
+        if (file.Version == 7) return TypeCodePlanner.Plan(available, pending);
         if (file.Version == 2) return KacRulePlanner.Plan(file, available, pending, sample);
         if (file.Version == 3) return SpaceRulePlanner.Plan(file, available, pending);
         var owners = available.GroupBy(r => (r.ModelPath, r.OwnerId, r.Scope)).Select(g => g.ToList()).ToList();

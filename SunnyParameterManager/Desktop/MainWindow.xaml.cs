@@ -390,7 +390,7 @@ public partial class MainWindow : Window
         if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
             throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
         _loadedRules = file;
-        _loadedRulePath = file.MaterialAudit ? sourcePath : null;
+        _loadedRulePath = file.MaterialAudit || file.TypeCodeFix ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
         StatusText.Text = _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
@@ -430,12 +430,20 @@ public partial class MainWindow : Window
         var available = _models.SelectMany(m => m.Snapshot!.Owners.Concat(m.Snapshot.Rows));
         // 속성규격(버전5)은 값이 아니라 모델별 매개변수 정의 목록으로 평가한다.
         var plan = file.Version == 5 ? SpecRulePlanner.Plan(file, _models.Select(m => m.Snapshot!), _edits.Values) : RulePlanner.Plan(file, available, _edits.Values, _sample);
+        string? typeCodeReport = null;
+        if (file.TypeCodeFix)
+        {
+            if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 유형 코드 보정 룰셋을 다시 불러오세요.");
+            typeCodeReport = TypeCodeWorkbook.PathForRule(_loadedRulePath);
+            TypeCodeWorkbook.Save(typeCodeReport, plan.TypeCodeFindings);
+        }
         foreach (var item in _models)
         foreach (var notice in item.Snapshot!.Notices.Where(n => n.StartsWith("다른 사용자 소유로 감지된 대상", StringComparison.Ordinal)))
             plan.Notes.Add($"조회 당시 소유권 안내 — {item.Title}\n{notice}\n실제 적용할 대상은 저장 직전에 다시 확인합니다.");
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
         RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes.Take(file.Version == 5 ? 40 : int.MaxValue)) +
             (file.Version == 5 && plan.Notes.Count > 40 ? $"\n… 확인 항목 전체 {plan.Notes.Count:N0}줄은 ‘처리 결과’ 탭과 검사 결과 파일(CSV)에서 확인하세요." : "") +
+            (typeCodeReport == null ? "" : "\n엑셀 점검 목록: " + typeCodeReport) +
             "\n※ 불러올 당시의 결과입니다. 이후 제외/직접 입력한 내용은 아래 목록이 최종 기준입니다.";
         RuleSummaryPanel.Visibility = Visibility.Visible;
         ReportBox.AppendText("\n" + (file.Version == 5 ? $"불러온 룰셋: {file.Name}\n" + string.Join("\n", plan.Notes) : RuleSummary.Text) + "\n");
@@ -510,7 +518,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
@@ -612,7 +620,7 @@ public partial class MainWindow : Window
     private void ValidateCleanupApproval()
     {
         if (!_edits.Values.Any(e => e.KacCleanup)) return;
-        if (_loadedRules?.Version != 4) throw new InvalidOperationException("유형 정리 룰셋을 다시 선택하고 변경 내용을 검토하세요.");
+        if (_loadedRules?.Version is not (4 or 7)) throw new InvalidOperationException("유형 이름 룰셋을 다시 선택하고 변경 내용을 검토하세요.");
         var available = _models.SelectMany(m => (m.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.")).Owners.Concat(m.Snapshot.Rows));
         var expected = RulePlanner.Plan(_loadedRules, available, [], _sample).Edits.ToDictionary(e => e.Original.Key);
         foreach (var edit in _edits.Values)

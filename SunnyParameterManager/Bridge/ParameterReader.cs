@@ -32,22 +32,24 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         // 프로젝트 정보만 필요하면 모델 전체의 요소 수집을 하지 않는다.
         var elements = (query == null || query.Scopes.Contains("유형") ? new FilteredElementCollector(doc).WhereElementIsElementType().Cast<Element>() : Enumerable.Empty<Element>())
             .Concat(query == null || query.Scopes.Contains("인스턴스") ? new FilteredElementCollector(doc).WhereElementIsNotElementType().Cast<Element>() : Enumerable.Empty<Element>())
-            .Where(e => e is View v ? !v.IsTemplate && v.ViewType is not (ViewType.Internal or ViewType.ProjectBrowser or ViewType.SystemBrowser or ViewType.Undefined) :
+            .Where(e => query?.IncludeTypeCodeFix == true ? e is ElementType && e is not RevitLinkType :
+                e is View v ? !v.IsTemplate && v.ViewType is not (ViewType.Internal or ViewType.ProjectBrowser or ViewType.SystemBrowser or ViewType.Undefined) :
                 e.Category?.CategoryType == CategoryType.Model && e is not RevitLinkInstance && e is not RevitLinkType)
             .Concat(doc.ProjectInformation == null || query != null && !query.Scopes.Contains("프로젝트 정보") ? [] : new Element[] { doc.ProjectInformation });
         int errors = 0;
-        var cleanup = query?.IncludeCleanup == true ? new CleanupReader(doc) : null;
+        var cleanup = query?.IncludeCleanup == true || query?.IncludeTypeCodeFix == true ? new CleanupReader(doc) : null;
         foreach (var element in elements.DistinctBy(e => e.UniqueId))
         {
             if (query != null)
             {
                 var owner = Describe(element, query.IncludeOuterMaterial);
                 if (!query.Scopes.Contains(owner.Scope)) continue;
-                if (cleanup != null) owner.Cleanup = cleanup.Evidence(element);
+                if (cleanup != null && (query?.IncludeCleanup == true || element is ElementType && TypeCodePlanner.TryFix(owner.TypeName, out _))) owner.Cleanup = cleanup.Evidence(element, query?.IncludeCleanup == true);
                 model.Owners.Add(owner);
-                if (cleanup != null && element is ElementType && CleanupPlanner.IsKac(owner.TypeName))
+                if (cleanup != null && element is ElementType && (query?.IncludeCleanup == true && CleanupPlanner.IsKac(owner.TypeName) || query?.IncludeTypeCodeFix == true && TypeCodePlanner.TryFix(owner.TypeName, out _)))
                     result.Add(cleanup.NameRow(owner));
             }
+            if (query?.IncludeTypeCodeFix == true) continue;
             var parameters = element.Parameters.Cast<Parameter>().ToList();
             // 소속 작업세트는 일부 요소의 열거에 없더라도 직접 접근이 지원된다.
             if (element is not ElementType && element is not ProjectInfo && element is not View && doc.IsWorkshared)

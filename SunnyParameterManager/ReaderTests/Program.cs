@@ -132,5 +132,6 @@ Check(auditSnapshot.MaterialAuditItems!.Any(x => x.Issue == "KAC- 이외 재료"
 Check(auditSnapshot.MaterialAuditItems!.All(x => x.TypeName != unusedAuditType.Name), "배치되지 않은 유형 제외");
 Check(auditSnapshot.MaterialAuditItems!.All(x => x.Material != "KAC-외장"), "정상 KAC 재료는 보고 제외");
 CleanupTests.Run(Check);
+TypeCodeReaderTests.Run(Check);
 GroupTests.Run(Check);
 Console.WriteLine($"TOTAL {count} PASS · 실제 ParameterReader/CleanupWriter의 API 대역 검사; RVT 저장 검증 아님");

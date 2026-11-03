@@ -6,11 +6,11 @@ namespace SunnyParameterManager.Bridge;
 internal sealed class CleanupReader(Document doc)
 {
     private readonly Dictionary<string, (double? Width, string Basis, string Issue)> _thickness = [];
-    internal CleanupEvidence Evidence(Element owner)
+    internal CleanupEvidence Evidence(Element owner, bool readThickness = true)
     {
         var type = owner as ElementType ?? doc.GetElement(owner.GetTypeId()) as ElementType;
         var result = new CleanupEvidence { Version = owner.VersionGuid.ToString("D"), InPlace = type is FamilySymbol symbol && symbol.Family.IsInPlace, CanRename = owner is ElementType et && et.CanBeRenamed };
-        if (type != null && owner is ElementType && CleanupPlanner.IsKac(type.Name))
+        if (readThickness && type != null && owner is ElementType && CleanupPlanner.IsKac(type.Name))
         {
             if (!_thickness.TryGetValue(type.UniqueId, out var thickness)) _thickness[type.UniqueId] = thickness = Thickness(type);
             result.ThicknessMm = thickness.Width; result.ThicknessBasis = thickness.Basis; result.ThicknessIssue = thickness.Issue;
