@@ -5,6 +5,16 @@ using SunnyParameterManager.Bridge;
 int count = 0;
 void Check(bool ok, string text) { if (!ok) throw new Exception("FAIL " + text); Console.WriteLine("PASS " + text); count++; }
 var doc = new Document(); var model = new ModelSnapshot { Path = "테스트.rvt" }; var reader = new ParameterReader(doc, model);
+doc.ActiveProjectLocation!.Name = "현장 공유대지";
+doc.ActiveProjectLocation.Position = new() { NorthSouth = -10, EastWest = 20, Elevation = 5, Angle = Math.PI / 6 };
+var pointRule = RulePlanner.Parse("{\"Version\":8,\"Name\":\"기준점 점검\",\"Rules\":[],\"ProjectBasePointAudit\":true}");
+Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
+    model.ProjectBasePointAudit is { SiteName: "현장 공유대지", Status: "확인", NorthSouthMeters: -3.048, EastWestMeters: 6.096, ElevationMeters: 1.524 } &&
+    Math.Abs(model.ProjectBasePointAudit.TrueNorthDegrees!.Value - 30) < 1e-10, "프로젝트 기준점 공유 좌표·단위·진북각도 조회");
+doc.ProjectBasePoint = null;
+Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
+    model.ProjectBasePointAudit?.Status.Contains("찾을 수 없음") == true, "기준점 부재 모델도 상태 기록");
+doc.ProjectBasePoint = new();
 var type = new ElementType { Name = "공통 뷰 유형", Category = new() { CategoryType = CategoryType.Internal } }; doc.Elements.Add(type);
 foreach (var kind in new[] { ViewType.FloorPlan, ViewType.CeilingPlan, ViewType.Elevation, ViewType.Section, ViewType.Detail, ViewType.DraftingView, ViewType.Legend, ViewType.Schedule, ViewType.ThreeD })
 {

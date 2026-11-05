@@ -244,7 +244,9 @@ public partial class MainWindow : Window
                     var snapshot = result.Snapshot;
                     var duplicate = _models.Where(m => m != item && m.Snapshot != null).Any(m => string.Equals(ModelIdentityPath(m.Snapshot!), ModelIdentityPath(snapshot), StringComparison.OrdinalIgnoreCase));
                     if (duplicate) { item.ReadFailed = true; item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다."; }
-                    else { item.Snapshot = snapshot; item.Status = snapshot.MaterialAuditItems != null
+                    else { item.Snapshot = snapshot; item.Status = snapshot.ProjectBasePointAudit != null
+                        ? $"{snapshot.Kind} · 기준점 점검 · {snapshot.ProjectBasePointAudit.Status}"
+                        : snapshot.MaterialAuditItems != null
                         ? $"{snapshot.Kind} · 재료 점검 · {snapshot.MaterialAuditItems.Count:N0}개 확인 항목"
                         : $"{snapshot.Kind} · {(snapshot.Query == null ? "전체" : "룰셋 선택")} 조회 · {snapshot.Rows.Count:N0}개 값" + (snapshot.Definitions == null ? "" : $" · 정의 {snapshot.Definitions.Definitions.Count:N0}개"); }
                     ReportBox.AppendText("\n" + item.Title + " · " + result.Message + "\n" + string.Join("\n", snapshot.Notices) + "\n");
@@ -377,6 +379,7 @@ public partial class MainWindow : Window
         SelectRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)), dialog.FileName);
         if (_models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery &&
             (!_loadedRules!.MaterialAudit || m.Snapshot.MaterialAuditItems != null) &&
+            (!_loadedRules.ProjectBasePointAudit || m.Snapshot.ProjectBasePointAudit != null) &&
             (m.Snapshot.Query == null || m.Snapshot.Query.Covers(QueryPlan.FromRules(_loadedRules!)))))
             PrepareRules(_loadedRules!);
     });
@@ -385,12 +388,12 @@ public partial class MainWindow : Window
         if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
         QueryPlan.FromRules(file);
         if (file.SampleOnly && !_sample) throw new InvalidOperationException("연습용 룰셋은 샘플 모드에서만 사용하세요.");
-        if (file.MaterialAudit && _edits.Count > 0)
-            throw new InvalidOperationException("재료 점검은 읽기 전용입니다. 기존 변경 예정을 먼저 적용·제외하거나 작업 파일로 보관한 뒤 불러오세요.");
+        if ((file.MaterialAudit || file.ProjectBasePointAudit) && _edits.Count > 0)
+            throw new InvalidOperationException("읽기 전용 점검은 기존 변경 예정과 함께 진행할 수 없습니다. 변경을 먼저 적용·제외하거나 작업 파일로 보관하세요.");
         if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
             throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
         _loadedRules = file;
-        _loadedRulePath = file.MaterialAudit || file.TypeCodeFix ? sourcePath : null;
+        _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
         StatusText.Text = _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
@@ -411,6 +414,21 @@ public partial class MainWindow : Window
         if (_models.Count == 0 || _models.Any(m => m.Snapshot == null))
             throw new InvalidOperationException("모든 대상 파일을 먼저 읽어야 합니다. 실패하거나 중복된 파일은 ‘파일 관리’에서 제외하세요.");
         QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), file);
+        if (file.ProjectBasePointAudit)
+        {
+            if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 프로젝트 기준점 점검 룰셋을 다시 불러오세요.");
+            var path = ProjectBasePointWorkbook.PathForRule(_loadedRulePath);
+            ProjectBasePointWorkbook.Save(path, _models.Select(m => m.Snapshot!));
+            var failed = _models.Count(m => m.Snapshot!.ProjectBasePointAudit!.Status != "확인");
+            RuleSummary.Text = $"읽기 전용 프로젝트 기준점 점검 완료 · {_models.Count:N0}개 모델 · 확인 필요 {failed:N0}개\n" +
+                "활성 공유대지의 프로젝트 기준점 좌표를 미터, 진북각도를 도 단위로 기록했습니다. RVT는 변경하지 않았습니다.\n같은 파일명으로 이전 보고서를 교체했습니다. 엑셀 파일: " + path;
+            RuleSummaryPanel.Visibility = Visibility.Visible;
+            ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
+            StatusText.Text = "프로젝트 기준점 점검 엑셀을 저장했습니다: " + path;
+            MainTabs.SelectedIndex = 2;
+            UpdatePending();
+            return;
+        }
         if (file.MaterialAudit)
         {
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 재료 점검 룰셋을 다시 불러오세요.");
@@ -505,7 +523,7 @@ public partial class MainWindow : Window
         RefreshGroupRestrictions();
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         PendingText.Text = $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
-        ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _edits.Count > 0 && !_worker.NeedsAttention && !HasFailedPending();
+        ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true && _edits.Count > 0 && !_worker.NeedsAttention && !HasFailedPending();
         ReviewButton.IsEnabled = !_busy && _edits.Count > 0;
         ReviewButton.Content = $"③ 변경 내용 확인 ({_edits.Count:N0})";
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -518,7 +536,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectBasePointAudit ? "프로젝트 기준점 공유대지 점검·엑셀 목록" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
@@ -553,7 +571,7 @@ public partial class MainWindow : Window
     });
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
-        if (_busy || _sample || _loadedRules?.MaterialAudit == true || _edits.Count == 0) return;
+        if (_busy || _sample || _loadedRules?.MaterialAudit == true || _loadedRules?.ProjectBasePointAudit == true || _edits.Count == 0) return;
         try { ValidateRemovalApproval(); ValidateCleanupApproval(); }
         catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "적용 전 검증", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }

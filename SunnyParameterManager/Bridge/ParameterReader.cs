@@ -22,6 +22,12 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
     public List<ParameterRow> ReadAll(QueryPlan? query = null)
     {
         query?.Validate(); model.Query = query; model.Owners.Clear();
+        if (query?.IncludeProjectBasePointAudit == true)
+        {
+            model.ProjectBasePointAudit = ProjectBasePointReader.Read(doc);
+            Notices.Add("활성 공유대지의 프로젝트 기준점 좌표와 진북각도를 읽었습니다. RVT는 변경하지 않았습니다.");
+            return [];
+        }
         if (query?.IncludeMaterialAudit == true)
         {
             model.MaterialAuditItems = MaterialAuditReader.Read(doc, System.IO.Path.GetFileName(model.Path));

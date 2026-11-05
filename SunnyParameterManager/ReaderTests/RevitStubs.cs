@@ -10,7 +10,7 @@ namespace Autodesk.Revit.DB
  public enum CheckoutStatus { NotOwned, OwnedByOtherUser }
  public static class WorksharingUtils { public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id) => doc.OtherOwner ? CheckoutStatus.OwnedByOtherUser : CheckoutStatus.NotOwned; }
  public static class GroupTypeId { public static ForgeTypeId IdentityData { get; } = new("identity"); }
- public static class UnitTypeId { public static ForgeTypeId Millimeters { get; } = new("mm"); }
+ public static class UnitTypeId { public static ForgeTypeId Millimeters { get; } = new("mm"); public static ForgeTypeId Meters { get; } = new("m"); }
  public sealed record ElementId(long Value) { public static ElementId InvalidElementId { get; } = new(-1); }
  public sealed record ForgeTypeId(string TypeId);
  public static class SpecTypeId
@@ -57,6 +57,24 @@ namespace Autodesk.Revit.DB
  public class HostObjAttributes : ElementType { public CompoundStructure? Structure { get; set; } = new(); public CompoundStructure? GetCompoundStructure() => Structure; }
  public class CompoundStructure : IDisposable { public double Width { get; set; } = 1; public bool IsVerticallyCompound { get; set; } public bool Homogeneous { get; set; } = true; public int VariableLayerIndex { get; set; } = -1; public List<ElementId> LayerMaterials { get; } = []; public int LayerCount => LayerMaterials.Count; public ElementId GetMaterialId(int index) => LayerMaterials[index]; public bool IsVerticallyHomogeneous() => Homogeneous; public double GetWidth() => Width; public void Dispose() { } }
  public sealed class ProjectInfo : Element { }
+ public sealed record XYZ(double X, double Y, double Z);
+ public sealed class BasePoint : Element
+ {
+  public XYZ Position { get; set; } = new(0, 0, 0);
+  public static BasePoint? GetProjectBasePoint(Document doc) => doc.ProjectBasePoint;
+ }
+ public sealed class ProjectPosition : IDisposable
+ {
+  public double NorthSouth { get; set; } public double EastWest { get; set; }
+  public double Elevation { get; set; } public double Angle { get; set; }
+  public void Dispose() { }
+ }
+ public sealed class ProjectLocation
+ {
+  public string Name { get; set; } = "내부";
+  public ProjectPosition Position { get; set; } = new();
+  public ProjectPosition GetProjectPosition(XYZ point) => Position;
+ }
  public sealed class RevitLinkType : ElementType { }
  public sealed class RevitLinkInstance : Element { }
  public sealed class Material : Element { }
@@ -74,6 +92,7 @@ namespace Autodesk.Revit.DB
  public sealed class Document
  {
   public List<Element> Elements { get; } = []; public ProjectInfo? ProjectInformation { get; set; } public bool IsWorkshared { get; set; }
+  public BasePoint? ProjectBasePoint { get; set; } = new(); public ProjectLocation? ActiveProjectLocation { get; set; } = new();
   public bool OtherOwner { get; set; } public List<Workset> Worksets { get; } = [];
   public Element? GetElement(string id) => Elements.FirstOrDefault(e => e.UniqueId == id);
   public Element? GetElement(ElementId id) => Elements.FirstOrDefault(e => e.Id == id);
@@ -89,7 +108,7 @@ namespace Autodesk.Revit.DB
  }
  public sealed class Units { public FormatOptions GetFormatOptions(ForgeTypeId id) => new(); }
  public sealed class FormatOptions { public ForgeTypeId GetUnitTypeId() => new("unit"); }
- public static class UnitUtils { public static bool IsMeasurableSpec(ForgeTypeId id) => false; public static double ConvertFromInternalUnits(double value, ForgeTypeId unit) => value * 304.8; }
+ public static class UnitUtils { public static bool IsMeasurableSpec(ForgeTypeId id) => false; public static double ConvertFromInternalUnits(double value, ForgeTypeId unit) => value * (unit == UnitTypeId.Meters ? 0.3048 : 304.8); }
  public sealed record WorksetId(int IntegerValue);
  public sealed class Workset { public string Name { get; set; } = "작업세트"; public Guid UniqueId { get; } = Guid.NewGuid(); public WorksetId Id { get; set; } = new(1); }
  public sealed class WorksetTable(List<Workset> items) { public Workset? GetWorkset(WorksetId id) => items.FirstOrDefault(w => w.Id == id) ?? new(); }

@@ -128,7 +128,9 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 if (metadata.Kind == "로컬") metadata.Notices.Add("기존 로컬을 적용하면 이 파일에 저장된 미동기화 변경도 중앙에 포함됩니다.");
                 result.Snapshot = metadata;
                 result.Success = true;
-                result.Message = metadata.MaterialAuditItems is { } audit ? $"재료 점검 {audit.Count:N0}건을 읽었습니다. 원본을 저장하지 않았습니다." : $"{metadata.Rows.Count:N0}개 매개변수 값을 읽었습니다. 원본을 저장하지 않았습니다.";
+                result.Message = metadata.ProjectBasePointAudit is { } point ? $"프로젝트 기준점 점검: {point.Status}. 원본을 저장하지 않았습니다." :
+                    metadata.MaterialAuditItems is { } audit ? $"재료 점검 {audit.Count:N0}건을 읽었습니다. 원본을 저장하지 않았습니다." :
+                    $"{metadata.Rows.Count:N0}개 매개변수 값을 읽었습니다. 원본을 저장하지 않았습니다.";
             }
             else
             {

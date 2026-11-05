@@ -18,6 +18,7 @@ public sealed class RuleSet
     public List<string> PreserveWorksets { get; set; } = [];
     public bool MaterialAudit { get; set; }
     public bool TypeCodeFix { get; set; }
+    public bool ProjectBasePointAudit { get; set; }
 }
 
 public sealed class ParameterRule
@@ -87,6 +88,14 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 8 || file?.ProjectBasePointAudit == true)
+        {
+            if (file.Version != 8 || !file.ProjectBasePointAudit || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
+                file.Kac != null || file.Space != null || file.Spec != null || file.Cleanup || file.MaterialAudit || file.TypeCodeFix ||
+                file.SampleOnly || file.PreserveWorksets?.Count != 0)
+                throw new InvalidOperationException("프로젝트 기준점 점검 룰셋은 버전8과 ProjectBasePointAudit만 사용합니다.");
+            return;
+        }
         if (file?.Version == 7 || file?.TypeCodeFix == true)
         {
             if (file.Version != 7 || !file.TypeCodeFix || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||

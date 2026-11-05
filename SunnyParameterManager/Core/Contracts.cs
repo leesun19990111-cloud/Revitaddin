@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.4.1";
+    public const string Release = "0.4.2";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -51,7 +51,19 @@ public sealed class ModelSnapshot
     // 속성규격 룰셋(버전5)으로 조회할 때만 채운다. 매개변수 정의(바인딩) 목록.
     public DefinitionSnapshot? Definitions { get; set; }
     public List<MaterialAuditItem>? MaterialAuditItems { get; set; }
+    public ProjectBasePointAudit? ProjectBasePointAudit { get; set; }
     public void ConnectCatalogs() { foreach (var row in Rows) row.Choices = Catalogs.GetValueOrDefault(row.ChoiceCatalog, []); }
+}
+
+// 활성 공유대지에서 프로젝트 기준점 위치를 읽은 결과. 길이값은 미터, 각도는 도 단위다.
+public sealed class ProjectBasePointAudit
+{
+    public string SiteName { get; set; } = "";
+    public double? NorthSouthMeters { get; set; }
+    public double? EastWestMeters { get; set; }
+    public double? ElevationMeters { get; set; }
+    public double? TrueNorthDegrees { get; set; }
+    public string Status { get; set; } = "";
 }
 
 // 실제 유형과 배치 요소에서 확인한 재료 이상 항목. 같은 유형/재료/슬롯은 개수로 묶는다.
