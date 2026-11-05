@@ -102,6 +102,12 @@
       <Button x:Name="ApplyButton" Content="RVT에 저장 · 중앙 동기화" Style="{StaticResource Primary}" Click="ApplyChanges" HorizontalAlignment="Right" Margin="0" MinHeight="40" IsEnabled="False"/>
      </StackPanel>
      <DataGrid x:Name="EditsGrid"><DataGrid.Columns><DataGridTextColumn Header="소속 파일" Binding="{Binding Model}" Width="140" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="패밀리 / 대상 이름" Binding="{Binding Type}" Width="200" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="항목" Binding="{Binding Field}" Width="120"/><DataGridTextColumn Header="기존 값" Binding="{Binding Before}" Width="140" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="바뀔 값" Binding="{Binding Value}" Width="150" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="입력 근거" Binding="{Binding Reason}" Width="240" ElementStyle="{StaticResource ReviewText}"/></DataGrid.Columns></DataGrid>
+     <DataGrid x:Name="CentralRebuildGrid" Visibility="Collapsed" IsReadOnly="True"><DataGrid.Columns>
+      <DataGridTextColumn Header="선택한 중앙파일" Binding="{Binding Title}" Width="210" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="원본 경로 · 새 중앙 저장 위치" Binding="{Binding CanonicalPath}" Width="*" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="종류" Binding="{Binding Kind}" Width="75"/>
+      <DataGridTextColumn Header="조회 시각" Binding="{Binding ReadAt}" Width="145"/>
+     </DataGrid.Columns></DataGrid>
     </DockPanel></TabItem>
     <TabItem Header="처리 결과"><DockPanel Margin="12"><Button DockPanel.Dock="Top" Content="기록 폴더 열기" Click="OpenLogs" HorizontalAlignment="Left" Margin="0,0,0,10"/><TextBox x:Name="ReportBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" BorderThickness="0" Text="처음에는 별도 테스트 모델로 확인해 주세요."/></DockPanel></TabItem>
     <TabItem x:Name="GroupRestrictionsTab" Header="그룹 제한 항목 (0)"><DockPanel Margin="12">

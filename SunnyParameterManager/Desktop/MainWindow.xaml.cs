@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private string? _loadedRulePath;
     private bool _initialized, _filtering, _busy, _sample, _selecting;
     private bool _stopRequested;
+    private bool _centralRebuildReviewed;
 
     public MainWindow()
     {
@@ -122,6 +123,7 @@ public partial class MainWindow : Window
         if (selected.Any(p => !string.Equals(Path.GetExtension(p), ".rvt", StringComparison.OrdinalIgnoreCase) || !File.Exists(p)))
             throw new InvalidOperationException("존재하지 않거나 RVT가 아닌 파일이 있습니다. 파일을 다시 선택하세요.");
         if (_sample) { if (!DiscardPending()) return []; _edits.Clear(); _models.Clear(); _sample = false; _loadedRules = null; _loadedRulePath = null; RuleSummaryPanel.Visibility = Visibility.Collapsed; }
+        _centralRebuildReviewed = false;
         List<string> added = [];
         foreach (var path in selected)
             if (_models.All(m => !string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) { _models.Add(new() { Path = path }); added.Add(path); }
@@ -145,6 +147,7 @@ public partial class MainWindow : Window
         }
         foreach (var key in _edits.Where(p => paths.Contains(p.Value.Original.ModelPath)).Select(p => p.Key).ToList()) _edits.Remove(key);
         foreach (var item in items) _models.Remove(item);
+        _centralRebuildReviewed = false;
         RefreshFields(); UpdatePending();
     });
     private void ModelsListKeyDown(object sender, KeyEventArgs e)
@@ -194,6 +197,7 @@ public partial class MainWindow : Window
         if (failed > 0) text += $"\n\n적용 실패로 재조회가 필요한 파일 {failed:N0}개가 포함되어 있습니다. 원본 모델에서 실패 원인을 확인했는지 점검하세요.";
         if (MessageBox.Show(this, text, "선택한 파일만 다시 조회", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         foreach (var key in pending) _edits.Remove(key);
+        _centralRebuildReviewed = false;
         foreach (var item in items) { item.Snapshot = null; item.ReadFailed = false; item.Status = "재조회 전"; }
         RefreshFields(); UpdatePending();
         await ReadRegisteredModels(false, paths);
@@ -244,7 +248,9 @@ public partial class MainWindow : Window
                     var snapshot = result.Snapshot;
                     var duplicate = _models.Where(m => m != item && m.Snapshot != null).Any(m => string.Equals(ModelIdentityPath(m.Snapshot!), ModelIdentityPath(snapshot), StringComparison.OrdinalIgnoreCase));
                     if (duplicate) { item.ReadFailed = true; item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다."; }
-                    else { item.Snapshot = snapshot; item.Status = snapshot.ProjectBasePointAudit != null
+                    else { item.Snapshot = snapshot; _centralRebuildReviewed = false; item.Status = snapshot.CentralRebuild != null
+                        ? "중앙 · 분리 재생성 검토 대기"
+                        : snapshot.ProjectBasePointAudit != null
                         ? $"{snapshot.Kind} · 기준점 점검 · {snapshot.ProjectBasePointAudit.Status}"
                         : snapshot.MaterialAuditItems != null
                         ? $"{snapshot.Kind} · 재료 점검 · {snapshot.MaterialAuditItems.Count:N0}개 확인 항목"
@@ -380,6 +386,7 @@ public partial class MainWindow : Window
         if (_models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery &&
             (!_loadedRules!.MaterialAudit || m.Snapshot.MaterialAuditItems != null) &&
             (!_loadedRules.ProjectBasePointAudit || m.Snapshot.ProjectBasePointAudit != null) &&
+            (!_loadedRules.RebuildCentral || m.Snapshot.CentralRebuild != null) &&
             (m.Snapshot.Query == null || m.Snapshot.Query.Covers(QueryPlan.FromRules(_loadedRules!)))))
             PrepareRules(_loadedRules!);
     });
@@ -388,11 +395,13 @@ public partial class MainWindow : Window
         if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
         QueryPlan.FromRules(file);
         if (file.SampleOnly && !_sample) throw new InvalidOperationException("연습용 룰셋은 샘플 모드에서만 사용하세요.");
-        if ((file.MaterialAudit || file.ProjectBasePointAudit) && _edits.Count > 0)
-            throw new InvalidOperationException("읽기 전용 점검은 기존 변경 예정과 함께 진행할 수 없습니다. 변경을 먼저 적용·제외하거나 작업 파일로 보관하세요.");
+        if ((file.MaterialAudit || file.ProjectBasePointAudit || file.RebuildCentral) && _edits.Count > 0)
+            throw new InvalidOperationException("이 전용 룰셋은 기존 변경 예정과 함께 진행할 수 없습니다. 변경을 먼저 적용·제외하거나 작업 파일로 보관하세요.");
         if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
             throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
         _loadedRules = file;
+        _centralRebuildReviewed = false;
+        CentralRebuildGrid.Visibility = Visibility.Collapsed; EditsGrid.Visibility = Visibility.Visible;
         _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
@@ -401,7 +410,8 @@ public partial class MainWindow : Window
     }
     private void UseFullQuery(object sender, RoutedEventArgs e) => Guard(() =>
     {
-        _loadedRules = null; _loadedRulePath = null; UpdatePending();
+        _loadedRules = null; _loadedRulePath = null; _centralRebuildReviewed = false;
+        CentralRebuildGrid.Visibility = Visibility.Collapsed; EditsGrid.Visibility = Visibility.Visible; UpdatePending();
         StatusText.Text = "다음 조회부터 전체 항목을 읽습니다. 기존 선택 조회값과 변경 예정은 유지합니다. 전체 항목이 필요하면 ‘파일 관리 → 다시 조회’를 누르세요.";
     });
     private void ReviewLoadedRules(object sender, RoutedEventArgs e) => Guard(() =>
@@ -414,6 +424,26 @@ public partial class MainWindow : Window
         if (_models.Count == 0 || _models.Any(m => m.Snapshot == null))
             throw new InvalidOperationException("모든 대상 파일을 먼저 읽어야 합니다. 실패하거나 중복된 파일은 ‘파일 관리’에서 제외하세요.");
         QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), file);
+        if (file.RebuildCentral)
+        {
+            if (!ReferenceEquals(file, _loadedRules) || _sample || _edits.Count > 0)
+                throw new InvalidOperationException("중앙 재생성 룰셋을 새로 선택하고 기존 변경 예정 없이 실제 파일을 조회하세요.");
+            foreach (var model in _models) CentralRebuildPlanner.Validate(model.Snapshot!);
+            CentralRebuildGrid.ItemsSource = _models.Select(m => m.Snapshot!).ToList();
+            CentralRebuildGrid.Visibility = Visibility.Visible;
+            EditsGrid.Visibility = Visibility.Collapsed;
+            RuleSummary.Text = $"중앙 재생성 검토 · {_models.Count:N0}개 파일\n" +
+                "각 중앙을 작업세트 유지 상태로 분리 → 같은 경로·이름의 새 중앙으로 덮어쓰기 → 중앙 동기화 → 차용 요소·모든 작업세트 소유권 반환 → 저장·닫기 순서로 처리합니다.\n" +
+                "교체 전 원본은 작업 세션 Backups에 복사합니다. 기존 모든 작업자의 로컬은 새 중앙에 동기화할 수 없으므로, 모두 미동기화 작업을 정리한 뒤 새 로컬을 만들어야 합니다.\n" +
+                "모델별로 순차 처리하며 실패 시 뒤의 모델은 중단합니다. 조회 후 원본이 바뀌면 해당 파일은 덮어쓰지 않습니다.";
+            RuleSummaryPanel.Visibility = Visibility.Visible;
+            _centralRebuildReviewed = true;
+            UpdatePending(); MainTabs.SelectedIndex = 1;
+            StatusText.Text = $"중앙 재생성 대상 {_models.Count:N0}개를 검토했습니다. 아직 원본을 바꾸지 않았습니다.";
+            return;
+        }
+        _centralRebuildReviewed = false;
+        CentralRebuildGrid.Visibility = Visibility.Collapsed; EditsGrid.Visibility = Visibility.Visible;
         if (file.ProjectBasePointAudit)
         {
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 프로젝트 기준점 점검 룰셋을 다시 불러오세요.");
@@ -522,10 +552,12 @@ public partial class MainWindow : Window
     {
         RefreshGroupRestrictions();
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
-        PendingText.Text = $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
-        ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true && _edits.Count > 0 && !_worker.NeedsAttention && !HasFailedPending();
-        ReviewButton.IsEnabled = !_busy && _edits.Count > 0;
-        ReviewButton.Content = $"③ 변경 내용 확인 ({_edits.Count:N0})";
+        var rebuildReady = _loadedRules?.RebuildCentral == true && _centralRebuildReviewed && _edits.Count == 0 && _models.Count > 0 && _models.All(m => m.Snapshot?.CentralRebuild != null && !m.Snapshot.RequiresRequery);
+        PendingText.Text = rebuildReady ? $"새 중앙 재생성 대상 {_models.Count:N0}개 모델 · 아직 적용 전" : $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
+        ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true && (rebuildReady || _edits.Count > 0) && !_worker.NeedsAttention && !HasFailedPending();
+        ApplyButton.Content = _loadedRules?.RebuildCentral == true ? "새 중앙으로 교체 · 동기화" : "RVT에 저장 · 중앙 동기화";
+        ReviewButton.IsEnabled = !_busy && (rebuildReady || _edits.Count > 0);
+        ReviewButton.Content = rebuildReady ? $"③ 중앙 재생성 검토 ({_models.Count:N0})" : $"③ 변경 내용 확인 ({_edits.Count:N0})";
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         RulesButton.IsEnabled = !_busy;
         ReviewRulesButton.IsEnabled = !_busy && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery);
@@ -536,7 +568,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectBasePointAudit ? "프로젝트 기준점 공유대지 점검·엑셀 목록" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트 기준점 공유대지 점검·엑셀 목록" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
@@ -571,6 +603,7 @@ public partial class MainWindow : Window
     });
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
+        if (_loadedRules?.RebuildCentral == true) { await ApplyCentralRebuild(); return; }
         if (_busy || _sample || _loadedRules?.MaterialAudit == true || _loadedRules?.ProjectBasePointAudit == true || _edits.Count == 0) return;
         try { ValidateRemovalApproval(); ValidateCleanupApproval(); }
         catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "적용 전 검증", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
@@ -628,6 +661,55 @@ public partial class MainWindow : Window
         });
     }
 
+    private async Task ApplyCentralRebuild()
+    {
+        if (_busy || _sample || !_centralRebuildReviewed || _loadedRules?.RebuildCentral != true || _edits.Count != 0 || _worker.NeedsAttention) return;
+        try
+        {
+            if (_models.Count == 0 || _models.Any(m => m.Snapshot == null || m.Snapshot.RequiresRequery))
+                throw new InvalidOperationException("모든 대상 중앙파일을 새로 조회·검토하세요.");
+            QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), _loadedRules);
+            foreach (var model in _models) CentralRebuildPlanner.Validate(model.Snapshot!);
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "중앙 재생성 검토", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        var names = string.Join("\n", _models.Select(m => m.Title));
+        var warning = $"아래 {_models.Count:N0}개 중앙파일을 순서대로 새 중앙으로 교체할까요?\n\n{names}\n\n" +
+            "각 파일의 작업세트를 유지한 채 분리해 원래 경로·이름으로 덮어씁니다. 교체 직전 복구 사본을 작업 세션에 만들며, 중앙 동기화·차용 요소와 모든 작업세트 소유권 반환·저장·닫기까지 실행합니다.\n\n" +
+            "기존 중앙과 다른 중앙 식별자가 생기므로 다른 작업자들의 기존 로컬은 새 중앙과 동기화할 수 없습니다. 모든 작업자가 먼저 미동기화 작업을 정리하고 파일을 닫은 뒤 진행하세요. 완료 후 모두 새 로컬을 생성해야 합니다.\n\n" +
+            "조회 이후 원본이 바뀌면 해당 파일을 건너뛰고 뒤의 파일도 중단합니다. 중앙 교체가 시작된 뒤 실패하면 자동으로 되돌리거나 재시도하지 않습니다.";
+        if (MessageBox.Show(this, warning, "새 중앙으로 교체 · 최종 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        await Run(async () =>
+        {
+            await _worker.Connect(RevitPathBox.Text.Trim());
+            MainTabs.SelectedIndex = 2;
+            var total = _models.Count;
+            int completed = 0;
+            foreach (var item in _models)
+            {
+                if (_stopRequested) { ReportBox.AppendText($"작업중지: 남은 {total - completed:N0}개 모델은 처리하지 않았습니다.\n"); break; }
+                var snapshot = item.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.");
+                CentralRebuildPlanner.Validate(snapshot);
+                var result = await _worker.Send(new Request { Operation = "중앙 재생성", Path = item.Path,
+                    CanonicalPath = snapshot.CanonicalPath, Identity = snapshot.Identity, CentralRebuild = snapshot.CentralRebuild,
+                    Confirmed = true });
+                ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {item.Title}\n{result.Stage} · {result.Message}\n원본 중앙: {snapshot.CanonicalPath}\n교체 전 복구 사본: {result.BackupPath}\n");
+                _centralRebuildReviewed = false;
+                if (result.Success)
+                {
+                    item.Snapshot = null; item.Status = "새 중앙 완료 · 기존 로컬 재생성 필요"; completed++;
+                }
+                else
+                {
+                    snapshot.RequiresRequery = true;
+                    item.Status = result.RequiresAttention ? "중앙 교체 상태 확인 필요" : "원본 미교체 · 재조회 필요";
+                    ReportBox.AppendText($"나머지 {total - completed - 1:N0}개 모델은 처리하지 않았습니다. 같은 파일을 자동 재실행하지 않습니다.\n");
+                    break;
+                }
+            }
+            StatusText.Text = $"새 중앙 완료 {completed:N0}/{total:N0}개. 처리 결과와 백업 경로를 확인하세요.";
+        });
+    }
+
     private void ValidateRemovalApproval()
     {
         if (_loadedRules?.Spec?.RemoveOnly != true && !_edits.Values.Any(e => e.DefinitionFix?.Action == SpecRulePlanner.ActionRemove)) return;
@@ -675,7 +757,8 @@ public partial class MainWindow : Window
                 edit.AddParameter == null ? !rows.ContainsKey(edit.Original.Key) :
                 rows.ContainsKey(edit.Original.Key) || !owners.Any(o => o.ModelPath == edit.Original.ModelPath && o.OwnerId == edit.Original.OwnerId && o.Scope == "프로젝트 정보"))
                 throw new InvalidDataException("변경 대상이 조회 목록에 없습니다.");
-        _models.Clear(); _edits.Clear(); _sample = file.Sample; _loadedRules = file.LoadedRules; _loadedRulePath = null; RuleSummaryPanel.Visibility = Visibility.Collapsed;
+        _models.Clear(); _edits.Clear(); _sample = file.Sample; _loadedRules = file.LoadedRules; _loadedRulePath = null; _centralRebuildReviewed = false; RuleSummaryPanel.Visibility = Visibility.Collapsed;
+        CentralRebuildGrid.Visibility = Visibility.Collapsed; EditsGrid.Visibility = Visibility.Visible;
         foreach (var path in file.Paths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var snapshot = file.Models.SingleOrDefault(m => m.Path == path); snapshot?.ConnectCatalogs();

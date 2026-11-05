@@ -49,4 +49,16 @@ namespace SunnyParameterManager.Bridge
             Result.Id = request.Id; return Result;
         }
     }
+    public sealed class CentralRebuildEngine
+    {
+        public static Response Result = new();
+        public static int Calls;
+        public CentralRebuildEngine(string folder, Action<Response> progress) { }
+        public Response Run(Autodesk.Revit.ApplicationServices.Application app, Request request)
+        {
+            Calls++;
+            Result.Id = request.Id;
+            return Result;
+        }
+    }
 }

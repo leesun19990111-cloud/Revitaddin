@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $payloadHashes = Get-Content -LiteralPath (Join-Path $OutputPath 'ParameterManager/files.sha256.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$expected = @('SunnyTools_Install.exe','SunnyTools_Install.pdb','먼저 읽어주세요.md','룰셋 파일 안내.md','연습용.sunnyrules.json','빌드정보.json','ParameterManager/files.sha256.json') + @($payloadHashes.PSObject.Properties.Name | ForEach-Object { 'ParameterManager/' + $_ })
+$expected = @('SunnyTools_Install.exe','SunnyTools_Install.pdb','먼저 읽어주세요.md','룰셋 파일 안내.md','연습용.sunnyrules.json','중앙모델_분리재생성.sunnyrules.json','빌드정보.json','ParameterManager/files.sha256.json') + @($payloadHashes.PSObject.Properties.Name | ForEach-Object { 'ParameterManager/' + $_ })
 foreach ($name in $expected) {
     if ($name.Contains('..') -or $name.StartsWith('/') -or $name.Contains('\')) { throw "배포 경로 오류: $name" }
     if (-not (Test-Path -LiteralPath (Join-Path $OutputPath $name) -PathType Leaf)) { throw "배포 파일 없음: $name" }

@@ -28,6 +28,7 @@ internal static class Program
             SpecRemoveOnlyTests.Run(Check, Reject);
             MaterialAuditTests.Run(Check, Reject);
             ProjectBasePointTests.Run(Check, Reject);
+            CentralRebuildTests.Run(Check, Reject);
             TypeCodeTests.Run(Check, Reject);
             ReadBatchTests.Run(Check);
             Check(!ApplyContinuation.CanOffer(new()), "구버전 응답은 다음 적용 승인 불가");

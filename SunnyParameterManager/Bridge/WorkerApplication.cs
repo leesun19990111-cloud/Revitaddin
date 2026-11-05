@@ -83,8 +83,9 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
                 ui.PostCommand(command);
                 return;
             }
-            var engine = new ModelEngine(_folder, r => SafeWrite(req.Id + ".progress.json", r));
-            var result = engine.Run(ui.Application, req);
+            var result = req.Operation == "중앙 재생성"
+                ? new CentralRebuildEngine(_folder, r => SafeWrite(req.Id + ".progress.json", r)).Run(ui.Application, req)
+                : new ModelEngine(_folder, r => SafeWrite(req.Id + ".progress.json", r)).Run(ui.Application, req);
             if (req.Operation == "조회" && result.ReadRestartRequired)
             {
                 result.RequiresAttention = true;

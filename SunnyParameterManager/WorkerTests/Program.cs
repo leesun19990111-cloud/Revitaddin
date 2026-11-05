@@ -29,6 +29,7 @@ internal static class Program
                 worker = new(); Set(worker, "_folder", folder); ui = new();
                 ModelEngine.Result = new() { Success = true, Snapshot = new() };
                 ModelEngine.Error = null; ModelEngine.LeaveDocument = false; ModelEngine.Calls = 0;
+                CentralRebuildEngine.Result = new() { Success = true }; CentralRebuildEngine.Calls = 0;
             }
             Reset(); ModelEngine.Result = new() { ReadRestartRequired = true, Message = "OOM" };
             var result = Run("조회");
@@ -70,6 +71,12 @@ internal static class Program
             Check(!result.CanContinueAfterPreflightFailure, "조회 응답은 적용 계속 승인 불가");
             Reset(); ModelEngine.Result = new() { CanContinueAfterPreflightFailure = true, CentralSynchronized = true }; result = Run("적용");
             Check(!result.CanContinueAfterPreflightFailure, "중앙 반영된 응답은 사전 실패로 오인 금지");
+            Reset(); result = Run("중앙 재생성");
+            Check(result.Success && CentralRebuildEngine.Calls == 1 && ModelEngine.Calls == 0, "중앙 재생성 요청은 전용 엔진으로만 전달");
+            Reset(); CentralRebuildEngine.Result = new() { RequiresAttention = true, Stage = "중앙 교체 결과 확인 필요" }; result = Run("중앙 재생성");
+            Check(result.RequiresAttention && !result.Success, "중앙 교체 결과 불명은 작업 세션 잠금");
+            result = Run("조회");
+            Check(result.RequiresAttention && ModelEngine.Calls == 0, "중앙 교체 결과 불명 뒤 후속 조회 차단");
             Console.WriteLine($"PASS {count} worker 안전 경계 검사"); return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

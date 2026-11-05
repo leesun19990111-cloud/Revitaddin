@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.4.3";
+    public const string Release = "0.4.4";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -52,6 +52,7 @@ public sealed class ModelSnapshot
     public DefinitionSnapshot? Definitions { get; set; }
     public List<MaterialAuditItem>? MaterialAuditItems { get; set; }
     public ProjectBasePointAudit? ProjectBasePointAudit { get; set; }
+    public CentralRebuildEvidence? CentralRebuild { get; set; }
     public void ConnectCatalogs() { foreach (var row in Rows) row.Choices = Catalogs.GetValueOrDefault(row.ChoiceCatalog, []); }
 }
 
@@ -66,6 +67,15 @@ public sealed class ProjectBasePointAudit
     public double? ElevationMillimeters { get; set; }
     public double? TrueNorthDegrees { get; set; }
     public string Status { get; set; } = "";
+}
+
+// 조회와 적용 사이에 원본 중앙파일이 바뀌면 분리 저장을 금지한다.
+public sealed class CentralRebuildEvidence
+{
+    public int FormatVersion { get; set; } = 1;
+    public long Length { get; set; }
+    public DateTime LastWriteUtc { get; set; }
+    public string Sha256 { get; set; } = "";
 }
 
 // 실제 유형과 배치 요소에서 확인한 재료 이상 항목. 같은 유형/재료/슬롯은 개수로 묶는다.
@@ -247,6 +257,7 @@ public sealed class Request
     public RuleSet? CleanupRules { get; set; }
     public LinkRemovalPlan? LinkRemoval { get; set; }
     public bool DependentsConfirmed { get; set; }
+    public CentralRebuildEvidence? CentralRebuild { get; set; }
 }
 
 public sealed class Response

@@ -59,6 +59,8 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 }
             }
             var isCentral = info.IsWorkshared && string.Equals(source, central, StringComparison.OrdinalIgnoreCase);
+            if (req.Query?.IncludeCentralRebuild == true && !isCentral)
+                throw new InvalidOperationException("분리 재생성은 선택한 파일이 실제 중앙파일일 때만 가능합니다. 로컬·일반 RVT와 다른 경로의 중앙을 대신 덮어쓰지 않습니다.");
             if (info.IsWorkshared && !isCentral && !string.Equals(info.Username, app.Username, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"다른 사용자의 로컬 파일입니다. 원래 중앙파일을 선택하세요.\n파일 사용자: {info.Username} / 현재 Revit 사용자: {app.Username}\n중앙 경로: {central}\n보관용 복사본·스캔 전 파일을 현재 중앙으로 추정하지 않습니다. 사용자 이름을 바꾸어 우회하지 마세요.");
             if (modifying && info.IsWorkshared && !isCentral && !req.LocalChangesConfirmed)
@@ -119,16 +121,27 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             }
             else if (req.Operation == "조회")
             {
-                Step("매개변수 읽기");
-                var reader = new ParameterReader(doc, metadata);
-                metadata.Rows = reader.ReadAll(req.Query);
-                metadata.Notices = reader.Notices;
-                var ownership = OwnershipConflicts(doc, metadata.Rows);
-                if (ownership.Length > 0) metadata.Notices.Add(ownership);
-                if (metadata.Kind == "로컬") metadata.Notices.Add("기존 로컬을 적용하면 이 파일에 저장된 미동기화 변경도 중앙에 포함됩니다.");
+                if (req.Query?.IncludeCentralRebuild == true)
+                {
+                    Step("중앙파일 상태와 내용 지문 읽기 — 원본 저장 안 함");
+                    metadata.Query = req.Query;
+                    metadata.CentralRebuild = CentralRebuildPlanner.Capture(source);
+                    metadata.Notices.Add("분리 후 같은 경로에 새 중앙을 만들면 기존 로컬은 새 중앙에 동기화할 수 없습니다. 모든 작업자의 미동기화 작업을 먼저 정리하고 새 로컬을 만들어야 합니다.");
+                }
+                else
+                {
+                    Step("매개변수 읽기");
+                    var reader = new ParameterReader(doc, metadata);
+                    metadata.Rows = reader.ReadAll(req.Query);
+                    metadata.Notices = reader.Notices;
+                    var ownership = OwnershipConflicts(doc, metadata.Rows);
+                    if (ownership.Length > 0) metadata.Notices.Add(ownership);
+                    if (metadata.Kind == "로컬") metadata.Notices.Add("기존 로컬을 적용하면 이 파일에 저장된 미동기화 변경도 중앙에 포함됩니다.");
+                }
                 result.Snapshot = metadata;
                 result.Success = true;
-                result.Message = metadata.ProjectBasePointAudit is { } point ? $"프로젝트 기준점 점검: {point.Status}. 원본을 저장하지 않았습니다." :
+                result.Message = metadata.CentralRebuild != null ? "중앙파일 상태를 검토했습니다. 원본을 저장하지 않았습니다." :
+                    metadata.ProjectBasePointAudit is { } point ? $"프로젝트 기준점 점검: {point.Status}. 원본을 저장하지 않았습니다." :
                     metadata.MaterialAuditItems is { } audit ? $"재료 점검 {audit.Count:N0}건을 읽었습니다. 원본을 저장하지 않았습니다." :
                     $"{metadata.Rows.Count:N0}개 매개변수 값을 읽었습니다. 원본을 저장하지 않았습니다.";
             }

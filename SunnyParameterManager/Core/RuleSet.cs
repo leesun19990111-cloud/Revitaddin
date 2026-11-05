@@ -19,6 +19,7 @@ public sealed class RuleSet
     public bool MaterialAudit { get; set; }
     public bool TypeCodeFix { get; set; }
     public bool ProjectBasePointAudit { get; set; }
+    public bool RebuildCentral { get; set; }
 }
 
 public sealed class ParameterRule
@@ -88,6 +89,14 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 9 || file?.RebuildCentral == true)
+        {
+            if (file.Version != 9 || !file.RebuildCentral || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
+                file.Kac != null || file.Space != null || file.Spec != null || file.Cleanup || file.MaterialAudit || file.TypeCodeFix ||
+                file.ProjectBasePointAudit || file.SampleOnly || file.PreserveWorksets?.Count != 0)
+                throw new InvalidOperationException("중앙모델 분리 재생성 룰셋은 버전9와 RebuildCentral만 사용합니다.");
+            return;
+        }
         if (file?.Version == 8 || file?.ProjectBasePointAudit == true)
         {
             if (file.Version != 8 || !file.ProjectBasePointAudit || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
