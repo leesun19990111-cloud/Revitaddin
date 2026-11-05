@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.4.2";
+    public const string Release = "0.4.3";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -55,13 +55,15 @@ public sealed class ModelSnapshot
     public void ConnectCatalogs() { foreach (var row in Rows) row.Choices = Catalogs.GetValueOrDefault(row.ChoiceCatalog, []); }
 }
 
-// 활성 공유대지에서 프로젝트 기준점 위치를 읽은 결과. 길이값은 미터, 각도는 도 단위다.
+// 활성 공유대지에서 프로젝트 기준점의 표시 매개변수를 읽은 결과.
 public sealed class ProjectBasePointAudit
 {
+    // 이전 0.4.2 조회 기록은 단위·각도 방향이 달라 반드시 다시 읽는다.
+    public int FormatVersion { get; set; }
     public string SiteName { get; set; } = "";
-    public double? NorthSouthMeters { get; set; }
-    public double? EastWestMeters { get; set; }
-    public double? ElevationMeters { get; set; }
+    public double? NorthSouthMillimeters { get; set; }
+    public double? EastWestMillimeters { get; set; }
+    public double? ElevationMillimeters { get; set; }
     public double? TrueNorthDegrees { get; set; }
     public string Status { get; set; } = "";
 }

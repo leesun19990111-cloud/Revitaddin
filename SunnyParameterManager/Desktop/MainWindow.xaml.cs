@@ -421,7 +421,7 @@ public partial class MainWindow : Window
             ProjectBasePointWorkbook.Save(path, _models.Select(m => m.Snapshot!));
             var failed = _models.Count(m => m.Snapshot!.ProjectBasePointAudit!.Status != "확인");
             RuleSummary.Text = $"읽기 전용 프로젝트 기준점 점검 완료 · {_models.Count:N0}개 모델 · 확인 필요 {failed:N0}개\n" +
-                "활성 공유대지의 프로젝트 기준점 좌표를 미터, 진북각도를 도 단위로 기록했습니다. RVT는 변경하지 않았습니다.\n같은 파일명으로 이전 보고서를 교체했습니다. 엑셀 파일: " + path;
+                "활성 공유대지의 프로젝트 기준점 좌표를 정수 mm, 진북각도를 소수 둘째 자리 도 단위로 기록했습니다. RVT는 변경하지 않았습니다.\n같은 파일명으로 이전 보고서를 교체했습니다. 엑셀 파일: " + path;
             RuleSummaryPanel.Visibility = Visibility.Visible;
             ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
             StatusText.Text = "프로젝트 기준점 점검 엑셀을 저장했습니다: " + path;

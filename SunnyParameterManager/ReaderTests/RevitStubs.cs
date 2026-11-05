@@ -5,7 +5,7 @@ namespace Autodesk.Revit.DB
  public enum CategoryType { Model, Annotation, Internal }
  public enum ViewType { Undefined, FloorPlan, CeilingPlan, Elevation, Section, Detail, DraftingView, Legend, Schedule, ThreeD, DrawingSheet, Internal, ProjectBrowser, SystemBrowser }
  public enum StorageType { String, Integer, Double, ElementId }
- public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053 }
+ public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053, BASEPOINT_NORTHSOUTH_PARAM = -1150191, BASEPOINT_EASTWEST_PARAM = -1150192, BASEPOINT_ELEVATION_PARAM = -1150193, BASEPOINT_ANGLETON_PARAM = -1150194 }
  public enum WorksetKind { UserWorkset }
  public enum CheckoutStatus { NotOwned, OwnedByOtherUser }
  public static class WorksharingUtils { public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id) => doc.OtherOwner ? CheckoutStatus.OwnedByOtherUser : CheckoutStatus.NotOwned; }
@@ -60,6 +60,13 @@ namespace Autodesk.Revit.DB
  public sealed record XYZ(double X, double Y, double Z);
  public sealed class BasePoint : Element
  {
+  public BasePoint()
+  {
+   Parameters.Clear();
+   foreach (var id in new[] { BuiltInParameter.BASEPOINT_NORTHSOUTH_PARAM, BuiltInParameter.BASEPOINT_EASTWEST_PARAM,
+       BuiltInParameter.BASEPOINT_ELEVATION_PARAM, BuiltInParameter.BASEPOINT_ANGLETON_PARAM })
+    Parameters.Add(new Parameter { Id = new((long)id), StorageType = StorageType.Double, Value = "0" });
+  }
   public XYZ Position { get; set; } = new(0, 0, 0);
   public static BasePoint? GetProjectBasePoint(Document doc) => doc.ProjectBasePoint;
  }

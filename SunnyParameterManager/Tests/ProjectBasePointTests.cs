@@ -15,7 +15,8 @@ internal static class ProjectBasePointTests
         reject(() => RulePlanner.Parse(json.Replace("\"Rules\":[]", "\"Rules\":[{}]")), "기준점 점검과 변경 규칙 혼합 거부");
         reject(() => RulePlanner.Parse(json.Replace("\"Version\":8", "\"Version\":7")), "구버전 기준점 점검 플래그 거부");
         reject(() => QueryPlan.RequireCoverage([new ModelSnapshot { Title = "전체 조회" }], rule), "일반 조회로 기준점 점검 대체 불가");
-        QueryPlan.RequireCoverage([new ModelSnapshot { Title = "점검", Query = query, ProjectBasePointAudit = new() }], rule);
+        reject(() => QueryPlan.RequireCoverage([new ModelSnapshot { Title = "구버전 점검", Query = query, ProjectBasePointAudit = new() }], rule), "0.4.2 조회는 단위·각도 변경 때문에 재조회");
+        QueryPlan.RequireCoverage([new ModelSnapshot { Title = "점검", Query = query, ProjectBasePointAudit = new() { FormatVersion = 2 } }], rule);
         var folder = Path.Combine(Path.GetTempPath(), "SunnyBasePointTest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         try
@@ -26,8 +27,8 @@ internal static class ProjectBasePointTests
             var rows = new[]
             {
                 new ModelSnapshot { Path = "C:/models/PUS-01.rvt", ProjectBasePointAudit = new()
-                    { SiteName = "공유대지 A", NorthSouthMeters = -12.345, EastWestMeters = 7.5,
-                      ElevationMeters = 1.25, TrueNorthDegrees = 23.5, Status = "확인" } },
+                    { FormatVersion = 2, SiteName = "공유대지 A", NorthSouthMillimeters = -12345, EastWestMillimeters = 7500,
+                      ElevationMillimeters = 1250, TrueNorthDegrees = 346, Status = "확인" } },
                 new ModelSnapshot { Path = "C:/models/PUS-02.rvt", ProjectBasePointAudit = new()
                     { SiteName = "", Status = "조회 실패: 기준점 없음" } }
             };
@@ -38,11 +39,12 @@ internal static class ProjectBasePointTests
                 var xml = XDocument.Parse(reader.ReadToEnd());
                 XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
                 check(xml.Descendants(ns + "row").Count() == 3 && xml.Descendants(ns + "autoFilter").Any(), "모델별 행·필터 유지");
-                check(xml.Descendants(ns + "c").Any(c => (string?)c.Attribute("r") == "D2" &&
-                    double.TryParse((string?)c.Element(ns + "v"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) && Math.Abs(value + 12.345) < 1e-9) &&
-                    xml.Descendants(ns + "c").Any(c => (string?)c.Attribute("r") == "G2" && (string?)c.Element(ns + "v") == "23.5"), "미터·각도 숫자 셀");
+                check(xml.Descendants(ns + "c").Any(c => (string?)c.Attribute("r") == "D2" && (string?)c.Attribute("s") == "1" && (string?)c.Element(ns + "v") == "-12345") &&
+                    xml.Descendants(ns + "c").Any(c => (string?)c.Attribute("r") == "G2" && (string?)c.Attribute("s") == "2" && (string?)c.Element(ns + "v") == "346"), "정수 mm·소수 둘째 자리 각도 숫자 셀");
                 check(xml.Descendants(ns + "t").Any(t => (string?)t == "조회 실패: 기준점 없음"), "실패 모델도 한 행으로 기록");
             }
+            using (var styled = ZipFile.OpenRead(report))
+                check(styled.GetEntry("xl/styles.xml") != null, "mm 정수·각도 두 자리 표시 형식 포함");
             ProjectBasePointWorkbook.Save(report, rows);
             check(Directory.GetFiles(folder, "*.xlsx").SequenceEqual([report]), "반복 저장은 같은 엑셀 한 파일만 갱신");
         }

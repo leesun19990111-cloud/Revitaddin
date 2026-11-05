@@ -6,11 +6,24 @@ int count = 0;
 void Check(bool ok, string text) { if (!ok) throw new Exception("FAIL " + text); Console.WriteLine("PASS " + text); count++; }
 var doc = new Document(); var model = new ModelSnapshot { Path = "테스트.rvt" }; var reader = new ParameterReader(doc, model);
 doc.ActiveProjectLocation!.Name = "현장 공유대지";
-doc.ActiveProjectLocation.Position = new() { NorthSouth = -10, EastWest = 20, Elevation = 5, Angle = Math.PI / 6 };
+doc.ActiveProjectLocation.Position = new() { NorthSouth = -10, EastWest = 20, Elevation = 5, Angle = 14 * Math.PI / 180 };
+doc.ProjectBasePoint!.get_Parameter(BuiltInParameter.BASEPOINT_NORTHSOUTH_PARAM)!.Value = "-10";
+doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_EASTWEST_PARAM)!.Value = "20";
+doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_ELEVATION_PARAM)!.Value = "5";
+doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_ANGLETON_PARAM)!.Value = (346 * Math.PI / 180).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 var pointRule = RulePlanner.Parse("{\"Version\":8,\"Name\":\"기준점 점검\",\"Rules\":[],\"ProjectBasePointAudit\":true}");
 Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
-    model.ProjectBasePointAudit is { SiteName: "현장 공유대지", Status: "확인", NorthSouthMeters: -3.048, EastWestMeters: 6.096, ElevationMeters: 1.524 } &&
-    Math.Abs(model.ProjectBasePointAudit.TrueNorthDegrees!.Value - 30) < 1e-10, "프로젝트 기준점 공유 좌표·단위·진북각도 조회");
+    model.ProjectBasePointAudit is { FormatVersion: 2, SiteName: "현장 공유대지", Status: "확인", NorthSouthMillimeters: -3048, EastWestMillimeters: 6096, ElevationMillimeters: 1524, TrueNorthDegrees: 346 }, "프로젝트 기준점 화면 좌표·mm·346도 조회");
+doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_ANGLETON_PARAM)!.Value = (-14 * Math.PI / 180).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
+    model.ProjectBasePointAudit?.TrueNorthDegrees == 346, "음수 내부 각도도 화면 기준 0~360도로 표시");
+doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_NORTHSOUTH_PARAM)!.Value =
+    (100806150.91579382 / 304.8).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_ANGLETON_PARAM)!.Value =
+    (149.377615028738 * Math.PI / 180).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
+    model.ProjectBasePointAudit is { NorthSouthMillimeters: 100806151, TrueNorthDegrees: 149.38 },
+    "실제 모델의 소수 mm·각도는 정수 mm·소수 둘째 자리로 통일");
 doc.ProjectBasePoint = null;
 Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
     model.ProjectBasePointAudit?.Status.Contains("찾을 수 없음") == true, "기준점 부재 모델도 상태 기록");
