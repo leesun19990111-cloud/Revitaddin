@@ -304,7 +304,7 @@ CAD 링크를 Revit에서 스냅해 따라 그린 모델선 또는 상세선을 
 
 ## 설치 (사용자용)
 
-1. 저장소 루트의 `SunnyTools_Installer_v.1.1.1.zip`(버전이 붙은 최신 zip 하나만 루트에 있습니다)을 내려받아 압축을 풉니다.
+1. 저장소 루트의 `SunnyTools_Installer_v.1.1.2.zip`(버전이 붙은 최신 zip 하나만 루트에 있습니다)을 내려받아 압축을 풉니다.
 2. 실행 중인 Revit을 모두 종료한 뒤 `SunnyTools_Install.exe`를 실행합니다. 설치된 Revit 버전을 자동으로 감지해 해당 버전에 맞는 파일과 `.addin` 매니페스트를 설치합니다.
 3. Revit을 실행하면 리본에 "Sunny Tools" 탭이 나타납니다.
 

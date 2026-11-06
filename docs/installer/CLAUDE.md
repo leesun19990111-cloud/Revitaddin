@@ -1,5 +1,10 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## Sunny Tools v112 — NAMER 분류 순서 보정
+
+- v111의 링크 NAMER 화면을 첫 화면과 같은 분류 순서 및 기본 `뷰` 선택으로 마무리한다. 내부 저장·동기화 경로는 변경하지 않는다. 상세는 namer 문서.
+- 2023~2027 격리 Release 빌드 오류 0, 통합 회귀 308건 통과. `SunnyToolsInstaller_out_v112`, `SunnyTools_Installer_v.1.1.2.zip`의 연도별 DLL 11/11/2/2/2개와 ZIP 30개 파일을 빌드 출력과 SHA-256 대조했다. Autodesk API DLL 없음. ZIP SHA-256 `7868786A66DD0775544E01FBB8110061FAAC946E0381217372623E6E46C5DBBB`, EXE SHA-256 `DBF820866372C46880533EAD90DBA407B732000CD7F238664C68AE9A0C6A130C`. v111 산출물은 `Old_Versions/`에 보관한다. 실제 Revit 모델 적용은 수행하지 않았다.
+
 ## Sunny Tools v111 — NAMER 화면 배치 통일
 
 - 링크가 있는 모델의 통합 NAMER를 기존 단일 모델 NAMER의 상단 조작 순서와 제목에 맞췄다. 링크 편집 경로·중앙 동기화 안전 정책, 재료 지정 화면은 유지한다. 상세는 namer 문서.

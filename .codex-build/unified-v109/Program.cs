@@ -92,6 +92,11 @@ partial class Program {
   Check(parents.Select(r=>r.Key).Distinct().Count()==3&&parents.All(r=>r.UniqueId=="1"),"동일 UniqueId라도 모델 키로 분리");
   Check(sources[0].Rows.Count(r=>r.ParentId=="1")==245,"패밀리 하위 모든 유형 연결");
   var w=new UnifiedEditWindow(sources,false);
+  Check(Field<ComboBox>(w,"_category").SelectedIndex==0,"통합 NAMER 기본 분류는 기존 창처럼 뷰");
+  Check(Children<RadioButton>((DependencyObject)w.Content).Where(r=>r.Tag is int).Select(r=>r.Content?.ToString())
+    .SequenceEqual(new[]{"뷰","시트","패밀리","유형","범례","일람표","뷰 템플릿","재료","프로젝트 정보"}),
+    "통합 NAMER 분류 순서가 기존 창과 같음");
+  Field<ComboBox>(w,"_category").SelectedIndex=2;
   Check(Field<List<UnifiedRow>>(w,"_display").Count==4,"처음 모든 모델의 패밀리가 같은 목록에 표시");
   Click(w,"전체 선택");Check(parents.All(r=>r.Selected)&&!sources[0].Rows.Any(r=>r.ParentId=="1"&&r.Selected),"전체 선택은 접힌 유형 제외");
   parents[0].Expanded=true;Call(w,"Refresh");
@@ -192,7 +197,7 @@ partial class Program {
  }
  static void UiRegression(){
   var host=Doc("현재",245);Link(host,Doc("링크"),"링크.rvt",500);
-  var sources=UnifiedEditService.Collect(host,false);var w=new UnifiedEditWindow(sources,false);
+  var sources=UnifiedEditService.Collect(host,false);var w=new UnifiedEditWindow(sources,false);Field<ComboBox>(w,"_category").SelectedIndex=2;
   var first=sources[0].Rows.Single(r=>r.IsFamily);first.Expanded=true;Call(w,"Refresh");Capture(w,"ui-before.png");
   var display=Field<List<UnifiedRow>>(w,"_display");
   Invoke(w,"BeginDrag",display[1],false);Invoke(w,"ContinueDrag",display[4]);Invoke(w,"ContinueDrag",display[2]);Call(w,"EndDrag");

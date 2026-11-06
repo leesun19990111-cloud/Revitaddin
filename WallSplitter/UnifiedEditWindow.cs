@@ -69,12 +69,14 @@ namespace WallSplitter
                 var categories = new WrapPanel { Margin = new Thickness(0,0,0,8) };
                 categories.Children.Add(new TextBlock { Text = "대상:", FontWeight = FontWeights.Bold,
                     VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,8,0) });
-                string[] names = { "뷰", "시트", "패밀리", "유형", "범례", "일람표", "재료", "뷰 템플릿", "프로젝트 정보" };
-                for (int index = 0; index < names.Length; index++)
+                (int Category, string Name)[] categoriesInDisplayOrder =
+                { (0, "뷰"), (1, "시트"), (2, "패밀리"), (3, "유형"), (4, "범례"), (5, "일람표"),
+                    (7, "뷰 템플릿"), (6, "재료"), (8, "프로젝트 정보") };
+                foreach (var item in categoriesInDisplayOrder)
                 {
-                    int selectedIndex = index;
-                    var radio = new RadioButton { Content = names[index], GroupName = "UnifiedNamerCategory",
-                        Margin = new Thickness(0,0,12,0), IsChecked = index == 2 };
+                    int selectedIndex = item.Category;
+                    var radio = new RadioButton { Content = item.Name, Tag = selectedIndex, GroupName = "UnifiedNamerCategory",
+                        Margin = new Thickness(0,0,12,0), IsChecked = selectedIndex == 0 };
                     radio.Checked += (_, _) => Guard(() => _category.SelectedIndex = selectedIndex);
                     _categoryRadios.Add(radio);
                     categories.Children.Add(radio);
@@ -91,7 +93,7 @@ namespace WallSplitter
             _category.Width = 135;
             foreach (string label in materials ? new[] { "유형/패밀리", "현재 재료", "재료 없음" }
                 : new[] { "뷰", "시트", "패밀리", "유형", "범례", "일람표", "재료", "뷰 템플릿", "프로젝트 정보" }) _category.Items.Add(label);
-            _category.SelectedIndex = materials ? 0 : 2;
+            _category.SelectedIndex = 0;
             if (materials) filters.Children.Add(_category);
             _search.Width = materials ? 230 : 215; _search.ToolTip = "모든 모델의 검색 결과를 함께 표시합니다."; filters.Children.Add(_search);
             _filterMode.Width = 125;
@@ -236,7 +238,15 @@ namespace WallSplitter
             });
             apply.Style = (Style)FindResource("PrimaryButtonStyle"); footer.Children.Add(apply);
             _model.SelectionChanged += (_, _) => Guard(Refresh);
-            _category.SelectionChanged += (_, _) => Guard(Refresh);
+            _category.SelectionChanged += (_, _) => Guard(() =>
+            {
+                if (!_materials)
+                {
+                    var radio = _categoryRadios.FirstOrDefault(r => r.Tag is int index && index == _category.SelectedIndex);
+                    if (radio != null) radio.IsChecked = true;
+                }
+                Refresh();
+            });
             _filterMode.SelectionChanged += (_, _) => Guard(Refresh);
             _search.TextChanged += (_, _) => Guard(Refresh);
             _sort.SelectionChanged += (_, _) => Guard(Resort);
