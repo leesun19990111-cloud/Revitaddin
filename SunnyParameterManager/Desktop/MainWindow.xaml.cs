@@ -433,7 +433,7 @@ public partial class MainWindow : Window
             CentralRebuildGrid.Visibility = Visibility.Visible;
             EditsGrid.Visibility = Visibility.Collapsed;
             RuleSummary.Text = $"중앙 재생성 검토 · {_models.Count:N0}개 파일\n" +
-                "각 중앙을 작업세트 유지 상태로 분리 → 같은 경로·이름의 새 중앙으로 덮어쓰기 → 중앙 동기화 → 차용 요소·모든 작업세트 소유권 반환 → 저장·닫기 순서로 처리합니다.\n" +
+                "선택한 작업공유 파일을 작업세트 유지 상태로 분리 → 같은 경로·이름의 새 중앙으로 덮어쓰기 → 중앙 동기화 → 차용 요소·모든 작업세트 소유권 반환 → 저장·닫기 순서로 처리합니다.\n" +
                 "교체 전 원본은 작업 세션 Backups에 복사합니다. 기존 모든 작업자의 로컬은 새 중앙에 동기화할 수 없으므로, 모두 미동기화 작업을 정리한 뒤 새 로컬을 만들어야 합니다.\n" +
                 "모델별로 순차 처리하며 실패 시 뒤의 모델은 중단합니다. 조회 후 원본이 바뀌면 해당 파일은 덮어쓰지 않습니다.";
             RuleSummaryPanel.Visibility = Visibility.Visible;

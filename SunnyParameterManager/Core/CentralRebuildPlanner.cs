@@ -28,8 +28,10 @@ public static class CentralRebuildPlanner
         if (model.CentralRebuild?.FormatVersion != 2 || model.CentralRebuild.SourceKind != model.Kind ||
             model.Kind is not ("중앙" or "작업공유 사본") ||
             model.Query?.IncludeCentralRebuild != true ||
-            !string.Equals(model.Path, model.CanonicalPath, StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(model.Path) || string.IsNullOrWhiteSpace(model.CanonicalPath) ||
+            !Path.IsPathFullyQualified(model.CanonicalPath) ||
             !model.Identity.StartsWith("중앙재생성-v2/", StringComparison.Ordinal) ||
+            !model.Identity.EndsWith("/" + model.CanonicalPath.ToUpperInvariant(), StringComparison.Ordinal) ||
             model.CentralRebuild.Length <= 0 || model.CentralRebuild.Sha256.Length != 64)
             throw new InvalidOperationException(model.Title + ": 선택한 RVT를 중앙 재생성 룰셋으로 다시 조회하세요. 이전 조회는 사용할 수 없습니다.");
     }

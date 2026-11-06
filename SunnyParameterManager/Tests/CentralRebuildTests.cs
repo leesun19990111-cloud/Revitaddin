@@ -17,6 +17,16 @@ internal static class CentralRebuildTests
         CentralRebuildPlanner.Validate(model);
         QueryPlan.RequireCoverage([model], rules);
         check(true, "중앙 증거와 선택 조회가 맞으면 검토 가능");
+        model.Path = @"A:\BIM\source.rvt";
+        model.CanonicalPath = @"\\192.168.0.31\share\BIM\source.rvt";
+        model.Identity = CentralRebuildPlanner.Identity(Guid.NewGuid(), model.CanonicalPath);
+        CentralRebuildPlanner.Validate(model);
+        check(true, "매핑 드라이브 선택 경로와 실제 UNC 경로가 달라도 검토 가능");
+        model.Identity = CentralRebuildPlanner.Identity(Guid.NewGuid(), @"\\192.168.0.31\share\BIM\other.rvt");
+        reject(() => CentralRebuildPlanner.Validate(model), "조회 식별자가 다른 원본 경로를 가리키면 차단");
+        model.Path = "C:/x.rvt";
+        model.CanonicalPath = "C:/x.rvt";
+        model.Identity = CentralRebuildPlanner.Identity(Guid.NewGuid(), model.CanonicalPath);
         foreach (var kind in new[] { "작업공유 사본" })
         {
             model.Kind = kind;
