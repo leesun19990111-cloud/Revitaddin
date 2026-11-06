@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.4.4";
+    public const string Release = "0.4.5";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -69,10 +69,11 @@ public sealed class ProjectBasePointAudit
     public string Status { get; set; } = "";
 }
 
-// 조회와 적용 사이에 원본 중앙파일이 바뀌면 분리 저장을 금지한다.
+// 조회와 적용 사이에 선택한 RVT가 바뀌면 새 중앙 저장을 금지한다.
 public sealed class CentralRebuildEvidence
 {
-    public int FormatVersion { get; set; } = 1;
+    public int FormatVersion { get; set; } = 2;
+    public string SourceKind { get; set; } = "";
     public long Length { get; set; }
     public DateTime LastWriteUtc { get; set; }
     public string Sha256 { get; set; } = "";

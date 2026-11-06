@@ -46,28 +46,32 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             using var info = ReadFileInfo(source, Step);
             if (!info.IsSavedInCurrentVersion) throw new InvalidOperationException($"Revit 2026 형식만 처리합니다. 선택 파일: {info.Format}. 자동 업그레이드는 하지 않습니다.");
             if (info.IsInProgress) throw new InvalidOperationException("저장 중인 파일은 처리하지 않습니다.");
+            var rebuildQuery = req.Query?.IncludeCentralRebuild == true;
+            var rebuildKind = rebuildQuery ? CentralRebuildSourceKind(source, info) : "";
             var central = "";
             if (info.IsWorkshared)
             {
-                Step("기록된 중앙파일 경로 확인");
-                try { central = Canonical(info.CentralPath); }
-                catch (IOException ex)
+                if (rebuildQuery) central = info.CentralPath ?? "";
+                else
                 {
-                    throw new InvalidOperationException("선택한 파일에 기록된 중앙모델 경로에 접근할 수 없습니다. 이동·이름 변경 또는 서버 연결을 확인하세요. " +
-                        "이 파일을 다른 중앙으로 임의 재연결하거나 복사본을 중앙으로 간주하지 않았습니다. Revit에서 정상 중앙 연결을 확인한 파일을 다시 등록하세요.\n선택 파일: " + source +
-                        "\n기록된 중앙 경로: " + info.CentralPath + "\n원본 오류: " + ex.Message, ex);
+                    Step("기록된 중앙파일 경로 확인");
+                    try { central = Canonical(info.CentralPath); }
+                    catch (IOException ex)
+                    {
+                        throw new InvalidOperationException("선택한 파일에 기록된 중앙모델 경로에 접근할 수 없습니다. 이동·이름 변경 또는 서버 연결을 확인하세요. " +
+                            "이 파일을 다른 중앙으로 임의 재연결하거나 복사본을 중앙으로 간주하지 않았습니다. Revit에서 정상 중앙 연결을 확인한 파일을 다시 등록하세요.\n선택 파일: " + source +
+                            "\n기록된 중앙 경로: " + info.CentralPath + "\n원본 오류: " + ex.Message, ex);
+                    }
                 }
             }
-            var isCentral = info.IsWorkshared && string.Equals(source, central, StringComparison.OrdinalIgnoreCase);
-            if (req.Query?.IncludeCentralRebuild == true && !isCentral)
-                throw new InvalidOperationException("분리 재생성은 선택한 파일이 실제 중앙파일일 때만 가능합니다. 로컬·일반 RVT와 다른 경로의 중앙을 대신 덮어쓰지 않습니다.");
-            if (info.IsWorkshared && !isCentral && !string.Equals(info.Username, app.Username, StringComparison.OrdinalIgnoreCase))
+            var isCentral = rebuildQuery ? rebuildKind == "중앙" : info.IsWorkshared && string.Equals(source, central, StringComparison.OrdinalIgnoreCase);
+            if (!rebuildQuery && info.IsWorkshared && !isCentral && !string.Equals(info.Username, app.Username, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"다른 사용자의 로컬 파일입니다. 원래 중앙파일을 선택하세요.\n파일 사용자: {info.Username} / 현재 Revit 사용자: {app.Username}\n중앙 경로: {central}\n보관용 복사본·스캔 전 파일을 현재 중앙으로 추정하지 않습니다. 사용자 이름을 바꾸어 우회하지 마세요.");
             if (modifying && info.IsWorkshared && !isCentral && !req.LocalChangesConfirmed)
                 throw new InvalidOperationException("기존 로컬의 미동기화 작업까지 중앙에 포함된다는 확인이 필요합니다.");
             if (modifying && !string.Equals(source, req.CanonicalPath, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("조회 이후 실제 파일 경로가 달라졌습니다.");
-            var lockKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((central.Length > 0 ? central : source).ToUpperInvariant())));
+            var lockKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((!rebuildQuery && central.Length > 0 ? central : source).ToUpperInvariant())));
             gate = new Mutex(false, "Local\\SunnyParameterManager-" + lockKey);
             try { locked = gate.WaitOne(0); } catch (AbandonedMutexException) { locked = true; throw new InvalidOperationException("이 모델의 이전 작업이 비정상 종료됐습니다. 중앙 상태와 복구 기록을 확인한 뒤 다시 시도하세요."); }
             if (!locked) throw new InvalidOperationException("이 모델은 다른 매개변수 관리자 작업에서 사용 중입니다.");
@@ -80,7 +84,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 File.Copy(source, result.BackupPath, false);
             }
             var openPath = source;
-            if (isCentral)
+            if (isCentral && !rebuildQuery)
             {
                 Step("작업용 로컬 준비");
                 var localDir = Path.Combine(folder, "Locals", req.Id);
@@ -98,20 +102,26 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             }
             result.RecoveryPath = openPath;
             Step("모델 열기");
-            using var options = new OpenOptions { DetachFromCentralOption = DetachFromCentralOption.DoNotDetach };
+            using var options = new OpenOptions { DetachFromCentralOption = rebuildQuery && info.IsWorkshared
+                ? DetachFromCentralOption.DetachAndPreserveWorksets : DetachFromCentralOption.DoNotDetach };
             if (info.IsWorkshared) options.SetOpenWorksetsConfiguration(new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets));
             doc = app.OpenDocumentFile(ModelPathUtils.ConvertUserVisiblePathToModelPath(openPath), options);
             Step("모델 식별 및 중앙 연결 확인");
-            if (doc.IsFamilyDocument || doc.IsLinked || doc.IsDetached || doc.IsReadOnly) throw new InvalidOperationException("일반 프로젝트 원본만 지원합니다. 패밀리·링크·분리·읽기 전용 문서는 처리하지 않습니다.");
+            if (doc.IsFamilyDocument || doc.IsLinked || doc.IsReadOnly || !rebuildQuery && doc.IsDetached)
+                throw new InvalidOperationException("일반 프로젝트 원본만 지원합니다. 패밀리·링크·분리·읽기 전용 문서는 처리하지 않습니다.");
             if (doc.IsWorkshared != info.IsWorkshared) throw new InvalidOperationException("파일의 작업공유 상태가 달라졌습니다.");
-            if (doc.IsWorkshared && !string.Equals(Canonical(ModelPathUtils.ConvertModelPathToUserVisiblePath(doc.GetWorksharingCentralModelPath())), central, StringComparison.OrdinalIgnoreCase))
+            if (rebuildQuery && doc.IsWorkshared && !doc.IsDetached)
+                throw new InvalidOperationException("작업공유 파일을 작업세트 유지 상태로 분리해 열지 못했습니다.");
+            if (!rebuildQuery && doc.IsWorkshared && !string.Equals(Canonical(ModelPathUtils.ConvertModelPathToUserVisiblePath(doc.GetWorksharingCentralModelPath())), central, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("원래 중앙모델과 연결이 다릅니다.");
             // WorksharingCentralGUID는 Revit Server 전용이다. 파일 기반 중앙/로컬에 호출하면 예외가 난다.
             // 작업마다 새로 만드는 로컬의 경로 대신, 생성 식별자와 위에서 검증한 실제 중앙 경로를 결합한다.
             var creationId = doc.CreationGUID;
             if (creationId == Guid.Empty) throw new InvalidOperationException("모델 생성 식별자를 확인할 수 없습니다. 조회를 중단합니다.");
-            var identity = "파일-v2/" + creationId.ToString("D") + "/" + (doc.IsWorkshared ? "중앙:" + central.ToUpperInvariant() : "일반");
-            var metadata = new ModelSnapshot { Path = req.Path, CanonicalPath = source, Title = Path.GetFileNameWithoutExtension(source), CentralPath = central, Kind = isCentral ? "중앙" : doc.IsWorkshared ? "로컬" : "일반", Identity = identity };
+            var identity = rebuildQuery ? CentralRebuildPlanner.Identity(creationId, source) :
+                "파일-v2/" + creationId.ToString("D") + "/" + (doc.IsWorkshared ? "중앙:" + central.ToUpperInvariant() : "일반");
+            var metadata = new ModelSnapshot { Path = req.Path, CanonicalPath = source, Title = Path.GetFileNameWithoutExtension(source),
+                CentralPath = central, Kind = rebuildQuery ? rebuildKind : isCentral ? "중앙" : doc.IsWorkshared ? "로컬" : "일반", Identity = identity };
             if (req.Operation == "링크 검사")
             {
                 Step("링크·가져오기와 삭제 영향 검사 — 원본 저장 안 함");
@@ -121,12 +131,13 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             }
             else if (req.Operation == "조회")
             {
-                if (req.Query?.IncludeCentralRebuild == true)
+                if (rebuildQuery)
                 {
-                    Step("중앙파일 상태와 내용 지문 읽기 — 원본 저장 안 함");
+                    Step("선택한 RVT 상태와 내용 지문 읽기 — 원본 저장 안 함");
                     metadata.Query = req.Query;
-                    metadata.CentralRebuild = CentralRebuildPlanner.Capture(source);
-                    metadata.Notices.Add("분리 후 같은 경로에 새 중앙을 만들면 기존 로컬은 새 중앙에 동기화할 수 없습니다. 모든 작업자의 미동기화 작업을 먼저 정리하고 새 로컬을 만들어야 합니다.");
+                    metadata.CentralRebuild = CentralRebuildPlanner.Capture(source, rebuildKind);
+                    metadata.Notices.Add("작업세트를 유지한 채 선택한 파일을 분리해 같은 경로에 새 중앙으로 저장합니다. 기존 로컬은 새 중앙에 동기화할 수 없습니다.");
+                    if (rebuildKind == "작업공유 사본") metadata.Notices.Add("기록된 기존 중앙은 변경하지 않습니다. 선택한 사본만 새 중앙으로 교체합니다.");
                 }
                 else
                 {
@@ -140,7 +151,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 }
                 result.Snapshot = metadata;
                 result.Success = true;
-                result.Message = metadata.CentralRebuild != null ? "중앙파일 상태를 검토했습니다. 원본을 저장하지 않았습니다." :
+                result.Message = metadata.CentralRebuild != null ? "선택한 RVT를 새 중앙으로 만들 수 있는지 검토했습니다. 원본을 저장하지 않았습니다." :
                     metadata.ProjectBasePointAudit is { } point ? $"프로젝트 기준점 점검: {point.Status}. 원본을 저장하지 않았습니다." :
                     metadata.MaterialAuditItems is { } audit ? $"재료 점검 {audit.Count:N0}건을 읽었습니다. 원본을 저장하지 않았습니다." :
                     $"{metadata.Rows.Count:N0}개 매개변수 값을 읽었습니다. 원본을 저장하지 않았습니다.";
@@ -406,6 +417,17 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         var resolved = buffer.ToString();
         if (resolved.StartsWith("\\\\?\\UNC\\", StringComparison.OrdinalIgnoreCase)) return "\\\\" + resolved[8..];
         return resolved.StartsWith("\\\\?\\", StringComparison.Ordinal) ? resolved[4..] : resolved;
+    }
+
+    internal static string CentralRebuildSourceKind(string source, BasicFileInfo info)
+    {
+        if (!info.IsWorkshared) throw new InvalidOperationException("중앙 재생성은 작업세트가 있는 RVT만 지원합니다. 작업공유가 없는 일반 RVT는 대상이 아닙니다.");
+        if (string.IsNullOrWhiteSpace(info.CentralPath)) return "작업공유 사본";
+        if (!Path.IsPathFullyQualified(info.CentralPath))
+            throw new InvalidOperationException("파일 기반 RVT만 새 중앙으로 만들 수 있습니다. Revit Server·클라우드 연결은 지원하지 않습니다.");
+        try { return string.Equals(source, Canonical(info.CentralPath), StringComparison.OrdinalIgnoreCase) ? "중앙" : "작업공유 사본"; }
+        catch (IOException) { return "작업공유 사본"; }
+        catch (UnauthorizedAccessException) { return "작업공유 사본"; }
     }
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetFinalPathNameByHandle(IntPtr file, StringBuilder path, uint length, uint flags);

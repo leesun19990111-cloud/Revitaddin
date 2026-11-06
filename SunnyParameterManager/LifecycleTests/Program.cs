@@ -68,6 +68,13 @@ internal static class Program
    Check(result.Success && State.Events.Contains("create-local") && State.Events.Contains("sync"), "중앙 조회 후 새 작업 로컬에서도 같은 모델 식별");
    r = Setup(true); r.Operation = "조회"; result = Run(r);
    Check(result.Success && result.Snapshot!.Kind == "로컬" && State.Events.SequenceEqual(new[] { "open", "close" }), "기존 파일 기반 로컬 조회도 저장/동기화 없음");
+   var rebuildQuery = QueryPlan.FromRules(RulePlanner.Parse("{\"Version\":9,\"Name\":\"중앙 재생성\",\"Rules\":[],\"RebuildCentral\":true}"));
+   r = Setup(true); r.Operation = "조회"; r.Query = rebuildQuery; result = Run(r);
+   Check(result.Success && result.Snapshot!.Kind == "작업공유 사본" && result.Snapshot.CentralRebuild?.SourceKind == "작업공유 사본" && State.Events.SequenceEqual(new[] { "open", "close" }), "작업공유 로컬도 분리 재생성 조회 가능·원본 비저장: " + result.Message + " / " + string.Join(",", State.Events));
+   r = Setup(true); State.Info.CentralPath = Path.Combine(_root, "missing-central.rvt"); r.Operation = "조회"; r.Query = rebuildQuery; result = Run(r);
+   Check(result.Success && result.Snapshot!.Kind == "작업공유 사본" && !State.Events.Contains("create-local"), "기존 중앙 경로가 없어도 선택한 사본을 독립 조회");
+   r = Setup(); r.Operation = "조회"; r.Query = rebuildQuery; result = Run(r);
+   Check(!result.Success && result.Message.Contains("작업세트") && !State.Events.Contains("open"), "비작업공유 일반 RVT는 조회 전 차단");
    r = Setup(true, true); State.Doc.CreationGUID = Guid.NewGuid(); result = Run(r);
    Check(!result.Success && result.Message.Contains("다른 문서") && !State.Events.Contains("tx-start"), "같은 경로의 중앙모델 교체 시 편집 차단");
    r = Setup(true, true); State.Doc.CentralPathOverride = _source; result = Run(r);

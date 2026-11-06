@@ -103,7 +103,7 @@
      </StackPanel>
      <DataGrid x:Name="EditsGrid"><DataGrid.Columns><DataGridTextColumn Header="소속 파일" Binding="{Binding Model}" Width="140" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="패밀리 / 대상 이름" Binding="{Binding Type}" Width="200" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="항목" Binding="{Binding Field}" Width="120"/><DataGridTextColumn Header="기존 값" Binding="{Binding Before}" Width="140" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="바뀔 값" Binding="{Binding Value}" Width="150" ElementStyle="{StaticResource ReviewText}"/><DataGridTextColumn Header="입력 근거" Binding="{Binding Reason}" Width="240" ElementStyle="{StaticResource ReviewText}"/></DataGrid.Columns></DataGrid>
      <DataGrid x:Name="CentralRebuildGrid" Visibility="Collapsed" IsReadOnly="True"><DataGrid.Columns>
-      <DataGridTextColumn Header="선택한 중앙파일" Binding="{Binding Title}" Width="210" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="선택한 RVT" Binding="{Binding Title}" Width="210" ElementStyle="{StaticResource ReviewText}"/>
       <DataGridTextColumn Header="원본 경로 · 새 중앙 저장 위치" Binding="{Binding CanonicalPath}" Width="*" ElementStyle="{StaticResource ReviewText}"/>
       <DataGridTextColumn Header="종류" Binding="{Binding Kind}" Width="75"/>
       <DataGridTextColumn Header="조회 시각" Binding="{Binding ReadAt}" Width="145"/>

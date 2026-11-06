@@ -12,7 +12,7 @@ namespace Autodesk.Revit.ApplicationServices
   public int Observers => FailuresProcessing?.GetInvocationList().Length ?? 0;
   public void Raise(DB.Document doc) => FailuresProcessing?.Invoke(this, new(doc));
   public string Username => "테스터";
-  public DB.Document OpenDocumentFile(DB.ModelPath path, DB.OpenOptions options) { DB.State.Events.Add("open"); return DB.State.Doc; }
+  public DB.Document OpenDocumentFile(DB.ModelPath path, DB.OpenOptions options) { DB.State.Events.Add("open"); if (options.DetachFromCentralOption == DB.DetachFromCentralOption.DetachAndPreserveWorksets) DB.State.Doc.IsDetached = true; return DB.State.Doc; }
  }
 }
 namespace Autodesk.Revit.DB.Events
@@ -65,7 +65,7 @@ namespace Autodesk.Revit.DB
  public enum BuiltInParameter { ELEM_PARTITION_PARAM = -100 }
  public enum CheckoutStatus { OwnedByOtherUser, OwnedByCurrentUser, NotOwned }
  public enum TransactionStatus { Uninitialized, Started, Committed, RolledBack }
- public enum DetachFromCentralOption { DoNotDetach }
+ public enum DetachFromCentralOption { DoNotDetach, DetachAndPreserveWorksets }
  public enum WorksetConfigurationOption { OpenAllWorksets }
  public enum WorksetKind { UserWorkset }
  public sealed record ElementId(long Value);
@@ -88,6 +88,7 @@ namespace Autodesk.Revit.DB
  public sealed class Document
  {
   public bool IsFamilyDocument, IsLinked, IsDetached, IsReadOnly, IsWorkshared;
+  public bool CanEnableWorksharing() => !IsWorkshared && !IsFamilyDocument;
   public Guid CreationGUID { get; set; } = Guid.NewGuid();
   // 파일 기반 모델에서는 실제 Revit처럼 실패해야 서버 전용 API 오용을 잡을 수 있다.
   public Guid WorksharingCentralGUID => throw new InvalidOperationException("The current document is a file-based model.");

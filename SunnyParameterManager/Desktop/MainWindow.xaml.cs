@@ -249,7 +249,7 @@ public partial class MainWindow : Window
                     var duplicate = _models.Where(m => m != item && m.Snapshot != null).Any(m => string.Equals(ModelIdentityPath(m.Snapshot!), ModelIdentityPath(snapshot), StringComparison.OrdinalIgnoreCase));
                     if (duplicate) { item.ReadFailed = true; item.Status = "제외 · 같은 중앙/실제 파일이 이미 등록되어 있습니다."; }
                     else { item.Snapshot = snapshot; _centralRebuildReviewed = false; item.Status = snapshot.CentralRebuild != null
-                        ? "중앙 · 분리 재생성 검토 대기"
+                        ? $"{snapshot.Kind} · 새 중앙 생성 검토 대기"
                         : snapshot.ProjectBasePointAudit != null
                         ? $"{snapshot.Kind} · 기준점 점검 · {snapshot.ProjectBasePointAudit.Status}"
                         : snapshot.MaterialAuditItems != null
@@ -280,7 +280,7 @@ public partial class MainWindow : Window
         if (completed && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery))
             Guard(() => PrepareRules(_loadedRules));
     }
-    private static string ModelIdentityPath(ModelSnapshot s) => s.CentralPath.Length > 0 ? s.CentralPath : s.CanonicalPath;
+    private static string ModelIdentityPath(ModelSnapshot s) => s.CentralRebuild != null ? s.CanonicalPath : s.CentralPath.Length > 0 ? s.CentralPath : s.CanonicalPath;
 
     private IEnumerable<ParameterRow> AllRows() => _models.Where(m => m.Snapshot != null).SelectMany(m => m.Snapshot!.Rows);
     private void RefreshFields()
@@ -552,7 +552,7 @@ public partial class MainWindow : Window
     {
         RefreshGroupRestrictions();
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
-        var rebuildReady = _loadedRules?.RebuildCentral == true && _centralRebuildReviewed && _edits.Count == 0 && _models.Count > 0 && _models.All(m => m.Snapshot?.CentralRebuild != null && !m.Snapshot.RequiresRequery);
+        var rebuildReady = _loadedRules?.RebuildCentral == true && _centralRebuildReviewed && _edits.Count == 0 && _models.Count > 0 && _models.All(m => m.Snapshot?.CentralRebuild?.FormatVersion == 2 && !m.Snapshot.RequiresRequery);
         PendingText.Text = rebuildReady ? $"새 중앙 재생성 대상 {_models.Count:N0}개 모델 · 아직 적용 전" : $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
         ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true && (rebuildReady || _edits.Count > 0) && !_worker.NeedsAttention && !HasFailedPending();
         ApplyButton.Content = _loadedRules?.RebuildCentral == true ? "새 중앙으로 교체 · 동기화" : "RVT에 저장 · 중앙 동기화";
@@ -667,15 +667,15 @@ public partial class MainWindow : Window
         try
         {
             if (_models.Count == 0 || _models.Any(m => m.Snapshot == null || m.Snapshot.RequiresRequery))
-                throw new InvalidOperationException("모든 대상 중앙파일을 새로 조회·검토하세요.");
+                throw new InvalidOperationException("모든 대상 RVT를 새로 조회·검토하세요.");
             QueryPlan.RequireCoverage(_models.Select(m => m.Snapshot!), _loadedRules);
             foreach (var model in _models) CentralRebuildPlanner.Validate(model.Snapshot!);
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "중앙 재생성 검토", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         var names = string.Join("\n", _models.Select(m => m.Title));
-        var warning = $"아래 {_models.Count:N0}개 중앙파일을 순서대로 새 중앙으로 교체할까요?\n\n{names}\n\n" +
-            "각 파일의 작업세트를 유지한 채 분리해 원래 경로·이름으로 덮어씁니다. 교체 직전 복구 사본을 작업 세션에 만들며, 중앙 동기화·차용 요소와 모든 작업세트 소유권 반환·저장·닫기까지 실행합니다.\n\n" +
-            "기존 중앙과 다른 중앙 식별자가 생기므로 다른 작업자들의 기존 로컬은 새 중앙과 동기화할 수 없습니다. 모든 작업자가 먼저 미동기화 작업을 정리하고 파일을 닫은 뒤 진행하세요. 완료 후 모두 새 로컬을 생성해야 합니다.\n\n" +
+        var warning = $"아래 {_models.Count:N0}개 RVT를 순서대로 같은 경로의 새 중앙으로 만들까요?\n\n{names}\n\n" +
+            "작업세트가 있는 파일만 작업세트를 유지한 채 분리합니다. 선택한 파일의 원래 경로·이름으로 덮어씁니다. 교체 직전 복구 사본을 만들고 중앙 동기화·소유권 반환·저장·닫기까지 실행합니다.\n\n" +
+            "작업공유 사본은 선택한 사본만 교체하며 이전 중앙 경로의 파일은 변경하지 않습니다. 기존 중앙 파일을 교체하면 작업자들의 기존 로컬은 새 중앙과 동기화할 수 없으므로 미동기화 작업을 정리하고 새 로컬을 만들어야 합니다.\n\n" +
             "조회 이후 원본이 바뀌면 해당 파일을 건너뛰고 뒤의 파일도 중단합니다. 중앙 교체가 시작된 뒤 실패하면 자동으로 되돌리거나 재시도하지 않습니다.";
         if (MessageBox.Show(this, warning, "새 중앙으로 교체 · 최종 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         await Run(async () =>
@@ -692,7 +692,7 @@ public partial class MainWindow : Window
                 var result = await _worker.Send(new Request { Operation = "중앙 재생성", Path = item.Path,
                     CanonicalPath = snapshot.CanonicalPath, Identity = snapshot.Identity, CentralRebuild = snapshot.CentralRebuild,
                     Confirmed = true });
-                ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {item.Title}\n{result.Stage} · {result.Message}\n원본 중앙: {snapshot.CanonicalPath}\n교체 전 복구 사본: {result.BackupPath}\n");
+                ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {item.Title}\n{result.Stage} · {result.Message}\n선택한 원본: {snapshot.CanonicalPath}\n교체 전 복구 사본: {result.BackupPath}\n");
                 _centralRebuildReviewed = false;
                 if (result.Success)
                 {
