@@ -16,6 +16,8 @@ namespace WallSplitter
         private readonly bool _materials;
         private readonly ComboBox _model = new(), _category = new(), _filterMode = new(), _mode = new(), _sort = new();
         private readonly TextBox _search = new(), _first = new(), _second = new();
+        private readonly TextBlock _firstLabel = Label("찾을 문자열:"), _secondLabel = Label("바꿀 문자열:");
+        private readonly List<RadioButton> _categoryRadios = new(), _modeRadios = new();
         private readonly TextBlock _status = new(), _hint = new();
         private readonly TextBlock _targetHeader = Label(""), _originalHeader = Label(""), _previewHeader = Label("");
         private readonly TextBlock _projectHelp = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4,4,4,0) };
@@ -47,29 +49,55 @@ namespace WallSplitter
         internal UnifiedEditWindow(List<UnifiedSource> sources, bool materials)
         {
             _sources = sources; _materials = materials;
-            Title = materials ? "Sunny Tools · 재료 지정 — 모든 모델" : "Sunny Tools · NAMER — 모든 모델";
-            Width = 1240; Height = 800; MinWidth = 1040; MinHeight = 620;
+            Title = materials ? "Sunny Tools · 재료 지정 — 모든 모델" : "NAMER - 이름 일괄 변경";
+            Width = materials ? 1240 : 920; Height = materials ? 800 : 700;
+            MinWidth = materials ? 1040 : 820; MinHeight = 620;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/WallSplitter;component/Resources/Theme.xaml", UriKind.Relative) });
             Background = Theme.WindowBackground;
             var root = new Grid { Margin = new Thickness(14), Background = Theme.WindowBackground };
             for (int i = 0; i < 7; i++) root.RowDefinitions.Add(new RowDefinition { Height = i == 4 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             Content = root;
-            var info = new TextBlock { Text = "현재 모델 + 링크 모델 통합 편집 · 같은 링크의 반복 배치는 한 번만 표시\n창 안의 변경은 미리보기입니다. 최종 적용 후 링크 중앙모델에 반영하며, 편집 중 다른 Revit 작업은 잠시 제한됩니다.",
-                TextWrapping = TextWrapping.Wrap, Foreground = Theme.Accent, Margin = new Thickness(0,0,0,10) };
-            root.Children.Add(info);
-            var filters = new WrapPanel(); Put(root, Section("1 · 검색 및 선택", filters), 1);
-            filters.Children.Add(Label("모델"));
-            _model.Width = 240; _model.Items.Add("전체 모델"); foreach (var source in sources) _model.Items.Add(source);
-            _model.SelectedIndex = 0; filters.Children.Add(_model);
+            if (materials)
+            {
+                var info = new TextBlock { Text = "현재 모델 + 링크 모델 통합 편집 · 같은 링크의 반복 배치는 한 번만 표시\n창 안의 변경은 미리보기입니다. 최종 적용 후 링크 중앙모델에 반영하며, 편집 중 다른 Revit 작업은 잠시 제한됩니다.",
+                    TextWrapping = TextWrapping.Wrap, Foreground = Theme.Accent, Margin = new Thickness(0,0,0,10) };
+                root.Children.Add(info);
+            }
+            else
+            {
+                var categories = new WrapPanel { Margin = new Thickness(0,0,0,8) };
+                categories.Children.Add(new TextBlock { Text = "대상:", FontWeight = FontWeights.Bold,
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,8,0) });
+                string[] names = { "뷰", "시트", "패밀리", "유형", "범례", "일람표", "재료", "뷰 템플릿", "프로젝트 정보" };
+                for (int index = 0; index < names.Length; index++)
+                {
+                    int selectedIndex = index;
+                    var radio = new RadioButton { Content = names[index], GroupName = "UnifiedNamerCategory",
+                        Margin = new Thickness(0,0,12,0), IsChecked = index == 2 };
+                    radio.Checked += (_, _) => Guard(() => _category.SelectedIndex = selectedIndex);
+                    _categoryRadios.Add(radio);
+                    categories.Children.Add(radio);
+                }
+                Put(root, categories, 0);
+            }
+            var filters = new WrapPanel();
+            Put(root, materials ? Section("1 · 검색 및 선택", filters) : filters, 1);
+            if (!materials) filters.Children.Add(Label("필터:"));
+            _model.Width = materials ? 240 : 185;
+            _model.Items.Add("전체 모델"); foreach (var source in sources) _model.Items.Add(source);
+            _model.SelectedIndex = 0;
+            if (materials) filters.Children.Add(_model);
             _category.Width = 135;
             foreach (string label in materials ? new[] { "유형/패밀리", "현재 재료", "재료 없음" }
                 : new[] { "뷰", "시트", "패밀리", "유형", "범례", "일람표", "재료", "뷰 템플릿", "프로젝트 정보" }) _category.Items.Add(label);
-            _category.SelectedIndex = materials ? 0 : 2; filters.Children.Add(_category);
-            _search.Width = 230; _search.ToolTip = "모든 모델의 검색 결과를 함께 표시합니다."; filters.Children.Add(_search);
+            _category.SelectedIndex = materials ? 0 : 2;
+            if (materials) filters.Children.Add(_category);
+            _search.Width = materials ? 230 : 215; _search.ToolTip = "모든 모델의 검색 결과를 함께 표시합니다."; filters.Children.Add(_search);
             _filterMode.Width = 125;
             foreach (string label in new[] { "포함됨", "포함하지 않음", "일치함", "일치하지 않음", "시작함", "끝남" }) _filterMode.Items.Add(label);
             _filterMode.SelectedIndex = 0; filters.Children.Add(_filterMode);
+            if (!materials) { filters.Children.Add(Label("모델:")); filters.Children.Add(_model); }
             var sorting = new StackPanel { Orientation = Orientation.Horizontal };
             sorting.Children.Add(Label("정렬"));
             _sort.Width = 115; _sort.Items.Add("모델 기준"); _sort.Items.Add("이름 기준"); _sort.SelectedIndex = 0;
@@ -86,15 +114,34 @@ namespace WallSplitter
                 filters.Children.Add(_projectHelp);
             }
 
-            var editor = new StackPanel(); Put(root, Section("2 · 변경 설정 — 입력 즉시 선택 항목에 미리보기", editor), 2);
+            var editor = new StackPanel();
+            Put(root, materials ? Section("2 · 변경 설정 — 입력 즉시 선택 항목에 미리보기", editor) : editor, 2);
             if (!materials)
             {
-                var line = new WrapPanel(); editor.Children.Add(line);
+                var modes = new WrapPanel { Margin = new Thickness(0,8,0,6) };
+                modes.Children.Add(new TextBlock { Text = "작업:", FontWeight = FontWeights.Bold,
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,8,0) });
+                string[] modeNames = { "문자열 치환", "위치에 삽입", "구분자 기준 자리바꾸기", "구간 삭제", "값 전체 지정" };
+                for (int index = 0; index < modeNames.Length; index++)
+                {
+                    int selectedIndex = index;
+                    var radio = new RadioButton { Content = modeNames[index], GroupName = "UnifiedNamerMode",
+                        Margin = new Thickness(0,0,14,0), IsChecked = index == 0 };
+                    radio.Checked += (_, _) => Guard(() => _mode.SelectedIndex = selectedIndex);
+                    _modeRadios.Add(radio);
+                    modes.Children.Add(radio);
+                }
+                editor.Children.Add(modes);
+                var line = new WrapPanel { Margin = new Thickness(10,8,10,8) };
+                editor.Children.Add(new Border { Child = line, Background = Theme.Surface,
+                    BorderBrush = Theme.Divider, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6) });
                 _mode.Width = 180;
                 foreach (string label in new[] { "문자열 치환", "위치에 삽입", "구분자 기준 자리바꾸기", "구간 삭제", "값 전체 지정" }) _mode.Items.Add(label);
-                _mode.SelectedIndex = 0; line.Children.Add(_mode);
-                _first.Width = 210; _second.Width = 210; line.Children.Add(_first); line.Children.Add(_second);
-                line.Children.Add(Button("선택 항목에 적용 (창 안)", Stage));
+                _mode.SelectedIndex = 0;
+                _first.Width = 160; _second.Width = 160;
+                line.Children.Add(_firstLabel); line.Children.Add(_first);
+                line.Children.Add(_secondLabel); line.Children.Add(_second);
+                line.Children.Add(Button("적용 (창 안에서만)", Stage));
                 line.Children.Add(_merge); editor.Children.Add(_hint); UpdateHint();
                 _mode.SelectionChanged += (_, _) => Guard(() => { UpdateHint(); RefreshPreview(); });
                 _first.TextChanged += (_, _) => Guard(RefreshPreview);
@@ -161,7 +208,7 @@ namespace WallSplitter
             var footer = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right }; Put(root, footer, 6);
             footer.Children.Add(Button("모델 상태 / 제외 사유", () => MessageBox.Show(this, string.Join("\n\n", sources.Select(s =>
                 s.Name + "\n" + s.Path + "\n" + SourceStatus(s))), "모델 상태")));
-            footer.Children.Add(Button("현재 모델 전용 도구", () =>
+            if (!materials) footer.Children.Add(Button("현재 모델 전용 도구", () =>
             {
                 if (sources.SelectMany(s => s.Rows).Any(r => r.Changed) && MessageBox.Show(this,
                     "통합 창의 미적용 변경을 버리고 현재 모델 전용 도구로 이동할까요?", "작업 확인", MessageBoxButton.YesNo,
@@ -176,7 +223,7 @@ namespace WallSplitter
                 Refresh();
             }));
             footer.Children.Add(Button("닫기", Close));
-            var apply = Button("최종 적용 · 모든 모델", () =>
+            var apply = Button(materials ? "최종 적용 · 모든 모델" : "최종 적용 (모델에 반영)", () =>
             {
                 CommitInline(true); Keyboard.ClearFocus();
                 var changed = sources.SelectMany(s => s.Rows).Where(r => r.Changed).ToList();
@@ -266,6 +313,14 @@ namespace WallSplitter
                 "첫 칸: 구분자 (첫 번째 구분자 기준) / 둘째 칸: 사용 안 함", "첫 칸: 시작 위치 / 둘째 칸: 끝 위치 (1부터)",
                 "첫 칸: 선택 항목에 지정할 값 전체 (프로젝트 정보의 텍스트는 비우면 삭제)" }[Math.Max(0,_mode.SelectedIndex)];
             _second.IsEnabled = _mode.SelectedIndex != 2 && _mode.SelectedIndex != 4;
+            if (_materials) return;
+            string[] firstLabels = { "찾을 문자열:", "삽입 위치:", "구분자:", "시작 위치:", "지정할 값:" };
+            string[] secondLabels = { "바꿀 문자열:", "삽입할 문자열:", "", "끝 위치:", "" };
+            int index = Math.Max(0, _mode.SelectedIndex);
+            _firstLabel.Text = firstLabels[index]; _secondLabel.Text = secondLabels[index];
+            _secondLabel.Visibility = _second.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+            _second.Visibility = _secondLabel.Visibility;
+            if (index < _modeRadios.Count) _modeRadios[index].IsChecked = true;
         }
         private void ShowProjectInformation()
         {
@@ -280,6 +335,8 @@ namespace WallSplitter
             }
             finally { _ready = true; }
             UpdateHint(); Refresh();
+            if (_categoryRadios.Count > (int)NamerWindow.NamerCategory.ProjectInformation)
+                _categoryRadios[(int)NamerWindow.NamerCategory.ProjectInformation].IsChecked = true;
         }
         private static string SourceStatus(UnifiedSource source)
         {
@@ -296,7 +353,8 @@ namespace WallSplitter
             _originalHeader.Text = _materials ? "현재 재료" : project ? "현재 값" : "기존 이름 / 값";
             _previewHeader.Text = _materials ? "변경 후 재료 · 미리보기" : project ? "변경 후 값 · 미리보기" : "변경 후 이름 / 값 · 미리보기";
             _projectHelp.Visibility = project ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
-            _merge.Visibility = project ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+            _merge.Visibility = !_materials && _category.SelectedIndex == (int)NamerWindow.NamerCategory.Material
+                ? Visibility.Visible : Visibility.Collapsed;
             _search.ToolTip = project ? "프로젝트 정보 항목명 또는 값으로 검색합니다. 빈 값은 ‘없음’으로 검색하세요." : "모든 모델의 검색 결과를 함께 표시합니다.";
         }
         private void Refresh()

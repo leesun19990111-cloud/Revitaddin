@@ -1,5 +1,11 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## Sunny Tools v111 — NAMER 화면 배치 통일
+
+- 링크가 있는 모델의 통합 NAMER를 기존 단일 모델 NAMER의 상단 조작 순서와 제목에 맞췄다. 링크 편집 경로·중앙 동기화 안전 정책, 재료 지정 화면은 유지한다. 상세는 namer 문서.
+- 2023~2027 격리 Release 빌드 오류 0, 기존 통합 회귀 306건 및 기본/최소 창 렌더 통과. 실제 Revit 링크 모델 최종 적용은 설치 후 테스트 중앙에서 확인한다.
+- 산출물 `SunnyToolsInstaller_out_v111`, `SunnyTools_Installer_v.1.1.1.zip`. 5개 연도 DLL 11/11/2/2/2개, 빌드 출력→Payload→ZIP 30개 파일의 SHA-256 일치, Autodesk API DLL 제외. ZIP SHA-256 `019BCC625534BE24A10A98C6E11076ED76C534F42A1A0B633F198455272F207D`, EXE SHA-256 `77C5C6297C965E37F7DC3CB23210339CAE2B517DA22A56EC616DC5C24F77C770`. v110 폴더·ZIP은 `Old_Versions/`로 보관했다. 실제 설치와 사용자 RVT 수정은 수행하지 않았다.
+
 ## 별도 제품 0.4.4 — 2026-11-06 중앙모델 분리 재생성
 
 - Version9 전용 중앙 재생성 룰셋과 Revit2026 Bridge 작업을 포함한다. 같은 파일명의 새 중앙으로 교체하므로 기존 로컬은 새로 만들어야 한다. 운영 중앙 실증 전 테스트 버전이며 상세는 parameter-manager 문서.

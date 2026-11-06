@@ -107,7 +107,7 @@ partial class Program {
   Check(host.GetElement(new ElementId(10))!.Name=="유형_0","창 안 편집은 실제 문서 미변경");
   Check(a.GetElement(new ElementId(10))!.Name=="유형_0","같은 ID의 다른 링크 요소 미변경");
   parents[0].Expanded=true;Call(w,"Refresh");Capture(w,"unified-namer.png");
-  Capture(w,"unified-namer-min.png",1040,620);
+  Capture(w,"unified-namer-min.png",820,620);
   Field<ComboBox>(w,"_model").SelectedIndex=2;
   Check(Field<List<UnifiedRow>>(w,"_display").All(r=>r.Source.Key==sources[1].Key),"모델 필터가 소속 기준으로 분리");
   Check(sources[0].Rows.Count(r=>r.Changed)==245,"필터 변경 후 누적 편집 유지");
