@@ -10,6 +10,8 @@ public sealed class QueryPlan
     public bool IncludeOuterMaterial { get; set; }
     public bool IncludeCleanup { get; set; }
     public bool IncludeDefinitions { get; set; }
+    // 모델 간 정의·값 전송 전용: 선택 항목만 읽고 요소 식별 목록을 쌓지 않는다.
+    public bool TransferOnly { get; set; }
     public bool IncludeMaterialAudit { get; set; }
     public bool IncludeTypeCodeFix { get; set; }
     public bool IncludeProjectBasePointAudit { get; set; }
@@ -29,8 +31,12 @@ public sealed class QueryPlan
             throw new InvalidOperationException("프로젝트 기준점 점검은 프로젝트 정보 범위만 조회합니다.");
         if (IncludeCentralRebuild && (Scopes.Count != 1 || Scopes[0] != "프로젝트 정보" || IncludeProjectBasePointAudit || IncludeDefinitions || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix))
             throw new InvalidOperationException("중앙모델 재생성은 파일 상태만 별도로 조회합니다.");
+        if (TransferOnly && (IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
+            throw new InvalidOperationException("매개변수 전송 조회는 다른 점검·정리 작업과 함께 실행하지 않습니다.");
     }
-    public bool Includes(string name, string key) => Names.Contains(name, StringComparer.Ordinal) || Keys.Contains(key, StringComparer.OrdinalIgnoreCase);
+    public bool Includes(string name, string key) => TransferOnly && Keys.Count > 0
+        ? Keys.Contains(key, StringComparer.OrdinalIgnoreCase)
+        : Names.Contains(name, StringComparer.Ordinal) || Keys.Contains(key, StringComparer.OrdinalIgnoreCase);
     public bool Covers(QueryPlan required)
     {
         Validate(); required.Validate();
@@ -41,6 +47,7 @@ public sealed class QueryPlan
     {
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
+        if (rules.Version == 10) return DefinitionTransferPlanner.DefinitionQuery();
         if (rules.Version == 9)
         {
             plan.Scopes = ["프로젝트 정보"];

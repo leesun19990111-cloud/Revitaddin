@@ -220,6 +220,14 @@ public partial class MainWindow : Window
     }
     private async Task ReadRegisteredModels(bool onlyUnread, IReadOnlyCollection<string>? selectedPaths = null)
     {
+        if (_loadedRules?.ProjectParameterTransfer == true)
+        {
+            foreach (var item in _models.Where(m => selectedPaths == null || selectedPaths.Contains(m.Path, StringComparer.OrdinalIgnoreCase)))
+                item.Status = "전송 룰셋 · 기준/대상 선택 대기";
+            StatusText.Text = "기준 파일과 대상 파일을 등록한 뒤 ‘룰셋 변경 검토’를 누르세요. 전용 창에서 필요한 정의만 읽습니다.";
+            UpdatePending();
+            return;
+        }
         bool completed = false;
         await Run(async () =>
         {
@@ -383,7 +391,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         if (new FileInfo(dialog.FileName).Length > 2 * 1024 * 1024) throw new InvalidOperationException("룰셋은 2MB 이하만 지원합니다.");
         SelectRules(RulePlanner.Parse(File.ReadAllText(dialog.FileName)), dialog.FileName);
-        if (_models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery &&
+        if (!_loadedRules!.ProjectParameterTransfer && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery &&
             (!_loadedRules!.MaterialAudit || m.Snapshot.MaterialAuditItems != null) &&
             (!_loadedRules.ProjectBasePointAudit || m.Snapshot.ProjectBasePointAudit != null) &&
             (!_loadedRules.RebuildCentral || m.Snapshot.CentralRebuild != null) &&
@@ -395,7 +403,7 @@ public partial class MainWindow : Window
         if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
         QueryPlan.FromRules(file);
         if (file.SampleOnly && !_sample) throw new InvalidOperationException("연습용 룰셋은 샘플 모드에서만 사용하세요.");
-        if ((file.MaterialAudit || file.ProjectBasePointAudit || file.RebuildCentral) && _edits.Count > 0)
+        if ((file.MaterialAudit || file.ProjectBasePointAudit || file.RebuildCentral || file.ProjectParameterTransfer) && _edits.Count > 0)
             throw new InvalidOperationException("이 전용 룰셋은 기존 변경 예정과 함께 진행할 수 없습니다. 변경을 먼저 적용·제외하거나 작업 파일로 보관하세요.");
         if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
             throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
@@ -405,7 +413,7 @@ public partial class MainWindow : Window
         _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
-        StatusText.Text = _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
+        StatusText.Text = file.ProjectParameterTransfer ? "전송 룰셋 준비 완료. 기준·대상 RVT를 등록한 뒤 ‘룰셋 변경 검토’를 누르세요." : _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
             "룰셋 준비 완료. 필요한 항목이 부족하면 ‘파일 관리 → 다시 조회’를 누르세요.";
     }
     private void UseFullQuery(object sender, RoutedEventArgs e) => Guard(() =>
@@ -415,10 +423,32 @@ public partial class MainWindow : Window
         StatusText.Text = "다음 조회부터 전체 항목을 읽습니다. 기존 선택 조회값과 변경 예정은 유지합니다. 전체 항목이 필요하면 ‘파일 관리 → 다시 조회’를 누르세요.";
     });
     private void ReviewLoadedRules(object sender, RoutedEventArgs e) => Guard(() =>
-        PrepareRules(_loadedRules ?? throw new InvalidOperationException("룰셋을 먼저 불러오세요.")));
+    {
+        var rules = _loadedRules ?? throw new InvalidOperationException("룰셋을 먼저 불러오세요.");
+        if (rules.ProjectParameterTransfer) OpenDefinitionTransfer();
+        else PrepareRules(rules);
+    });
+    private void OpenDefinitionTransfer()
+    {
+        if (_sample || _models.Count < 2) throw new InvalidOperationException("기준 RVT와 대상 RVT를 합쳐 두 파일 이상 등록하세요.");
+        if (_worker.NeedsAttention) throw new InvalidOperationException("작업용 Revit의 미확정 결과를 먼저 확인하세요.");
+        if (_edits.Count > 0) throw new InvalidOperationException("기존 변경 예정은 먼저 적용하거나 정리하세요. 정의 전송과 섞어서 처리하지 않습니다.");
+        var dialog = new DefinitionTransferWindow(_models.Select(m => m.Path), async request =>
+        {
+            await _worker.Connect(RevitPathBox.Text.Trim()); return await _worker.Send(request);
+        }, (path, response) =>
+        {
+            var item = _models.Single(m => string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase));
+            item.Snapshot = null; item.Status = response.Success ? "전송 완료 · 재조회 필요" : "전송 실패 · 재조회 필요";
+            ReportBox.AppendText($"\n{path}\n{response.Message}\n복구: {response.RecoveryPath}\n백업: {response.BackupPath}\n");
+            RefreshFields(); UpdatePending();
+        }) { Owner = this, Resources = Resources };
+        dialog.ShowDialog();
+    }
     // 룰셋은 조회된 전체 파일로 평가한다. 그리드의 검색/행 선택 때문에 일부만 조용히 적용하면 안 된다.
     public void PrepareRules(RuleSet file)
     {
+        if (file.ProjectParameterTransfer) { OpenDefinitionTransfer(); return; }
         if (_busy) throw new InvalidOperationException("진행 중인 파일 작업이 끝난 후 불러오세요.");
         if (_models.Any(m => m.Snapshot?.RequiresRequery == true)) throw new InvalidOperationException("실패한 파일의 원인을 확인하고 다시 조회한 뒤 룰셋을 불러오세요.");
         if (_models.Count == 0 || _models.Any(m => m.Snapshot == null))
@@ -560,7 +590,8 @@ public partial class MainWindow : Window
         ReviewButton.Content = rebuildReady ? $"③ 중앙 재생성 검토 ({_models.Count:N0})" : $"③ 변경 내용 확인 ({_edits.Count:N0})";
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         RulesButton.IsEnabled = !_busy;
-        ReviewRulesButton.IsEnabled = !_busy && _loadedRules != null && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery);
+        ReviewRulesButton.IsEnabled = !_busy && _loadedRules != null && (_loadedRules.ProjectParameterTransfer
+            ? _models.Count > 1 : _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery));
         RulesButton.Content = _loadedRules == null ? "룰셋 먼저 불러오기" : "룰셋 바꾸기";
         WelcomeRulesButton.Content = _loadedRules == null ? "1. 룰셋 먼저 불러오기" : "선택한 룰셋 바꾸기";
         WelcomeRulesPanel.Visibility = _loadedRules == null ? Visibility.Collapsed : Visibility.Visible;
@@ -568,9 +599,10 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트 기준점 공유대지 점검·엑셀 목록" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 대상 RVT 여러 개 · 프로젝트 매개변수 정의 선택 전송" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트 기준점 공유대지 점검·엑셀 목록" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
-        FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." :
+        FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." : _loadedRules?.ProjectParameterTransfer == true ?
+            $"{_models.Count}개 파일 등록 · 전용 창에서 필요한 정의 조회" :
             $"{_models.Count}개 파일 · {_models.Count(m => m.Snapshot != null)}개 읽음" + (_sample ? " · 연습 중 (실제 저장 불가)" : "");
     }
     private void GroupSearchChanged(object sender, TextChangedEventArgs e) { if (_initialized) RefreshGroupRestrictions(); }

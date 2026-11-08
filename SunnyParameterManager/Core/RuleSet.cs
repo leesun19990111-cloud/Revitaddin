@@ -20,6 +20,8 @@ public sealed class RuleSet
     public bool TypeCodeFix { get; set; }
     public bool ProjectBasePointAudit { get; set; }
     public bool RebuildCentral { get; set; }
+    // 기준 RVT 하나에서 선택한 프로젝트 매개변수 정의를 여러 모델로 전송한다.
+    public bool ProjectParameterTransfer { get; set; }
 }
 
 public sealed class ParameterRule
@@ -89,6 +91,14 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 10 || file?.ProjectParameterTransfer == true)
+        {
+            if (file.Version != 10 || !file.ProjectParameterTransfer || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
+                file.Kac != null || file.Space != null || file.Spec != null || file.Cleanup || file.MaterialAudit || file.TypeCodeFix ||
+                file.ProjectBasePointAudit || file.RebuildCentral || file.SampleOnly || file.PreserveWorksets?.Count != 0)
+                throw new InvalidOperationException("프로젝트 매개변수 전송 룰셋은 버전10과 ProjectParameterTransfer만 사용합니다.");
+            return;
+        }
         if (file?.Version == 9 || file?.RebuildCentral == true)
         {
             if (file.Version != 9 || !file.RebuildCentral || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||

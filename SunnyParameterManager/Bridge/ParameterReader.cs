@@ -34,6 +34,12 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             Notices.Add($"재료 점검: 유형·배치 요소에서 확인할 항목 {model.MaterialAuditItems.Count:N0}건. RVT는 변경하지 않았습니다.");
             return [];
         }
+        if (query?.TransferOnly == true && query.IncludeDefinitions)
+        {
+            model.Definitions = DefinitionReader.Read(doc, false);
+            Notices.Add($"매개변수 정의 {model.Definitions.Definitions.Count:N0}개를 읽었습니다. 값과 전체 요소는 조회하지 않았습니다.");
+            return [];
+        }
         var result = new List<ParameterRow>();
         // 프로젝트 정보만 필요하면 모델 전체의 요소 수집을 하지 않는다.
         var elements = (query == null || query.Scopes.Contains("유형") ? new FilteredElementCollector(doc).WhereElementIsElementType().Cast<Element>() : Enumerable.Empty<Element>())
@@ -51,7 +57,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
                 var owner = Describe(element, query.IncludeOuterMaterial);
                 if (!query.Scopes.Contains(owner.Scope)) continue;
                 if (cleanup != null && (query?.IncludeCleanup == true || element is ElementType && TypeCodePlanner.TryFix(owner.TypeName, out _))) owner.Cleanup = cleanup.Evidence(element, query?.IncludeCleanup == true);
-                model.Owners.Add(owner);
+                if (query?.TransferOnly != true) model.Owners.Add(owner);
                 if (cleanup != null && element is ElementType && (query?.IncludeCleanup == true && CleanupPlanner.IsKac(owner.TypeName) || query?.IncludeTypeCodeFix == true && TypeCodePlanner.TryFix(owner.TypeName, out _)))
                     result.Add(cleanup.NameRow(owner));
             }
@@ -86,7 +92,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         if (errors > 0) Notices.Add($"매개변수 {errors:N0}개는 읽기에 실패하여 제외했습니다.");
         if (query?.IncludeDefinitions == true)
         {
-            model.Definitions = DefinitionReader.Read(doc);
+            model.Definitions = DefinitionReader.Read(doc, query?.TransferOnly != true);
             Notices.Add($"매개변수 정의 {model.Definitions.Definitions.Count:N0}개(연결 가능 카테고리 {model.Definitions.AllCategories.Count:N0}개)를 읽었습니다." +
                 (model.Definitions.Definitions.Any(d => d.ValueCount < 0) ? " 일부 정의는 값 존재 여부를 확인하지 못해 제거·전환 대상에서 제외됩니다." : ""));
         }

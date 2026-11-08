@@ -1,0 +1,34 @@
+<Window x:Class="SunnyParameterManager.Desktop.DefinitionTransferWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Sunny · 매개변수 정의 전송" Width="1120" Height="800" MinWidth="900" MinHeight="650"
+ Background="#F2F2F3" FontFamily="Segoe UI" FontSize="13" Closing="WindowClosing">
+ <Grid Margin="16"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="170"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel Margin="0,0,0,12"><TextBlock Text="매개변수 정의 전송" FontSize="22" FontWeight="SemiBold" Foreground="#243A50"/>
+   <TextBlock Text="기준 RVT 1개 → 대상 RVT 여러 개 · 복제할 매개변수를 직접 선택합니다." Margin="0,5,0,0"/>
+   <TextBlock Text="기본은 정의만 추가합니다. 값 복사를 켜면 정의 적용 후 새로 조회해 별도로 확인합니다." Foreground="#687785" TextWrapping="Wrap"/></StackPanel>
+  <DockPanel Grid.Row="1" Margin="0,0,0,8"><Button x:Name="ReadSourceButton" DockPanel.Dock="Right" Content="① 기준 정의 읽기" Click="ReadSourceClick"/>
+   <TextBlock Text="기준 파일" VerticalAlignment="Center" Margin="0,0,12,0"/>
+   <ComboBox x:Name="SourceCombo" DisplayMemberPath="Title" SelectionChanged="SourceChanged" MinWidth="380" Height="32"/></DockPanel>
+  <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <GroupBox Header="② 복제할 매개변수" Grid.Column="0"><DockPanel Margin="6"><DockPanel DockPanel.Dock="Top" Margin="0,0,0,6"><TextBox x:Name="SearchBox" TextChanged="SearchChanged" MinWidth="180" ToolTip="이름으로 검색"/><Button Content="표시된 항목 전체 선택" Click="SelectVisible"/><Button Content="전체 해제" Click="ClearDefinitions"/></DockPanel>
+    <DataGrid x:Name="DefinitionsGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="False"><DataGrid.Columns>
+     <DataGridTemplateColumn Header="선택" Width="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding Selected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanSelect}" HorizontalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+     <DataGridTextColumn Header="이름" Binding="{Binding Name}" Width="*" IsReadOnly="True"/><DataGridTextColumn Header="범위" Binding="{Binding Binding}" Width="85" IsReadOnly="True"/><DataGridTextColumn Header="종류" Binding="{Binding Kind}" Width="125" IsReadOnly="True"/>
+    </DataGrid.Columns></DataGrid></DockPanel></GroupBox>
+   <GroupBox Header="③ 대상 파일" Grid.Column="2"><DataGrid x:Name="TargetsGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="False"><DataGrid.Columns>
+    <DataGridTemplateColumn Header="선택" Width="55"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding Selected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+    <DataGridTextColumn Header="파일" Binding="{Binding Title}" Width="*" IsReadOnly="True"/><DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="210" IsReadOnly="True"/>
+   </DataGrid.Columns></DataGrid></GroupBox>
+  </Grid>
+  <DockPanel Grid.Row="3" Margin="0,9"><CheckBox x:Name="CopyValuesCheck" DockPanel.Dock="Left" Content="입력된 값도 옮기기 (정의 적용 뒤 별도 확인)" VerticalAlignment="Center" Margin="0,0,16,0" Checked="OptionsChanged" Unchecked="OptionsChanged"/>
+   <Button x:Name="PreviewButton" Content="④ 대상 검사·미리보기" Click="PreviewClick"/><Button x:Name="StopButton" Content="작업중지" Click="StopClick" IsEnabled="False"/>
+   <TextBlock x:Name="SummaryText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#455A69"/></DockPanel>
+  <TabControl Grid.Row="4" x:Name="DetailsTabs"><TabItem Header="모델별 검사 결과"><DataGrid x:Name="PreviewGrid" AutoGenerateColumns="False" IsReadOnly="True"><DataGrid.Columns>
+   <DataGridTextColumn Header="대상 모델" Binding="{Binding Model}" Width="200"/><DataGridTextColumn Header="매개변수" Binding="{Binding Name}" Width="200"/><DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="105"/><DataGridTextColumn Header="설명 / 값 변경" Binding="{Binding Reason}" Width="*"/>
+  </DataGrid.Columns></DataGrid></TabItem><TabItem Header="처리 기록"><TextBox x:Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></TabItem></TabControl>
+  <DockPanel Grid.Row="5" Margin="0,10,0,0"><Button x:Name="CloseButton" DockPanel.Dock="Right" Content="닫기" Click="CloseClick"/>
+   <Button x:Name="ApplyValuesButton" DockPanel.Dock="Right" Content="값 적용 · 저장 · 중앙 동기화" Click="ApplyValuesClick" IsEnabled="False"/>
+   <Button x:Name="ApplyDefinitionsButton" DockPanel.Dock="Right" Content="정의 적용 · 저장 · 중앙 동기화" Click="ApplyDefinitionsClick" IsEnabled="False"/>
+   <TextBlock Text="충돌·읽기 실패 모델은 적용하지 않습니다. 중앙 동기화 뒤 현재 사용자의 소유권 반환 결과를 확인합니다." VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
+ </Grid>
+</Window>
