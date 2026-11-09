@@ -100,12 +100,18 @@ internal static class NativeTransferDialog
             dialog.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.List));
         if (list == null) throw new InvalidOperationException("Revit 기본 창의 전송 항목 목록을 찾지 못했습니다.");
         ScrollToNativeItem(dialog);
-        for (int i = 0; i < 100; i++)
+        var visibleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nativeList = GetDlgItem((IntPtr)dialog.Current.NativeWindowHandle, 2372);
+        var nativeCount = NativeItemCount(nativeList);
+        for (int i = 0; i < Math.Max(100, nativeCount); i++)
         {
+            // Revit 목록은 화면 밖 행을 접근성 트리에서 제외할 수 있으므로 매번 새로 읽는다.
+            list = FindById(dialog, ControlType.List, "2372") ?? list;
             var boxes = list.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.CheckBox));
             foreach (AutomationElement box in boxes)
             {
-                if (!ProjectParameterNames.Any(n => string.Equals(box.Current.Name, n, StringComparison.OrdinalIgnoreCase))) continue;
+                visibleNames.Add(box.Current.Name);
+                if (!IsProjectParameterName(box.Current.Name)) continue;
                 if (!box.TryGetCurrentPattern(TogglePattern.Pattern, out var toggle))
                     throw new InvalidOperationException("'프로젝트 매개변수' 체크박스를 선택할 수 없습니다.");
                 var pattern = (TogglePattern)toggle;
@@ -114,22 +120,80 @@ internal static class NativeTransferDialog
                     throw new InvalidOperationException("'프로젝트 매개변수' 선택 상태를 확인할 수 없습니다.");
                 return;
             }
+            var items = list.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem));
+            var namedItem = items.Cast<AutomationElement>().FirstOrDefault(item => IsProjectParameterName(item.Current.Name));
+            if (namedItem != null && namedItem.TryGetCurrentPattern(ScrollItemPattern.Pattern, out var scrollItem))
+            {
+                ((ScrollItemPattern)scrollItem).ScrollIntoView();
+                continue;
+            }
+            bool moved = false;
             if (list.TryGetCurrentPattern(ScrollPattern.Pattern, out var scroll))
             {
                 var pattern = (ScrollPattern)scroll;
-                if (pattern.Current.VerticalScrollPercent >= 100) break;
-                pattern.ScrollVertical(ScrollAmount.LargeIncrement);
+                if (pattern.Current.VerticallyScrollable && pattern.Current.VerticalScrollPercent < 100)
+                { pattern.ScrollVertical(ScrollAmount.LargeIncrement); moved = true; }
             }
-            else
+            if (!moved)
             {
                 var bar = list.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ScrollBar));
-                if (bar == null || !bar.TryGetCurrentPattern(RangeValuePattern.Pattern, out var range)) break;
-                var pattern = (RangeValuePattern)range;
-                if (pattern.Current.Value >= pattern.Current.Maximum) break;
-                pattern.SetValue(Math.Min(pattern.Current.Maximum, pattern.Current.Value + Math.Max(pattern.Current.LargeChange, 1)));
+                if (bar != null && bar.TryGetCurrentPattern(RangeValuePattern.Pattern, out var range))
+                {
+                    var pattern = (RangeValuePattern)range;
+                    if (pattern.Current.Value < pattern.Current.Maximum)
+                    { pattern.SetValue(Math.Min(pattern.Current.Maximum, pattern.Current.Value + Math.Max(pattern.Current.LargeChange, 1))); moved = true; }
+                }
             }
+            if (!moved) moved = ScrollNativeList(nativeList, i, nativeCount);
+            if (!moved) break;
+            Thread.Sleep(80);
         }
-        throw new InvalidOperationException("Revit 기본 창에서 '프로젝트 매개변수' 항목을 찾지 못했습니다.");
+        throw new InvalidOperationException("Revit 기본 창에서 '프로젝트 매개변수' 항목을 찾지 못했습니다. " +
+            "목록 종류: " + NativeClass(nativeList) + " · 표시 항목: " + string.Join(", ", visibleNames.Take(16)));
+    }
+
+    private static bool IsProjectParameterName(string value) =>
+        ProjectParameterNames.Any(name => value.Trim().Contains(name, StringComparison.OrdinalIgnoreCase));
+
+    private static int NativeItemCount(IntPtr list)
+    {
+        if (list == IntPtr.Zero) return 0;
+        var name = NativeClass(list);
+        var message = name.Equals("SysListView32", StringComparison.OrdinalIgnoreCase) ? 0x1004u :
+            name.Equals("ListBox", StringComparison.OrdinalIgnoreCase) ? 0x018Bu : 0u;
+        if (message == 0) return 0;
+        try { return Math.Max(0, (int)Send(list, message, IntPtr.Zero, IntPtr.Zero).ToInt64()); }
+        catch (InvalidOperationException) { return 0; }
+    }
+
+    private static bool ScrollNativeList(IntPtr list, int step, int count)
+    {
+        if (list == IntPtr.Zero) return false;
+        var name = NativeClass(list);
+        if (count > 0 && name.Equals("SysListView32", StringComparison.OrdinalIgnoreCase))
+        {
+            var index = Math.Min(count - 1, (step + 1) * 8);
+            Send(list, 0x1013, new IntPtr(index), IntPtr.Zero); // LVM_ENSUREVISIBLE
+            return step <= (count - 1) / 8;
+        }
+        if (count > 0 && name.Equals("ListBox", StringComparison.OrdinalIgnoreCase))
+        {
+            var index = Math.Min(count - 1, (step + 1) * 8);
+            Send(list, 0x0197, new IntPtr(index), IntPtr.Zero); // LB_SETTOPINDEX
+            return step <= (count - 1) / 8;
+        }
+        // Autodesk 전용 목록은 UIA 스크롤 패턴과 표준 ListBox 메시지가 모두 없을 수 있다.
+        Send(list, 0x0115, new IntPtr(3), IntPtr.Zero); // WM_VSCROLL / SB_PAGEDOWN
+        var parent = GetParent(list);
+        if (parent != IntPtr.Zero) Send(parent, 0x0115, new IntPtr(3), list);
+        return step < 40;
+    }
+
+    private static string NativeClass(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return "창 핸들 없음";
+        var name = new System.Text.StringBuilder(128);
+        return GetClassName(handle, name, name.Capacity) > 0 ? name.ToString() : "알 수 없음";
     }
 
     private static void ClickNativeOverwrite(AutomationElement dialog)
@@ -254,6 +318,10 @@ internal static class NativeTransferDialog
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr GetDlgItem(IntPtr dialog, int id);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetParent(IntPtr handle);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetClassName(IntPtr handle, System.Text.StringBuilder name, int capacity);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr SendMessageTimeout(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam,
         uint flags, uint timeout, out IntPtr result);
