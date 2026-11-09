@@ -21,10 +21,32 @@ internal static class ProjectParameterTransferTests
         check(planned.Single(d => d.Source.Name == "뷰 구분-1").Status == "이미 있음", "일반 매개변수 동일 정의는 중복 생성하지 않음");
         target.Definitions.Definitions[0].Binding = "유형";
         planned = ProjectParameterTransfer.Plan(source, target);
-        check(planned.Single(d => d.Source.Name == "뷰 구분-1").Status == "충돌", "동명 바인딩 차이는 대상 보류");
+        check(planned.Single(d => d.Source.Name == "뷰 구분-1").Status == "정의 교체 예정", "일반 매개변수의 바인딩 차이는 기준 정의로 교체");
         target.Definitions.Definitions[0].Binding = "인스턴스";
         target.Definitions.Definitions[0].Categories = ["OST_Sheets"];
-        check(ProjectParameterTransfer.Plan(source, target).Any(d => d.Status == "충돌"), "동명 카테고리 차이는 대상 보류");
+        check(ProjectParameterTransfer.Plan(source, target).Single(d => d.Source.Name == "뷰 구분-1").Status == "정의 교체 예정",
+            "일반 매개변수의 카테고리 차이는 기준 정의로 교체");
+        target.Definitions.Definitions[0].Guid = "22222222-2222-2222-2222-222222222222";
+        check(ProjectParameterTransfer.Plan(source, target).Single(d => d.Source.Name == "뷰 구분-1").Status == "정의 교체 예정",
+            "동명 GUID 차이는 기준 정의로 교체");
+        target.Definitions.Definitions[0].Guid = "";
+        target.Definitions.Definitions[0].DataType = "autodesk.spec:spec.int-2.0.0";
+        check(ProjectParameterTransfer.Plan(source, target).Single(d => d.Source.Name == "뷰 구분-1").Status == "정의 교체 예정",
+            "동명 자료형 차이는 기준 정의로 교체");
+        target.Definitions.Definitions[0].DataType = ordinary.DataType;
+        target.Definitions.AllCategories.Remove("OST_Views");
+        check(ProjectParameterTransfer.Plan(source, target).Single(d => d.Source.Name == "뷰 구분-1").Status == "충돌",
+            "대상에 없는 카테고리는 임의로 버리지 않음");
+        target.Definitions.AllCategories.Add("OST_Views");
+        var sharedTarget = Model("shared-target", query,
+            [Def("제작정보", shared.Guid, shared.Key, "901", "shared-target-901", "OST_Sheets")]);
+        check(ProjectParameterTransfer.Plan(source, sharedTarget).Single(d => d.Source.Name == "제작정보").Status == "설정 변경 예정",
+            "공유 매개변수의 카테고리 차이는 연결 설정 변경");
+        var groupTarget = Model("group-target", query,
+            [Def("뷰 구분-1", "", "id:902", "902", "group-target-902", "OST_Views")]);
+        groupTarget.Definitions!.Definitions[0].Group = "autodesk.parameter.group:identityData-1.0.0";
+        check(ProjectParameterTransfer.Plan(source, groupTarget).Single(d => d.Source.Name == "뷰 구분-1").Status == "설정 변경 예정",
+            "일반 매개변수의 그룹만 다르면 제자리 변경");
         source.Definitions!.Definitions.Add(Def("뷰 구분-1", "", "id:103", "103", "uid-103", "OST_Views"));
         check(ProjectParameterTransfer.Plan(source, Model("third", query, [])).Any(d => d.Status == "충돌"), "원본 동명 중복 차단");
         source.Definitions.Definitions.RemoveAt(2);
@@ -52,6 +74,13 @@ internal static class ProjectParameterTransferTests
             check(grid.Visibility == Visibility.Visible && grid.Items.Count == 2,
                 "기존 기준 파일 선택 후 같은 창에서 모든 정의 검토");
             check(button.IsEnabled, "전송 검토 후 기존 저장 버튼 활성화");
+            models[1].Snapshot = Model("target", query,
+                [Def("뷰 구분-1", "", "id:503", "503", "target-503", "OST_Sheets"),
+                 Def("제작정보", shared.Guid, shared.Key, "504", "target-504", "OST_Walls")]);
+            typeof(MainWindow).GetMethod("ReviewLoadedRules", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(window, [window.FindName("ReviewRulesButton"), new RoutedEventArgs()]);
+            check(grid.Items.Cast<ProjectTransferReviewRow>().Any(r => r.Status == "정의 교체 예정") && button.IsEnabled,
+                "추가 없이 정의 교체만 있어도 전송 버튼 활성화");
             combo.SelectedIndex = 1;
             check(grid.Visibility == Visibility.Collapsed && !button.IsEnabled,
                 "기준 파일 변경 시 이전 전송 승인 무효화");

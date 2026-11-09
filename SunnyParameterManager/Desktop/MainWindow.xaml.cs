@@ -415,7 +415,7 @@ public partial class MainWindow : Window
         TransferSourceHint.Visibility = file.ProjectParameterTransfer ? Visibility.Visible : Visibility.Collapsed;
         EditActions.Visibility = file.ProjectParameterTransfer ? Visibility.Collapsed : Visibility.Visible;
         ReviewExplanation.Text = file.ProjectParameterTransfer
-            ? "기준 파일의 모든 프로젝트 매개변수 정의를 대상 파일별로 비교합니다. 추가·일치·충돌을 확인하세요. 값은 전송하지 않습니다."
+            ? "기준 파일의 프로젝트 매개변수 정의를 대상 파일별로 비교합니다. 추가·설정 변경·정의 교체를 확인하세요. 요소별 입력값은 전송하지 않습니다."
             : "아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요.";
         _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
@@ -482,12 +482,12 @@ public partial class MainWindow : Window
             ProjectTransferGrid.Visibility = Visibility.Visible;
             EditsGrid.Visibility = CentralRebuildGrid.Visibility = Visibility.Collapsed;
             RuleSummaryPanel.Visibility = Visibility.Visible;
-            var eligible = _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌") && p.Decisions.Any(d => d.Status == "추가 예정")).ToList();
-            RuleSummary.Text = $"기준: {source.Title} · 대상 {_transferPlans.Count:N0}개 · 추가 예정 {rows.Count(r => r.Status == "추가 예정"):N0}개 · 이미 있음 {rows.Count(r => r.Status == "이미 있음"):N0}개 · 충돌 {rows.Count(r => r.Status == "충돌"):N0}개\n" +
-                $"적용 가능 대상 {eligible.Count:N0}개. 충돌이 하나라도 있는 모델은 전체를 보류합니다. 매개변수 값은 복사하지 않습니다.";
+            var eligible = _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌") && p.Decisions.Any(ProjectParameterTransfer.IsActionable)).ToList();
+            RuleSummary.Text = $"기준: {source.Title} · 대상 {_transferPlans.Count:N0}개 · 추가 {rows.Count(r => r.Status == "추가 예정"):N0}개 · 설정 변경 {rows.Count(r => r.Status == "설정 변경 예정"):N0}개 · 정의 교체 {rows.Count(r => r.Status == "정의 교체 예정"):N0}개 · 이미 있음 {rows.Count(r => r.Status == "이미 있음"):N0}개 · 처리 불가 {rows.Count(r => r.Status == "충돌"):N0}개\n" +
+                $"적용 가능 대상 {eligible.Count:N0}개. 기준 파일의 정의 설정을 우선합니다. 교체·연결 제외 시 대상의 기존 매개변수 값은 사라질 수 있습니다.";
             _transferReviewed = true;
             MainTabs.SelectedIndex = 1;
-            StatusText.Text = "프로젝트 매개변수 정의 검토가 끝났습니다. 대상별 추가·일치·충돌을 확인하세요.";
+            StatusText.Text = "프로젝트 매개변수 정의 검토가 끝났습니다. 기준 파일 우선 적용 내용과 대상의 값 손실 가능성을 확인하세요.";
             UpdatePending();
         }
         catch (Exception ex)
@@ -635,9 +635,9 @@ public partial class MainWindow : Window
         RefreshGroupRestrictions();
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         var rebuildReady = _loadedRules?.RebuildCentral == true && _centralRebuildReviewed && _edits.Count == 0 && _models.Count > 0 && _models.All(m => m.Snapshot?.CentralRebuild?.FormatVersion == 2 && !m.Snapshot.RequiresRequery);
-        var transferCount = _transferReviewed ? _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌")).Sum(p => p.Decisions.Count(d => d.Status == "추가 예정")) : 0;
+        var transferCount = _transferReviewed ? _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌")).Sum(p => p.Decisions.Count(ProjectParameterTransfer.IsActionable)) : 0;
         PendingText.Text = _loadedRules?.ProjectParameterTransfer == true
-            ? _transferReviewed ? $"기준 {_transferSource?.Title} · 정의 추가 예정 {transferCount:N0}개 · 실제 파일 반영 전" : "기준 파일 선택 → 룰셋 변경 검토를 진행하세요."
+            ? _transferReviewed ? $"기준 {_transferSource?.Title} · 정의 적용 예정 {transferCount:N0}개 · 실제 파일 반영 전" : "기준 파일 선택 → 룰셋 변경 검토를 진행하세요."
             : rebuildReady ? $"새 중앙 재생성 대상 {_models.Count:N0}개 모델 · 아직 적용 전" : $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
         ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true &&
             (_loadedRules?.ProjectParameterTransfer == true ? transferCount > 0 : rebuildReady || _edits.Count > 0) && !_worker.NeedsAttention && !HasFailedPending();
@@ -754,16 +754,18 @@ public partial class MainWindow : Window
     {
         if (_busy || !_transferReviewed || _sample || _transferSource?.Snapshot?.Definitions == null || _worker.NeedsAttention) return;
         var source = _transferSource;
-        var eligible = _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌") && p.Decisions.Any(d => d.Status == "추가 예정")).ToList();
+        var eligible = _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌") && p.Decisions.Any(ProjectParameterTransfer.IsActionable)).ToList();
         if (eligible.Count == 0) return;
         if (SourceCombo.SelectedItem != source || eligible.Any(p => p.Target.Snapshot?.Definitions == null || p.Target.Snapshot.RequiresRequery))
         { InvalidateProjectTransfer(); MessageBox.Show(this, "기준 또는 대상 조회가 바뀌었습니다. 다시 ‘룰셋 변경 검토’를 누르세요."); return; }
         var blocked = _transferPlans.Count - eligible.Count;
-        var count = eligible.Sum(p => p.Decisions.Count(d => d.Status == "추가 예정"));
-        var message = $"기준 파일: {source.Title}\n전송 대상: {eligible.Count:N0}개 모델 · 프로젝트 매개변수 정의 {count:N0}개 추가\n" +
-            (blocked > 0 ? $"충돌 또는 추가할 항목이 없는 대상 {blocked:N0}개는 제외합니다.\n" : "") +
-            "\n일반 매개변수(GUID 없음)와 공유 매개변수를 정의·카테고리 연결 그대로 추가합니다. 매개변수 값은 복사하지 않습니다. " +
-            "같은 이름의 다른 정의가 있는 모델은 전체를 보류합니다.\n\n작업공유 모델은 중앙 동기화 후 차용 요소·작업세트 소유권을 반환합니다. " +
+        var count = eligible.Sum(p => p.Decisions.Count(ProjectParameterTransfer.IsActionable));
+        var replaced = eligible.Sum(p => p.Decisions.Count(d => d.Status == "정의 교체 예정"));
+        var rebound = eligible.Sum(p => p.Decisions.Count(d => d.Status == "설정 변경 예정"));
+        var message = $"기준 파일: {source.Title}\n전송 대상: {eligible.Count:N0}개 모델 · 정의 {count:N0}개 적용 (설정 변경 {rebound:N0}개, 정의 교체 {replaced:N0}개)\n" +
+            (blocked > 0 ? $"처리 불가 또는 변경할 항목이 없는 대상 {blocked:N0}개는 제외합니다.\n" : "") +
+            "\n기준 파일의 프로젝트 매개변수 정의·카테고리 연결을 우선합니다. 다른 GUID·자료형은 기존 정의를 제거하고 교체합니다. " +
+            "교체된 정의의 대상 모델 입력값과 제외되는 카테고리의 입력값은 사라질 수 있습니다. 기준 모델의 요소별 입력값은 복사하지 않습니다.\n\n작업공유 모델은 중앙 동기화 후 차용 요소·작업세트 소유권을 반환합니다. " +
             "모델별 순차 처리이며 완료된 모델을 자동으로 되돌릴 수 없습니다. 운영 모델 전에 별도 테스트 중앙에서 검증하세요." +
             (eligible.Any(p => p.Target.Snapshot?.Kind == "로컬") ? "\n\n기존 로컬의 미동기화 변경도 중앙에 함께 반영됩니다." : "");
         if (MessageBox.Show(this, message, "프로젝트 매개변수 정의 전송 · 최종 확인", MessageBoxButton.YesNo,
