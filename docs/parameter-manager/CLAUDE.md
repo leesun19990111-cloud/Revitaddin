@@ -1,5 +1,10 @@
 # 독립 매개변수 관리자
 
+## 2026-11-09 · 0.5.4 기본 전송 체크 상태 확인과 수동 이어가기
+
+- 0.5.3 현장 오류는 ListBox 전체 121개 중 ‘프로젝트 매개변수’ 인덱스 111을 찾았지만 해당 Revit 항목에 UIA TogglePattern이 없어 선택 단계에서 중단된 것이다. ListBox 행을 `LB_GETITEMRECT`/`LB_ITEMFROMPOINT`로 검증해 체크박스 위치를 누르고 MSAA `accName`/`accState`의 `STATE_SYSTEM_CHECKED`로 결과를 확인한다. 번호를 찾았는데 자동 상태 판독이 불가하면 열린 기본 창에서 사용자가 체크 상태를 확인하고 확인/취소하도록 안내한 뒤 창이 닫힐 때까지 기다린다. Worker의 `TransferredProjectStandards` 확인 없이는 저장하지 않는다.
+- MSAA 및 실제 Revit 전송·중앙 동기화는 운영 파일에 대한 자동 테스트를 하지 않았다. 새 버전은 독립 테스트 중앙 사본으로 현장 검증한다.
+
 ## 2026-11-09 · 0.5.3 기본 전송 ListBox 전체 항목 탐색
 
 - 0.5.2 현장 오류에서 Revit 기본 전송 ListBox의 `표시 항목`이 상단 16개만 보여 끝까지 탐색했는지 확인할 수 없었다. Win32 `LB_GETCOUNT`/`LB_GETTEXTLEN`/`LB_GETTEXT`로 전체 항목을 읽고 한글·영문 ‘프로젝트 매개변수’ 위치를 직접 찾는다. 해당 인덱스로 `LB_SETTOPINDEX`/`LB_SETCARETINDEX` 이동 후 접근성 Toggle 상태를 확인하고, 검증 실패 시 전송 확인을 누르지 않는다. 오류에 전체 수와 원시/접근성 목록 앞뒤 항목을 함께 기록한다.

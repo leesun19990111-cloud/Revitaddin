@@ -10,7 +10,7 @@ internal static class NativeTransferDialog
     private static readonly TimeSpan DialogTimeout = TimeSpan.FromMinutes(3);
     private static readonly string[] ProjectParameterNames = ["프로젝트 매개변수", "Project Parameters"];
 
-    public static Task Run(int processId, string sourceTitle, Action<string>? progress)
+    public static async Task Run(int processId, string sourceTitle, Action<string>? progress)
     {
         var context = SynchronizationContext.Current;
         Action<string>? report = progress == null ? null : message =>
@@ -18,7 +18,19 @@ internal static class NativeTransferDialog
             if (context == null) progress(message);
             else context.Post(_ => progress(message), null);
         };
-        return Task.Run(() => RunOnAutomationThread(processId, sourceTitle, report));
+        try { await Task.Run(() => RunOnAutomationThread(processId, sourceTitle, report)); }
+        catch (ManualSelectionRequiredException ex)
+        {
+            System.Windows.MessageBox.Show(
+                "Revit 기본 전송 창에서 자동 체크 상태를 확인할 수 없습니다.\n\n" +
+                "작업용 Revit 창에서 '프로젝트 매개변수'만 체크되어 있는지 확인하고 Revit의 '확인'을 눌러 주세요.\n" +
+                "전송을 취소하려면 Revit의 '취소'를 누르세요.\n\n" +
+                "Revit 창이 닫힐 때까지 매개변수 관리자는 기다립니다.\n\n" + ex.Message,
+                "Sunny 매개변수 관리자 · Revit 기본 창 확인",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            report?.Invoke("Revit 기본 창에서 사용자 선택 대기 중");
+            await Task.Run(() => WaitForTransferCompletion(processId));
+        }
     }
 
     private static void RunOnAutomationThread(int processId, string sourceTitle, Action<string>? progress)
@@ -38,6 +50,11 @@ internal static class NativeTransferDialog
         if (!ClickNativeButton(dialog, 1)) Invoke(ok);
         progress?.Invoke("Revit 기본 프로젝트 표준 전송 처리 중");
 
+        WaitForTransferCompletion(processId);
+    }
+
+    private static void WaitForTransferCompletion(int processId)
+    {
         var watch = Stopwatch.StartNew();
         DateTime? closedSince = null;
         while (watch.Elapsed < TimeSpan.FromMinutes(15))
@@ -123,6 +140,9 @@ internal static class NativeTransferDialog
             }
             catch (Exception ex) when (ex is InvalidOperationException or COMException)
             { /* 기본 목록 위치는 옮겼으므로 나머지 접근성 경로를 계속 확인한다. */ }
+            if (TryCheckNativeRow(nativeList, index, list, visibleNames)) return;
+            throw new ManualSelectionRequiredException(
+                "목록 " + nativeCount + "개 중 해당 행: " + (index + 1) + "번째 · 자동 체크 확인 실패");
         }
         for (int i = 0; i < Math.Min(100, Math.Max(20, nativeCount)); i++)
         {
@@ -175,7 +195,7 @@ internal static class NativeTransferDialog
             if (!moved) break;
             Thread.Sleep(80);
         }
-        throw new InvalidOperationException("Revit 기본 창에서 '프로젝트 매개변수' 항목을 찾지 못했습니다. " +
+        throw new ManualSelectionRequiredException("Revit 기본 창에서 '프로젝트 매개변수' 자동 선택을 확인하지 못했습니다. " +
             "목록 종류: " + NativeClass(nativeList) + " · 전체 항목: " + nativeCount +
             " · 원시 목록에서 찾음: " + (nativeMatches.Count == 1 ? nativeMatches[0].Index.ToString() : "아니오") +
             " · 원시 목록 앞/뒤: " + string.Join(", ", nativeItems.Take(5).Select(item => item.Name)
@@ -188,6 +208,66 @@ internal static class NativeTransferDialog
         ProjectParameterNames.Any(name => NormalizeItemName(value).Contains(NormalizeItemName(name), StringComparison.OrdinalIgnoreCase));
 
     private static string NormalizeItemName(string value) => new(value.Where(c => !char.IsWhiteSpace(c) && c != '-' && c != '_').ToArray());
+
+    private static bool TryCheckNativeRow(IntPtr handle, int index, AutomationElement list, HashSet<string> names)
+    {
+        if (handle == IntPtr.Zero || !NativeClass(handle).Equals("ListBox", StringComparison.OrdinalIgnoreCase)) return false;
+        if (TryGetMsaaCheck(handle, index, out var alreadyChecked) && alreadyChecked) return true;
+        Send(handle, 0x0197, new IntPtr(index), IntPtr.Zero); // LB_SETTOPINDEX
+        var rectPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NativeRect>());
+        try
+        {
+            if (Send(handle, 0x0198, new IntPtr(index), rectPtr).ToInt64() < 0) return false; // LB_GETITEMRECT
+            var row = Marshal.PtrToStructure<NativeRect>(rectPtr);
+            if (!GetClientRect(handle, out var client)) return false;
+            var x = Math.Min(row.Right - 1, Math.Max(row.Left + 8, client.Left + 8));
+            var y = row.Top + (row.Bottom - row.Top) / 2;
+            if (x < client.Left || x >= client.Right || y < client.Top || y >= client.Bottom) return false;
+            var point = new IntPtr((y & 0xffff) << 16 | (x & 0xffff));
+            var hit = Send(handle, 0x01A9, IntPtr.Zero, point).ToInt64(); // LB_ITEMFROMPOINT
+            if ((hit & 0xffff) != index || ((hit >> 16) & 0xffff) != 0) return false;
+            Send(handle, 0x0201, new IntPtr(1), point); // WM_LBUTTONDOWN
+            Send(handle, 0x0202, IntPtr.Zero, point); // WM_LBUTTONUP
+            Thread.Sleep(150);
+            if (TryGetMsaaCheck(handle, index, out var checkedAfter) && checkedAfter) return true;
+            try
+            {
+                list = AutomationElement.FromHandle(handle);
+                return TrySelectNamedParameter(list, names);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or COMException) { return false; }
+        }
+        finally { Marshal.FreeHGlobal(rectPtr); }
+    }
+
+    private static bool TryGetMsaaCheck(IntPtr handle, int index, out bool isChecked)
+    {
+        isChecked = false;
+        var iid = new Guid("618736e0-3c3d-11cf-810c-00aa00389b71"); // IID_IAccessible
+        object? accessible = null;
+        try
+        {
+            if (AccessibleObjectFromWindow(handle, 0xFFFFFFFC, ref iid, out accessible) != 0 || accessible == null)
+                return false; // OBJID_CLIENT
+            var type = accessible.GetType();
+            var child = index + 1; // MSAA 목록 항목은 1부터 시작한다.
+            var name = Convert.ToString(type.InvokeMember("accName", System.Reflection.BindingFlags.GetProperty,
+                null, accessible, [child]));
+            if (string.IsNullOrEmpty(name) || !IsProjectParameterName(name)) return false;
+            var state = Convert.ToInt32(type.InvokeMember("accState", System.Reflection.BindingFlags.GetProperty,
+                null, accessible, [child]));
+            isChecked = (state & 0x10) != 0; // STATE_SYSTEM_CHECKED
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or COMException or System.Reflection.TargetInvocationException)
+        { return false; }
+        finally { if (accessible != null && Marshal.IsComObject(accessible)) Marshal.ReleaseComObject(accessible); }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect { public int Left, Top, Right, Bottom; }
+
+    private sealed class ManualSelectionRequiredException(string message) : InvalidOperationException(message);
 
     private static List<(int Index, string Name)> ReadNativeListItems(IntPtr list)
     {
@@ -418,6 +498,11 @@ internal static class NativeTransferDialog
     private static extern IntPtr GetDlgItem(IntPtr dialog, int id);
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr GetParent(IntPtr handle);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetClientRect(IntPtr handle, out NativeRect rectangle);
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromWindow(IntPtr handle, uint objectId, ref Guid iid,
+        [MarshalAs(UnmanagedType.Interface)] out object? accessible);
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool ShowWindow(IntPtr handle, int command);
     [DllImport("user32.dll", SetLastError = true)]
