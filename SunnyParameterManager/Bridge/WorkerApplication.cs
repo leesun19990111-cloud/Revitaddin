@@ -15,6 +15,8 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
     private Request? _pending;
     private bool _attention;
     private bool _readRestartAllowed;
+    private NativeProjectTransferSession? _nativeTransfer;
+    private string _anchorPath = "";
 
     public Result OnStartup(UIControlledApplication app)
     {
@@ -27,6 +29,7 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
             _token = token;
             if (!Directory.Exists(_folder)) return Result.Succeeded;
             _event = ExternalEvent.Create(this);
+            app.TransferredProjectStandards += (_, args) => _nativeTransfer?.MarkTransferred(args.SourceDocument, args.TargetDocument);
             _timer = new Timer(_ => Poll(), null, 1000, 500);
             Protocol.Write(Path.Combine(_folder, "ready.json"), new WorkerReady { ProcessId = Environment.ProcessId, RevitVersion = app.ControlledApplication.VersionNumber });
             return Result.Succeeded;
@@ -73,7 +76,7 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
             if (req == null) return;
             if (_attention && !(req.Operation == "종료" && _readRestartAllowed)) throw new InvalidOperationException("이 작업 세션은 확인이 필요합니다. 결과와 작업용 Revit을 확인한 뒤 종료하세요. 자동 재실행하지 않습니다.");
             if (ui.Application.VersionNumber != "2026") throw new InvalidOperationException("첫 버전은 Revit 2026만 지원합니다.");
-            if (ui.Application.Documents.Cast<Autodesk.Revit.DB.Document>().Any())
+            if (req.Operation != "프로젝트 표준 전송 완료" && HasUnexpectedDocuments(ui))
                 throw new InvalidOperationException("작업용 Revit에 이미 문서가 열려 있습니다. 사용자 문서나 복구 문서를 임의로 닫거나 수정하지 않습니다.");
             if (req.Operation == "종료")
             {
@@ -83,19 +86,32 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
                 ui.PostCommand(command);
                 return;
             }
-            var result = req.Operation == "중앙 재생성"
+            Response result;
+            if (req.Operation == "프로젝트 매개변수 전송")
+            {
+                _nativeTransfer = new NativeProjectTransferSession(_folder, r => SafeWrite(req.Id + ".progress.json", r));
+                result = _nativeTransfer.Start(ui, req, ref _anchorPath);
+                if (!result.Success) _nativeTransfer = null;
+            }
+            else if (req.Operation == "프로젝트 표준 전송 완료")
+            {
+                if (_nativeTransfer == null) throw new InvalidOperationException("완료할 Revit 기본 전송 작업이 없습니다.");
+                result = _nativeTransfer.Complete(ui, req);
+                if (!result.RequiresAttention) _nativeTransfer = null;
+            }
+            else result = req.Operation == "중앙 재생성"
                 ? new CentralRebuildEngine(_folder, r => SafeWrite(req.Id + ".progress.json", r)).Run(ui.Application, req)
                 : new ModelEngine(_folder, r => SafeWrite(req.Id + ".progress.json", r)).Run(ui.Application, req);
             if (req.Operation == "조회" && result.ReadRestartRequired)
             {
                 result.RequiresAttention = true;
-                result.CanRestartForRead = !HasDocuments(ui);
+                result.CanRestartForRead = !HasUnexpectedDocuments(ui);
                 _readRestartAllowed = result.CanRestartForRead;
                 result.Message += "\n조회 중 메모리가 부족했습니다. 불완전한 조회 결과는 사용하지 않습니다.";
             }
             if (result.CanContinueAfterPreflightFailure)
             {
-                bool empty = !HasDocuments(ui);
+                bool empty = !HasUnexpectedDocuments(ui);
                 result.CanContinueAfterPreflightFailure = req.Operation is "적용" or "프로젝트 매개변수 전송" && !result.Success && !result.RequiresAttention &&
                     !result.CentralSynchronized && result.Applied == 0 && empty;
                 if (!empty) result.RequiresAttention = true;
@@ -106,7 +122,7 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
         catch (Exception ex)
         {
             // 조회 결과 전달 실패도 저장 실패와 구별한다. 기존 잠금이나 남은 문서는 절대 우회하지 않는다.
-            bool restart = (!_attention || _readRestartAllowed) && req?.Operation == "조회" && !HasDocuments(ui);
+            bool restart = (!_attention || _readRestartAllowed) && req?.Operation == "조회" && !HasUnexpectedDocuments(ui);
             _readRestartAllowed = restart;
             _attention = true;
             SafeWrite((req?.Id ?? "worker-error") + ".result.json", new Response { Id = req?.Id ?? "", Stage = restart ? "조회 실패 · 연결 재시작 가능" : "확인 필요", Message = ex.Message, RequiresAttention = true, CanRestartForRead = restart });
@@ -115,9 +131,9 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
     }
 
     private void SafeWrite(string file, Response response) { try { if (_folder.Length > 0) Protocol.Write(Path.Combine(_folder, file), response); } catch { /* 기록 실패가 Revit으로 전파되지 않게 한다. */ } }
-    private static bool HasDocuments(UIApplication ui)
+    private bool HasUnexpectedDocuments(UIApplication ui)
     {
-        try { return ui.Application.Documents.Cast<Autodesk.Revit.DB.Document>().Any(); }
+        try { return ui.Application.Documents.Cast<Autodesk.Revit.DB.Document>().Any(d => _anchorPath.Length == 0 || !string.Equals(d.PathName, _anchorPath, StringComparison.OrdinalIgnoreCase)); }
         catch { return true; } // 확인 불가는 빈 작업 프로세스로 간주하지 않는다.
     }
     public string GetName() => "Sunny 매개변수 관리자 전용 작업";

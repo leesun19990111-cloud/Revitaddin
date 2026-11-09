@@ -46,7 +46,7 @@ public partial class MainWindow : Window
     private bool _centralRebuildReviewed;
     private bool _transferReviewed;
     private ModelItem? _transferSource;
-    private readonly List<(ModelItem Target, IReadOnlyList<ProjectParameterTransfer.Decision> Decisions)> _transferPlans = [];
+    private readonly List<ModelItem> _transferPlans = [];
 
     public MainWindow()
     {
@@ -415,7 +415,7 @@ public partial class MainWindow : Window
         TransferSourceHint.Visibility = file.ProjectParameterTransfer ? Visibility.Visible : Visibility.Collapsed;
         EditActions.Visibility = file.ProjectParameterTransfer ? Visibility.Collapsed : Visibility.Visible;
         ReviewExplanation.Text = file.ProjectParameterTransfer
-            ? "기준 파일의 프로젝트 매개변수 정의를 대상 파일별로 비교합니다. 추가·설정 변경·정의 교체를 확인하세요. 요소별 입력값은 전송하지 않습니다."
+            ? "기준 파일과 대상 파일을 확인합니다. 적용할 때 각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행하고 '프로젝트 매개변수'만 선택합니다."
             : "아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요.";
         _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
@@ -455,7 +455,7 @@ public partial class MainWindow : Window
         {
             if (_busy || _sample || _loadedRules?.ProjectParameterTransfer != true)
                 throw new InvalidOperationException("진행 중인 작업 또는 샘플에서는 전송을 검토할 수 없습니다.");
-            if (_edits.Count > 0) throw new InvalidOperationException("기존 변경 예정을 먼저 정리하세요. 정의 전송과 값 변경을 섞지 않습니다.");
+            if (_edits.Count > 0) throw new InvalidOperationException("기존 변경 예정을 먼저 정리하세요. 표준 전송과 값 변경을 섞지 않습니다.");
             if (_worker.NeedsAttention) throw new InvalidOperationException("작업용 Revit의 미확정 결과를 먼저 확인하세요.");
             if (SourceCombo.SelectedItem is not ModelItem source || _models.Count < 2)
                 throw new InvalidOperationException("기준 RVT 하나와 대상 RVT를 등록하고, 왼쪽 ‘다른 파일에서 값 가져오기’에서 기준 파일을 선택하세요.");
@@ -470,24 +470,19 @@ public partial class MainWindow : Window
                 throw new InvalidOperationException("일부 파일의 정의 조회가 완료되지 않았습니다. 처리 결과를 확인한 뒤 해당 파일만 다시 조회하세요.");
             InvalidateProjectTransfer();
             _transferSource = source;
-            var rows = new List<ProjectTransferReviewRow>();
-            foreach (var target in _models.Where(m => m != source))
-            {
-                var decisions = ProjectParameterTransfer.Plan(source.Snapshot!, target.Snapshot!);
-                _transferPlans.Add((target, decisions));
-                rows.AddRange(decisions.Select(d => new ProjectTransferReviewRow(target.Title, d.Source.Name,
-                    d.Source.Guid.Length == 0 ? "일반" : "공유", string.Join(", ", d.Source.Categories), d.Status, d.Reason)));
-            }
+            _transferPlans.AddRange(_models.Where(m => m != source));
+            var rows = _transferPlans.Select(target => new ProjectTransferReviewRow(target.Title,
+                "프로젝트 매개변수", "Revit 기본 명령", "전체", "전송 대상",
+                "기준 파일을 선택하고 '모두 선택 안 함' 뒤 '프로젝트 매개변수'만 체크해 전송합니다.")).ToList();
             ProjectTransferGrid.ItemsSource = rows;
             ProjectTransferGrid.Visibility = Visibility.Visible;
             EditsGrid.Visibility = CentralRebuildGrid.Visibility = Visibility.Collapsed;
             RuleSummaryPanel.Visibility = Visibility.Visible;
-            var eligible = _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌") && p.Decisions.Any(ProjectParameterTransfer.IsActionable)).ToList();
-            RuleSummary.Text = $"기준: {source.Title} · 대상 {_transferPlans.Count:N0}개 · 추가 {rows.Count(r => r.Status == "추가 예정"):N0}개 · 설정 변경 {rows.Count(r => r.Status == "설정 변경 예정"):N0}개 · 정의 교체 {rows.Count(r => r.Status == "정의 교체 예정"):N0}개 · 이미 있음 {rows.Count(r => r.Status == "이미 있음"):N0}개 · 처리 불가 {rows.Count(r => r.Status == "충돌"):N0}개\n" +
-                $"적용 가능 대상 {eligible.Count:N0}개. 기준 파일의 정의 설정을 우선합니다. 교체·연결 제외 시 대상의 기존 매개변수 값은 사라질 수 있습니다.";
+            RuleSummary.Text = $"기준: {source.Title} · 대상 {_transferPlans.Count:N0}개\n" +
+                "각 대상 파일에서 Revit 기본 '프로젝트 표준 전송'을 실행합니다. 복사 위치는 기준 파일, 전송 항목은 '프로젝트 매개변수' 하나만 선택합니다.";
             _transferReviewed = true;
             MainTabs.SelectedIndex = 1;
-            StatusText.Text = "프로젝트 매개변수 정의 검토가 끝났습니다. 기준 파일 우선 적용 내용과 대상의 값 손실 가능성을 확인하세요.";
+            StatusText.Text = "기준 파일과 전송 대상 목록을 확인했습니다. Revit 기본 프로젝트 표준 전송을 실행할 수 있습니다.";
             UpdatePending();
         }
         catch (Exception ex)
@@ -635,15 +630,15 @@ public partial class MainWindow : Window
         RefreshGroupRestrictions();
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         var rebuildReady = _loadedRules?.RebuildCentral == true && _centralRebuildReviewed && _edits.Count == 0 && _models.Count > 0 && _models.All(m => m.Snapshot?.CentralRebuild?.FormatVersion == 2 && !m.Snapshot.RequiresRequery);
-        var transferCount = _transferReviewed ? _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌")).Sum(p => p.Decisions.Count(ProjectParameterTransfer.IsActionable)) : 0;
+        var transferCount = _transferReviewed ? _transferPlans.Count : 0;
         PendingText.Text = _loadedRules?.ProjectParameterTransfer == true
-            ? _transferReviewed ? $"기준 {_transferSource?.Title} · 정의 적용 예정 {transferCount:N0}개 · 실제 파일 반영 전" : "기준 파일 선택 → 룰셋 변경 검토를 진행하세요."
+            ? _transferReviewed ? $"기준 {_transferSource?.Title} · 기본 표준 전송 대상 {transferCount:N0}개 모델 · 실제 파일 반영 전" : "기준 파일 선택 → 룰셋 변경 검토를 진행하세요."
             : rebuildReady ? $"새 중앙 재생성 대상 {_models.Count:N0}개 모델 · 아직 적용 전" : $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
         ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true &&
             (_loadedRules?.ProjectParameterTransfer == true ? transferCount > 0 : rebuildReady || _edits.Count > 0) && !_worker.NeedsAttention && !HasFailedPending();
         ApplyButton.Content = _loadedRules?.ProjectParameterTransfer == true ? "프로젝트 매개변수 전송 · 중앙 동기화" : _loadedRules?.RebuildCentral == true ? "새 중앙으로 교체 · 동기화" : "RVT에 저장 · 중앙 동기화";
         ReviewButton.IsEnabled = !_busy && (_loadedRules?.ProjectParameterTransfer == true ? _transferReviewed : rebuildReady || _edits.Count > 0);
-        ReviewButton.Content = _loadedRules?.ProjectParameterTransfer == true ? $"③ 정의 전송 검토 ({transferCount:N0})" : rebuildReady ? $"③ 중앙 재생성 검토 ({_models.Count:N0})" : $"③ 변경 내용 확인 ({_edits.Count:N0})";
+        ReviewButton.Content = _loadedRules?.ProjectParameterTransfer == true ? $"③ 기본 전송 검토 ({transferCount:N0})" : rebuildReady ? $"③ 중앙 재생성 검토 ({_models.Count:N0})" : $"③ 변경 내용 확인 ({_edits.Count:N0})";
         WelcomePanel.Visibility = _models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         RulesButton.IsEnabled = !_busy;
         ReviewRulesButton.IsEnabled = !_busy && _loadedRules != null && (_loadedRules.ProjectParameterTransfer
@@ -655,7 +650,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · 프로젝트 매개변수 정의 전체 전송" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트 기준점 공유대지 점검·엑셀 목록" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · Revit 기본 표준 전송의 프로젝트 매개변수 항목" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트 기준점 공유대지 점검·엑셀 목록" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." : _loadedRules?.ProjectParameterTransfer == true ?
             $"{_models.Count}개 파일 · 정의 조회 {_models.Count(m => m.Snapshot?.Definitions != null)}개 · 기준 선택: {(SourceCombo.SelectedItem as ModelItem)?.Title ?? "없음"}" :
@@ -754,21 +749,13 @@ public partial class MainWindow : Window
     {
         if (_busy || !_transferReviewed || _sample || _transferSource?.Snapshot?.Definitions == null || _worker.NeedsAttention) return;
         var source = _transferSource;
-        var eligible = _transferPlans.Where(p => p.Decisions.All(d => d.Status != "충돌") && p.Decisions.Any(ProjectParameterTransfer.IsActionable)).ToList();
+        var eligible = _transferPlans.ToList();
         if (eligible.Count == 0) return;
-        if (SourceCombo.SelectedItem != source || eligible.Any(p => p.Target.Snapshot?.Definitions == null || p.Target.Snapshot.RequiresRequery))
+        if (SourceCombo.SelectedItem != source || eligible.Any(p => p.Snapshot?.Definitions == null || p.Snapshot.RequiresRequery))
         { InvalidateProjectTransfer(); MessageBox.Show(this, "기준 또는 대상 조회가 바뀌었습니다. 다시 ‘룰셋 변경 검토’를 누르세요."); return; }
-        var blocked = _transferPlans.Count - eligible.Count;
-        var count = eligible.Sum(p => p.Decisions.Count(ProjectParameterTransfer.IsActionable));
-        var replaced = eligible.Sum(p => p.Decisions.Count(d => d.Status == "정의 교체 예정"));
-        var rebound = eligible.Sum(p => p.Decisions.Count(d => d.Status == "설정 변경 예정"));
-        var message = $"기준 파일: {source.Title}\n전송 대상: {eligible.Count:N0}개 모델 · 정의 {count:N0}개 적용 (설정 변경 {rebound:N0}개, 정의 교체 {replaced:N0}개)\n" +
-            (blocked > 0 ? $"처리 불가 또는 변경할 항목이 없는 대상 {blocked:N0}개는 제외합니다.\n" : "") +
-            "\n기준 파일의 프로젝트 매개변수 정의·카테고리 연결을 우선합니다. 다른 GUID·자료형은 기존 정의를 제거하고 교체합니다. " +
-            "교체된 정의의 대상 모델 입력값과 제외되는 카테고리의 입력값은 사라질 수 있습니다. 기준 모델의 요소별 입력값은 복사하지 않습니다.\n\n작업공유 모델은 중앙 동기화 후 차용 요소·작업세트 소유권을 반환합니다. " +
-            "모델별 순차 처리이며 완료된 모델을 자동으로 되돌릴 수 없습니다. 운영 모델 전에 별도 테스트 중앙에서 검증하세요." +
-            (eligible.Any(p => p.Target.Snapshot?.Kind == "로컬") ? "\n\n기존 로컬의 미동기화 변경도 중앙에 함께 반영됩니다." : "");
-        if (MessageBox.Show(this, message, "프로젝트 매개변수 정의 전송 · 최종 확인", MessageBoxButton.YesNo,
+        var message = $"기준 파일: {source.Title}\n전송 대상: {eligible.Count:N0}개 모델\n\n" +
+            "각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행합니다. 기준 파일을 선택하고 '모두 선택 안 함' 뒤 '프로젝트 매개변수'만 체크합니다. 완료 뒤 저장·중앙 동기화합니다.";
+        if (MessageBox.Show(this, message, "Revit 기본 프로젝트 표준 전송", MessageBoxButton.YesNo,
             MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         await Run(async () =>
         {
@@ -776,27 +763,26 @@ public partial class MainWindow : Window
             MainTabs.SelectedIndex = 2;
             var sourceSnapshot = source.Snapshot ?? throw new InvalidOperationException("기준 파일을 다시 조회하세요.");
             int completed = 0;
-            foreach (var plan in eligible)
+            foreach (var target in eligible)
             {
                 if (_stopRequested) { ReportBox.AppendText($"작업중지: 남은 {eligible.Count - completed:N0}개 모델은 처리하지 않았습니다.\n"); break; }
-                var target = plan.Target;
                 var snapshot = target.Snapshot ?? throw new InvalidOperationException("대상 파일을 다시 조회하세요: " + target.Title);
                 var result = await _worker.Send(new Request
                 {
                     Operation = "프로젝트 매개변수 전송", Path = target.Path, CanonicalPath = snapshot.CanonicalPath,
                     Identity = snapshot.Identity, Confirmed = true, LocalChangesConfirmed = snapshot.Kind == "로컬",
-                    TransferSource = sourceSnapshot, TransferTargetDefinitions = snapshot.Definitions
+                    TransferSource = sourceSnapshot
                 });
                 ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {target.Title}\n{result.Stage} · {result.Message}\n작업/복구 경로: {result.RecoveryPath}\n변경 전 백업: {result.BackupPath}\n");
                 if (result.Success && (snapshot.Kind == "일반" || result.CentralSynchronized && result.OwnershipReleased))
                 {
-                    target.Status = "정의 전송 완료 · 재조회 필요"; target.Snapshot = null; completed++;
+                    target.Status = "기본 표준 전송 완료 · 재조회 필요"; target.Snapshot = null; completed++;
                 }
                 else
                 {
                     snapshot.RequiresRequery = true;
                     target.Status = result.RequiresAttention ? "전송 반영 여부 확인 필요" : "전송 실패 · 재조회 필요";
-                    var remaining = eligible.Count - eligible.IndexOf(plan) - 1;
+                    var remaining = eligible.Count - eligible.IndexOf(target) - 1;
                     if (!_stopRequested && remaining > 0 && ApplyContinuation.CanOffer(result) && !_worker.NeedsAttention &&
                         MessageBox.Show(this, $"{target.Title}\n{result.Message}\n\n이 파일을 건너뛰고 나머지 {remaining:N0}개 모델의 전송을 계속할까요?",
                             "전송 실패 · 나머지 계속", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
@@ -807,7 +793,7 @@ public partial class MainWindow : Window
             }
             InvalidateProjectTransfer();
             RefreshFields();
-            StatusText.Text = $"프로젝트 매개변수 정의 전송 완료 {completed:N0}/{eligible.Count:N0}개 모델 · 처리 결과를 확인하세요.";
+            StatusText.Text = $"Revit 기본 프로젝트 표준 전송 완료 {completed:N0}/{eligible.Count:N0}개 모델 · 처리 결과를 확인하세요.";
         });
     }
 

@@ -57,6 +57,24 @@ public sealed class WorkerClient
 
     public async Task<Response> Send(Request request)
     {
+        if (request.Operation != "프로젝트 매개변수 전송") return await SendCore(request);
+        var started = await SendCore(request);
+        if (!started.Success) return started;
+        try
+        {
+            await NativeTransferDialog.Run(_process!.Id, started.Message, Progress);
+            return await SendCore(new Request { Operation = "프로젝트 표준 전송 완료", Identity = request.Identity,
+                TransferSource = request.TransferSource });
+        }
+        catch
+        {
+            NeedsAttention = true;
+            throw;
+        }
+    }
+
+    private async Task<Response> SendCore(Request request)
+    {
         if (!_sending && Connected && !NeedsAttention && request.Operation == "조회" && _process is { HasExited: true })
         {
             NeedsAttention = true; CanRestartForRead = true;
