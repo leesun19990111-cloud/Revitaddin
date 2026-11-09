@@ -23,6 +23,7 @@ internal static class NativeTransferDialog
 
     private static void RunOnAutomationThread(int processId, string sourceTitle, Action<string>? progress)
     {
+        RestoreWorkerWindow(processId);
         var dialog = WaitFor(processId, IsTransferDialog, DialogTimeout);
         progress?.Invoke("Revit 기본 전송 창 · 기준 파일 지정 중");
         SelectSource(dialog, processId, sourceTitle);
@@ -101,24 +102,31 @@ internal static class NativeTransferDialog
         if (list == null) throw new InvalidOperationException("Revit 기본 창의 전송 항목 목록을 찾지 못했습니다.");
         ScrollToNativeItem(dialog);
         var visibleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var nativeList = GetDlgItem((IntPtr)dialog.Current.NativeWindowHandle, 2372);
+        var nativeList = (IntPtr)list.Current.NativeWindowHandle;
+        if (nativeList == IntPtr.Zero) nativeList = GetDlgItem((IntPtr)dialog.Current.NativeWindowHandle, 2372);
         var nativeCount = NativeItemCount(nativeList);
         for (int i = 0; i < Math.Max(100, nativeCount); i++)
         {
             // Revit 목록은 화면 밖 행을 접근성 트리에서 제외할 수 있으므로 매번 새로 읽는다.
             list = FindById(dialog, ControlType.List, "2372") ?? list;
-            var boxes = list.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.CheckBox));
-            foreach (AutomationElement box in boxes)
+            if (TrySelectNamedParameter(list, visibleNames)) return;
+            if (list.TryGetCurrentPattern(ItemContainerPattern.Pattern, out var container))
             {
-                visibleNames.Add(box.Current.Name);
-                if (!IsProjectParameterName(box.Current.Name)) continue;
-                if (!box.TryGetCurrentPattern(TogglePattern.Pattern, out var toggle))
-                    throw new InvalidOperationException("'프로젝트 매개변수' 체크박스를 선택할 수 없습니다.");
-                var pattern = (TogglePattern)toggle;
-                if (pattern.Current.ToggleState != ToggleState.On) pattern.Toggle();
-                if (pattern.Current.ToggleState != ToggleState.On)
-                    throw new InvalidOperationException("'프로젝트 매개변수' 선택 상태를 확인할 수 없습니다.");
-                return;
+                foreach (var name in ProjectParameterNames)
+                {
+                    try
+                    {
+                        var item = ((ItemContainerPattern)container).FindItemByProperty(null, AutomationElement.NameProperty, name);
+                        if (item == null) continue;
+                        if (item.TryGetCurrentPattern(VirtualizedItemPattern.Pattern, out var virtualized))
+                            ((VirtualizedItemPattern)virtualized).Realize();
+                        if (item.TryGetCurrentPattern(ScrollItemPattern.Pattern, out var itemScroll))
+                            ((ScrollItemPattern)itemScroll).ScrollIntoView();
+                        if (TrySelectNamedParameter(list, visibleNames)) return;
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or COMException)
+                    { /* Revit 목록이 가상 항목 실현을 거부하면 기본 스크롤 경로를 사용한다. */ }
+                }
             }
             var items = list.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem));
             var namedItem = items.Cast<AutomationElement>().FirstOrDefault(item => IsProjectParameterName(item.Current.Name));
@@ -154,6 +162,51 @@ internal static class NativeTransferDialog
 
     private static bool IsProjectParameterName(string value) =>
         ProjectParameterNames.Any(name => value.Trim().Contains(name, StringComparison.OrdinalIgnoreCase));
+
+    private static bool TrySelectNamedParameter(AutomationElement list, HashSet<string> visibleNames)
+    {
+        var elements = list.FindAll(TreeScope.Descendants, Condition.TrueCondition).Cast<AutomationElement>().ToList();
+        foreach (var element in elements)
+        {
+            var type = element.Current.ControlType;
+            if (type != ControlType.CheckBox && type != ControlType.ListItem && type != ControlType.DataItem && type != ControlType.Text) continue;
+            var name = element.Current.Name;
+            if (name.Length > 0) visibleNames.Add(name);
+            if (!IsProjectParameterName(name)) continue;
+            AutomationElement? target = type == ControlType.CheckBox ? element : null;
+            if (target == null && (type == ControlType.ListItem || type == ControlType.DataItem))
+                target = element.FindFirst(TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.CheckBox));
+            if (target == null && type == ControlType.Text)
+            {
+                var walker = TreeWalker.ControlViewWalker;
+                var parent = walker.GetParent(element);
+                if (parent != null && (parent.Current.ControlType == ControlType.ListItem || parent.Current.ControlType == ControlType.DataItem))
+                    target = parent.FindFirst(TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.CheckBox));
+                if (target == null && !element.Current.BoundingRectangle.IsEmpty)
+                {
+                    var row = element.Current.BoundingRectangle;
+                    var rowCenter = (row.Top + row.Bottom) / 2;
+                    target = elements.Where(candidate => candidate.Current.ControlType == ControlType.CheckBox)
+                        .FirstOrDefault(candidate =>
+                        {
+                            var box = candidate.Current.BoundingRectangle;
+                            return !box.IsEmpty && box.Right <= row.Right &&
+                                Math.Abs((box.Top + box.Bottom) / 2 - rowCenter) <= Math.Max(8, row.Height / 2);
+                        });
+                }
+            }
+            target ??= element;
+            if (!target.TryGetCurrentPattern(TogglePattern.Pattern, out var toggle)) continue;
+            var pattern = (TogglePattern)toggle;
+            if (pattern.Current.ToggleState != ToggleState.On) pattern.Toggle();
+            if (pattern.Current.ToggleState != ToggleState.On)
+                throw new InvalidOperationException("'프로젝트 매개변수' 선택 상태를 확인할 수 없습니다.");
+            return true;
+        }
+        return false;
+    }
 
     private static int NativeItemCount(IntPtr list)
     {
@@ -221,6 +274,18 @@ internal static class NativeTransferDialog
             Thread.Sleep(250);
         }
         throw new TimeoutException("작업용 Revit의 기본 프로젝트 표준 전송 창이 열리지 않았습니다.");
+    }
+
+    private static void RestoreWorkerWindow(int processId)
+    {
+        using var process = Process.GetProcessById(processId);
+        var handle = process.MainWindowHandle;
+        if (handle == IntPtr.Zero)
+            throw new InvalidOperationException("작업용 Revit의 창을 찾지 못했습니다. 전송 창을 직접 확인해 주세요.");
+        ShowWindow(handle, 9); // SW_RESTORE: 최소화된 Revit의 전송 항목을 접근성 트리에 표시한다.
+        if (IsIconic(handle))
+            throw new InvalidOperationException("작업용 Revit 창을 복원하지 못했습니다. 최소화된 창을 열고 다시 확인해 주세요.");
+        SetForegroundWindow(handle);
     }
 
     private static List<AutomationElement> Windows(int processId)
@@ -320,6 +385,12 @@ internal static class NativeTransferDialog
     private static extern IntPtr GetDlgItem(IntPtr dialog, int id);
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr GetParent(IntPtr handle);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ShowWindow(IntPtr handle, int command);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool IsIconic(IntPtr handle);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetForegroundWindow(IntPtr handle);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int GetClassName(IntPtr handle, System.Text.StringBuilder name, int capacity);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]

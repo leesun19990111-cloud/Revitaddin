@@ -1,5 +1,10 @@
 # 독립 매개변수 관리자
 
+## 2026-11-09 · 0.5.2 최소화된 Revit 전송 창 접근성
+
+- 0.5.1 현장 재시도에서도 기본 전송 항목을 찾지 못했고 오류의 `표시 항목`은 빈 목록이었다. 한글/영문 이름 매칭 실패보다 UIA에서 목록 자식 자체를 얻지 못한 상황이다. `WorkerClient.Connect`는 전용 Revit을 `ProcessWindowStyle.Minimized`로 시작하므로 네이티브 전송 창을 읽기 전 해당 프로세스의 기본 창을 `SW_RESTORE`로 복원한다. 복원 실패 시 목록이 비었다고 오진하지 않고 안내한다.
+- 이름이 체크박스 자체가 아니라 ListItem/DataItem/텍스트에 실리는 경우도 동일 행의 TogglePattern으로 선택한다. ItemContainerPattern/VirtualizedItemPattern으로 화면 밖 항목을 실현한 뒤 다시 읽는다. 한글 `프로젝트 매개변수`와 영어 `Project Parameters`를 모두 허용한다. 운영 중앙 저장·동기화는 아직 재검증하지 않았다.
+
 ## 2026-11-09 · 0.5.1 기본 전송 목록 화면 밖 항목 탐색
 
 - 0.5.0 실제 작업에서 Revit 기본 ‘프로젝트 표준 전송’ 창에는 ‘프로젝트 매개변수’가 보이는데 UIA의 목록 자식에서 해당 체크박스를 찾지 못했다. 목록이 화면 밖 행을 가상화하는 경우 UIA ScrollPattern·ScrollBar가 없을 수 있다. ListItem ScrollItemPattern, Win32 SysListView32/ListBox 위치 이동, Autodesk 전용 목록의 WM_VSCROLL을 순서대로 사용한다. 체크박스 이름은 정확 일치 대신 표기 접미어를 허용한다.
