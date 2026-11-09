@@ -14,24 +14,29 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
     public Response Run(RevitApplication app, Request req)
     {
         Document? doc = null;
+        Document? transferSourceDoc = null;
         Mutex? gate = null;
         bool locked = false, preserve = false;
         bool editingStarted = false;
         int restoredStairNames = 0;
+        int transferredDefinitions = 0;
         var result = new Response { Id = req.Id };
         var removingLinks = req.Operation == "링크 삭제";
+        var transferring = req.Operation == "프로젝트 매개변수 전송";
         var removingDefinitions = req.Operation == "적용" && req.Edits.Any(e => e.DefinitionFix?.Action == SpecRulePlanner.ActionRemove);
-        var modifying = req.Operation == "적용" || removingLinks;
+        var modifying = req.Operation == "적용" || removingLinks || transferring;
         void Step(string stage) { result.Stage = stage; progress(new Response { Id = result.Id, Stage = stage, RecoveryPath = result.RecoveryPath, Applied = result.Applied, CentralSynchronized = result.CentralSynchronized, OwnershipReleased = result.OwnershipReleased }); }
         try
         {
-            if (req.Operation is not ("조회" or "적용" or "링크 검사" or "링크 삭제")) throw new InvalidOperationException("지원하지 않는 작업입니다.");
+            if (req.Operation is not ("조회" or "적용" or "링크 검사" or "링크 삭제" or "프로젝트 매개변수 전송")) throw new InvalidOperationException("지원하지 않는 작업입니다.");
             if (req.Query != null)
             {
                 if (req.Operation != "조회") throw new InvalidOperationException("선택 조회 조건은 조회 요청에만 사용할 수 있습니다.");
                 req.Query.Validate();
             }
             if (req.Operation == "적용" && (!req.Confirmed || req.Edits.Count == 0)) throw new InvalidOperationException("변경 확인이 없거나 변경 내용이 없습니다.");
+            if (transferring && (!req.Confirmed || req.TransferSource?.Definitions == null || req.TransferTargetDefinitions == null || req.Edits.Count != 0 || req.Query != null))
+                throw new InvalidOperationException("기준·대상 정의 조회와 최종 확인이 없거나 다른 변경이 섞였습니다.");
             if (removingLinks)
             {
                 if (!req.Confirmed || req.LinkRemoval == null || req.Edits.Count != 0) throw new InvalidOperationException("링크 삭제 확인/검사 정보가 없거나 값 변경이 섞여 있습니다.");
@@ -92,9 +97,9 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 openPath = Path.Combine(localDir, Path.GetFileName(source));
                 WorksharingUtils.CreateNewLocal(ModelPathUtils.ConvertUserVisiblePathToModelPath(source), ModelPathUtils.ConvertUserVisiblePathToModelPath(openPath));
             }
-            if ((removingLinks || removingDefinitions) && isCentral)
+            if ((removingLinks || removingDefinitions || transferring) && isCentral)
             {
-                Step(removingLinks ? "링크 삭제 전 복구용 로컬 백업" : "매개변수 삭제 전 복구용 로컬 백업");
+                Step(removingLinks ? "링크 삭제 전 복구용 로컬 백업" : transferring ? "정의 전송 전 복구용 로컬 백업" : "매개변수 삭제 전 복구용 로컬 백업");
                 var backupDir = Path.Combine(folder, "Backups", req.Id);
                 Directory.CreateDirectory(backupDir);
                 result.BackupPath = Path.Combine(backupDir, Path.GetFileName(openPath));
@@ -166,7 +171,39 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 if (ownership.Length > 0) throw new InvalidOperationException(ownership);
                 var reader = new ParameterReader(doc, metadata);
                 List<WriteAction> writes;
-                if (removingLinks)
+                if (transferring)
+                {
+                    var expectedSource = req.TransferSource!;
+                    var sourcePath = Canonical(expectedSource.Path);
+                    if (!sourcePath.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase) ||
+                        !string.Equals(sourcePath, expectedSource.CanonicalPath, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(sourcePath, source, StringComparison.OrdinalIgnoreCase) || expectedSource.Identity == identity)
+                        throw new InvalidOperationException("기준 파일의 경로·식별자가 검토 내용과 다릅니다.");
+                    using var sourceInfo = ReadFileInfo(sourcePath, Step);
+                    if (!sourceInfo.IsSavedInCurrentVersion || sourceInfo.IsInProgress)
+                        throw new InvalidOperationException("기준 RVT가 Revit 2026 형식이 아니거나 저장 중입니다.");
+                    if (sourceInfo.IsWorkshared && !string.Equals(sourcePath, Canonical(sourceInfo.CentralPath), StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(sourceInfo.Username, app.Username, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("다른 사용자의 로컬 파일을 기준으로 전송하지 않습니다.");
+                    Step("기준 파일을 읽기 전용 작업 문서로 열기");
+                    using var sourceOptions = new OpenOptions { DetachFromCentralOption = DetachFromCentralOption.DoNotDetach };
+                    if (sourceInfo.IsWorkshared) sourceOptions.SetOpenWorksetsConfiguration(new WorksetConfiguration(WorksetConfigurationOption.CloseAllWorksets));
+                    transferSourceDoc = app.OpenDocumentFile(ModelPathUtils.ConvertUserVisiblePathToModelPath(sourcePath), sourceOptions);
+                    var sourceCentral = sourceInfo.IsWorkshared ? Canonical(sourceInfo.CentralPath) : "";
+                    var sourceIdentity = "파일-v2/" + transferSourceDoc.CreationGUID.ToString("D") + "/" +
+                        (transferSourceDoc.IsWorkshared ? "중앙:" + sourceCentral.ToUpperInvariant() : "일반");
+                    if (sourceIdentity != expectedSource.Identity || transferSourceDoc.IsFamilyDocument || transferSourceDoc.IsLinked || transferSourceDoc.IsDetached ||
+                        transferSourceDoc.IsWorkshared != sourceInfo.IsWorkshared ||
+                        transferSourceDoc.IsWorkshared && !string.Equals(
+                            Canonical(ModelPathUtils.ConvertModelPathToUserVisiblePath(transferSourceDoc.GetWorksharingCentralModelPath())),
+                            sourceCentral, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("기준 파일이 조회했던 프로젝트와 다릅니다. 다시 조회하세요.");
+                    var plan = ProjectParameterTransferWriter.Prepare(transferSourceDoc, doc, expectedSource, req.TransferTargetDefinitions!);
+                    transferredDefinitions = plan.Count;
+                    if (transferredDefinitions == 0) throw new InvalidOperationException("추가할 프로젝트 매개변수가 없습니다. 대상 파일을 다시 검토하세요.");
+                    writes = [new(plan.Set, plan.Verify)];
+                }
+                else if (removingLinks)
                 {
                     var removal = LinkRemovalEngine.Prepare(doc, metadata, req.LinkRemoval!, req.DependentsConfirmed);
                     writes = [new(removal.Delete, removal.Verify)];
@@ -175,18 +212,18 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 else if (req.Edits.Any(e => e.KacCleanup)) writes = CleanupWriter.Prepare(doc, metadata, req.Edits,
                     req.CleanupRules ?? throw new InvalidOperationException("유형 정리 룰셋이 적용 요청에 없습니다. 룰셋을 다시 불러와 검토하세요.")).Select(w => new WriteAction(w.Set, w.Verify)).ToList();
                 else writes = PrepareAll(app, doc, reader, req.Edits);
-                var stairNames = removingLinks ? [] : StairTypeNames.Capture(doc, req.Edits);
+                var stairNames = removingLinks || transferring ? [] : StairTypeNames.Capture(doc, req.Edits);
                 using var diagnostics = new TransactionDiagnostics(app, doc);
                 using (var group = new TransactionGroup(doc, "Sunny 매개변수 관리자"))
                 {
                     if (group.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집 묶음을 시작할 수 없습니다.");
                     try
                     {
-                        using var tx = new Transaction(doc, removingLinks ? "모든 링크·가져오기 완전 제거" : req.Edits.Any(e => e.DefinitionFix != null) ? "속성규격 매개변수 정의 정리" : "선택한 매개변수 값 변경");
+                        using var tx = new Transaction(doc, transferring ? "프로젝트 매개변수 정의 전송" : removingLinks ? "모든 링크·가져오기 완전 제거" : req.Edits.Any(e => e.DefinitionFix != null) ? "속성규격 매개변수 정의 정리" : "선택한 매개변수 값 변경");
                         if (tx.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집을 시작할 수 없습니다.");
                         editingStarted = true;
                         tx.SetFailureHandlingOptions(tx.GetFailureHandlingOptions().SetForcedModalHandling(true));
-                        Step(removingLinks ? "승인한 링크·가져오기 삭제 중" : "값 적용 중");
+                        Step(transferring ? "기준 파일의 프로젝트 매개변수 정의 복사 중" : removingLinks ? "승인한 링크·가져오기 삭제 중" : "값 적용 중");
                         foreach (var w in writes) w.Set();
                         var committed = tx.Commit();
                         if (committed != TransactionStatus.Committed) throw new InvalidOperationException("Revit이 변경을 확정하지 못했습니다: " + committed + "\n" + diagnostics.Details);
@@ -214,7 +251,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     transact.SetLockCallback(new NoWait());
                     doc.SynchronizeWithCentral(transact, sync);
                     result.CentralSynchronized = true;
-                    result.Applied = removingLinks ? req.LinkRemoval!.Affected.Count : writes.Count;
+                    result.Applied = transferring ? transferredDefinitions : removingLinks ? req.LinkRemoval!.Affected.Count : writes.Count;
                     OwnershipRelease.Complete(doc, Step);
                     result.OwnershipReleased = true;
                 }
@@ -223,13 +260,20 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     Step("저장·동기화 후 남은 링크 확인");
                     LinkRemovalEngine.CheckComplete(doc, metadata);
                 }
-                result.Applied = removingLinks ? req.LinkRemoval!.Affected.Count : writes.Count;
+                result.Applied = transferring ? transferredDefinitions : removingLinks ? req.LinkRemoval!.Affected.Count : writes.Count;
                 result.Success = true;
                 result.Message = doc.IsWorkshared ? "중앙 동기화 및 차용 요소·모든 작업세트 소유권 반환 호출이 완료되었습니다. 반환 후 검사에서 현재 사용자 소유권 잔존이 발견되지 않았습니다. 다른 사용자의 로컬은 최신 내용 가져오기가 필요합니다." : "파일 저장이 완료되었습니다.";
                 if (restoredStairNames > 0) result.Message += $"\n매개변수 확정 중 재생성된 계단진행 유형 {restoredStairNames:N0}개의 이름을 승인한 이름으로 보존하고 재검증했습니다.";
                 if (removingLinks) result.Message = $"링크 정의·가져오기 완전 제거 및 승인한 종속 요소 삭제: 총 {result.Applied:N0}개. 외부 원본 파일은 변경하지 않았습니다.\n" + result.Message;
+                if (transferring) result.Message = $"기준 모델의 프로젝트 매개변수 정의 {result.Applied:N0}개를 카테고리 연결과 함께 추가했습니다. 값은 복사하지 않았습니다.\n" + result.Message;
                 Step(doc.IsWorkshared ? "중앙 동기화·소유권 반환 완료" : "저장 완료");
                 preserve = false;
+            }
+            if (transferSourceDoc != null)
+            {
+                Step("기준 파일 닫기 — 저장하지 않음");
+                if (!transferSourceDoc.Close(false)) { preserve = true; throw new InvalidOperationException("기준 파일을 닫지 못했습니다."); }
+                transferSourceDoc = null;
             }
             Step("문서 닫기");
             if (!doc.Close(false)) { preserve = true; throw new InvalidOperationException("작업은 끝났지만 문서를 닫지 못했습니다."); }
@@ -238,6 +282,12 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         }
         catch (Exception ex)
         {
+            if (transferSourceDoc != null)
+            {
+                try { if (!transferSourceDoc.Close(false)) preserve = true; }
+                catch { preserve = true; }
+                transferSourceDoc = null;
+            }
             // 저장 전 실패도 롤백 뒤 획득한 차용권이 남을 수 있다. 동기화 실패 문서는 여기서 반환하지 않는다.
             if (editingStarted && !preserve && doc?.IsWorkshared == true)
             {
@@ -260,7 +310,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             }
             if (!result.Success) result.Stage = result.CentralSynchronized && !result.OwnershipReleased ? "중앙 반영 완료 · 소유권 반환 확인 필요" : preserve ? "반영 결과 확인 필요" : "실패 — 이번 변경 미저장";
             // 수정 전 차단만 다음 모델 진행 후보다. 실제 빈 문서 여부는 Worker에서 다시 검사한다.
-            result.CanContinueAfterPreflightFailure = req.Operation == "적용" && !editingStarted && !result.Success &&
+            result.CanContinueAfterPreflightFailure = (req.Operation == "적용" || transferring) && !editingStarted && !result.Success &&
                 !result.RequiresAttention && !result.CentralSynchronized && result.Applied == 0 && ex is not OutOfMemoryException;
         }
         finally { if (locked) gate?.ReleaseMutex(); gate?.Dispose(); }

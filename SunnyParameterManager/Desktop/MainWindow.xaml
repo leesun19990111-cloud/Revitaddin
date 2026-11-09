@@ -42,7 +42,8 @@
      <Button x:Name="RemoveLinksButton" Content="링크·가져오기 완전 제거…" Foreground="#A52C32" BorderBrush="#C66B6B" Click="OpenLinkRemoval" Margin="0,0,0,12" ToolTip="모델을 체크하고 삭제 영향 검사 후 별도 승인합니다. 외부 원본 파일은 삭제하지 않습니다."/>
      <Expander x:Name="FileManagement" Header="파일 관리" Margin="0,0,0,12"><StackPanel Margin="0,8,0,0"><Button Content="미조회 파일 계속 조회" Click="ContinueUnreadModels" Margin="0,0,0,8"/><Button Content="다시 조회" Click="ReadModels" Margin="0,0,0,8"/><Button x:Name="ReadSelectedButton" Content="선택한 파일만 다시 조회" Click="ReadSelectedModels" Margin="0,0,0,8" ToolTip="왼쪽 목록에서 Ctrl·Shift로 고른 파일만 다시 읽습니다. 다른 파일의 조회값과 변경 예정은 유지합니다."/><Button Content="선택한 파일 제외 (Ctrl·Shift 다중 선택)" Click="RemoveModel" Margin="0"/></StackPanel></Expander>
      <Expander x:Name="CopyExpander" Header="다른 파일에서 값 가져오기"><StackPanel Margin="0,10,0,0">
-      <TextBlock Text="값을 가져올 기준 파일"/><ComboBox x:Name="SourceCombo" DisplayMemberPath="Title" Margin="0,6,0,8"/>
+      <TextBlock Text="값·프로젝트 매개변수를 가져올 기준 파일"/><ComboBox x:Name="SourceCombo" DisplayMemberPath="Title" SelectionChanged="TransferSourceChanged" Margin="0,6,0,8"/>
+      <TextBlock x:Name="TransferSourceHint" Text="전송 룰셋에서는 이 기준 파일의 프로젝트 매개변수 정의 전체를 다른 등록 파일에 추가합니다." TextWrapping="Wrap" Foreground="#526474" FontSize="12" Visibility="Collapsed" Margin="0,0,0,8"/>
       <CheckBox x:Name="ApproveNamed" Margin="0,0,0,8" ToolTip="공유 GUID가 없는 경우에만 동일 이름·자료형·범위의 유일한 매개변수를 연결합니다."><TextBlock Text="일반 매개변수도 이름으로 연결" TextWrapping="Wrap"/></CheckBox>
       <Button Content="선택한 행에 값 가져오기" Click="CopyValues" Margin="0,0,0,8"/>
       <TextBlock Text="카테고리·패밀리·유형이 같은 대상에만 복사합니다. 기준 파일의 행은 선택에서 빼주세요." TextWrapping="Wrap" Foreground="#687785" FontSize="12"/>
@@ -93,9 +94,9 @@
     </Grid></TabItem>
     <TabItem Header="변경 내용 확인"><DockPanel Margin="12">
      <StackPanel DockPanel.Dock="Top">
-      <TextBlock Text="아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요." TextWrapping="Wrap" Margin="0,0,0,10" Foreground="#526474"/>
+      <TextBlock x:Name="ReviewExplanation" Text="아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요." TextWrapping="Wrap" Margin="0,0,0,10" Foreground="#526474"/>
       <Border Background="#F0F4F7" Padding="10" Margin="0,0,0,10" x:Name="RuleSummaryPanel" Visibility="Collapsed"><TextBox x:Name="RuleSummary" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" MaxHeight="90" VerticalScrollBarVisibility="Auto"/></Border>
-      <WrapPanel Margin="0,0,0,10"><Button Content="선택한 변경 제외" Click="RemoveEdits"/><Button Content="모든 변경 취소" Click="ClearEdits"/></WrapPanel>
+      <WrapPanel x:Name="EditActions" Margin="0,0,0,10"><Button Content="선택한 변경 제외" Click="RemoveEdits"/><Button Content="모든 변경 취소" Click="ClearEdits"/></WrapPanel>
      </StackPanel>
      <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
       <TextBlock Text="작업공유 파일은 중앙모델에 동기화합니다. 저장 전에 한 번 더 확인합니다." TextWrapping="Wrap" Foreground="#687785" Margin="0,0,0,8"/>
@@ -107,6 +108,14 @@
       <DataGridTextColumn Header="원본 경로 · 새 중앙 저장 위치" Binding="{Binding CanonicalPath}" Width="*" ElementStyle="{StaticResource ReviewText}"/>
       <DataGridTextColumn Header="종류" Binding="{Binding Kind}" Width="75"/>
       <DataGridTextColumn Header="조회 시각" Binding="{Binding ReadAt}" Width="145"/>
+     </DataGrid.Columns></DataGrid>
+     <DataGrid x:Name="ProjectTransferGrid" Visibility="Collapsed" IsReadOnly="True"><DataGrid.Columns>
+      <DataGridTextColumn Header="대상 파일" Binding="{Binding Model}" Width="155" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="매개변수" Binding="{Binding Name}" Width="160" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="종류" Binding="{Binding Kind}" Width="95"/>
+      <DataGridTextColumn Header="연결 카테고리" Binding="{Binding Categories}" Width="220" ElementStyle="{StaticResource ReviewText}"/>
+      <DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="90"/>
+      <DataGridTextColumn Header="설명" Binding="{Binding Reason}" Width="*" ElementStyle="{StaticResource ReviewText}"/>
      </DataGrid.Columns></DataGrid>
     </DockPanel></TabItem>
     <TabItem Header="처리 결과"><DockPanel Margin="12"><Button DockPanel.Dock="Top" Content="기록 폴더 열기" Click="OpenLogs" HorizontalAlignment="Left" Margin="0,0,0,10"/><TextBox x:Name="ReportBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" BorderThickness="0" Text="처음에는 별도 테스트 모델로 확인해 주세요."/></DockPanel></TabItem>

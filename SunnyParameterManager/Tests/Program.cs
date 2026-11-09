@@ -26,7 +26,7 @@ internal static class Program
             SpaceRuleTests.Run(Check, Reject);
             SpecRuleTests.Run(Check, Reject);
             SpecRemoveOnlyTests.Run(Check, Reject);
-            DefinitionTransferTests.Run(Check, Reject);
+            ProjectParameterTransferTests.Run(Check, Reject);
             MaterialAuditTests.Run(Check, Reject);
             ProjectBasePointTests.Run(Check, Reject);
             CentralRebuildTests.Run(Check, Reject);
@@ -127,13 +127,6 @@ internal static class Program
         {
             _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             QueryTests.Run(Check, Reject);
-            var transferWindow = new DefinitionTransferWindow(["기준.rvt", "대상1.rvt", "대상2.rvt"],
-                _ => Task.FromResult(new Response()), (_, _) => { });
-            var transferTargets = ((DataGrid)transferWindow.FindName("TargetsGrid")).ItemsSource!.Cast<TransferTarget>().ToList();
-            Check(transferTargets.Count == 3 && !transferTargets[0].Selected && transferTargets.Skip(1).All(t => t.Selected), "전송 창 기준 1개·대상 여러 개 초기 선택");
-            Check(((CheckBox)transferWindow.FindName("CopyValuesCheck")).IsChecked != true && !((Button)transferWindow.FindName("ApplyDefinitionsButton")).IsEnabled,
-                "정의만 기본값·검사 전 적용 차단");
-            transferWindow.Close();
             var w = new MainWindow();
             Check(((FrameworkElement)w.FindName("WelcomePanel")).Visibility == Visibility.Visible, "첫 화면 파일 선택 안내");
             Check(!((Expander)w.FindName("AdvancedSettings")).IsExpanded && !((Expander)w.FindName("CopyExpander")).IsExpanded, "세부 설정 기본 숨김");

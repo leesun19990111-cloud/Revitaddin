@@ -96,7 +96,7 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
             if (result.CanContinueAfterPreflightFailure)
             {
                 bool empty = !HasDocuments(ui);
-                result.CanContinueAfterPreflightFailure = req.Operation == "적용" && !result.Success && !result.RequiresAttention &&
+                result.CanContinueAfterPreflightFailure = req.Operation is "적용" or "프로젝트 매개변수 전송" && !result.Success && !result.RequiresAttention &&
                     !result.CentralSynchronized && result.Applied == 0 && empty;
                 if (!empty) result.RequiresAttention = true;
             }

@@ -47,7 +47,7 @@ public sealed class QueryPlan
     {
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
-        if (rules.Version == 10) return DefinitionTransferPlanner.DefinitionQuery();
+        if (rules.Version == 10) return ProjectParameterTransfer.DefinitionQuery();
         if (rules.Version == 9)
         {
             plan.Scopes = ["프로젝트 정보"];

@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.4.7";
+    public const string Release = "0.4.8";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -259,6 +259,9 @@ public sealed class Request
     public LinkRemovalPlan? LinkRemoval { get; set; }
     public bool DependentsConfirmed { get; set; }
     public CentralRebuildEvidence? CentralRebuild { get; set; }
+    // 프로젝트 매개변수 정의 전송의 기준 조회와 대상 조회 근거. 값은 포함하지 않는다.
+    public ModelSnapshot? TransferSource { get; set; }
+    public DefinitionSnapshot? TransferTargetDefinitions { get; set; }
 }
 
 public sealed class Response

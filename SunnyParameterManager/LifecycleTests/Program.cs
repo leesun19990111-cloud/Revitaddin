@@ -88,6 +88,23 @@ internal static class Program
    r = Setup(); result = Run(r);
    Check(result.Success && result.Applied == 1 && State.Doc.Element.Parameter.Value == "새값", "일반 파일 변경 성공");
    Check(State.Events.SequenceEqual(new[] { "open", "group-start", "tx-start", "set", "tx-commit", "assimilate", "save", "close" }), "일반 파일 단계 순서");
+   r = Setup(); State.SourceFile = ModelEngine.Canonical(_central); State.SourceDoc = new Document();
+   r.Operation = "프로젝트 매개변수 전송"; r.Edits.Clear();
+   r.TransferSource = new ModelSnapshot { Path = _central, CanonicalPath = State.SourceFile,
+    Identity = "파일-v2/" + State.SourceDoc.CreationGUID.ToString("D") + "/일반",
+    Query = ProjectParameterTransfer.DefinitionQuery(), Definitions = new DefinitionSnapshot() };
+   r.TransferTargetDefinitions = new DefinitionSnapshot();
+   result = Run(r);
+   Check(result.Success && result.Applied == 1 && State.Events.Contains("transfer-parameters") && State.Events.Contains("verify-parameters") &&
+    State.Events.Contains("save") && State.Events.Count(e => e == "close") == 2, "정의 전송은 기준 비저장·대상 검증 후 저장·두 문서 닫기");
+   r = Setup(); State.SourceFile = ModelEngine.Canonical(_central); State.SourceDoc = new Document();
+   r.Operation = "프로젝트 매개변수 전송"; r.Edits.Clear();
+   r.TransferSource = new ModelSnapshot { Path = _central, CanonicalPath = State.SourceFile, Identity = "다른 모델",
+    Query = ProjectParameterTransfer.DefinitionQuery(), Definitions = new DefinitionSnapshot() };
+   r.TransferTargetDefinitions = new DefinitionSnapshot();
+   result = Run(r);
+   Check(!result.Success && !State.Events.Contains("transfer-parameters") && !State.Events.Contains("save") &&
+    State.Events.Count(e => e == "close") == 2, "기준 모델 식별이 바뀌면 저장 전 전송 차단");
    Check(File.ReadAllText(result.BackupPath) == "테스트 대역 원본", "변경 전 파일 백업");
    r = Setup(true, true); r.Edits[0].DefinitionFix = new() { Action = SpecRulePlanner.ActionRemove }; result = Run(r);
    Check(!result.Success && File.Exists(result.BackupPath) && !State.Events.Contains("tx-start") && !State.Events.Contains("sync"), "중앙 정의 삭제도 실제 편집 전 별도 작업 로컬 백업·잘못된 요청 미저장");

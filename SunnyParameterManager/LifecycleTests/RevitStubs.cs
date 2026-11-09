@@ -12,7 +12,7 @@ namespace Autodesk.Revit.ApplicationServices
   public int Observers => FailuresProcessing?.GetInvocationList().Length ?? 0;
   public void Raise(DB.Document doc) => FailuresProcessing?.Invoke(this, new(doc));
   public string Username => "테스터";
-  public DB.Document OpenDocumentFile(DB.ModelPath path, DB.OpenOptions options) { DB.State.Events.Add("open"); if (options.DetachFromCentralOption == DB.DetachFromCentralOption.DetachAndPreserveWorksets) DB.State.Doc.IsDetached = true; return DB.State.Doc; }
+  public DB.Document OpenDocumentFile(DB.ModelPath path, DB.OpenOptions options) { DB.State.Events.Add("open"); if (DB.State.SourceDoc != null && path.Path == DB.State.SourceFile) return DB.State.SourceDoc; if (options.DetachFromCentralOption == DB.DetachFromCentralOption.DetachAndPreserveWorksets) DB.State.Doc.IsDetached = true; return DB.State.Doc; }
  }
 }
 namespace Autodesk.Revit.DB.Events
@@ -27,6 +27,8 @@ namespace Autodesk.Revit.DB
  public static class State
  {
   public static Document Doc = new();
+  public static Document? SourceDoc;
+  public static string SourceFile = "";
   public static BasicFileInfo Info = new();
   public static List<string> Events = [];
   public static bool FailSave, FailSync, FailClose, FailCommit, FailSet, VerifyMismatch, OwnedOther, MaterialChangesAfterSet, TypeChangesAfterSet;
@@ -45,7 +47,7 @@ namespace Autodesk.Revit.DB
   public static ApplicationServices.Application App = null!;
   public static FailureSeverity? Failure;
   public static bool OtherDocFailure, UnreadableFailure, DeletedAfterCommit;
-  public static void Reset() { FailRelinquish = LeaveBorrowed = LeaveWorkset = FailOwnershipCheck = false; OwnedIds = []; GroupEdit = null; GroupChangesAfterSet = false; Doc = new(); Info = new(); Events = []; TypeOwnerId = "type-1"; MaterialMissing = false; Failure = null; OtherDocFailure = UnreadableFailure = DeletedAfterCommit = false; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = TypeChangesAfterSet = false; }
+  public static void Reset() { FailRelinquish = LeaveBorrowed = LeaveWorkset = FailOwnershipCheck = false; OwnedIds = []; GroupEdit = null; GroupChangesAfterSet = false; Doc = new(); SourceDoc = null; SourceFile = ""; Info = new(); Events = []; TypeOwnerId = "type-1"; MaterialMissing = false; Failure = null; OtherDocFailure = UnreadableFailure = DeletedAfterCommit = false; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = TypeChangesAfterSet = false; }
  }
  public enum FailureSeverity { Warning, Error, DocumentCorruption }
  public sealed class FailureMessageAccessor
@@ -66,7 +68,7 @@ namespace Autodesk.Revit.DB
  public enum CheckoutStatus { OwnedByOtherUser, OwnedByCurrentUser, NotOwned }
  public enum TransactionStatus { Uninitialized, Started, Committed, RolledBack }
  public enum DetachFromCentralOption { DoNotDetach, DetachAndPreserveWorksets }
- public enum WorksetConfigurationOption { OpenAllWorksets }
+ public enum WorksetConfigurationOption { OpenAllWorksets, CloseAllWorksets }
  public enum WorksetKind { UserWorkset }
  public sealed record ElementId(long Value);
  public sealed class Definition { public object GetDataType() => new(); }
@@ -206,6 +208,12 @@ namespace SunnyParameterManager.Bridge
    Affected = [new() { UniqueId = "link", ElementId = 55, Revision = "r1" }] };
   internal static RemovalAction Prepare(Document doc, ModelSnapshot model, LinkRemovalPlan plan, bool approved)
   { plan.Validate(approved); return new(() => State.Events.Add("delete-links"), () => { State.Events.Add("verify-links"); if (State.VerifyMismatch) throw new InvalidOperationException("링크 제거 결과 불일치"); }); }
+ }
+ internal static class ProjectParameterTransferWriter
+ {
+  internal sealed record Plan(int Count, Action Set, Action Verify);
+  internal static Plan Prepare(Document source, Document target, ModelSnapshot expectedSource, DefinitionSnapshot expectedTarget) =>
+   new(1, () => State.Events.Add("transfer-parameters"), () => State.Events.Add("verify-parameters"));
  }
  internal sealed class ParameterReader(Document doc, ModelSnapshot model)
  {
