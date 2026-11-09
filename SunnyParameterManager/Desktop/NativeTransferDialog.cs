@@ -100,12 +100,31 @@ internal static class NativeTransferDialog
         var list = FindById(dialog, ControlType.List, "2372") ??
             dialog.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.List));
         if (list == null) throw new InvalidOperationException("Revit 기본 창의 전송 항목 목록을 찾지 못했습니다.");
-        ScrollToNativeItem(dialog);
         var visibleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var nativeList = (IntPtr)list.Current.NativeWindowHandle;
         if (nativeList == IntPtr.Zero) nativeList = GetDlgItem((IntPtr)dialog.Current.NativeWindowHandle, 2372);
         var nativeCount = NativeItemCount(nativeList);
-        for (int i = 0; i < Math.Max(100, nativeCount); i++)
+        var nativeItems = ReadNativeListItems(nativeList);
+        var nativeMatches = nativeItems.Where(item => IsProjectParameterName(item.Name)).ToList();
+        if (nativeMatches.Count > 1)
+            throw new InvalidOperationException("Revit 기본 전송 목록에 '프로젝트 매개변수' 항목이 여러 개입니다. 자동으로 고르지 않았습니다.");
+        if (nativeMatches.Count == 1)
+        {
+            var index = nativeMatches[0].Index;
+            Send(nativeList, 0x0197, new IntPtr(index), IntPtr.Zero); // LB_SETTOPINDEX
+            Send(nativeList, 0x019E, new IntPtr(index), IntPtr.Zero); // LB_SETCARETINDEX
+            Thread.Sleep(120);
+            list = FindById(dialog, ControlType.List, "2372") ?? list;
+            if (TrySelectNamedParameter(list, visibleNames)) return;
+            try
+            {
+                var fromHandle = AutomationElement.FromHandle(nativeList);
+                if (fromHandle != null && TrySelectNamedParameter(fromHandle, visibleNames)) return;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or COMException)
+            { /* 기본 목록 위치는 옮겼으므로 나머지 접근성 경로를 계속 확인한다. */ }
+        }
+        for (int i = 0; i < Math.Min(100, Math.Max(20, nativeCount)); i++)
         {
             // Revit 목록은 화면 밖 행을 접근성 트리에서 제외할 수 있으므로 매번 새로 읽는다.
             list = FindById(dialog, ControlType.List, "2372") ?? list;
@@ -157,11 +176,43 @@ internal static class NativeTransferDialog
             Thread.Sleep(80);
         }
         throw new InvalidOperationException("Revit 기본 창에서 '프로젝트 매개변수' 항목을 찾지 못했습니다. " +
-            "목록 종류: " + NativeClass(nativeList) + " · 표시 항목: " + string.Join(", ", visibleNames.Take(16)));
+            "목록 종류: " + NativeClass(nativeList) + " · 전체 항목: " + nativeCount +
+            " · 원시 목록에서 찾음: " + (nativeMatches.Count == 1 ? nativeMatches[0].Index.ToString() : "아니오") +
+            " · 원시 목록 앞/뒤: " + string.Join(", ", nativeItems.Take(5).Select(item => item.Name)
+                .Concat(nativeItems.TakeLast(5).Select(item => item.Name))) +
+            " · 접근성 항목 수: " + visibleNames.Count +
+            " · 접근성 항목 앞/뒤: " + string.Join(", ", visibleNames.Take(5).Concat(visibleNames.TakeLast(5))));
     }
 
     private static bool IsProjectParameterName(string value) =>
-        ProjectParameterNames.Any(name => value.Trim().Contains(name, StringComparison.OrdinalIgnoreCase));
+        ProjectParameterNames.Any(name => NormalizeItemName(value).Contains(NormalizeItemName(name), StringComparison.OrdinalIgnoreCase));
+
+    private static string NormalizeItemName(string value) => new(value.Where(c => !char.IsWhiteSpace(c) && c != '-' && c != '_').ToArray());
+
+    private static List<(int Index, string Name)> ReadNativeListItems(IntPtr list)
+    {
+        var result = new List<(int, string)>();
+        if (list == IntPtr.Zero || !NativeClass(list).Equals("ListBox", StringComparison.OrdinalIgnoreCase)) return result;
+        var count = Math.Min(NativeItemCount(list), 5000);
+        for (var index = 0; index < count; index++)
+        {
+            var length = Send(list, 0x018A, new IntPtr(index), IntPtr.Zero).ToInt64(); // LB_GETTEXTLEN
+            if (length < 0 || length > 1024) continue;
+            var buffer = Marshal.AllocHGlobal(Math.Max(IntPtr.Size + sizeof(char), checked((int)(length + 1) * sizeof(char))));
+            try
+            {
+                Marshal.WriteInt16(buffer, 0);
+                var copied = Send(list, 0x0189, new IntPtr(index), buffer).ToInt64(); // LB_GETTEXT
+                if (copied >= 0 && copied <= length)
+                {
+                    var name = Marshal.PtrToStringUni(buffer, (int)copied)?.Trim() ?? "";
+                    if (name.Length > 0) result.Add((index, name));
+                }
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+        return result;
+    }
 
     private static bool TrySelectNamedParameter(AutomationElement list, HashSet<string> visibleNames)
     {
@@ -354,24 +405,6 @@ internal static class NativeTransferDialog
         if (handle == IntPtr.Zero) return false;
         Send(handle, 0x00F5, IntPtr.Zero, IntPtr.Zero); // BM_CLICK
         return true;
-    }
-
-    private static void ScrollToNativeItem(AutomationElement dialog)
-    {
-        var list = GetDlgItem((IntPtr)dialog.Current.NativeWindowHandle, 2372);
-        if (list == IntPtr.Zero) return;
-        foreach (var name in ProjectParameterNames)
-        {
-            var value = Marshal.StringToHGlobalUni(name);
-            try
-            {
-                var index = Send(list, 0x1A2, new IntPtr(-1), value); // LB_FINDSTRINGEXACT
-                if (index.ToInt64() < 0) continue;
-                Send(list, 0x197, index, IntPtr.Zero); // LB_SETTOPINDEX
-                return;
-            }
-            finally { Marshal.FreeHGlobal(value); }
-        }
     }
 
     private static IntPtr Send(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam)
