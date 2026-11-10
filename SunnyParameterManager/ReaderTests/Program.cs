@@ -11,9 +11,13 @@ doc.ProjectBasePoint!.get_Parameter(BuiltInParameter.BASEPOINT_NORTHSOUTH_PARAM)
 doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_EASTWEST_PARAM)!.Value = "20";
 doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_ELEVATION_PARAM)!.Value = "5";
 doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_ANGLETON_PARAM)!.Value = (346 * Math.PI / 180).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+doc.SurveyPoint!.get_Parameter(BuiltInParameter.BASEPOINT_NORTHSOUTH_PARAM)!.Value = "100";
+doc.SurveyPoint.get_Parameter(BuiltInParameter.BASEPOINT_EASTWEST_PARAM)!.Value = "-200";
+doc.SurveyPoint.get_Parameter(BuiltInParameter.BASEPOINT_ELEVATION_PARAM)!.Value = "3";
 var pointRule = RulePlanner.Parse("{\"Version\":8,\"Name\":\"기준점 점검\",\"Rules\":[],\"ProjectBasePointAudit\":true}");
 Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
-    model.ProjectBasePointAudit is { FormatVersion: 2, SiteName: "현장 공유대지", Status: "확인", NorthSouthMillimeters: -3048, EastWestMillimeters: 6096, ElevationMillimeters: 1524, TrueNorthDegrees: 346 }, "프로젝트 기준점 화면 좌표·mm·346도 조회");
+    model.ProjectBasePointAudit is { FormatVersion: 3, SiteName: "현장 공유대지", Status: "확인", NorthSouthMillimeters: -3048, EastWestMillimeters: 6096, ElevationMillimeters: 1524, TrueNorthDegrees: 346,
+        SurveyStatus: "확인", SurveyNorthSouthMillimeters: 30480, SurveyEastWestMillimeters: -60960, SurveyElevationMillimeters: 914 }, "프로젝트·측량 기준점 표시 좌표·mm·346도 조회");
 doc.ProjectBasePoint.get_Parameter(BuiltInParameter.BASEPOINT_ANGLETON_PARAM)!.Value = (-14 * Math.PI / 180).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
     model.ProjectBasePointAudit?.TrueNorthDegrees == 346, "음수 내부 각도도 화면 기준 0~360도로 표시");
@@ -28,6 +32,11 @@ doc.ProjectBasePoint = null;
 Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
     model.ProjectBasePointAudit?.Status.Contains("찾을 수 없음") == true, "기준점 부재 모델도 상태 기록");
 doc.ProjectBasePoint = new();
+doc.SurveyPoint = null;
+Check(reader.ReadAll(QueryPlan.FromRules(pointRule)).Count == 0 &&
+    model.ProjectBasePointAudit is { Status: "확인", SurveyStatus: "측량 기준점 또는 활성 공유대지를 찾을 수 없음", SurveyNorthSouthMillimeters: null },
+    "측량 기준점 부재 시 프로젝트 기준점 결과 보존");
+doc.SurveyPoint = new();
 var type = new ElementType { Name = "공통 뷰 유형", Category = new() { CategoryType = CategoryType.Internal } }; doc.Elements.Add(type);
 foreach (var kind in new[] { ViewType.FloorPlan, ViewType.CeilingPlan, ViewType.Elevation, ViewType.Section, ViewType.Detail, ViewType.DraftingView, ViewType.Legend, ViewType.Schedule, ViewType.ThreeD })
 {

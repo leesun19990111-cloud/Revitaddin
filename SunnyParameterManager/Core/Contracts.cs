@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.5.4";
+    public const string Release = "0.5.5";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -59,7 +59,7 @@ public sealed class ModelSnapshot
 // 활성 공유대지에서 프로젝트 기준점의 표시 매개변수를 읽은 결과.
 public sealed class ProjectBasePointAudit
 {
-    // 이전 0.4.2 조회 기록은 단위·각도 방향이 달라 반드시 다시 읽는다.
+    // 이전 조회에는 측량 기준점 값이 없으므로 반드시 다시 읽는다.
     public int FormatVersion { get; set; }
     public string SiteName { get; set; } = "";
     public double? NorthSouthMillimeters { get; set; }
@@ -67,6 +67,10 @@ public sealed class ProjectBasePointAudit
     public double? ElevationMillimeters { get; set; }
     public double? TrueNorthDegrees { get; set; }
     public string Status { get; set; } = "";
+    public double? SurveyNorthSouthMillimeters { get; set; }
+    public double? SurveyEastWestMillimeters { get; set; }
+    public double? SurveyElevationMillimeters { get; set; }
+    public string SurveyStatus { get; set; } = "";
 }
 
 // 조회와 적용 사이에 선택한 RVT가 바뀌면 새 중앙 저장을 금지한다.

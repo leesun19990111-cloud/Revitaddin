@@ -112,7 +112,7 @@ public sealed class QueryPlan
     {
         var required = FromRules(rules);
         foreach (var model in models)
-            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeTypeCodeFix && model.Query?.IncludeTypeCodeFix != true || required.IncludeDefinitions && model.Definitions == null || required.IncludeMaterialAudit && model.MaterialAuditItems == null || required.IncludeProjectBasePointAudit && model.ProjectBasePointAudit?.FormatVersion != 2 || required.IncludeCentralRebuild && model.CentralRebuild?.FormatVersion != 2)
+            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeTypeCodeFix && model.Query?.IncludeTypeCodeFix != true || required.IncludeDefinitions && model.Definitions == null || required.IncludeMaterialAudit && model.MaterialAuditItems == null || required.IncludeProjectBasePointAudit && model.ProjectBasePointAudit?.FormatVersion != 3 || required.IncludeCentralRebuild && model.CentralRebuild?.FormatVersion != 2)
                 throw new InvalidOperationException(model.Title + ": 이 룰셋에 필요한 항목을 아직 조회하지 않았습니다. 변경 예정을 적용하거나 정리한 뒤 ‘다시 조회’를 누르세요. 미조회 값은 빈 값이나 ND로 처리하지 않습니다.");
     }
 }

@@ -69,6 +69,7 @@ namespace Autodesk.Revit.DB
   }
   public XYZ Position { get; set; } = new(0, 0, 0);
   public static BasePoint? GetProjectBasePoint(Document doc) => doc.ProjectBasePoint;
+  public static BasePoint? GetSurveyPoint(Document doc) => doc.SurveyPoint;
  }
  public sealed class ProjectPosition : IDisposable
  {
@@ -99,7 +100,7 @@ namespace Autodesk.Revit.DB
  public sealed class Document
  {
   public List<Element> Elements { get; } = []; public ProjectInfo? ProjectInformation { get; set; } public bool IsWorkshared { get; set; }
-  public BasePoint? ProjectBasePoint { get; set; } = new(); public ProjectLocation? ActiveProjectLocation { get; set; } = new();
+  public BasePoint? ProjectBasePoint { get; set; } = new(); public BasePoint? SurveyPoint { get; set; } = new(); public ProjectLocation? ActiveProjectLocation { get; set; } = new();
   public bool OtherOwner { get; set; } public List<Workset> Worksets { get; } = [];
   public Element? GetElement(string id) => Elements.FirstOrDefault(e => e.UniqueId == id);
   public Element? GetElement(ElementId id) => Elements.FirstOrDefault(e => e.Id == id);

@@ -1,5 +1,10 @@
 # 독립 매개변수 관리자
 
+## 2026-11-10 · 0.5.5 프로젝트·측량 기준점 두 시트 보고서
+
+- 기존 Version8 읽기 전용 룰셋을 유지하면서 활성 공유대지의 프로젝트 기준점과 측량 기준점 `BASEPOINT_NORTHSOUTH_PARAM`·`EASTWEST`·`ELEVATION` 표시값을 각각 읽는다. 측량점은 `BasePoint.GetSurveyPoint`, 원시 피트→정수 mm 변환, 별도 상태를 사용한다. 프로젝트점의 진북각도(0~360°, 0.01°)와 첫 시트 구조는 보존한다. 한 기준점의 조회 실패가 다른 기준점 값을 지우지 않는다.
+- 조회 결과 `FormatVersion=3`으로 이전 캐시를 재조회하게 한다. XLSX는 같은 파일의 기존 `기준점 점검`과 새 `측량 기준점` 시트 2개, 각각 고정 헤더·필터·숫자 셀을 포함한다. 사용자 날짜 폴더의 룰셋·보고서는 ZIP/Git에 넣지 않는다. Reader 대역·XLSX 구조·Revit 2026 API 컴파일은 확인하고 실제 사용자 RVT 저장/수정은 하지 않는다.
+
 ## 2026-11-09 · 0.5.4 기본 전송 체크 상태 확인과 수동 이어가기
 
 - 0.5.3 현장 오류는 ListBox 전체 121개 중 ‘프로젝트 매개변수’ 인덱스 111을 찾았지만 해당 Revit 항목에 UIA TogglePattern이 없어 선택 단계에서 중단된 것이다. ListBox 행을 `LB_GETITEMRECT`/`LB_ITEMFROMPOINT`로 검증해 체크박스 위치를 누르고 MSAA `accName`/`accState`의 `STATE_SYSTEM_CHECKED`로 결과를 확인한다. 번호를 찾았는데 자동 상태 판독이 불가하면 열린 기본 창에서 사용자가 체크 상태를 확인하고 확인/취소하도록 안내한 뒤 창이 닫힐 때까지 기다린다. Worker의 `TransferredProjectStandards` 확인 없이는 저장하지 않는다.
