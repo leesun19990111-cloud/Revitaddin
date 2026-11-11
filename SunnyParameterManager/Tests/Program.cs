@@ -24,6 +24,7 @@ internal static class Program
         {
             KacRuleTests.Run(Check, Reject);
             SpaceRuleTests.Run(Check, Reject);
+            RoomUseTests.Run(Check, Reject);
             SpecRuleTests.Run(Check, Reject);
             SpecRemoveOnlyTests.Run(Check, Reject);
             ProjectParameterTransferTests.Run(Check, Reject);

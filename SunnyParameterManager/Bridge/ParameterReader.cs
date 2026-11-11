@@ -43,8 +43,10 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         var result = new List<ParameterRow>();
         // 프로젝트 정보만 필요하면 모델 전체의 요소 수집을 하지 않는다.
         var elements = (query == null || query.Scopes.Contains("유형") ? new FilteredElementCollector(doc).WhereElementIsElementType().Cast<Element>() : Enumerable.Empty<Element>())
-            .Concat(query == null || query.Scopes.Contains("인스턴스") ? new FilteredElementCollector(doc).WhereElementIsNotElementType().Cast<Element>() : Enumerable.Empty<Element>())
-            .Where(e => query?.IncludeTypeCodeFix == true ? e is ElementType && e is not RevitLinkType :
+            .Concat(query?.IncludeRoomUse == true ? new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().Cast<Element>() :
+                query == null || query.Scopes.Contains("인스턴스") ? new FilteredElementCollector(doc).WhereElementIsNotElementType().Cast<Element>() : Enumerable.Empty<Element>())
+            .Where(e => query?.IncludeRoomUse == true ? e.Category?.Id.Value == (int)BuiltInCategory.OST_Rooms :
+                query?.IncludeTypeCodeFix == true ? e is ElementType && e is not RevitLinkType :
                 e is View v ? !v.IsTemplate && v.ViewType is not (ViewType.Internal or ViewType.ProjectBrowser or ViewType.SystemBrowser or ViewType.Undefined) :
                 e.Category?.CategoryType == CategoryType.Model && e is not RevitLinkInstance && e is not RevitLinkType)
             .Concat(doc.ProjectInformation == null || query != null && !query.Scopes.Contains("프로젝트 정보") ? [] : new Element[] { doc.ProjectInformation });

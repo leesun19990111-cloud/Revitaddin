@@ -417,7 +417,7 @@ public partial class MainWindow : Window
         ReviewExplanation.Text = file.ProjectParameterTransfer
             ? "기준 파일과 대상 파일을 확인합니다. 적용할 때 각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행하고 '프로젝트 매개변수'만 선택합니다."
             : "아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요.";
-        _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit ? sourcePath : null;
+        _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit || file.RoomUse != null ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
         StatusText.Text = file.ProjectParameterTransfer ? "기준 파일을 ‘다른 파일에서 값 가져오기’에서 고르고 ‘룰셋 변경 검토’를 누르세요." : _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
@@ -553,9 +553,22 @@ public partial class MainWindow : Window
             UpdatePending();
             return;
         }
+        string? roomReport = null;
+        var roomIssueCount = 0;
+        if (file.RoomUse != null)
+        {
+            if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 용도구분+공간정보엑셀검토 룰셋을 다시 불러오세요.");
+            var findings = RoomSpaceAudit.Inspect(_models.Select(m => m.Snapshot!));
+            roomIssueCount = findings.Count;
+            roomReport = RoomSpaceWorkbook.PathForRule(_loadedRulePath);
+            RoomSpaceWorkbook.Save(roomReport, findings);
+        }
         var available = _models.SelectMany(m => m.Snapshot!.Owners.Concat(m.Snapshot.Rows));
         // 속성규격(버전5)은 값이 아니라 모델별 매개변수 정의 목록으로 평가한다.
-        var plan = file.Version == 5 ? SpecRulePlanner.Plan(file, _models.Select(m => m.Snapshot!), _edits.Values) : RulePlanner.Plan(file, available, _edits.Values, _sample);
+        RulePlan plan;
+        try { plan = file.Version == 5 ? SpecRulePlanner.Plan(file, _models.Select(m => m.Snapshot!), _edits.Values) : RulePlanner.Plan(file, available, _edits.Values, _sample); }
+        catch (InvalidOperationException ex) when (roomReport != null)
+        { throw new InvalidOperationException(ex.Message + "\n공간정보 점검 엑셀은 저장했습니다: " + roomReport, ex); }
         string? typeCodeReport = null;
         if (file.TypeCodeFix)
         {
@@ -570,6 +583,7 @@ public partial class MainWindow : Window
         RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes.Take(file.Version == 5 ? 40 : int.MaxValue)) +
             (file.Version == 5 && plan.Notes.Count > 40 ? $"\n… 확인 항목 전체 {plan.Notes.Count:N0}줄은 ‘처리 결과’ 탭과 검사 결과 파일(CSV)에서 확인하세요." : "") +
             (typeCodeReport == null ? "" : "\n엑셀 점검 목록: " + typeCodeReport) +
+            (roomReport == null ? "" : $"\n공간정보 점검 {roomIssueCount:N0}건 · 엑셀: {roomReport}\n실명·번호·기존실번호·지상지하·층 값은 변경하지 않습니다.") +
             "\n※ 불러올 당시의 결과입니다. 이후 제외/직접 입력한 내용은 아래 목록이 최종 기준입니다.";
         RuleSummaryPanel.Visibility = Visibility.Visible;
         ReportBox.AppendText("\n" + (file.Version == 5 ? $"불러온 룰셋: {file.Name}\n" + string.Join("\n", plan.Notes) : RuleSummary.Text) + "\n");
@@ -651,7 +665,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · Revit 기본 표준 전송의 프로젝트 매개변수 항목" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트·측량 기준점 공유대지 점검·엑셀 2개 시트" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · Revit 기본 표준 전송의 프로젝트 매개변수 항목" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트·측량 기준점 공유대지 점검·엑셀 2개 시트" : _loadedRules.RoomUse != null ? "Room 용도 판정 · 공간정보 5개 필드 엑셀 점검" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." : _loadedRules?.ProjectParameterTransfer == true ?
             $"{_models.Count}개 파일 · 정의 조회 {_models.Count(m => m.Snapshot?.Definitions != null)}개 · 기준 선택: {(SourceCombo.SelectedItem as ModelItem)?.Title ?? "없음"}" :

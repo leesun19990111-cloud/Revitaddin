@@ -16,6 +16,7 @@ public sealed class QueryPlan
     public bool IncludeTypeCodeFix { get; set; }
     public bool IncludeProjectBasePointAudit { get; set; }
     public bool IncludeCentralRebuild { get; set; }
+    public bool IncludeRoomUse { get; set; }
 
     public void Validate()
     {
@@ -33,6 +34,9 @@ public sealed class QueryPlan
             throw new InvalidOperationException("중앙모델 재생성은 파일 상태만 별도로 조회합니다.");
         if (TransferOnly && (IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
             throw new InvalidOperationException("매개변수 전송 조회는 다른 점검·정리 작업과 함께 실행하지 않습니다.");
+        if (IncludeRoomUse && (Scopes.Count != 1 || Scopes[0] != "인스턴스" || !RoomUsePlanner.RequiredAuditFields.All(Names.Contains) || !Names.Contains("용도") ||
+            TransferOnly || IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeDefinitions || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
+            throw new InvalidOperationException("Room 용도·공간정보 점검은 Room 인스턴스의 지정된 필드만 읽습니다.");
     }
     public bool Includes(string name, string key) => TransferOnly && Keys.Count > 0
         ? Keys.Contains(key, StringComparer.OrdinalIgnoreCase)
@@ -41,14 +45,20 @@ public sealed class QueryPlan
     {
         Validate(); required.Validate();
         return required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
-            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit) && (!required.IncludeTypeCodeFix || IncludeTypeCodeFix) && (!required.IncludeProjectBasePointAudit || IncludeProjectBasePointAudit) && (!required.IncludeCentralRebuild || IncludeCentralRebuild);
+            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit) && (!required.IncludeTypeCodeFix || IncludeTypeCodeFix) && (!required.IncludeProjectBasePointAudit || IncludeProjectBasePointAudit) && (!required.IncludeCentralRebuild || IncludeCentralRebuild) && (!required.IncludeRoomUse || IncludeRoomUse);
     }
     public static QueryPlan FromRules(RuleSet rules)
     {
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
         if (rules.Version == 10) return ProjectParameterTransfer.DefinitionQuery();
-        if (rules.Version == 9)
+        if (rules.Version == 11)
+        {
+            plan.Scopes = ["인스턴스"];
+            plan.Names = ["실명", "용도", "번호", "기존실번호", "지상지하", "층"];
+            plan.IncludeRoomUse = true;
+        }
+        else if (rules.Version == 9)
         {
             plan.Scopes = ["프로젝트 정보"];
             plan.Names = ["중앙모델 파일 상태"];

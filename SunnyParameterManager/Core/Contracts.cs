@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.5.5";
+    public const string Release = "0.5.7";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -176,7 +176,9 @@ public sealed class ValueEdit
     // 속성규격 룰셋의 매개변수 정의 정리(그룹·카테고리·유형/인스턴스·추가·중복 병합). 값 변경과 섞지 않는다.
     public DefinitionFix? DefinitionFix { get; set; }
     [JsonIgnore] public string Model => Original.ModelTitle;
-    [JsonIgnore] public string Type => Original.Scope is "뷰" or "시트" ? Original.Scope + " : " + Original.TargetName : Original.Family + " : " + Original.TypeName;
+    [JsonIgnore] public string Type => Original.Scope is "뷰" or "시트" ? Original.Scope + " : " + Original.TargetName :
+        Original.Scope == "인스턴스" && Original.CategoryKey == RoomUsePlanner.RoomCategory && Original.ElementName.Length > 0
+            ? "Room : " + Original.ElementName : Original.Family + " : " + Original.TypeName;
     [JsonIgnore] public string Field => Original.Name;
     [JsonIgnore] public string Before => Original.ValueLabel;
 }

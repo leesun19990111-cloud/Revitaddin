@@ -6,6 +6,7 @@ namespace Autodesk.Revit.DB
  public enum ViewType { Undefined, FloorPlan, CeilingPlan, Elevation, Section, Detail, DraftingView, Legend, Schedule, ThreeD, DrawingSheet, Internal, ProjectBrowser, SystemBrowser }
  public enum StorageType { String, Integer, Double, ElementId }
  public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053, BASEPOINT_NORTHSOUTH_PARAM = -1150191, BASEPOINT_EASTWEST_PARAM = -1150192, BASEPOINT_ELEVATION_PARAM = -1150193, BASEPOINT_ANGLETON_PARAM = -1150194 }
+ public enum BuiltInCategory { OST_Rooms = -2000160 }
  public enum WorksetKind { UserWorkset }
  public enum CheckoutStatus { NotOwned, OwnedByOtherUser }
  public static class WorksharingUtils { public static CheckoutStatus GetCheckoutStatus(Document doc, ElementId id) => doc.OtherOwner ? CheckoutStatus.OwnedByOtherUser : CheckoutStatus.NotOwned; }
@@ -112,6 +113,7 @@ namespace Autodesk.Revit.DB
   public FilteredElementCollector WhereElementIsElementType() { _items = _items.Where(e => e is ElementType); return this; }
   public FilteredElementCollector WhereElementIsNotElementType() { _items = _items.Where(e => e is not ElementType); return this; }
   public FilteredElementCollector OfClass(Type type) { _items = _items.Where(e => type.IsInstanceOfType(e)); return this; }
+ public FilteredElementCollector OfCategory(BuiltInCategory category) { _items = _items.Where(e => e.Category?.Id.Value == (int)category); return this; }
   public IEnumerator<Element> GetEnumerator() => _items.GetEnumerator(); System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
  }
  public sealed class Units { public FormatOptions GetFormatOptions(ForgeTypeId id) => new(); }

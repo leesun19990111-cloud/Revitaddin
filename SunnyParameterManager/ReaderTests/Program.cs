@@ -97,6 +97,20 @@ Check(OuterMaterialReader.Calls == 1 && slimModel.Owners.Single().OuterMaterial?
 slimDoc.ProjectInformation.Parameters[0].Definition.Name = "공항코드";
 var piOnly = new QueryPlan { Scopes = ["프로젝트 정보"], Names = ["공항코드", "건축물번호"] };
 Check(slimReader.ReadAll(piOnly).Single().Scope == "프로젝트 정보" && slimModel.Owners.Count == 1 && OuterMaterialReader.Calls == 1, "프로젝트 정보 전용은 모델 유형과 재료를 조회하지 않음");
+var room = new Element { Category = new() { Id = new((int)BuiltInCategory.OST_Rooms), Name = "룸" } };
+room.Parameters.Clear();
+room.Parameters.Add(new() { Definition = new() { Name = "실명", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "기계실" });
+room.Parameters.Add(new() { Definition = new() { Name = "용도", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "R" });
+room.Parameters.Add(new() { Definition = new() { Name = "번호", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "101" });
+room.Parameters.Add(new() { Definition = new() { Name = "기존실번호", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "100" });
+room.Parameters.Add(new() { Definition = new() { Name = "지상지하", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "지상" });
+room.Parameters.Add(new() { Definition = new() { Name = "층", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "01" });
+room.Parameters.Add(new() { Definition = new() { Name = "불필요한 값" }, FailRead = true });
+slimDoc.Elements.Add(room);
+var roomQuery = new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도", "번호", "기존실번호", "지상지하", "층"], IncludeRoomUse = true };
+var roomRows = slimReader.ReadAll(roomQuery);
+Check(roomRows.Count == 6 && roomRows.All(r => r.OwnerId == room.UniqueId) && slimModel.Owners.Single().OwnerId == room.UniqueId,
+    "Room 용도·공간정보 조회는 지정된 필드만 읽고 다른 요소·매개변수 제외");
 var inst = new Element { TypeId = slimType.Id }; inst.Parameters[0].Definition.Name = "업체명"; slimDoc.Elements.Add(inst);
 select.Scopes.Add("인스턴스");
 Check(slimReader.ReadAll(select).Single(r => r.Scope == "인스턴스").TypeOwnerId == slimType.UniqueId, "선택 조회 실제 인스턴스→유형 연결 보존");

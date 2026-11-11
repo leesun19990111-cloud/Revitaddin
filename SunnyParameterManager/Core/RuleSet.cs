@@ -22,6 +22,8 @@ public sealed class RuleSet
     public bool RebuildCentral { get; set; }
     // 기준 RVT 하나에서 선택한 프로젝트 매개변수 정의를 여러 모델로 전송한다.
     public bool ProjectParameterTransfer { get; set; }
+    // Room의 실명만 판정해 용도 한 필드에 입력한다.
+    public RoomUseProfile? RoomUse { get; set; }
 }
 
 public sealed class ParameterRule
@@ -91,6 +93,11 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 11 || file?.RoomUse != null)
+        {
+            RoomUsePlanner.Validate(file!);
+            return;
+        }
         if (file?.Version == 10 || file?.ProjectParameterTransfer == true)
         {
             if (file.Version != 10 || !file.ProjectParameterTransfer || string.IsNullOrWhiteSpace(file.Name) || file.Rules?.Count != 0 ||
@@ -192,6 +199,7 @@ public static class RulePlanner
         if (file.Version == 7) return TypeCodePlanner.Plan(available, pending);
         if (file.Version == 2) return KacRulePlanner.Plan(file, available, pending, sample);
         if (file.Version == 3) return SpaceRulePlanner.Plan(file, available, pending);
+        if (file.Version == 11) return RoomUsePlanner.Plan(file, available, pending);
         var owners = available.GroupBy(r => (r.ModelPath, r.OwnerId, r.Scope)).Select(g => g.ToList()).ToList();
         var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Rule)>();
         var matched = new HashSet<(string, string, string)>();
