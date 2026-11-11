@@ -45,9 +45,29 @@ namespace SunnyParameterManager.Bridge
 {
     internal sealed class NativeProjectTransferSession(string folder, Action<Response> progress)
     {
+        public static int Created;
+        public static int Started;
+        private Autodesk.Revit.DB.Document? _source;
+        private Autodesk.Revit.DB.Document? _target;
+        public bool HasCachedSource(Autodesk.Revit.DB.Document document) => ReferenceEquals(_source, document);
         public void MarkTransferred(Autodesk.Revit.DB.Document source, Autodesk.Revit.DB.Document target) { }
-        public Response Start(Autodesk.Revit.UI.UIApplication ui, Request req, ref string anchorPath) => new() { Id = req.Id, Success = true };
-        public Response Complete(Autodesk.Revit.UI.UIApplication ui, Request req) => new() { Id = req.Id, Success = true };
+        public Response Start(Autodesk.Revit.UI.UIApplication ui, Request req, ref string anchorPath)
+        {
+            if (_source == null) { _source = new() { PathName = "기준" }; ui.Application.Documents.Add(_source); Created++; }
+            _target = new() { PathName = "대상" }; ui.Application.Documents.Add(_target); Started++;
+            return new() { Id = req.Id, Success = true };
+        }
+        public Response Complete(Autodesk.Revit.UI.UIApplication ui, Request req)
+        {
+            ui.Application.Documents.Remove(_target!); _target = null;
+            return new() { Id = req.Id, Success = true };
+        }
+        public Response End(Autodesk.Revit.UI.UIApplication ui, Request req)
+        {
+            if (_source != null) ui.Application.Documents.Remove(_source);
+            _source = null;
+            return new() { Id = req.Id, Success = true };
+        }
     }
     public sealed class ModelEngine
     {

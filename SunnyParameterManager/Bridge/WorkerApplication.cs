@@ -76,7 +76,8 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
             if (req == null) return;
             if (_attention && !(req.Operation == "종료" && _readRestartAllowed)) throw new InvalidOperationException("이 작업 세션은 확인이 필요합니다. 결과와 작업용 Revit을 확인한 뒤 종료하세요. 자동 재실행하지 않습니다.");
             if (ui.Application.VersionNumber != "2026") throw new InvalidOperationException("첫 버전은 Revit 2026만 지원합니다.");
-            if (req.Operation != "프로젝트 표준 전송 완료" && HasUnexpectedDocuments(ui))
+            bool transferRequest = req.Operation is "프로젝트 매개변수 전송" or "프로젝트 표준 전송 묶음 종료";
+            if (req.Operation != "프로젝트 표준 전송 완료" && HasUnexpectedDocuments(ui, transferRequest))
                 throw new InvalidOperationException("작업용 Revit에 이미 문서가 열려 있습니다. 사용자 문서나 복구 문서를 임의로 닫거나 수정하지 않습니다.");
             if (req.Operation == "종료")
             {
@@ -89,14 +90,17 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
             Response result;
             if (req.Operation == "프로젝트 매개변수 전송")
             {
-                _nativeTransfer = new NativeProjectTransferSession(_folder, r => SafeWrite(req.Id + ".progress.json", r));
+                _nativeTransfer ??= new NativeProjectTransferSession(_folder, r => SafeWrite(r.Id + ".progress.json", r));
                 result = _nativeTransfer.Start(ui, req, ref _anchorPath);
-                if (!result.Success) _nativeTransfer = null;
             }
             else if (req.Operation == "프로젝트 표준 전송 완료")
             {
                 if (_nativeTransfer == null) throw new InvalidOperationException("완료할 Revit 기본 전송 작업이 없습니다.");
                 result = _nativeTransfer.Complete(ui, req);
+            }
+            else if (req.Operation == "프로젝트 표준 전송 묶음 종료")
+            {
+                result = _nativeTransfer?.End(ui, req) ?? new Response { Id = req.Id, Success = true, Stage = "묶음 전송 정리 완료" };
                 if (!result.RequiresAttention) _nativeTransfer = null;
             }
             else result = req.Operation == "중앙 재생성"
@@ -111,7 +115,7 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
             }
             if (result.CanContinueAfterPreflightFailure)
             {
-                bool empty = !HasUnexpectedDocuments(ui);
+                bool empty = !HasUnexpectedDocuments(ui, req.Operation == "프로젝트 매개변수 전송");
                 result.CanContinueAfterPreflightFailure = req.Operation is "적용" or "프로젝트 매개변수 전송" && !result.Success && !result.RequiresAttention &&
                     !result.CentralSynchronized && result.Applied == 0 && empty;
                 if (!empty) result.RequiresAttention = true;
@@ -131,9 +135,11 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
     }
 
     private void SafeWrite(string file, Response response) { try { if (_folder.Length > 0) Protocol.Write(Path.Combine(_folder, file), response); } catch { /* 기록 실패가 Revit으로 전파되지 않게 한다. */ } }
-    private bool HasUnexpectedDocuments(UIApplication ui)
+    private bool HasUnexpectedDocuments(UIApplication ui, bool allowTransferSource = false)
     {
-        try { return ui.Application.Documents.Cast<Autodesk.Revit.DB.Document>().Any(d => _anchorPath.Length == 0 || !string.Equals(d.PathName, _anchorPath, StringComparison.OrdinalIgnoreCase)); }
+        try { return ui.Application.Documents.Cast<Autodesk.Revit.DB.Document>().Any(d =>
+            (_anchorPath.Length == 0 || !string.Equals(d.PathName, _anchorPath, StringComparison.OrdinalIgnoreCase)) &&
+            !(allowTransferSource && _nativeTransfer?.HasCachedSource(d) == true)); }
         catch { return true; } // 확인 불가는 빈 작업 프로세스로 간주하지 않는다.
     }
     public string GetName() => "Sunny 매개변수 관리자 전용 작업";

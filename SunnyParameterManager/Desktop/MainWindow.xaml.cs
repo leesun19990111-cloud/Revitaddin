@@ -784,37 +784,52 @@ public partial class MainWindow : Window
             MainTabs.SelectedIndex = 2;
             var sourceSnapshot = source.Snapshot ?? throw new InvalidOperationException("기준 파일을 다시 조회하세요.");
             int completed = 0;
-            foreach (var target in eligible)
+            bool cleanupAttention = false;
+            try
             {
-                if (_stopRequested) { ReportBox.AppendText($"작업중지: 남은 {eligible.Count - completed:N0}개 모델은 처리하지 않았습니다.\n"); break; }
-                var snapshot = target.Snapshot ?? throw new InvalidOperationException("대상 파일을 다시 조회하세요: " + target.Title);
-                var result = await _worker.Send(new Request
+                foreach (var target in eligible)
                 {
-                    Operation = "프로젝트 매개변수 전송", Path = target.Path, CanonicalPath = snapshot.CanonicalPath,
-                    Identity = snapshot.Identity, Confirmed = true, LocalChangesConfirmed = snapshot.Kind == "로컬",
-                    TransferSource = sourceSnapshot
-                });
-                ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {target.Title}\n{result.Stage} · {result.Message}\n작업/복구 경로: {result.RecoveryPath}\n변경 전 백업: {result.BackupPath}\n");
-                if (result.Success && (snapshot.Kind == "일반" || result.CentralSynchronized && result.OwnershipReleased))
-                {
-                    target.Status = "기본 표준 전송 완료 · 재조회 필요"; target.Snapshot = null; completed++;
+                    if (_stopRequested) { ReportBox.AppendText($"작업중지: 남은 {eligible.Count - completed:N0}개 모델은 처리하지 않았습니다.\n"); break; }
+                    var snapshot = target.Snapshot ?? throw new InvalidOperationException("대상 파일을 다시 조회하세요: " + target.Title);
+                    var result = await _worker.Send(new Request
+                    {
+                        Operation = "프로젝트 매개변수 전송", Path = target.Path, CanonicalPath = snapshot.CanonicalPath,
+                        Identity = snapshot.Identity, Confirmed = true, LocalChangesConfirmed = snapshot.Kind == "로컬",
+                        TransferSource = sourceSnapshot, TransferTargetDefinitions = snapshot.Definitions
+                    });
+                    ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {target.Title}\n{result.Stage} · {result.Message}\n작업/복구 경로: {(result.RecoveryPath.Length == 0 ? "임시 사본 정리됨" : result.RecoveryPath)}\n변경 전 백업: {(result.BackupPath.Length == 0 ? "정리됨" : result.BackupPath)}\n");
+                    if (result.Success && (snapshot.Kind == "일반" || result.CentralSynchronized && result.OwnershipReleased))
+                    {
+                        target.Status = "기본 표준 전송 완료 · 재조회 필요"; target.Snapshot = null; completed++;
+                    }
+                    else
+                    {
+                        snapshot.RequiresRequery = true;
+                        target.Status = result.RequiresAttention ? "전송 반영 여부 확인 필요" : "전송 실패 · 재조회 필요";
+                        var remaining = eligible.Count - eligible.IndexOf(target) - 1;
+                        if (!_stopRequested && remaining > 0 && ApplyContinuation.CanOffer(result) && !_worker.NeedsAttention &&
+                            MessageBox.Show(this, $"{target.Title}\n{result.Message}\n\n이 파일을 건너뛰고 나머지 {remaining:N0}개 모델의 전송을 계속할까요?",
+                                "전송 실패 · 나머지 계속", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                        { ReportBox.AppendText("실패 파일을 제외하고 나머지 모델을 계속 처리합니다.\n"); continue; }
+                        ReportBox.AppendText($"나머지 {remaining:N0}개 모델은 처리하지 않았습니다.\n"); break;
+                    }
+                    if (result.RequiresAttention) break;
                 }
-                else
+            }
+            finally
+            {
+                if (_worker.Connected && !_worker.NeedsAttention)
                 {
-                    snapshot.RequiresRequery = true;
-                    target.Status = result.RequiresAttention ? "전송 반영 여부 확인 필요" : "전송 실패 · 재조회 필요";
-                    var remaining = eligible.Count - eligible.IndexOf(target) - 1;
-                    if (!_stopRequested && remaining > 0 && ApplyContinuation.CanOffer(result) && !_worker.NeedsAttention &&
-                        MessageBox.Show(this, $"{target.Title}\n{result.Message}\n\n이 파일을 건너뛰고 나머지 {remaining:N0}개 모델의 전송을 계속할까요?",
-                            "전송 실패 · 나머지 계속", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
-                    { ReportBox.AppendText("실패 파일을 제외하고 나머지 모델을 계속 처리합니다.\n"); continue; }
-                    ReportBox.AppendText($"나머지 {remaining:N0}개 모델은 처리하지 않았습니다.\n"); break;
+                    var cleanup = await _worker.Send(new Request { Operation = "프로젝트 표준 전송 묶음 종료" });
+                    ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] 기준 모델 정리 · {cleanup.Stage} · {cleanup.Message}\n");
+                    cleanupAttention = !cleanup.Success || cleanup.RequiresAttention || cleanup.Message.Contains("남아 있습니다", StringComparison.Ordinal);
                 }
-                if (result.RequiresAttention) break;
+                else cleanupAttention = true;
             }
             InvalidateProjectTransfer();
             RefreshFields();
-            StatusText.Text = $"Revit 기본 프로젝트 표준 전송 완료 {completed:N0}/{eligible.Count:N0}개 모델 · 처리 결과를 확인하세요.";
+            StatusText.Text = $"Revit 기본 프로젝트 표준 전송 완료 {completed:N0}/{eligible.Count:N0}개 모델 · " +
+                (cleanupAttention ? "작업용 문서·사본 상태를 확인하세요." : "임시 사본 정리 완료");
         });
     }
 

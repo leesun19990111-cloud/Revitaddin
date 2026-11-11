@@ -30,6 +30,7 @@ internal static class Program
                 ModelEngine.Result = new() { Success = true, Snapshot = new() };
                 ModelEngine.Error = null; ModelEngine.LeaveDocument = false; ModelEngine.Calls = 0;
                 CentralRebuildEngine.Result = new() { Success = true }; CentralRebuildEngine.Calls = 0;
+                NativeProjectTransferSession.Created = NativeProjectTransferSession.Started = 0;
             }
             Reset(); ModelEngine.Result = new() { ReadRestartRequired = true, Message = "OOM" };
             var result = Run("조회");
@@ -77,6 +78,19 @@ internal static class Program
             Check(result.RequiresAttention && !result.Success, "중앙 교체 결과 불명은 작업 세션 잠금");
             result = Run("조회");
             Check(result.RequiresAttention && ModelEngine.Calls == 0, "중앙 교체 결과 불명 뒤 후속 조회 차단");
+            Reset();
+            Check(Run("프로젝트 매개변수 전송").Success && Run("프로젝트 표준 전송 완료").Success &&
+                Run("프로젝트 매개변수 전송").Success && Run("프로젝트 표준 전송 완료").Success &&
+                NativeProjectTransferSession.Created == 1 && NativeProjectTransferSession.Started == 2,
+                "기준 문서를 유지한 채 대상 두 건을 순차 처리");
+            Check(Run("프로젝트 표준 전송 묶음 종료").Success && ui.Application.Documents.Count == 0 &&
+                Run("조회").Success, "묶음 종료 후 기준 문서 정리·일반 조회 재개");
+            Reset();
+            Run("프로젝트 매개변수 전송"); Run("프로젝트 표준 전송 완료");
+            ui.Application.Documents.Add(new() { PathName = "사용자 문서" });
+            result = Run("프로젝트 매개변수 전송");
+            Check(!result.Success && result.RequiresAttention && NativeProjectTransferSession.Started == 1,
+                "기준 문서 외 다른 문서가 있으면 다음 전송 거부");
             Console.WriteLine($"PASS {count} worker 안전 경계 검사"); return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
