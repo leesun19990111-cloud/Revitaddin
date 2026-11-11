@@ -1,5 +1,9 @@
 # 설치 프로그램 (SunnyToolsInstaller)
 
+## 별도 제품 0.6.2 — 2026-11-11 읽기 전용 룸 검토 엑셀
+
+- Version12 `RoomReview`로 ROOM 전체의 모델별 20열 녹색 XLSX를 만든다. 기존 Version11 용도 입력과 9열 점검은 유지한다. Protocol/설치 표기/App-0.6.2, 062 격리 빌드. 기존 0.6.1 배포는 Old_Versions에 보관한다. 사용자 RVT 적용·운영 중앙 동기화는 자동 검증하지 않는다.
+
 ## 별도 제품 0.6.1 — 2026-11-11 Room `기존 실번호` 이름 수정
 
 - Version11 Room 조회와 개인 룰셋 AuditFields를 실제 이름 `기존 실번호`로 맞춘다. 이전 조회는 재조회 대상이다. Protocol/설치 표기/App-0.6.1, 061 격리 빌드. 0.6.0 배포는 Old_Versions에 보관한다. 실제 사용자 RVT 적용·운영 중앙 동기화는 자동 검증하지 않는다.

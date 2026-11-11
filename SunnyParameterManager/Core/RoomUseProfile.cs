@@ -43,7 +43,7 @@ public static class RoomUsePlanner
         var p = file.RoomUse;
         if (file.Version != 11 || string.IsNullOrWhiteSpace(file.Name) || file.SampleOnly || file.Rules?.Count != 0 ||
             file.Kac != null || file.Space != null || file.Spec != null || file.Cleanup || file.MaterialAudit || file.TypeCodeFix ||
-            file.ProjectBasePointAudit || file.RebuildCentral || file.ProjectParameterTransfer || file.PreserveWorksets?.Count != 0 ||
+            file.ProjectBasePointAudit || file.RebuildCentral || file.ProjectParameterTransfer || file.RoomReview || file.PreserveWorksets?.Count != 0 ||
             p == null || string.IsNullOrWhiteSpace(p.Source) || !Regex.IsMatch(p.SourceSha256 ?? "", "^[0-9A-Fa-f]{64}$") ||
             p.Terms == null || p.Terms.Count is < 1 or > 400 || p.SemanticTerms == null || p.SemanticTerms.Count > 100 ||
             p.AuditFields == null || !p.AuditFields.SequenceEqual(RequiredAuditFields))

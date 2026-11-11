@@ -403,7 +403,7 @@ public partial class MainWindow : Window
         if (_busy) throw new InvalidOperationException("조회가 끝난 뒤 룰셋을 바꾸세요.");
         QueryPlan.FromRules(file);
         if (file.SampleOnly && !_sample) throw new InvalidOperationException("연습용 룰셋은 샘플 모드에서만 사용하세요.");
-        if ((file.MaterialAudit || file.ProjectBasePointAudit || file.RebuildCentral || file.ProjectParameterTransfer) && _edits.Count > 0)
+        if ((file.MaterialAudit || file.ProjectBasePointAudit || file.RebuildCentral || file.ProjectParameterTransfer || file.RoomReview) && _edits.Count > 0)
             throw new InvalidOperationException("이 전용 룰셋은 기존 변경 예정과 함께 진행할 수 없습니다. 변경을 먼저 적용·제외하거나 작업 파일로 보관하세요.");
         if (file.Spec?.RemoveOnly == true && _edits.Values.Any(e => e.DefinitionFix?.Action != SpecRulePlanner.ActionRemove || e.DefinitionFix.Removal == null))
             throw new InvalidOperationException("기존 변경 예정이 남아 있어 삭제 전용 룰셋으로 바꾸지 않았습니다. ‘변경 내용 확인’에서 기존 변경을 제외한 뒤 불러오세요.");
@@ -414,10 +414,10 @@ public partial class MainWindow : Window
         CopyExpander.IsExpanded = file.ProjectParameterTransfer;
         TransferSourceHint.Visibility = file.ProjectParameterTransfer ? Visibility.Visible : Visibility.Collapsed;
         EditActions.Visibility = file.ProjectParameterTransfer ? Visibility.Collapsed : Visibility.Visible;
-        ReviewExplanation.Text = file.ProjectParameterTransfer
+        ReviewExplanation.Text = file.RoomReview ? "ROOM 전체를 모델별 20열 엑셀로 저장합니다. RVT 값은 변경하지 않습니다." : file.ProjectParameterTransfer
             ? "기준 파일과 대상 파일을 확인합니다. 적용할 때 각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행하고 '프로젝트 매개변수'만 선택합니다."
             : "아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요.";
-        _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit || file.RoomUse != null ? sourcePath : null;
+        _loadedRulePath = file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit || file.RoomUse != null || file.RoomReview ? sourcePath : null;
         RuleSummaryPanel.Visibility = Visibility.Collapsed;
         UpdatePending();
         StatusText.Text = file.ProjectParameterTransfer ? "기준 파일을 ‘다른 파일에서 값 가져오기’에서 고르고 ‘룰셋 변경 검토’를 누르세요." : _models.Count == 0 ? "룰셋 준비 완료. 이제 RVT 파일을 선택하세요." :
@@ -521,6 +521,24 @@ public partial class MainWindow : Window
         }
         _centralRebuildReviewed = false;
         CentralRebuildGrid.Visibility = Visibility.Collapsed; EditsGrid.Visibility = Visibility.Visible;
+        if (file.RoomReview)
+        {
+            if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("룸 검토 룰셋을 다시 선택하세요.");
+            var snapshots = _models.Select(m => m.Snapshot!).ToList();
+            var findings = RoomSpaceAudit.Inspect(snapshots);
+            var path = RoomReviewWorkbook.PathForRule(_loadedRulePath);
+            RoomReviewWorkbook.Save(path, snapshots, findings);
+            var roomCount = snapshots.Sum(m => m.Owners.Count(r => r.Scope == "인스턴스" && r.CategoryKey == RoomUsePlanner.RoomCategory));
+            RuleSummary.Text = $"읽기 전용 룸 검토 완료 · {_models.Count:N0}개 모델 · ROOM {roomCount:N0}개 · 기본 공간정보 확인 항목 {findings.Count:N0}건\n" +
+                "모델별 시트에 ROOM마다 한 행씩 20열로 기록했습니다. 모델명은 첫 행에만 표시하고, 확인이 필요한 셀은 색으로 강조합니다.\n" +
+                "이 룰셋은 용도 및 다른 매개변수를 수정하거나 RVT를 저장·동기화하지 않습니다. 엑셀: " + path;
+            RuleSummaryPanel.Visibility = Visibility.Visible;
+            ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
+            StatusText.Text = "룸 검토 엑셀을 저장했습니다: " + path;
+            MainTabs.SelectedIndex = 2;
+            UpdatePending();
+            return;
+        }
         if (file.ProjectBasePointAudit)
         {
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 프로젝트 기준점 점검 룰셋을 다시 불러오세요.");
@@ -649,7 +667,7 @@ public partial class MainWindow : Window
         PendingText.Text = _loadedRules?.ProjectParameterTransfer == true
             ? _transferReviewed ? $"기준 {_transferSource?.Title} · 기본 표준 전송 대상 {transferCount:N0}개 모델 · 실제 파일 반영 전" : "기준 파일 선택 → 룰셋 변경 검토를 진행하세요."
             : rebuildReady ? $"새 중앙 재생성 대상 {_models.Count:N0}개 모델 · 아직 적용 전" : $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
-        ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true &&
+        ApplyButton.IsEnabled = !_busy && !_sample && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true && _loadedRules?.RoomReview != true &&
             (_loadedRules?.ProjectParameterTransfer == true ? transferCount > 0 : rebuildReady || _edits.Count > 0) && !_worker.NeedsAttention && !HasFailedPending();
         ApplyButton.Content = _loadedRules?.ProjectParameterTransfer == true ? "프로젝트 매개변수 전송 · 중앙 동기화" : _loadedRules?.RebuildCentral == true ? "새 중앙으로 교체 · 동기화" : "RVT에 저장 · 중앙 동기화";
         ReviewButton.IsEnabled = !_busy && (_loadedRules?.ProjectParameterTransfer == true ? _transferReviewed : rebuildReady || _edits.Count > 0);
@@ -665,7 +683,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · Revit 기본 표준 전송의 프로젝트 매개변수 항목" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트·측량 기준점 공유대지 점검·엑셀 2개 시트" : _loadedRules.RoomUse != null ? "Room 용도 판정 · 공간정보 5개 필드 엑셀 점검" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · Revit 기본 표준 전송의 프로젝트 매개변수 항목" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트·측량 기준점 공유대지 점검·엑셀 2개 시트" : _loadedRules.RoomReview ? "ROOM 전체 · 읽기 전용 20열 엑셀" : _loadedRules.RoomUse != null ? "Room 용도 판정 · 공간정보 5개 필드 엑셀 점검" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         FileSummary.Text = _models.Count == 0 ? "수정할 파일을 고르면 자동으로 읽어옵니다." : _loadedRules?.ProjectParameterTransfer == true ?
             $"{_models.Count}개 파일 · 정의 조회 {_models.Count(m => m.Snapshot?.Definitions != null)}개 · 기준 선택: {(SourceCombo.SelectedItem as ModelItem)?.Title ?? "없음"}" :
@@ -703,7 +721,7 @@ public partial class MainWindow : Window
     {
         if (_loadedRules?.ProjectParameterTransfer == true) { await ApplyProjectParameterTransfer(); return; }
         if (_loadedRules?.RebuildCentral == true) { await ApplyCentralRebuild(); return; }
-        if (_busy || _sample || _loadedRules?.MaterialAudit == true || _loadedRules?.ProjectBasePointAudit == true || _edits.Count == 0) return;
+        if (_busy || _sample || _loadedRules?.MaterialAudit == true || _loadedRules?.ProjectBasePointAudit == true || _loadedRules?.RoomReview == true || _edits.Count == 0) return;
         try { ValidateRemovalApproval(); ValidateCleanupApproval(); }
         catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "적용 전 검증", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }

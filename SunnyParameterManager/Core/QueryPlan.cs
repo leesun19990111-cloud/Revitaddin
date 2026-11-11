@@ -54,7 +54,14 @@ public sealed class QueryPlan
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
         if (rules.Version == 10) return ProjectParameterTransfer.DefinitionQuery();
-        if (rules.Version == 11)
+        if (rules.Version == 12)
+        {
+            plan.Scopes = ["인스턴스"];
+            plan.Names = RoomReviewRules.Fields.ToList();
+            plan.IncludeRoomUse = true;
+            plan.RoomIdentityVersion = 1;
+        }
+        else if (rules.Version == 11)
         {
             plan.Scopes = ["인스턴스"];
             plan.Names = ["실명", "용도", "번호", "기존 실번호", "지상지하", "층"];

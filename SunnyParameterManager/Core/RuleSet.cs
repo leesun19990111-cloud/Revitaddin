@@ -24,6 +24,8 @@ public sealed class RuleSet
     public bool ProjectParameterTransfer { get; set; }
     // Room의 실명만 판정해 용도 한 필드에 입력한다.
     public RoomUseProfile? RoomUse { get; set; }
+    // Room 전체를 읽기 전용 20열 Excel로 내보낸다.
+    public bool RoomReview { get; set; }
 }
 
 public sealed class ParameterRule
@@ -93,6 +95,11 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 12 || file?.RoomReview == true)
+        {
+            RoomReviewRules.Validate(file);
+            return;
+        }
         if (file?.Version == 11 || file?.RoomUse != null)
         {
             RoomUsePlanner.Validate(file!);
@@ -200,6 +207,7 @@ public static class RulePlanner
         if (file.Version == 2) return KacRulePlanner.Plan(file, available, pending, sample);
         if (file.Version == 3) return SpaceRulePlanner.Plan(file, available, pending);
         if (file.Version == 11) return RoomUsePlanner.Plan(file, available, pending);
+        if (file.Version == 12) throw new InvalidOperationException("룸 검토 룰셋은 읽기 전용입니다. '룰셋 변경 검토'에서 엑셀만 만듭니다.");
         var owners = available.GroupBy(r => (r.ModelPath, r.OwnerId, r.Scope)).Select(g => g.ToList()).ToList();
         var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Rule)>();
         var matched = new HashSet<(string, string, string)>();

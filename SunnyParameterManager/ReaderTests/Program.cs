@@ -106,6 +106,8 @@ room.Parameters.Add(new() { Definition = new() { Name = "번호", Spec = new("au
 room.Parameters.Add(new() { Definition = new() { Name = "기존 실번호", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "100" });
 room.Parameters.Add(new() { Definition = new() { Name = "지상지하", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "지상" });
 room.Parameters.Add(new() { Definition = new() { Name = "층", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "01" });
+room.Parameters.Add(new() { Definition = new() { Name = "설명", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "기계실 설명" });
+room.Parameters.Add(new() { Definition = new() { Name = "실내재료마감-천장", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "천장 마감" });
 room.Parameters.Add(new() { Definition = new() { Name = "불필요한 값" }, FailRead = true });
 slimDoc.Elements.Add(room);
 var roomQuery = new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도", "번호", "기존 실번호", "지상지하", "층"], IncludeRoomUse = true, RoomIdentityVersion = 1 };
@@ -114,6 +116,12 @@ Check(roomRows.Count == 6 && roomRows.All(r => r.OwnerId == room.UniqueId && r.E
     slimModel.Owners.Single().OwnerId == room.UniqueId && slimModel.Owners.Single().ElementName == "Revit 룸 이름" &&
     slimModel.RoomIdentityVersion == 1,
     "Room 용도·공간정보 조회와 Revit 이름 식별값 보존");
+var reviewQuery = QueryPlan.FromRules(new RuleSet { Version = 12, Name = "룸 검토", RoomReview = true });
+var reviewRows = slimReader.ReadAll(reviewQuery);
+Check(reviewRows.Count == 8 && reviewRows.Any(r => r.Name == "설명" && r.Raw == "기계실 설명") &&
+    reviewRows.Any(r => r.Name == "실내재료마감-천장" && r.Raw == "천장 마감") &&
+    reviewRows.All(r => r.OwnerId == room.UniqueId) && slimModel.Owners.Single().ElementName == "Revit 룸 이름",
+    "읽기 전용 룸 검토는 20열의 실제 매개변수만 조회");
 var inst = new Element { TypeId = slimType.Id }; inst.Parameters[0].Definition.Name = "업체명"; slimDoc.Elements.Add(inst);
 select.Scopes.Add("인스턴스");
 Check(slimReader.ReadAll(select).Single(r => r.Scope == "인스턴스").TypeOwnerId == slimType.UniqueId, "선택 조회 실제 인스턴스→유형 연결 보존");
