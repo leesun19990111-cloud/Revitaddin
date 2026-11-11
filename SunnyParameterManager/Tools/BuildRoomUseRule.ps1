@@ -53,12 +53,11 @@ if ($buffer.Length -gt 0 -or $terms.Count -ne 283 -or ($terms.Code | Select-Obje
 $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
 $rule = [ordered]@{
     Version = 11
-    Name = '용도구분+공간정보엑셀검토'
+    Name = '용도구분'
     Rules = @()
     RoomUse = [ordered]@{
         Source = [IO.Path]::GetFileName($source)
         SourceSha256 = $hash
-        AuditFields = @('실명', '번호', '기존 실번호', '지상지하', '층')
         Terms = @($terms)
         SemanticTerms = @(
             [ordered]@{ Phrase = '입출하대'; Use = 'R'; Basis = '작업절차의 하역장(R)에 해당하는 작업 공간' },

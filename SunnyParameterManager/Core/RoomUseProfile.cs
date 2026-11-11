@@ -9,6 +9,7 @@ public sealed class RoomUseProfile
     public string SourceSha256 { get; set; } = "";
     public List<RoomUseTerm> Terms { get; set; } = [];
     public List<RoomUseSemanticTerm> SemanticTerms { get; set; } = [];
+    // 이전 개인 룰셋과의 읽기 호환용. 용도 판정에서는 조회하거나 엑셀을 생성하지 않는다.
     public List<string> AuditFields { get; set; } = [];
 }
 
@@ -46,7 +47,7 @@ public static class RoomUsePlanner
             file.ProjectBasePointAudit || file.RebuildCentral || file.ProjectParameterTransfer || file.RoomReview || file.PreserveWorksets?.Count != 0 ||
             p == null || string.IsNullOrWhiteSpace(p.Source) || !Regex.IsMatch(p.SourceSha256 ?? "", "^[0-9A-Fa-f]{64}$") ||
             p.Terms == null || p.Terms.Count is < 1 or > 400 || p.SemanticTerms == null || p.SemanticTerms.Count > 100 ||
-            p.AuditFields == null || !p.AuditFields.SequenceEqual(RequiredAuditFields))
+            p.AuditFields == null || p.AuditFields.Count > 0 && !p.AuditFields.SequenceEqual(RequiredAuditFields))
             throw new InvalidOperationException("버전11 Room 용도 룰셋의 출처와 실 종류 사전을 확인하세요. 다른 규칙과 혼합할 수 없습니다.");
         var codes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var term in p.Terms)

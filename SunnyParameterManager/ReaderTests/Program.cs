@@ -110,12 +110,12 @@ room.Parameters.Add(new() { Definition = new() { Name = "설명", Spec = new("au
 room.Parameters.Add(new() { Definition = new() { Name = "실내재료마감-천장", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "천장 마감" });
 room.Parameters.Add(new() { Definition = new() { Name = "불필요한 값" }, FailRead = true });
 slimDoc.Elements.Add(room);
-var roomQuery = new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도", "번호", "기존 실번호", "지상지하", "층"], IncludeRoomUse = true, RoomIdentityVersion = 1 };
+var roomQuery = new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도"], IncludeRoomUse = true };
 var roomRows = slimReader.ReadAll(roomQuery);
-Check(roomRows.Count == 6 && roomRows.All(r => r.OwnerId == room.UniqueId && r.ElementName == "Revit 룸 이름") &&
+Check(roomRows.Count == 2 && roomRows.All(r => r.OwnerId == room.UniqueId && r.ElementName == "Revit 룸 이름") &&
     slimModel.Owners.Single().OwnerId == room.UniqueId && slimModel.Owners.Single().ElementName == "Revit 룸 이름" &&
     slimModel.RoomIdentityVersion == 1,
-    "Room 용도·공간정보 조회와 Revit 이름 식별값 보존");
+    "Room 용도 판정은 실명·용도만 조회하고 Revit 이름 식별값 보존");
 var reviewQuery = QueryPlan.FromRules(new RuleSet { Version = 12, Name = "룸 검토", RoomReview = true });
 var reviewRows = slimReader.ReadAll(reviewQuery);
 Check(reviewRows.Count == 8 && reviewRows.Any(r => r.Name == "설명" && r.Raw == "기계실 설명") &&
