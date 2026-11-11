@@ -58,7 +58,7 @@ $rule = [ordered]@{
     RoomUse = [ordered]@{
         Source = [IO.Path]::GetFileName($source)
         SourceSha256 = $hash
-        AuditFields = @('실명', '번호', '기존실번호', '지상지하', '층')
+        AuditFields = @('실명', '번호', '기존 실번호', '지상지하', '층')
         Terms = @($terms)
         SemanticTerms = @(
             [ordered]@{ Phrase = '입출하대'; Use = 'R'; Basis = '작업절차의 하역장(R)에 해당하는 작업 공간' },

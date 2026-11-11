@@ -583,7 +583,7 @@ public partial class MainWindow : Window
         RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes.Take(file.Version == 5 ? 40 : int.MaxValue)) +
             (file.Version == 5 && plan.Notes.Count > 40 ? $"\n… 확인 항목 전체 {plan.Notes.Count:N0}줄은 ‘처리 결과’ 탭과 검사 결과 파일(CSV)에서 확인하세요." : "") +
             (typeCodeReport == null ? "" : "\n엑셀 점검 목록: " + typeCodeReport) +
-            (roomReport == null ? "" : $"\n공간정보 점검 {roomIssueCount:N0}건 · 엑셀: {roomReport}\n실명·번호·기존실번호·지상지하·층 값은 변경하지 않습니다.") +
+            (roomReport == null ? "" : $"\n공간정보 점검 {roomIssueCount:N0}건 · 엑셀: {roomReport}\n실명·번호·기존 실번호·지상지하·층 값은 변경하지 않습니다.") +
             "\n※ 불러올 당시의 결과입니다. 이후 제외/직접 입력한 내용은 아래 목록이 최종 기준입니다.";
         RuleSummaryPanel.Visibility = Visibility.Visible;
         ReportBox.AppendText("\n" + (file.Version == 5 ? $"불러온 룰셋: {file.Name}\n" + string.Join("\n", plan.Notes) : RuleSummary.Text) + "\n");

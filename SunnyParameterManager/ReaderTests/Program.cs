@@ -103,12 +103,12 @@ room.Parameters.Add(new() { Id = new((int)BuiltInParameter.ROOM_NAME), Definitio
 room.Parameters.Add(new() { Definition = new() { Name = "실명", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "기계실" });
 room.Parameters.Add(new() { Definition = new() { Name = "용도", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "R" });
 room.Parameters.Add(new() { Definition = new() { Name = "번호", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "101" });
-room.Parameters.Add(new() { Definition = new() { Name = "기존실번호", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "100" });
+room.Parameters.Add(new() { Definition = new() { Name = "기존 실번호", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "100" });
 room.Parameters.Add(new() { Definition = new() { Name = "지상지하", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "지상" });
 room.Parameters.Add(new() { Definition = new() { Name = "층", Spec = new("autodesk.spec:spec.string-2.0.0") }, Value = "01" });
 room.Parameters.Add(new() { Definition = new() { Name = "불필요한 값" }, FailRead = true });
 slimDoc.Elements.Add(room);
-var roomQuery = new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도", "번호", "기존실번호", "지상지하", "층"], IncludeRoomUse = true, RoomIdentityVersion = 1 };
+var roomQuery = new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도", "번호", "기존 실번호", "지상지하", "층"], IncludeRoomUse = true, RoomIdentityVersion = 1 };
 var roomRows = slimReader.ReadAll(roomQuery);
 Check(roomRows.Count == 6 && roomRows.All(r => r.OwnerId == room.UniqueId && r.ElementName == "Revit 룸 이름") &&
     slimModel.Owners.Single().OwnerId == room.UniqueId && slimModel.Owners.Single().ElementName == "Revit 룸 이름" &&

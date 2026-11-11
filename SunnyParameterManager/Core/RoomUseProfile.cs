@@ -30,7 +30,7 @@ public sealed class RoomUseSemanticTerm
 public static class RoomUsePlanner
 {
     public const string RoomCategory = "-2000160";
-    public static readonly string[] RequiredAuditFields = ["실명", "번호", "기존실번호", "지상지하", "층"];
+    public static readonly string[] RequiredAuditFields = ["실명", "번호", "기존 실번호", "지상지하", "층"];
     private const string TextSpec = "autodesk.spec:spec.string-2.0.0";
     private static readonly string[] Choices = ["C", "E", "R", "U", "Z"];
     private static readonly string[] HumanRooms = ["감시실", "무균실", "무반향실", "장비실", "제어실"];

@@ -57,7 +57,7 @@ public sealed class QueryPlan
         if (rules.Version == 11)
         {
             plan.Scopes = ["인스턴스"];
-            plan.Names = ["실명", "용도", "번호", "기존실번호", "지상지하", "층"];
+            plan.Names = ["실명", "용도", "번호", "기존 실번호", "지상지하", "층"];
             plan.IncludeRoomUse = true;
             plan.RoomIdentityVersion = 1;
         }

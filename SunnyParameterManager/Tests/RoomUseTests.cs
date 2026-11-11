@@ -13,7 +13,7 @@ internal static class RoomUseTests
         Version = 11, Name = "Room 용도", RoomUse = new()
         {
             Source = "작업절차", SourceSha256 = new string('a', 64),
-            AuditFields = ["실명", "번호", "기존실번호", "지상지하", "층"],
+            AuditFields = ["실명", "번호", "기존 실번호", "지상지하", "층"],
             SemanticTerms =
             [
                 new() { Phrase = "입출하대", Use = "R", Basis = "하역장" },
@@ -50,8 +50,10 @@ internal static class RoomUseTests
         check(RulePlanner.Parse(JsonSerializer.Serialize(rules)).Version == 11, "Room 용도 룰셋 파싱");
         var query = QueryPlan.FromRules(rules);
         check(query.IncludeRoomUse && query.Scopes.SequenceEqual(["인스턴스"]) &&
-            query.Names.SequenceEqual(["실명", "용도", "번호", "기존실번호", "지상지하", "층"]), "Room 전용 용도·점검 필드 조회");
+            query.Names.SequenceEqual(["실명", "용도", "번호", "기존 실번호", "지상지하", "층"]), "Room 전용 용도·점검 필드 조회");
         check(!new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도"] }.Covers(query), "구 조회는 Room 범위 확인 전 재조회");
+        check(!new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도", "번호", "기존실번호", "지상지하", "층"] }.Covers(query),
+            "띄어쓰기 없는 기존 조회는 실제 기존 실번호 값 재조회");
         check(!new QueryPlan { Scopes = ["인스턴스"], Names = query.Names.ToList(), IncludeRoomUse = true }.Covers(query),
             "0.5.7 Room 조회는 Revit 이름이 없어 재조회");
         reject(() => QueryPlan.RequireCoverage([new ModelSnapshot { Title = "이전 전체 조회" }], rules),
@@ -93,9 +95,9 @@ internal static class RoomUseTests
         var auditRows = new List<ParameterRow>
         {
             Row("3", "실명", "ND"), Row("3", "용도", "R"), Row("3", "번호", ""),
-            Row("3", "기존실번호", "A-1"), Row("3", "지상지하", "ND"), Row("3", "층", "015"),
+            Row("3", "기존 실번호", "A-1"), Row("3", "지상지하", "ND"), Row("3", "층", "015"),
             Row("4", "실명", "기계실"), Row("4", "용도", "U"), Row("4", "번호", "101"),
-            Row("4", "기존실번호", "101"), Row("4", "지상지하", "지상"), Row("4", "층", "01")
+            Row("4", "기존 실번호", "101"), Row("4", "지상지하", "지상"), Row("4", "층", "01")
         };
         var snapshot = new ModelSnapshot
         {
@@ -109,6 +111,7 @@ internal static class RoomUseTests
             findings.Any(f => f.Field == "층" && f.CurrentValue == "015") &&
             findings.All(f => f.ElementId == "3" && f.RevitName == "Revit 룸 이름" && f.Number == ""),
             "Room 공간정보 누락·ND·층 세 자리 및 이름·번호 식별값 보존");
+        check(!findings.Any(f => f.Field == "기존 실번호"), "실제 매개변수 기존 실번호는 누락으로 오인하지 않기");
         var missingNameFindings = RoomSpaceAudit.Inspect([new ModelSnapshot
         {
             Title = "누락", Path = "missing.rvt",
@@ -140,8 +143,8 @@ internal static class RoomUseTests
                 ],
                 Rows =
                 [
-                    Row("5", "실명", "ND"), Row("5", "번호", "102"), Row("5", "기존실번호", "102"), Row("5", "지상지하", "지상"), Row("5", "층", "02"),
-                    Row("6", "실명", ""), Row("6", "번호", "103"), Row("6", "기존실번호", "103"), Row("6", "지상지하", "지상"), Row("6", "층", "03")
+                    Row("5", "실명", "ND"), Row("5", "번호", "102"), Row("5", "기존 실번호", "102"), Row("5", "지상지하", "지상"), Row("5", "층", "02"),
+                    Row("6", "실명", ""), Row("6", "번호", "103"), Row("6", "기존 실번호", "103"), Row("6", "지상지하", "지상"), Row("6", "층", "03")
                 ]
             };
             var empty = new ModelSnapshot { Title = "빈 모델", Path = "empty.rvt" };
