@@ -75,6 +75,21 @@ internal static class RoomUseTests
             plan.Edits[0].Type.Contains("ELEV기계실") && plan.Edits[0].Reason.Contains("실명"), "Room 변경 미리보기와 동일값 제외");
         reject(() => RoomUsePlanner.Plan(rules, rows.Take(3), []), "용도 없는 Room 전체 보류");
         reject(() => RoomUsePlanner.Plan(rules, rows, [new ValueEdit { Original = rows[1], Value = "E" }]), "기존 변경 충돌 보류");
+        var incomplete = new[]
+        {
+            Row("7", "실명", ""), Row("7", "용도", "C"),
+            Row("8", "실명", " ND "), Row("8", "용도", "E"),
+            Row("9", "용도", "U"),
+            Row("10", "실명", "기계실"), Row("10", "용도", "R")
+        };
+        var partial = RoomUsePlanner.Plan(rules, incomplete, []);
+        check(partial.MatchedOwners == 1 && partial.Edits.Count == 1 && partial.Edits[0].Original.OwnerId == "10" &&
+            partial.Edits[0].Value == "U" && partial.Notes.Count(n => n.Contains("용도 변경 제외")) == 3,
+            "실명 빈값·ND·매개변수 없음은 건너뛰고 정상 Room만 용도 변경");
+        check(incomplete.Where(r => r.Name == "용도" && r.OwnerId is "7" or "8" or "9").Select(r => r.Raw)
+            .SequenceEqual(["C", "E", "U"]), "실명 없는 Room의 기존 용도 유지");
+        reject(() => RoomUsePlanner.Plan(rules, incomplete, [new ValueEdit { Original = incomplete[1], Value = "R" }]),
+            "실명 없는 Room의 이전 용도 변경 예정은 적용 차단");
         var auditRows = new List<ParameterRow>
         {
             Row("3", "실명", "ND"), Row("3", "용도", "R"), Row("3", "번호", ""),
@@ -88,12 +103,20 @@ internal static class RoomUseTests
             Owners = [new() { OwnerId = "3", Name = "", ElementName = "Revit 룸 이름", ElementId = "3", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory }]
         };
         var findings = RoomSpaceAudit.Inspect([snapshot]);
-        check(findings.Count == 4 && findings.Any(f => f.Field == "실명" && f.Issue == "ND") &&
+        check(findings.Count == 4 && findings.Any(f => f.Field == "실명" && f.Issue == "ND — 용도 변경 제외") &&
             findings.Any(f => f.Field == "번호" && f.Issue == "빈값") &&
             findings.Any(f => f.Field == "지상지하" && f.Issue == "ND") &&
             findings.Any(f => f.Field == "층" && f.CurrentValue == "015") &&
             findings.All(f => f.ElementId == "3" && f.RevitName == "Revit 룸 이름" && f.Number == ""),
             "Room 공간정보 누락·ND·층 세 자리 및 이름·번호 식별값 보존");
+        var missingNameFindings = RoomSpaceAudit.Inspect([new ModelSnapshot
+        {
+            Title = "누락", Path = "missing.rvt",
+            Owners = [new() { OwnerId = "11", ElementId = "11", ElementName = "이름", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory }],
+            Rows = [Row("11", "용도", "R")]
+        }]);
+        check(missingNameFindings.Any(f => f.Field == "실명" && f.Issue == "매개변수 없음 — 용도 변경 제외"),
+            "실명 매개변수 없는 Room도 엑셀 점검 대상");
         foreach (var invalidFloor in new[] { "1", "2", "3", "015", "A1" })
         {
             auditRows.Single(r => r.OwnerId == "3" && r.Name == "층").Raw = auditRows.Single(r => r.OwnerId == "3" && r.Name == "층").Display = invalidFloor;
@@ -137,7 +160,8 @@ internal static class RoomUseTests
                 sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == address).Value;
             check(Cell(firstSheet, ns, "C1") == "이름" && Cell(firstSheet, ns, "E1") == "번호" &&
                 Cell(firstSheet, ns, "C2") == "Revit 룸 이름" && Cell(firstSheet, ns, "D2") == "" &&
-                Cell(firstSheet, ns, "E2") == "" && Cell(firstSheet, ns, "H5") == "015",
+                Cell(firstSheet, ns, "E2") == "" && Cell(firstSheet, ns, "I2") == "ND — 용도 변경 제외" &&
+                Cell(firstSheet, ns, "H5") == "015",
                 "이름 우선·번호 열·정상 이름의 요소 ID 숨김");
             check(Cell(secondSheet, ns, "C2") == "ND" && Cell(secondSheet, ns, "D2") == "5" &&
                 Cell(secondSheet, ns, "E2") == "102" && Cell(secondSheet, ns, "C3") == "" &&

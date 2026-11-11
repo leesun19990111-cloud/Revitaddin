@@ -39,6 +39,8 @@ public static class RoomSpaceAudit
                         _ when field == "층" && !Regex.IsMatch(value, "^[0-9]{2}$") => "층 형식 오류: 두 자리 숫자 필요",
                         _ => ""
                     };
+                    if (field == "실명" && issue is "매개변수 없음" or "빈값" or "ND")
+                        issue += " — 용도 변경 제외";
                     if (issue.Length > 0)
                         findings.Add(new RoomSpaceFinding(model.Title, model.Path, elementId, revitName, number, roomName,
                             field, value, issue));
