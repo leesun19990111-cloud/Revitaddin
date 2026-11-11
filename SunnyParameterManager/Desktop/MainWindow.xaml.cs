@@ -561,7 +561,7 @@ public partial class MainWindow : Window
             var findings = RoomSpaceAudit.Inspect(_models.Select(m => m.Snapshot!));
             roomIssueCount = findings.Count;
             roomReport = RoomSpaceWorkbook.PathForRule(_loadedRulePath);
-            RoomSpaceWorkbook.Save(roomReport, findings);
+            RoomSpaceWorkbook.Save(roomReport, _models.Select(m => m.Snapshot!), findings);
         }
         var available = _models.SelectMany(m => m.Snapshot!.Owners.Concat(m.Snapshot.Rows));
         // 속성규격(버전5)은 값이 아니라 모델별 매개변수 정의 목록으로 평가한다.

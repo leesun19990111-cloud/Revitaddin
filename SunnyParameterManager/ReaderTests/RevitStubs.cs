@@ -5,7 +5,7 @@ namespace Autodesk.Revit.DB
  public enum CategoryType { Model, Annotation, Internal }
  public enum ViewType { Undefined, FloorPlan, CeilingPlan, Elevation, Section, Detail, DraftingView, Legend, Schedule, ThreeD, DrawingSheet, Internal, ProjectBrowser, SystemBrowser }
  public enum StorageType { String, Integer, Double, ElementId }
- public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053, BASEPOINT_NORTHSOUTH_PARAM = -1150191, BASEPOINT_EASTWEST_PARAM = -1150192, BASEPOINT_ELEVATION_PARAM = -1150193, BASEPOINT_ANGLETON_PARAM = -1150194 }
+ public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053, ROOM_NAME = -1006900, BASEPOINT_NORTHSOUTH_PARAM = -1150191, BASEPOINT_EASTWEST_PARAM = -1150192, BASEPOINT_ELEVATION_PARAM = -1150193, BASEPOINT_ANGLETON_PARAM = -1150194 }
  public enum BuiltInCategory { OST_Rooms = -2000160 }
  public enum WorksetKind { UserWorkset }
  public enum CheckoutStatus { NotOwned, OwnedByOtherUser }

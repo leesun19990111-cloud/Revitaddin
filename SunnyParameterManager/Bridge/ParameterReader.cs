@@ -21,7 +21,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
 
     public List<ParameterRow> ReadAll(QueryPlan? query = null)
     {
-        query?.Validate(); model.Query = query; model.Owners.Clear();
+        query?.Validate(); model.Query = query; model.Owners.Clear(); model.RoomIdentityVersion = 0;
         if (query?.IncludeProjectBasePointAudit == true)
         {
             model.ProjectBasePointAudit = ProjectBasePointReader.Read(doc);
@@ -100,6 +100,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         }
         Notices.Add(query == null ? "모델 유형·인스턴스, 프로젝트 정보, 뷰·시트의 매개변수를 조회합니다. 뷰 템플릿 자체와 내부 뷰는 제외합니다. 링크 내부는 원본 파일을 별도로 등록하세요." :
             "룰셋 선택 조회: " + string.Join(", ", query.Names) + ". 다른 항목은 미조회이며 빈 값이 아닙니다. 링크 내부는 원본 파일을 별도로 등록하세요.");
+        if (query == null || query.IncludeRoomUse) model.RoomIdentityVersion = 1;
         return result;
     }
 
@@ -114,7 +115,10 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             CategoryKey = owner is ProjectInfo ? "project" : (owner.Category?.Id.Value ?? 0).ToString(Invariant),
             Family = type?.FamilyName ?? "", TypeName = owner is ProjectInfo ? "프로젝트 정보" : type?.Name ?? (owner is View ? "" : owner.Name ?? ""),
             TypeOwnerId = type?.UniqueId ?? "",
-            ElementName = owner is View ? owner.Name ?? "" : "", SheetNumber = owner is ViewSheet sheet ? sheet.SheetNumber ?? "" : "",
+            ElementName = owner.Category?.Id.Value == (int)BuiltInCategory.OST_Rooms
+                ? owner.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? ""
+                : owner is View ? owner.Name ?? "" : "",
+            SheetNumber = owner is ViewSheet sheet ? sheet.SheetNumber ?? "" : "",
             BlockReason = "대상 식별 정보 — 값 편집 불가"
         };
         if (material && owner is ElementType && KacRulePlanner.TypeCode(r.TypeName).Length > 0) r.OuterMaterial = ReadMaterial(owner);

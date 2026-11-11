@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.IO;
 using System.IO.Compression;
+using System.Xml.Linq;
 using SunnyParameterManager.Core;
 using SunnyParameterManager.Desktop;
 
@@ -51,6 +52,10 @@ internal static class RoomUseTests
         check(query.IncludeRoomUse && query.Scopes.SequenceEqual(["인스턴스"]) &&
             query.Names.SequenceEqual(["실명", "용도", "번호", "기존실번호", "지상지하", "층"]), "Room 전용 용도·점검 필드 조회");
         check(!new QueryPlan { Scopes = ["인스턴스"], Names = ["실명", "용도"] }.Covers(query), "구 조회는 Room 범위 확인 전 재조회");
+        check(!new QueryPlan { Scopes = ["인스턴스"], Names = query.Names.ToList(), IncludeRoomUse = true }.Covers(query),
+            "0.5.7 Room 조회는 Revit 이름이 없어 재조회");
+        reject(() => QueryPlan.RequireCoverage([new ModelSnapshot { Title = "이전 전체 조회" }], rules),
+            "0.5.7 전체 조회 캐시도 Revit Room 이름 재조회");
         foreach (var (name, expected) in new[]
         {
             ("ND", "R"), ("OPEN", "C"), ("중앙감시실", "R"), ("ELEV.PIT", "U"),
@@ -77,13 +82,18 @@ internal static class RoomUseTests
             Row("4", "실명", "기계실"), Row("4", "용도", "U"), Row("4", "번호", "101"),
             Row("4", "기존실번호", "101"), Row("4", "지상지하", "지상"), Row("4", "층", "01")
         };
-        var snapshot = new ModelSnapshot { Title = "검토모델", Path = "model.rvt", Rows = auditRows };
+        var snapshot = new ModelSnapshot
+        {
+            Title = "검토모델", Path = "model.rvt", Rows = auditRows,
+            Owners = [new() { OwnerId = "3", Name = "", ElementName = "Revit 룸 이름", ElementId = "3", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory }]
+        };
         var findings = RoomSpaceAudit.Inspect([snapshot]);
         check(findings.Count == 4 && findings.Any(f => f.Field == "실명" && f.Issue == "ND") &&
             findings.Any(f => f.Field == "번호" && f.Issue == "빈값") &&
             findings.Any(f => f.Field == "지상지하" && f.Issue == "ND") &&
             findings.Any(f => f.Field == "층" && f.CurrentValue == "015") &&
-            findings.All(f => f.ElementId == "3"), "Room 공간정보 누락·ND·층 세 자리 보고");
+            findings.All(f => f.ElementId == "3" && f.RevitName == "Revit 룸 이름" && f.Number == ""),
+            "Room 공간정보 누락·ND·층 세 자리 및 이름·번호 식별값 보존");
         foreach (var invalidFloor in new[] { "1", "2", "3", "015", "A1" })
         {
             auditRows.Single(r => r.OwnerId == "3" && r.Name == "층").Raw = auditRows.Single(r => r.OwnerId == "3" && r.Name == "층").Display = invalidFloor;
@@ -97,13 +107,43 @@ internal static class RoomUseTests
         var workbook = Path.Combine(Path.GetTempPath(), "room-audit-" + Guid.NewGuid().ToString("N") + ".xlsx");
         try
         {
-            RoomSpaceWorkbook.Save(workbook, findings);
+            var second = new ModelSnapshot
+            {
+                Title = "같은 파일명", Path = "other/model.rvt",
+                Owners =
+                [
+                    new() { OwnerId = "5", ElementId = "5", ElementName = "ND", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory },
+                    new() { OwnerId = "6", ElementId = "6", ElementName = "", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory }
+                ],
+                Rows =
+                [
+                    Row("5", "실명", "ND"), Row("5", "번호", "102"), Row("5", "기존실번호", "102"), Row("5", "지상지하", "지상"), Row("5", "층", "02"),
+                    Row("6", "실명", ""), Row("6", "번호", "103"), Row("6", "기존실번호", "103"), Row("6", "지상지하", "지상"), Row("6", "층", "03")
+                ]
+            };
+            var empty = new ModelSnapshot { Title = "빈 모델", Path = "empty.rvt" };
+            RoomSpaceWorkbook.Save(workbook, [snapshot, second, empty], findings.Concat(RoomSpaceAudit.Inspect([second])));
             using var zip = ZipFile.OpenRead(workbook);
-            using var reader = new StreamReader(zip.GetEntry("xl/worksheets/sheet1.xml")!.Open());
-            var xml = reader.ReadToEnd();
-            check(xml.Contains("공간정보") == false && xml.Contains("기존실번호") == false &&
-                xml.Contains("015") && xml.Contains("지상지하") && xml.Contains("<autoFilter ref=\"A1:G5\"/>"),
-                "공간정보 엑셀의 문제 행·필터 구조");
+            var workbookXml = XDocument.Load(zip.GetEntry("xl/workbook.xml")!.Open());
+            XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var names = workbookXml.Descendants(ns + "sheet").Select(s => (string?)s.Attribute("name")).ToList();
+            check(names.SequenceEqual(["model", "model (2)", "empty"]) &&
+                zip.Entries.Count(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.Ordinal)) == 3,
+                "모델별 시트 및 동일 파일명 시트 구별");
+            var firstSheet = XDocument.Load(zip.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+            var secondSheet = XDocument.Load(zip.GetEntry("xl/worksheets/sheet2.xml")!.Open());
+            var emptySheet = XDocument.Load(zip.GetEntry("xl/worksheets/sheet3.xml")!.Open());
+            static string Cell(XDocument sheet, XNamespace ns, string address) =>
+                sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == address).Value;
+            check(Cell(firstSheet, ns, "C1") == "이름" && Cell(firstSheet, ns, "E1") == "번호" &&
+                Cell(firstSheet, ns, "C2") == "Revit 룸 이름" && Cell(firstSheet, ns, "D2") == "" &&
+                Cell(firstSheet, ns, "E2") == "" && Cell(firstSheet, ns, "H5") == "015",
+                "이름 우선·번호 열·정상 이름의 요소 ID 숨김");
+            check(Cell(secondSheet, ns, "C2") == "ND" && Cell(secondSheet, ns, "D2") == "5" &&
+                Cell(secondSheet, ns, "E2") == "102" && Cell(secondSheet, ns, "C3") == "" &&
+                Cell(secondSheet, ns, "D3") == "6" && Cell(secondSheet, ns, "E3") == "103" &&
+                emptySheet.Descendants(ns + "row").Count() == 1,
+                "ND·빈 이름의 요소 ID 보조 표시와 문제 없는 모델 시트 유지");
         }
         finally { if (File.Exists(workbook)) File.Delete(workbook); }
         rules.RoomUse!.Terms[0].Code = "잘못";

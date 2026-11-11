@@ -17,6 +17,8 @@ public sealed class QueryPlan
     public bool IncludeProjectBasePointAudit { get; set; }
     public bool IncludeCentralRebuild { get; set; }
     public bool IncludeRoomUse { get; set; }
+    // 이전 Room 조회에는 Revit 고유 이름이 없으므로 새 보고서에 재사용하지 않는다.
+    public int RoomIdentityVersion { get; set; }
 
     public void Validate()
     {
@@ -34,7 +36,7 @@ public sealed class QueryPlan
             throw new InvalidOperationException("중앙모델 재생성은 파일 상태만 별도로 조회합니다.");
         if (TransferOnly && (IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
             throw new InvalidOperationException("매개변수 전송 조회는 다른 점검·정리 작업과 함께 실행하지 않습니다.");
-        if (IncludeRoomUse && (Scopes.Count != 1 || Scopes[0] != "인스턴스" || !RoomUsePlanner.RequiredAuditFields.All(Names.Contains) || !Names.Contains("용도") ||
+        if (IncludeRoomUse && (RoomIdentityVersion is < 0 or > 1 || Scopes.Count != 1 || Scopes[0] != "인스턴스" || !RoomUsePlanner.RequiredAuditFields.All(Names.Contains) || !Names.Contains("용도") ||
             TransferOnly || IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeDefinitions || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
             throw new InvalidOperationException("Room 용도·공간정보 점검은 Room 인스턴스의 지정된 필드만 읽습니다.");
     }
@@ -45,7 +47,7 @@ public sealed class QueryPlan
     {
         Validate(); required.Validate();
         return required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
-            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit) && (!required.IncludeTypeCodeFix || IncludeTypeCodeFix) && (!required.IncludeProjectBasePointAudit || IncludeProjectBasePointAudit) && (!required.IncludeCentralRebuild || IncludeCentralRebuild) && (!required.IncludeRoomUse || IncludeRoomUse);
+            required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit) && (!required.IncludeTypeCodeFix || IncludeTypeCodeFix) && (!required.IncludeProjectBasePointAudit || IncludeProjectBasePointAudit) && (!required.IncludeCentralRebuild || IncludeCentralRebuild) && (!required.IncludeRoomUse || IncludeRoomUse && RoomIdentityVersion >= required.RoomIdentityVersion);
     }
     public static QueryPlan FromRules(RuleSet rules)
     {
@@ -57,6 +59,7 @@ public sealed class QueryPlan
             plan.Scopes = ["인스턴스"];
             plan.Names = ["실명", "용도", "번호", "기존실번호", "지상지하", "층"];
             plan.IncludeRoomUse = true;
+            plan.RoomIdentityVersion = 1;
         }
         else if (rules.Version == 9)
         {
@@ -122,7 +125,7 @@ public sealed class QueryPlan
     {
         var required = FromRules(rules);
         foreach (var model in models)
-            if (model.Query != null && !model.Query.Covers(required) || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeTypeCodeFix && model.Query?.IncludeTypeCodeFix != true || required.IncludeDefinitions && model.Definitions == null || required.IncludeMaterialAudit && model.MaterialAuditItems == null || required.IncludeProjectBasePointAudit && model.ProjectBasePointAudit?.FormatVersion != 3 || required.IncludeCentralRebuild && model.CentralRebuild?.FormatVersion != 2)
+            if (model.Query != null && !model.Query.Covers(required) || required.IncludeRoomUse && model.RoomIdentityVersion != 1 || required.IncludeCleanup && model.Query?.IncludeCleanup != true || required.IncludeTypeCodeFix && model.Query?.IncludeTypeCodeFix != true || required.IncludeDefinitions && model.Definitions == null || required.IncludeMaterialAudit && model.MaterialAuditItems == null || required.IncludeProjectBasePointAudit && model.ProjectBasePointAudit?.FormatVersion != 3 || required.IncludeCentralRebuild && model.CentralRebuild?.FormatVersion != 2)
                 throw new InvalidOperationException(model.Title + ": 이 룰셋에 필요한 항목을 아직 조회하지 않았습니다. 변경 예정을 적용하거나 정리한 뒤 ‘다시 조회’를 누르세요. 미조회 값은 빈 값이나 ND로 처리하지 않습니다.");
     }
 }

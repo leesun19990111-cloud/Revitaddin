@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.5.7";
+    public const string Release = "0.5.9";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -43,6 +43,8 @@ public sealed class ModelSnapshot
     // 적용 실패한 조회값은 원인 확인·재조회 전 다시 적용하지 않는다. 작업 파일에도 보존한다.
     public bool RequiresRequery { get; set; }
     public QueryPlan? Query { get; set; }
+    // 0.5.8 이전 캐시의 Room 이름은 Revit의 전용 이름 매개변수로 읽지 않았다.
+    public int RoomIdentityVersion { get; set; }
     // 선택 필드가 없는 대상도 누락 진단/실제 유형 연결에 남긴다. 편집 목록에는 섞지 않는다.
     public List<ParameterRow> Owners { get; set; } = [];
     public List<ParameterRow> Rows { get; set; } = [];

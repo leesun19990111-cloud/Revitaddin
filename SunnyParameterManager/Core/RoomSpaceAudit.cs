@@ -4,7 +4,7 @@ namespace SunnyParameterManager.Core;
 
 // 용도 변경과 독립된 읽기 전용 점검. 한 Room의 문제 필드마다 한 행을 남긴다.
 public sealed record RoomSpaceFinding(string Model, string ModelPath, string ElementId,
-    string RoomName, string Field, string CurrentValue, string Issue);
+    string RevitName, string Number, string RoomName, string Field, string CurrentValue, string Issue);
 
 public static class RoomSpaceAudit
 {
@@ -21,6 +21,10 @@ public static class RoomSpaceAudit
                 var rows = room.ToList();
                 var name = rows.FirstOrDefault(r => r.Name == "실명");
                 var roomName = Value(name);
+                var identity = rows.FirstOrDefault(r => r.Name.Length == 0) ?? rows[0];
+                var revitName = identity.ElementName.Trim();
+                var numberRows = rows.Where(r => r.Name == "번호").ToList();
+                var number = numberRows.Count == 1 ? Value(numberRows[0]) : "";
                 var elementId = rows.Select(r => r.ElementId).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? room.Key;
                 foreach (var field in RoomUsePlanner.RequiredAuditFields)
                 {
@@ -36,7 +40,7 @@ public static class RoomSpaceAudit
                         _ => ""
                     };
                     if (issue.Length > 0)
-                        findings.Add(new RoomSpaceFinding(model.Title, model.Path, elementId, roomName,
+                        findings.Add(new RoomSpaceFinding(model.Title, model.Path, elementId, revitName, number, roomName,
                             field, value, issue));
                 }
             }
