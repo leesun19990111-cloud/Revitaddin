@@ -17,6 +17,7 @@ public sealed class QueryPlan
     public bool IncludeProjectBasePointAudit { get; set; }
     public bool IncludeCentralRebuild { get; set; }
     public bool IncludeRoomUse { get; set; }
+    public bool IncludeOtherElements { get; set; }
     // 이전 Room 조회에는 Revit 고유 이름이 없으므로 새 보고서에 재사용하지 않는다.
     public int RoomIdentityVersion { get; set; }
 
@@ -36,8 +37,9 @@ public sealed class QueryPlan
             throw new InvalidOperationException("중앙모델 재생성은 파일 상태만 별도로 조회합니다.");
         if (TransferOnly && (IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
             throw new InvalidOperationException("매개변수 전송 조회는 다른 점검·정리 작업과 함께 실행하지 않습니다.");
-        if (IncludeRoomUse && (RoomIdentityVersion is < 0 or > 1 || Scopes.Count != 1 || Scopes[0] != "인스턴스" || !Names.Contains("실명") || !Names.Contains("용도") ||
-            TransferOnly || IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeDefinitions || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
+        if (IncludeRoomUse && (RoomIdentityVersion is < 0 or > 1 || !Scopes.Contains("인스턴스") ||
+            !IncludeOtherElements && (Scopes.Count != 1 || IncludeOuterMaterial) || !Names.Contains("실명") || !Names.Contains("용도") ||
+            TransferOnly || IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeDefinitions || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix))
             throw new InvalidOperationException("Room 용도 판정은 Room 인스턴스의 실명·용도 필드를 읽습니다.");
     }
     public bool Includes(string name, string key) => TransferOnly && Keys.Count > 0
@@ -46,7 +48,8 @@ public sealed class QueryPlan
     public bool Covers(QueryPlan required)
     {
         Validate(); required.Validate();
-        return required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
+        return (!IncludeRoomUse || IncludeOtherElements || required.IncludeRoomUse && !required.IncludeOtherElements) &&
+            required.Scopes.All(Scopes.Contains) && required.Names.All(Names.Contains) &&
             required.Keys.All(k => Keys.Contains(k, StringComparer.OrdinalIgnoreCase)) && (!required.IncludeOuterMaterial || IncludeOuterMaterial) && (!required.IncludeCleanup || IncludeCleanup) && (!required.IncludeDefinitions || IncludeDefinitions) && (!required.IncludeMaterialAudit || IncludeMaterialAudit) && (!required.IncludeTypeCodeFix || IncludeTypeCodeFix) && (!required.IncludeProjectBasePointAudit || IncludeProjectBasePointAudit) && (!required.IncludeCentralRebuild || IncludeCentralRebuild) && (!required.IncludeRoomUse || IncludeRoomUse && RoomIdentityVersion >= required.RoomIdentityVersion);
     }
     public static QueryPlan FromRules(RuleSet rules)

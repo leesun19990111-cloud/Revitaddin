@@ -34,8 +34,8 @@ internal static class RoomReviewTests
             Path = "C:/one/A.rvt", Title = "첫 모델",
             Owners =
             [
-                new() { ModelPath = "C:/one/A.rvt", OwnerId = "1", ElementId = "1", ElementName = "기계실1", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory },
-                new() { ModelPath = "C:/one/A.rvt", OwnerId = "2", ElementId = "2", ElementName = "기계실2", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory }
+                new() { ModelPath = "C:/one/A.rvt", OwnerId = "2", ElementId = "2", ElementName = "ND", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory },
+                new() { ModelPath = "C:/one/A.rvt", OwnerId = "1", ElementId = "1", ElementName = "기계실1", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory }
             ],
             Rows =
             [
@@ -47,7 +47,7 @@ internal static class RoomReviewTests
                 Row("1", "실내재료마감-바닥", "F1"), Row("1", "실내재료마감-벽", "W1"),
                 Row("1", "실내재료마감-천장", "C1"), Row("1", "작성기준", "2026"),
                 Row("2", "지상지하", "지상"), Row("2", "층", "02"), Row("2", "번호", "102"),
-                Row("2", "기존 실번호", "A-2"), Row("2", "실명", "ND")
+                Row("2", "기존 실번호", "ND"), Row("2", "실명", "ND")
             ]
         };
         var second = new ModelSnapshot { Path = "C:/two/A.rvt", Title = "둘째 모델" };
@@ -64,6 +64,7 @@ internal static class RoomReviewTests
             var styles = XDocument.Load(zip.GetEntry("xl/styles.xml")!.Open());
             static string Cell(XDocument xml, XNamespace ns, string key) =>
                 xml.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == key).Value;
+            bool Red(string key) => (string?)sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == key).Attribute("s") == "1";
             check(sheets.SequenceEqual(["A", "A (2)"]) &&
                 RoomReviewWorkbook.Headers.SequenceEqual(["모델명", "용도", "지상지하", "층", "설명", "번호", "실번호", "기존실번호", "이름", "실명", "자산번호", "LOD", "공간분류코드", "구역", "실ID", "실내재료마감-걸레받이", "실내재료마감-바닥", "실내재료마감-벽", "실내재료마감-천장", "작성기준"]) &&
                 Cell(sheet, ns, "A1") == "모델명" && Cell(sheet, ns, "T1") == "작성기준" &&
@@ -81,6 +82,18 @@ internal static class RoomReviewTests
                 styles.Descendants(ns + "font").SelectMany(f => f.Elements(ns + "sz")).Any(s => (string?)s.Attribute("val") == "11") &&
                 styles.Descendants(ns + "fgColor").Any(c => (string?)c.Attribute("rgb") == "FF256B4A"),
                 "빈 용도·ND 실명 강조와 초록색 제목·작은 본문 글꼴");
+            check(!Red("A3") && !Red("H3") && !Red("I3") && Red("E3") && Red("G2") && !Red("F2"),
+                "의도적 모델명 생략과 기존 실번호·이름 ND는 허용하고 공란 및 실번호 불일치는 강조");
+            var number = first.Rows.Single(r => r.OwnerId == "1" && r.Name == "번호");
+            var roomCode = first.Rows.Single(r => r.OwnerId == "1" && r.Name == "실번호");
+            var level = first.Rows.Single(r => r.OwnerId == "1" && r.Name == "지상지하");
+            level.Display = "F";
+            roomCode.Display = "UF01101";
+            check(!RoomSpaceAudit.Inspect([first]).Any(f => f.ElementId == "1"),
+                "용도·지상지하·층·번호를 순서대로 합친 실번호는 통과");
+            number.Display = "01";
+            check(RoomSpaceAudit.Inspect([first]).Any(f => f.ElementId == "1" && f.Field == "번호"),
+                "번호는 숫자 세 자리 필수");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }

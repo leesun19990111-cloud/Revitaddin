@@ -128,10 +128,10 @@ public static class RoomUsePlanner
 
     public static (string Use, string Basis) Classify(string roomName, RoomUseProfile profile)
     {
-        roomName ??= "";
+        if (string.IsNullOrWhiteSpace(roomName)) return ("", "실명 공란");
         var name = Clean(roomName);
-        var original = Regex.Replace(roomName ?? "", @"\s+", "").ToUpperInvariant();
-        if (original == "ND") return ("R", "실명 ND");
+        var original = Regex.Replace(roomName, @"\s+", "").ToUpperInvariant();
+        if (original == "ND") return ("Z", "실명 ND");
         if (original == "OPEN") return ("C", "실명 OPEN");
         foreach (var candidate in Candidates(roomName!))
         {
@@ -151,14 +151,6 @@ public static class RoomUsePlanner
         return ("R", "그 외 기본값");
     }
 
-    public static string UnusableNameReason(ParameterRow? source)
-    {
-        if (source == null) return "실명 매개변수 없음";
-        if (!source.HasValue || string.IsNullOrWhiteSpace(source.Raw)) return "실명 빈값";
-        if (string.Equals(source.Raw.Trim(), "ND", StringComparison.OrdinalIgnoreCase)) return "실명 ND";
-        return "";
-    }
-
     public static RulePlan Plan(RuleSet file, IEnumerable<ParameterRow> available, IEnumerable<ValueEdit> pending)
     {
         Validate(file);
@@ -167,7 +159,7 @@ public static class RoomUsePlanner
             throw new InvalidOperationException("Room 용도 룰셋은 다른 변경 예정과 함께 적용하지 않습니다. 기존 변경을 먼저 적용·제외하거나 작업 파일로 보관하세요.");
         var plan = new RulePlan();
         var errors = new List<string>();
-        var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Reason)>();
+        var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Reason, string RoomName)>();
         var skippedNames = 0;
         var owners = available.Where(r => r.Scope == "인스턴스" && r.CategoryKey == RoomCategory)
             .GroupBy(r => (r.ModelPath, r.OwnerId)).ToList();
@@ -181,28 +173,28 @@ public static class RoomUsePlanner
             if (nameRows.Count > 1)
             { errors.Add($"{label}: 실명 매개변수가 {nameRows.Count}개라 판정할 수 없습니다."); continue; }
             var source = nameRows.SingleOrDefault();
-            if (source != null && (source.Storage != "String" || source.DataType != TextSpec))
-            { errors.Add(label + ": 실명은 텍스트 매개변수여야 합니다."); continue; }
-            var unavailable = UnusableNameReason(source);
-            if (unavailable.Length > 0)
+            if (source == null)
             {
                 skippedNames++;
-                plan.Notes.Add($"{label} · {unavailable} — 용도 변경 제외 · 공간정보 점검 엑셀에서 확인");
+                plan.Notes.Add($"{label} · 실명 매개변수 없음 — 용도 변경 제외");
                 continue;
             }
+            if (source.Storage != "String" || source.DataType != TextSpec)
+            { errors.Add(label + ": 실명은 텍스트 매개변수여야 합니다."); continue; }
             if (useRows.Count != 1)
             { errors.Add($"{label}: 용도 매개변수가 {useRows.Count}개라 입력할 수 없습니다."); continue; }
             var target = useRows[0];
             if (target.Storage != "String" || target.DataType != TextSpec)
             { errors.Add(label + ": 용도는 텍스트 매개변수여야 합니다."); continue; }
-            var name = source!.Raw.Trim();
+            var name = source.HasValue ? source.Raw.Trim() : "";
             var (value, basis) = Classify(name, file.RoomUse!);
-            var validation = EditPlanner.Validate(target, value);
+            var validation = value.Length == 0 && target.Raw.Length == 0 ? "" : EditPlanner.Validate(target, value);
             if (validation.Length > 0) { errors.Add(label + ": 용도 변경 불가 — " + validation); continue; }
-            target.ElementName = name.Length == 0 ? "(실명 없음)" : name;
-            var reason = $"실명 '{target.ElementName}' / {basis}";
-            assignments.Add(target.Key, (target, value, reason));
-            plan.Notes.Add($"{label} · 실명 {target.ElementName} · 기존 {target.ValueLabel} → 제안 {value} · {basis}");
+            var roomName = name.Length == 0 ? "(실명 없음)" : name;
+            var reason = $"실명 '{roomName}' / {basis}";
+            assignments.Add(target.Key, (target, value, reason, roomName));
+            var proposed = value.Length == 0 ? "(공란)" : value;
+            plan.Notes.Add($"{label} · 실명 {roomName} · 기존 {target.ValueLabel} → 제안 {proposed} · {basis}");
             plan.MatchedOwners++;
         }
         foreach (var edit in pendingList)
@@ -213,10 +205,10 @@ public static class RoomUsePlanner
         if (errors.Count > 0)
             throw new InvalidOperationException("Room 용도 룰셋 전체를 보류했습니다. 기존 변경은 유지합니다.\n" + string.Join("\n", errors.Take(12)) +
                 (errors.Count > 12 ? $"\n외 {errors.Count - 12}개 문제" : ""));
-        foreach (var a in assignments.Values)
+        foreach (var a in assignments.Values.Where(a => a.Value.Length != 0 || a.Row.Raw.Length != 0))
             foreach (var edit in EditPlanner.Stage([a.Row], a.Value))
-            { edit.Reason = "룰셋: " + file.Name + " / " + a.Reason; plan.Edits.Add(edit); }
-        plan.Notes.Insert(0, $"용도 판정 Room {plan.MatchedOwners:N0}개 · 실명 없음/ND 제외 {skippedNames:N0}개 · 변경 {plan.Edits.Count:N0}개 · 기존과 같음 {assignments.Count - plan.Edits.Count:N0}개. 제외 Room은 공간정보 점검 엑셀에서 확인하세요.");
+            { edit.Reason = "룰셋: " + file.Name + " / " + a.Reason; edit.RoomName = a.RoomName; plan.Edits.Add(edit); }
+        plan.Notes.Insert(0, $"용도 판정 Room {plan.MatchedOwners:N0}개 · 실명 매개변수 없음으로 제외 {skippedNames:N0}개 · 변경 {plan.Edits.Count:N0}개 · 기존과 같음 {assignments.Count - plan.Edits.Count:N0}개.");
         return plan;
     }
 }

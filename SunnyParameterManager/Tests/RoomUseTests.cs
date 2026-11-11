@@ -56,7 +56,8 @@ internal static class RoomUseTests
             "용도 변경은 실명·용도만 있으면 충분");
         foreach (var (name, expected) in new[]
         {
-            ("ND", "R"), ("OPEN", "C"), ("중앙감시실", "R"), ("ELEV.PIT", "U"),
+            ("ND", "Z"), (" nd ", "Z"), ("", ""), ("  ", ""),
+            ("OPEN", "C"), ("중앙감시실", "R"), ("ELEV.PIT", "U"),
             ("법무부(송환자 화장실)", "C"), ("창고-2", "R"), ("ELEV홀", "C"),
             ("ELEV기계실", "U"), ("CPS", "U"), ("AL/CPS", "U"),
             ("캐노피", "Z"), ("관세청(창고)", "R"), ("방풍실", "U"), ("대합실", "C"),
@@ -78,16 +79,32 @@ internal static class RoomUseTests
             Row("7", "실명", ""), Row("7", "용도", "C"),
             Row("8", "실명", " ND "), Row("8", "용도", "E"),
             Row("9", "용도", "U"),
-            Row("10", "실명", "기계실"), Row("10", "용도", "R")
+            Row("10", "실명", "기계실"), Row("10", "용도", "R"),
+            Row("11", "실명", " "), Row("11", "용도", ""),
+            Row("12", "실명", "nd"), Row("12", "용도", "Z"),
+            Row("13", "실명", " "), Row("13", "용도", "R")
         };
         var partial = RoomUsePlanner.Plan(rules, incomplete, []);
-        check(partial.MatchedOwners == 1 && partial.Edits.Count == 1 && partial.Edits[0].Original.OwnerId == "10" &&
-            partial.Edits[0].Value == "U" && partial.Notes.Count(n => n.Contains("용도 변경 제외")) == 3,
-            "실명 빈값·ND·매개변수 없음은 건너뛰고 정상 Room만 용도 변경");
-        check(incomplete.Where(r => r.Name == "용도" && r.OwnerId is "7" or "8" or "9").Select(r => r.Raw)
-            .SequenceEqual(["C", "E", "U"]), "실명 없는 Room의 기존 용도 유지");
+        check(partial.MatchedOwners == 6 &&
+            partial.Edits.Select(e => (e.Original.OwnerId, e.Value)).SequenceEqual([("7", ""), ("8", "Z"), ("10", "U"), ("13", "")]) &&
+            partial.Notes.Count(n => n.Contains("용도 변경 제외")) == 1,
+            "실명 공란·공백은 기존 용도 지우기, ND는 Z, 이미 맞는 용도와 실명 매개변수 누락은 편집하지 않음");
         reject(() => RoomUsePlanner.Plan(rules, incomplete, [new ValueEdit { Original = incomplete[1], Value = "R" }]),
-            "실명 없는 Room의 이전 용도 변경 예정은 적용 차단");
+            "실명이 공란인 Room의 이전 R 변경 예정은 보류");
+        var other = new RuleSet { Version = 1, Name = "설명 입력", Rules =
+        [
+            new() { Name = "공통 설명", Match = new() { Scope = "인스턴스", Category = "룸", Type = "실" },
+                Set = [new() { Name = "설명", Storage = "String", DataType = Text, Value = "입력" }] }
+        ] };
+        var combinedRows = rows.Take(2).Concat([Row("1", "설명", "기존")]).ToList();
+        foreach (var row in combinedRows) row.TypeName = "실";
+        check(RuleBatch.Query([rules, other]).IncludeOtherElements &&
+            !query.Covers(RuleBatch.Query([rules, other])) &&
+            RuleBatch.Plan([rules, other], combinedRows, [], false).Edits.Count == 2,
+            "용도와 일반 값 입력 룰셋을 한 조회·변경 목록으로 준비");
+        other.Rules[0].Set[0].Name = "용도";
+        other.Rules[0].Set[0].Value = "R";
+        reject(() => RuleBatch.Plan([other, rules], combinedRows, [], false), "현재 값과 같은 룰셋 제안과 다른 룰셋의 충돌도 차단");
         var auditRows = new List<ParameterRow>
         {
             Row("3", "실명", "ND"), Row("3", "용도", "R"), Row("3", "번호", ""),
@@ -100,8 +117,8 @@ internal static class RoomUseTests
             Title = "검토모델", Path = "model.rvt", Rows = auditRows,
             Owners = [new() { OwnerId = "3", Name = "", ElementName = "Revit 룸 이름", ElementId = "3", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory }]
         };
-        var findings = RoomSpaceAudit.Inspect([snapshot]);
-        check(findings.Count == 4 && findings.Any(f => f.Field == "실명" && f.Issue == "ND — 용도 변경 제외") &&
+        var findings = RoomSpaceAudit.Inspect([snapshot]).Where(f => RoomUsePlanner.RequiredAuditFields.Contains(f.Field)).ToList();
+        check(findings.Count == 4 && findings.Any(f => f.Field == "실명" && f.Issue == "ND") &&
             findings.Any(f => f.Field == "번호" && f.Issue == "빈값") &&
             findings.Any(f => f.Field == "지상지하" && f.Issue == "ND") &&
             findings.Any(f => f.Field == "층" && f.CurrentValue == "015") &&

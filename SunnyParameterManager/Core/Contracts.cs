@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.6.4";
+    public const string Release = "0.6.5";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -171,6 +171,7 @@ public sealed class ValueEdit
     public string RawValue { get; set; } = "";
     public string ReferenceKey { get; set; } = "";
     public string Reason { get; set; } = "직접 입력";
+    public string RoomName { get; set; } = "";
     public MaterialEvidence? MaterialSource { get; set; }
     public bool KacCleanup { get; set; }
     // 대상 모델에 없는 공유 매개변수를 프로젝트 정보에 새로 연결한 뒤 값을 넣는다. 룰셋이 명시한 경우만 생성된다.
@@ -178,7 +179,8 @@ public sealed class ValueEdit
     // 속성규격 룰셋의 매개변수 정의 정리(그룹·카테고리·유형/인스턴스·추가·중복 병합). 값 변경과 섞지 않는다.
     public DefinitionFix? DefinitionFix { get; set; }
     [JsonIgnore] public string Model => Original.ModelTitle;
-    [JsonIgnore] public string Type => Original.Scope is "뷰" or "시트" ? Original.Scope + " : " + Original.TargetName :
+    [JsonIgnore] public string Type => RoomName.Length > 0 ? "Room : " + RoomName :
+        Original.Scope is "뷰" or "시트" ? Original.Scope + " : " + Original.TargetName :
         Original.Scope == "인스턴스" && Original.CategoryKey == RoomUsePlanner.RoomCategory && Original.ElementName.Length > 0
             ? "Room : " + Original.ElementName : Original.Family + " : " + Original.TypeName;
     [JsonIgnore] public string Field => Original.Name;

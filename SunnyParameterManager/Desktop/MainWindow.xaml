@@ -20,6 +20,7 @@
   <StackPanel Grid.Row="1" Margin="0,0,0,8" x:Name="TopActions">
    <DockPanel>
     <Button x:Name="RulesButton" Content="룰셋 먼저 불러오기" Click="LoadRules" ToolTip="파일 선택 전에 불러오면 룰셋에 필요한 매개변수만 읽습니다. 기존 조회값이 충분하면 변경 내용을 검토합니다."/>
+    <Button x:Name="AddRulesButton" Content="룰셋 추가" Click="AddRules" IsEnabled="False" ToolTip="현재 선택에 다른 룰셋을 더합니다."/>
     <Button Content="RVT 파일 선택" Click="AddModels" Style="{StaticResource Primary}"/>
     <Button x:Name="FolderSearchButton" Content="폴더에서 RVT 찾기" Click="AddModelsFromFolders" ToolTip="여러 폴더와 하위 폴더에서 파일명 검색 후 체크한 파일만 추가합니다."/>
     <Button x:Name="ReviewRulesButton" Content="룰셋 변경 검토" Click="ReviewLoadedRules" IsEnabled="False" ToolTip="등록한 모든 파일을 대상으로 변경을 준비합니다. 실제 저장은 하지 않습니다."/>

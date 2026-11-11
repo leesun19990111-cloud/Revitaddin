@@ -89,7 +89,11 @@ public static class RoomReviewWorkbook
         var problems = findings.Select(f => (f.ElementId, f.Field)).ToHashSet();
         var rooms = model.Owners.Concat(model.Rows)
             .Where(r => r.Scope == "인스턴스" && r.CategoryKey == RoomUsePlanner.RoomCategory)
-            .GroupBy(r => r.OwnerId, StringComparer.Ordinal);
+            .GroupBy(r => r.OwnerId, StringComparer.Ordinal)
+            .Select(g => g.ToList())
+            .OrderBy(r => SortValue(r, "번호"), StringComparer.Ordinal)
+            .ThenBy(r => SortValue(r, "실번호"), StringComparer.Ordinal)
+            .ThenBy(r => r[0].OwnerId, StringComparer.Ordinal);
         using var stream = zip.CreateEntry($"xl/worksheets/sheet{sheetNumber}.xml", CompressionLevel.Optimal).Open();
         using var writer = new StreamWriter(stream, new UTF8Encoding(false));
         writer.Write("<?xml version=\"1.0\" encoding=\"utf-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><cols>");
@@ -98,19 +102,19 @@ public static class RoomReviewWorkbook
         writer.Write("</cols><sheetData>");
         Row(writer, 1, Headers, null, true);
         var number = 1;
-        foreach (var room in rooms)
+        foreach (var rows in rooms)
         {
-            var rows = room.ToList();
             var identity = rows.FirstOrDefault(r => r.Name.Length == 0) ?? rows[0];
-            var elementId = rows.Select(r => r.ElementId).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? room.Key;
+            var elementId = rows.Select(r => r.ElementId).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? rows[0].OwnerId;
             var values = new string[Headers.Length];
             values[0] = number == 1 ? model.Title : "";
             values[8] = identity.ElementName.Trim();
             var styles = new bool[Headers.Length];
             for (var i = 0; i < Headers.Length; i++)
             {
-                if (i is 0 or 8) continue;
                 var field = i == 7 ? "기존 실번호" : Headers[i];
+                styles[i] = problems.Contains((elementId, field));
+                if (i is 0 or 8) continue;
                 var matches = rows.Where(r => r.Name == field).ToList();
                 values[i] = matches.Count switch
                 {
@@ -118,11 +122,17 @@ public static class RoomReviewWorkbook
                     1 => Value(matches[0]),
                     _ => "동명 매개변수 확인 필요"
                 };
-                styles[i] = problems.Contains((elementId, field)) || i == 1 && matches.Count != 1;
             }
             Row(writer, ++number, values, styles);
         }
         writer.Write($"</sheetData><autoFilter ref=\"A1:T{number}\"/></worksheet>");
+    }
+
+    private static string SortValue(IReadOnlyList<ParameterRow> rows, string field)
+    {
+        var matches = rows.Where(r => r.Name == field).Take(2).ToList();
+        var value = matches.Count == 1 ? Value(matches[0]) : "";
+        return value.Length == 0 ? "\uFFFF" : value;
     }
 
     private static string Value(ParameterRow row) => row.HasValue

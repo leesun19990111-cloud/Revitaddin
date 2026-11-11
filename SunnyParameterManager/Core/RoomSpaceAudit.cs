@@ -26,20 +26,27 @@ public static class RoomSpaceAudit
                 var numberRows = rows.Where(r => r.Name == "번호").ToList();
                 var number = numberRows.Count == 1 ? Value(numberRows[0]) : "";
                 var elementId = rows.Select(r => r.ElementId).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? room.Key;
-                foreach (var field in RoomUsePlanner.RequiredAuditFields)
+                var fields = rows.Where(r => r.Name.Length > 0).ToLookup(r => r.Name, StringComparer.Ordinal);
+                string SingleValue(string field) => fields[field].Count() == 1 ? Value(fields[field].First()) : "";
+                var codeParts = new[] { "용도", "지상지하", "층", "번호" }.Select(SingleValue).ToArray();
+                foreach (var field in RoomReviewRules.Fields.Concat(["모델명", "이름"]))
                 {
-                    var matches = rows.Where(r => r.Name == field).ToList();
-                    var value = matches.Count == 1 ? Value(matches[0]) : "";
-                    var issue = matches.Count switch
+                    var count = field is "모델명" or "이름" ? 1 : fields[field].Count();
+                    var value = field switch { "모델명" => model.Title.Trim(), "이름" => revitName, _ => SingleValue(field) };
+                    var issue = count switch
                     {
                         0 => "매개변수 없음",
                         > 1 => "동명 매개변수 여러 개",
                         _ when value.Length == 0 => "빈값",
-                        _ when string.Equals(value, "ND", StringComparison.OrdinalIgnoreCase) => "ND",
+                        _ when field is ("실명" or "번호" or "지상지하" or "층") &&
+                            string.Equals(value, "ND", StringComparison.OrdinalIgnoreCase) => "ND",
                         _ when field == "층" && !Regex.IsMatch(value, "^[0-9]{2}$") => "층 형식 오류: 두 자리 숫자 필요",
+                        _ when field == "번호" && !Regex.IsMatch(value, "^[0-9]{3}$") => "번호 형식 오류: 세 자리 숫자 필요",
+                        _ when field == "실번호" && codeParts.All(p => p.Length > 0) &&
+                            value != string.Concat(codeParts) => "실번호 불일치: " + string.Concat(codeParts),
                         _ => ""
                     };
-                    if (field == "실명" && issue is "매개변수 없음" or "빈값" or "ND")
+                    if (field == "실명" && issue == "매개변수 없음")
                         issue += " — 용도 변경 제외";
                     if (issue.Length > 0)
                         findings.Add(new RoomSpaceFinding(model.Title, model.Path, elementId, revitName, number, roomName,

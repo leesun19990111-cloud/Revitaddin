@@ -123,6 +123,13 @@ Check(reviewRows.Count == 8 && reviewRows.Any(r => r.Name == "설명" && r.Raw =
     reviewRows.All(r => r.OwnerId == room.UniqueId) && slimModel.Owners.Single().ElementName == "Revit 룸 이름",
     "읽기 전용 룸 검토는 20열의 실제 매개변수만 조회");
 var inst = new Element { TypeId = slimType.Id }; inst.Parameters[0].Definition.Name = "업체명"; slimDoc.Elements.Add(inst);
+var mixedQuery = new QueryPlan { Scopes = ["인스턴스", "프로젝트 정보"], Names = ["실명", "용도", "업체명", "공항코드"],
+    IncludeRoomUse = true, IncludeOtherElements = true };
+var mixedRows = slimReader.ReadAll(mixedQuery);
+Check(mixedRows.Any(r => r.OwnerId == room.UniqueId && r.Name == "용도") &&
+    mixedRows.Any(r => r.OwnerId == inst.UniqueId && r.Name == "업체명") &&
+    mixedRows.Any(r => r.Scope == "프로젝트 정보" && r.Name == "공항코드"),
+    "묶음 조회에서 룸·일반 요소·프로젝트 정보를 함께 읽음");
 select.Scopes.Add("인스턴스");
 Check(slimReader.ReadAll(select).Single(r => r.Scope == "인스턴스").TypeOwnerId == slimType.UniqueId, "선택 조회 실제 인스턴스→유형 연결 보존");
 var viewOnly = new View(); viewOnly.Parameters[0].Definition.Name = "업체명"; slimDoc.Elements.Add(viewOnly);
