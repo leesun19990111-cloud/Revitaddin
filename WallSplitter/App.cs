@@ -82,24 +82,6 @@ namespace WallSplitter
                 oneWallButton.Image = RibbonIcons.ExtractWallLayer(16);
             }
 
-            var openingData = new PushButtonData("WallSplitter_StructuralWallOpening", "벽\n개구부", assemblyPath,
-                typeof(StructuralWallOpeningCommand).FullName);
-            if (panel.AddItem(openingData) is PushButton openingButton)
-            {
-                openingButton.ToolTip = "벽 두 개를 먼저 선택하세요. 문·창의 호스트는 유지하고 상대 벽에 같은 개구부를 만듭니다. 벽 간격은 5 mm까지 허용합니다.";
-                openingButton.LargeImage = RibbonIcons.StructuralWallOpening(32);
-                openingButton.Image = RibbonIcons.StructuralWallOpening(16);
-            }
-
-            var pairOpeningData = new PushButtonData("WallSplitter_WallPairOpening", "벽 쌍\n개구부", assemblyPath,
-                typeof(WallPairOpeningCommand).FullName);
-            if (panel.AddItem(pairOpeningData) is PushButton pairOpeningButton)
-            {
-                pairOpeningButton.ToolTip = "벽 두 개를 먼저 선택하세요. 문·창을 새 호스트 선택으로 상대 벽에 옮긴 뒤, 같은 버튼에서 이어서 원래 벽에 개구부를 만듭니다. 벽 간격은 5 mm까지 허용합니다.";
-                pairOpeningButton.LargeImage = RibbonIcons.WallPairOpening(32);
-                pairOpeningButton.Image = RibbonIcons.WallPairOpening(16);
-            }
-
             // "설정"/"단일·복수" 토글은 완전히 공유되는 하나의 설정이지만, 벽체 분리 패널에서만 접근할 수 있으면
             // 바닥 분리 작업 중엔 안 보여서 "바닥 분리에는 설정이 안 붙어 있다"고 느껴질 수 있어 두 패널에 각각 붙인다.
             NamingSettings currentSettings = NamingSettings.Load();

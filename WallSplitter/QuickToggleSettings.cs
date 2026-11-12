@@ -377,7 +377,7 @@ namespace WallSplitter
 
                 loaded.Buttons ??= new List<QuickToggleButtonConfig>();
                 loaded.UnlinkedCategories ??= new List<QuickToggleCategory>();
-                loaded.Buttons.RemoveAll(b => IsRemovedCategory(b.Category));
+                loaded.Buttons.RemoveAll(IsRemovedButton);
                 loaded.UnlinkedCategories.RemoveAll(IsRemovedCategory);
                 loaded.NormalizeGrouping();
 
@@ -452,6 +452,12 @@ namespace WallSplitter
         public static bool IsRemovedCategory(QuickToggleCategory category) =>
             category == QuickToggleCategory.Preset || category == QuickToggleCategory.GraphicsDisplaySearch ||
             category == QuickToggleCategory.LevelSectionBox;
+
+        internal static bool IsRemovedButton(QuickToggleButtonConfig button) =>
+            IsRemovedCategory(button.Category) ||
+            (button.Category == QuickToggleCategory.CommandLauncher &&
+             button.CommandKind == QuickToggleCommandKind.SunnyTool &&
+             button.CommandId is "WallSplitter.StructuralWallOpeningCommand" or "WallSplitter.WallPairOpeningCommand");
 
         // 같은 카테고리 내에서 "뷰템플릿버튼1", "뷰템플릿버튼2"처럼 다음 번호를 붙인 기본 이름을 만든다.
         public string NextDefaultName(QuickToggleCategory category)

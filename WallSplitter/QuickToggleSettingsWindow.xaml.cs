@@ -2567,19 +2567,8 @@ namespace WallSplitter
                 MessageBox.Show("가져오기에 실패했습니다: " + ex.Message, "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
-            // 예전 버전에서 내보낸 파일에는 지금은 없어진 종류의 버튼(프리셋/그래픽 화면표시 검색)이
-            // 들어 있을 수 있다 - 조용히 빼고 나머지만 가져온다(설정 파일을 읽을 때와 같은 처리).
-            imported?.RemoveAll(b => QuickToggleSettings.IsRemovedCategory(b.Category));
-
-            if (imported == null || imported.Count == 0)
-            {
-                MessageBox.Show("가져올 버튼이 없습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            // 예전 버전에서 내보낸 파일에는 지금은 없어진 종류의 버튼(프리셋/그래픽 화면표시 검색)이
-            // 들어 있을 수 있다 - 조용히 빼고 나머지만 가져온다(설정 파일을 읽을 때와 같은 처리).
-            imported?.RemoveAll(b => QuickToggleSettings.IsRemovedCategory(b.Category));
-
+            // 이전 버전에서 내보낸 삭제된 버튼은 설정을 불러올 때와 동일하게 제외한다.
+            imported?.RemoveAll(QuickToggleSettings.IsRemovedButton);
             if (imported == null || imported.Count == 0)
             {
                 MessageBox.Show("가져올 버튼이 없습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
