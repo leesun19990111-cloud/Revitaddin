@@ -30,7 +30,7 @@
     <!-- 리본 버튼 아이콘(BitmapSource)을 로드하기 위해 필요. net48/net8.0-windows/net10.0-windows 모두 지원. -->
     <UseWPF>true</UseWPF>
     <!-- WPF가 현재 DLL 버전의 창과 리소스를 찾도록 생성 URI에 버전을 포함한다. -->
-    <Version>1.1.5</Version>
+    <Version>1.1.6</Version>
     <AssemblyVersion>$(Version).$(RevitVersion)</AssemblyVersion>
     <!-- Revit은 클래스 라이브러리의 .deps.json을 따라 NuGet 런타임 DLL을 찾아주지 않는다.
          net8/net10 클래스 라이브러리 기본값(false)에 맡기면 Clipper2Lib.dll이 출력에서 빠져

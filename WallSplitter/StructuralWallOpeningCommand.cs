@@ -144,6 +144,8 @@ namespace WallSplitter
                 }
                 if (tx.Commit() != TransactionStatus.Committed)
                     throw new InvalidOperationException(failureHandler.Error ?? "Revit에서 벽 편집을 완료하지 못했습니다.");
+                if (ids.Any(id => doc.GetElement(id) is not Opening saved || saved.Host?.Id != wall.Id || !saved.IsRectBoundary))
+                    throw new InvalidOperationException("커밋된 독립 벽 개구부를 확인할 수 없습니다.");
                 var solids = WallSolids(wall);
                 foreach (var candidate in candidates)
                     if (OccupiedVolume(solids, candidate.Probe) > candidate.VolumeTolerance)
