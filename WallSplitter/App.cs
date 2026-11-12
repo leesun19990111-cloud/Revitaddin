@@ -82,6 +82,15 @@ namespace WallSplitter
                 oneWallButton.Image = RibbonIcons.ExtractWallLayer(16);
             }
 
+            var openingData = new PushButtonData("WallSplitter_StructuralWallOpening", "구조벽\n개구부", assemblyPath,
+                typeof(StructuralWallOpeningCommand).FullName);
+            if (panel.AddItem(openingData) is PushButton openingButton)
+            {
+                openingButton.ToolTip = "현재 모델의 구조벽과 인접 건축벽의 문·창을 선택해 실제 개구부 치수와 위치를 구조벽에 옮깁니다.";
+                openingButton.LargeImage = RibbonIcons.StructuralWallOpening(32);
+                openingButton.Image = RibbonIcons.StructuralWallOpening(16);
+            }
+
             // "설정"/"단일·복수" 토글은 완전히 공유되는 하나의 설정이지만, 벽체 분리 패널에서만 접근할 수 있으면
             // 바닥 분리 작업 중엔 안 보여서 "바닥 분리에는 설정이 안 붙어 있다"고 느껴질 수 있어 두 패널에 각각 붙인다.
             NamingSettings currentSettings = NamingSettings.Load();

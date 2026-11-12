@@ -1,5 +1,9 @@
 # 리본/앱 시작 (App.cs)
 
+## 2026-11-12 — 구조벽 개구부
+
+벽체 분리 패널에 구조벽 개구부 버튼을 추가한다. 명령은 StructuralWallOpeningCommand이며 SunnyToolsCommands에도 등록한다. 16/32px 아이콘은 RibbonIcons.StructuralWallOpening에서 그린다.
+
 ## 2026-10-30 — 한 층 분리 버튼
 
 벽체/바닥 분리 패널에 각각 별도 `한 층 분리` 버튼을 추가했다. 명령은 `SplitWallOneLayerCommand`/`SplitFloorOneLayerCommand`, 아이콘은 `RibbonIcons.ExtractWallLayer`/`ExtractFloorLayer`이며 `SunnyToolsCommands.All`에도 등록한다. 기존 전체 분리 버튼과 공유 설정 버튼은 유지한다.

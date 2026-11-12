@@ -124,6 +124,14 @@ namespace WallSplitter
 
         public static BitmapSource SplitFloor(int size) => SplitMember(size, vertical: false);
 
+        public static BitmapSource StructuralWallOpening(int size) => Draw(size, drawing =>
+        {
+            double m = Margin(size), w = size - 2 * m;
+            drawing.DrawRectangle(Fill, OutlinePen(size), new Rect(m, m, w, w));
+            drawing.DrawRectangle(Paper, Stroke(Accent, Math.Max(1.2, size / 14.0), false),
+                new Rect(m + 0.25 * w, m + 0.23 * w, 0.5 * w, 0.54 * w));
+        });
+
         public static BitmapSource ExtractWallLayer(int size) => ExtractEdge(size, vertical: true);
 
         public static BitmapSource ExtractFloorLayer(int size) => ExtractEdge(size, vertical: false);
