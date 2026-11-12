@@ -14,12 +14,12 @@ public static class ProjectBasePointWorkbook
     public const string ReportFileName = "프로젝트기준점_공유대지_점검결과.xlsx";
     private static readonly string[] Headers =
     [
-        "모델 파일", "모델 경로", "활성 공유대지", "북/남 (mm)", "동/서 (mm)",
+        "모델 파일", "활성 공유대지", "북/남 (mm)", "동/서 (mm)",
         "높이 (mm)", "진북각도 (°)", "상태"
     ];
     private static readonly string[] SurveyHeaders =
     [
-        "모델 파일", "모델 경로", "활성 공유대지", "북/남 (mm)", "동/서 (mm)",
+        "모델 파일", "활성 공유대지", "북/남 (mm)", "동/서 (mm)",
         "높이 (mm)", "상태"
     ];
 
@@ -27,7 +27,8 @@ public static class ProjectBasePointWorkbook
     {
         if (string.IsNullOrWhiteSpace(rulePath) || !File.Exists(rulePath))
             throw new InvalidOperationException("프로젝트 기준점 점검 룰셋 파일을 다시 선택하세요. 엑셀은 그 룰셋과 같은 폴더에 저장됩니다.");
-        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, ReportFileName);
+        var date = DateTime.Today.ToString("yyMMdd", CultureInfo.InvariantCulture);
+        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, $"{date}_{ReportFileName}");
     }
 
     public static void Save(string path, IEnumerable<ModelSnapshot> models)
@@ -67,7 +68,7 @@ public static class ProjectBasePointWorkbook
         using var sheetStream = zip.CreateEntry(entryName, CompressionLevel.Optimal).Open();
         using var xml = new StreamWriter(sheetStream, new UTF8Encoding(false));
         xml.Write("<?xml version=\"1.0\" encoding=\"utf-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><cols>");
-        var widths = survey ? new[] { 38, 70, 28, 18, 18, 18, 52 } : new[] { 38, 70, 28, 18, 18, 18, 20, 52 };
+        var widths = survey ? new[] { 38, 28, 18, 18, 18, 52 } : new[] { 38, 28, 18, 18, 18, 20, 52 };
         for (var i = 0; i < widths.Length; i++) xml.Write($"<col min=\"{i + 1}\" max=\"{i + 1}\" width=\"{widths[i]}\" customWidth=\"1\"/>");
         xml.Write("</cols><sheetData><row r=\"1\">");
         for (var c = 0; c < headers.Length; c++) TextCell(xml, 1, c, headers[c]);
@@ -79,21 +80,20 @@ public static class ProjectBasePointWorkbook
             var row = i + 2;
             xml.Write($"<row r=\"{row}\">");
             TextCell(xml, row, 0, Path.GetFileName(model.Path));
-            TextCell(xml, row, 1, model.Path);
-            TextCell(xml, row, 2, audit.SiteName);
-            NumberCell(xml, row, 3, survey ? audit.SurveyNorthSouthMillimeters : audit.NorthSouthMillimeters, 1);
-            NumberCell(xml, row, 4, survey ? audit.SurveyEastWestMillimeters : audit.EastWestMillimeters, 1);
-            NumberCell(xml, row, 5, survey ? audit.SurveyElevationMillimeters : audit.ElevationMillimeters, 1);
-            if (survey) TextCell(xml, row, 6, audit.SurveyStatus);
+            TextCell(xml, row, 1, audit.SiteName);
+            NumberCell(xml, row, 2, survey ? audit.SurveyNorthSouthMillimeters : audit.NorthSouthMillimeters, 1);
+            NumberCell(xml, row, 3, survey ? audit.SurveyEastWestMillimeters : audit.EastWestMillimeters, 1);
+            NumberCell(xml, row, 4, survey ? audit.SurveyElevationMillimeters : audit.ElevationMillimeters, 1);
+            if (survey) TextCell(xml, row, 5, audit.SurveyStatus);
             else
             {
-                NumberCell(xml, row, 6, audit.TrueNorthDegrees, 2);
-                TextCell(xml, row, 7, audit.Status);
+                NumberCell(xml, row, 5, audit.TrueNorthDegrees, 2);
+                TextCell(xml, row, 6, audit.Status);
             }
             xml.Write("</row>");
         }
         xml.Write("</sheetData>");
-        if (rows.Count > 0) xml.Write($"<autoFilter ref=\"A1:{(survey ? 'G' : 'H')}{rows.Count + 1}\"/>");
+        if (rows.Count > 0) xml.Write($"<autoFilter ref=\"A1:{(char)('A' + headers.Length - 1)}{rows.Count + 1}\"/>");
         xml.Write("</worksheet>");
     }
 

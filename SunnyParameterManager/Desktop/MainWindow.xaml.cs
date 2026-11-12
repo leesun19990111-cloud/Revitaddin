@@ -614,7 +614,7 @@ public partial class MainWindow : Window
             var failed = _models.Count(m => m.Snapshot!.ProjectBasePointAudit is { } audit &&
                 (audit.Status != "확인" || audit.SurveyStatus != "확인"));
             RuleSummary.Text = $"읽기 전용 프로젝트·측량 기준점 점검 완료 · {_models.Count:N0}개 모델 · 확인 필요 {failed:N0}개\n" +
-                "첫 시트에는 프로젝트 기준점 좌표·진북각도, 둘째 시트에는 측량 기준점 좌표를 기록했습니다. 좌표는 정수 mm, 각도는 소수 둘째 자리 도 단위입니다. RVT는 변경하지 않았습니다.\n같은 파일명으로 이전 보고서를 교체했습니다. 엑셀 파일: " + path;
+                "첫 시트에는 프로젝트 기준점 좌표·진북각도, 둘째 시트에는 측량 기준점 좌표를 기록했습니다. 좌표는 정수 mm, 각도는 소수 둘째 자리 도 단위입니다. RVT는 변경하지 않았습니다.\n같은 날 다시 내보내면 해당 날짜의 보고서를 갱신합니다. 엑셀 파일: " + path;
             RuleSummaryPanel.Visibility = Visibility.Visible;
             ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
             StatusText.Text = "프로젝트·측량 기준점 점검 엑셀을 저장했습니다: " + path;
