@@ -53,7 +53,7 @@ namespace WallSplitter
             Width = materials ? 1240 : 920; Height = materials ? 800 : 700;
             MinWidth = materials ? 1040 : 820; MinHeight = 620;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/WallSplitter;component/Resources/Theme.xaml", UriKind.Relative) });
+            Resources.MergedDictionaries.Add(Theme.CreateDictionary());
             Background = Theme.WindowBackground;
             var root = new Grid { Margin = new Thickness(14), Background = Theme.WindowBackground };
             for (int i = 0; i < 7; i++) root.RowDefinitions.Add(new RowDefinition { Height = i == 4 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });

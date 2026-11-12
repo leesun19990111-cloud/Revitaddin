@@ -132,6 +132,15 @@ namespace WallSplitter
                 new Rect(m + 0.25 * w, m + 0.23 * w, 0.5 * w, 0.54 * w));
         });
 
+        public static BitmapSource WallPairOpening(int size) => Draw(size, drawing =>
+        {
+            double m = Margin(size), w = size - 2 * m;
+            drawing.DrawRectangle(Fill, OutlinePen(size), new Rect(m + 0.23 * w, m, 0.77 * w, 0.76 * w));
+            drawing.DrawRectangle(Fill, OutlinePen(size), new Rect(m, m + 0.24 * w, 0.77 * w, 0.76 * w));
+            drawing.DrawRectangle(Paper, Stroke(Accent, Math.Max(1.1, size / 16.0), false),
+                new Rect(m + 0.17 * w, m + 0.45 * w, 0.43 * w, 0.36 * w));
+        });
+
         public static BitmapSource ExtractWallLayer(int size) => ExtractEdge(size, vertical: true);
 
         public static BitmapSource ExtractFloorLayer(int size) => ExtractEdge(size, vertical: false);

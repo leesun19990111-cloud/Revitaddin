@@ -36,7 +36,7 @@ namespace WallSplitter
         {
             _data = data; Title = "Sunny Tools · Schedule Editor — " + data.Name;
             Width = 1180; Height = 780; MinWidth = 950; MinHeight = 600; WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/WallSplitter;component/Resources/Theme.xaml", UriKind.Relative) });
+            Resources.MergedDictionaries.Add(Theme.CreateDictionary());
             var root = new Grid { Margin = new Thickness(14), Background = Theme.WindowBackground }; Content = root;
             for (int i = 0; i < 6; i++) root.RowDefinitions.Add(new RowDefinition { Height = i == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             Put(root, new TextBlock { Text = data.Name + "\n원래 정렬 순서의 데이터 행만 1부터 번호를 붙입니다. 제목·열 제목·소계·합계·빈 구분행은 제외됩니다.\n행 클릭·드래그 / Shift + 클릭으로 범위 체크·해제합니다. 행 번호 직접 입력도 가능합니다.\n묶인 행은 확인된 요소 전체에 적용합니다. 유형 값 변경은 선택 밖의 같은 유형에도 영향을 줍니다.\n링크 수정 전, 대상 원본의 로컬을 같은 Revit에 열어 두세요. 계산식/실제 읽기 전용 필드는 변경하지 않습니다.",
@@ -138,7 +138,7 @@ namespace WallSplitter
         {
             var window = new Window { Owner = this, Title = "Schedule Editor · 행 연결 진단", Width = 820, Height = 580,
                 MinWidth = 600, MinHeight = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-            window.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/WallSplitter;component/Resources/Theme.xaml", UriKind.Relative) });
+            window.Resources.MergedDictionaries.Add(Theme.CreateDictionary());
             var panel = new DockPanel { Margin = new Thickness(12), Background = Theme.WindowBackground };
             var note = new TextBlock { Text = "원본 모델은 변경하지 않습니다. 아래 내용을 선택해 복사할 수 있습니다. 모델 이름·필드 이름이 포함됩니다.", Foreground = Theme.TextPrimary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) };
             DockPanel.SetDock(note, Dock.Top); panel.Children.Add(note);

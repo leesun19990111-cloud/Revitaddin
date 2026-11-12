@@ -1,5 +1,9 @@
 # 리본/앱 시작 (App.cs)
 
+## 2026-11-12 — 벽 쌍 개구부
+
+벽체 분리 패널에 WallPairOpeningCommand 전용 버튼과 16/32px 아이콘을 추가하고 SunnyToolsCommands에도 등록한다. 기존 구조벽 개구부는 기존 버튼으로 실행한다.
+
 ## 2026-11-12 — 구조벽 개구부
 
 벽체 분리 패널에 구조벽 개구부 버튼을 추가한다. 명령은 StructuralWallOpeningCommand이며 SunnyToolsCommands에도 등록한다. 16/32px 아이콘은 RibbonIcons.StructuralWallOpening에서 그린다.

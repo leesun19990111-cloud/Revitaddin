@@ -1,5 +1,10 @@
 # 화면 디자인 시스템
 
+## 2026-11-12 — 창과 테마를 같은 빌드에서 로드
+
+XAML 창의 Theme.xaml은 창의 리소스 URI를 기준으로 하는 상대 경로를 쓴다. 코드로 구성하는 창은 Theme.CreateDictionary에서 현재 어셈블리 버전을 명시한다. 창별 Resources에 병합해 Revit과 다른 애드인의 Application.Resources에는 적용하지 않는다. 룸 경계 ON/OFF와 경고Pick은 기존 DLL이 여러 개 로드된 Revit 2026 세션에서 새 빌드로 창 초기화 및 PrimaryButtonStyle 조회를 확인했다.
+
+
 `WallSplitter/Resources/Theme.xaml`, `WallSplitter/Theme.cs`, 리본 아이콘(`WallSplitter/RibbonIcons.cs`)을 건드리기 전에 이 문서를 읽을 것. WPF 창 전반에 걸친 네임스페이스 충돌 gotcha(`Visibility`/`Grid`/`Control`/`Color`/`Binding`/`Line`/`Point`)도 여기서 다룬다.
 
 **연혁**: 2026-07-24 다크 테마 최초 도입(강조색 `#5B8DEF`, 둥근 모서리) → 2026-07-27 오전 `Application.Resources` 전역 병합이 Revit 리본/다른 애드인 UI까지 스타일을 물들이는 라이브 버그 발견, 각 창의 로컬 `Window.Resources` 병합으로 수정(아래 "리소스 병합 범위" 참고, 이때 색상 자체는 그대로 다크 유지) → 2026-07-27 오후 **"Industry" 라이트 테마로 전면 교체**(아래 본문) — 현재는 라이트 테마가 최종 상태다. 8개 WPF 창(설정/NAMER/재료 지정/모델간 변경 반영/레이어별 유형 지정/대상 선택/빠른 토글 설정·툴바) 전체가 대상이며, 매번 순수 시각적 변경만 했고 `x:Name`/`Click` 핸들러/이벤트 로직/클래스·파일명은 전혀 건드리지 않았다.

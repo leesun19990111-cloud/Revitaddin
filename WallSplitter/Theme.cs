@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Media;
 
 namespace WallSplitter
@@ -32,6 +33,15 @@ namespace WallSplitter
         public static readonly SolidColorBrush Divider = Freeze("#D4D4D7");
         // 창 바탕(종이색) - Theme.xaml의 WindowBackgroundBrush와 맞춰 유지.
         public static readonly SolidColorBrush WindowBackground = Freeze("#F2F2F3");
+
+        public static ResourceDictionary CreateDictionary()
+        {
+            var assembly = typeof(Theme).Assembly.GetName();
+            return new ResourceDictionary
+            {
+                Source = new Uri($"/{assembly.Name};v{assembly.Version};component/Resources/Theme.xaml", UriKind.Relative)
+            };
+        }
 
         private static SolidColorBrush Freeze(string hex)
         {

@@ -8,7 +8,7 @@
     <!-- 테마는 이 창의 Resources에만 병합한다 - Application.Resources에 넣으면 Revit 리본과 다른
          애드인 UI까지 물들이는 라이브 버그가 있었다 (NamerWindow.xaml의 같은 주석 참고). -->
     <Window.Resources>
-        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+        <ResourceDictionary Source="Resources/Theme.xaml"/>
     </Window.Resources>
     <Grid Margin="14">
         <Grid.RowDefinitions>

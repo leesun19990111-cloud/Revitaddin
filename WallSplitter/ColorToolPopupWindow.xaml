@@ -11,7 +11,7 @@
         Width="250"
         WindowStartupLocation="Manual">
     <Window.Resources>
-        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+        <ResourceDictionary Source="Resources/Theme.xaml"/>
     </Window.Resources>
     <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="4">
         <StackPanel x:Name="RootPanel" Margin="10"/>

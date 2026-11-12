@@ -1,5 +1,11 @@
 # 멀티 버전 빌드 (Revit 2023–2027)
 
+## 2026-11-12 — WPF 리소스의 어셈블리 버전 지정
+
+Revit 2026 journal.0416에서 룸 경계 ON/OFF와 경고Pick이 InitializeComponent에서 실패했다. 같은 세션에 설치 DLL과 테스트 중 Assembly.Load(byte[])로 넣은 DLL들이 모두 WallSplitter 1.0.0.0으로 올라왔으며, 설치본의 두 창을 직접 생성해 같은 오류를 재현했다. WPF의 버전 없는 pack URI가 다른 빌드의 BAML을 가리켰다.
+
+csproj의 Version을 설치 ZIP 버전과 함께 올린다. AssemblyVersion은 $(Version).$(RevitVersion)이며 WPF가 버전 포함 URI를 생성하도록 csproj에서 명시한다. 배포 검증에서 어셈블리 버전과 생성된 창 URI를 확인한다. 테스트는 별도 프로세스 또는 별도 Revit 세션에서 실행한다. 운영 Revit에는 설치 DLL과 동일한 어셈블리 ID의 시험 DLL을 로드하지 않는다.
+
 `WallSplitter.csproj`의 연도별 Configuration→TFM→`Nice3point.Revit.Api.RevitAPI` 패키지 버전 매핑을 건드리기 전에 이 문서를 읽을 것.
 
 `WallSplitter.csproj` builds the **same source** against 5 different Revit API versions via custom per-year Configurations, not `<TargetFrameworks>` (a single project can't multi-target the same TFM twice, and 2025/2026 share `net8.0-windows` while still needing different `RevitAPI.dll` versions):

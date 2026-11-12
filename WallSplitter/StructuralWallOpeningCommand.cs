@@ -11,9 +11,9 @@ namespace WallSplitter
     public sealed class StructuralWallOpeningCommand : IExternalCommand
     {
         private const string Title = "구조벽 개구부";
-        private static readonly double GeometryTolerance = Mm(0.5);
-        private static readonly double ContactTolerance = Mm(5);
-        private static readonly double ProbeInset = Mm(1);
+        internal static readonly double GeometryTolerance = Mm(0.5);
+        internal static readonly double ContactTolerance = Mm(5);
+        internal static readonly double ProbeInset = Mm(1);
         private static double Mm(double value) => UnitUtils.ConvertToInternalUnits(value, UnitTypeId.Millimeters);
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -91,14 +91,14 @@ namespace WallSplitter
             }
         }
 
-        private static bool IsStructuralWall(Element element) => element is Wall wall &&
+        internal static bool IsStructuralWall(Element element) => element is Wall wall &&
             wall.get_Parameter(BuiltInParameter.WALL_STRUCTURAL_SIGNIFICANT)?.AsInteger() == 1;
 
-        private static bool IsDoorOrWindow(Element element) => element is FamilyInstance &&
+        internal static bool IsDoorOrWindow(Element element) => element is FamilyInstance &&
             (element.Category?.Id == new ElementId(BuiltInCategory.OST_Doors) ||
              element.Category?.Id == new ElementId(BuiltInCategory.OST_Windows));
 
-        private static Line RequireStraightWall(Wall wall)
+        internal static Line RequireStraightWall(Wall wall)
         {
             if (wall.WallType.Kind != WallKind.Basic || wall.CrossSection != WallCrossSection.Vertical ||
                 wall.Location is not LocationCurve location || location.Curve is not Line line ||
@@ -107,7 +107,7 @@ namespace WallSplitter
             return line;
         }
 
-        private static (double Min, double Max) SideDepth(Wall wall, XYZ origin, XYZ normal)
+        internal static (double Min, double Max) SideDepth(Wall wall, XYZ origin, XYZ normal)
         {
             var offsets = new List<double>();
             foreach (var side in new[] { ShellLayerType.Exterior, ShellLayerType.Interior })
@@ -131,7 +131,7 @@ namespace WallSplitter
         }
 
         // IFC 개구부 API는 Revit에 설치된 별도 어셈블리에 있다. 현재 실행 중인 Revit의 파일만 참조한다.
-        private static MethodInfo FindCutReader()
+        internal static MethodInfo FindCutReader()
         {
             var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "RevitAPIIFC")
                 ?? Assembly.LoadFrom(Path.Combine(Path.GetDirectoryName(typeof(Document).Assembly.Location)!, "RevitAPIIFC.dll"));
@@ -194,7 +194,7 @@ namespace WallSplitter
             return rect;
         }
 
-        private static Solid BuildProbe(Rectangle rect, XYZ origin, XYZ along, XYZ normal, (double Min, double Max) depth)
+        internal static Solid BuildProbe(Rectangle rect, XYZ origin, XYZ along, XYZ normal, (double Min, double Max) depth)
         {
             // 경계가 맞닿는 문 하단과 불리언 연산 오차를 고려해 검증용 솔리드만 1 mm 안쪽에 둔다.
             var start = origin + normal * (depth.Min - ProbeInset);
@@ -206,7 +206,7 @@ namespace WallSplitter
             return GeometryCreationUtilities.CreateExtrusionGeometry(new[] { loop }, normal, depth.Max - depth.Min + 2 * ProbeInset);
         }
 
-        private static List<Solid> WallSolids(Wall wall)
+        internal static List<Solid> WallSolids(Wall wall)
         {
             var geometry = wall.get_Geometry(new Options { DetailLevel = ViewDetailLevel.Fine });
             var solids = geometry?.OfType<Solid>().Where(s => s.Faces.Size > 0 && s.Volume > 0).ToList();
@@ -215,10 +215,10 @@ namespace WallSplitter
             return solids;
         }
 
-        private static double OccupiedVolume(IEnumerable<Solid> solids, Solid probe) =>
+        internal static double OccupiedVolume(IEnumerable<Solid> solids, Solid probe) =>
             solids.Sum(s => Math.Abs(BooleanOperationsUtils.ExecuteBooleanOperation(s, probe, BooleanOperationsType.Intersect).Volume));
 
-        private static List<ElementId> Apply(Document doc, Wall wall, XYZ origin, XYZ along, List<OpeningCandidate> candidates)
+        internal static List<ElementId> Apply(Document doc, Wall wall, XYZ origin, XYZ along, List<OpeningCandidate> candidates)
         {
             using var group = new TransactionGroup(doc, Title);
             if (group.Start() != TransactionStatus.Started)
@@ -282,7 +282,7 @@ namespace WallSplitter
                 Math.Min(Top, other.Top) - Math.Max(Bottom, other.Bottom) > GeometryTolerance;
         }
 
-        private sealed class OpeningCandidate
+        internal sealed class OpeningCandidate
         {
             public OpeningCandidate(ElementId source, Rectangle rect, Solid probe, double volumeTolerance)
             { Source = source; Rect = rect; Probe = probe; VolumeTolerance = volumeTolerance; }
@@ -292,7 +292,7 @@ namespace WallSplitter
             public double VolumeTolerance { get; }
         }
 
-        private sealed class PickFilter : ISelectionFilter
+        internal sealed class PickFilter : ISelectionFilter
         {
             private readonly Func<Element, bool> _matches;
             public PickFilter(Func<Element, bool> matches) => _matches = matches;

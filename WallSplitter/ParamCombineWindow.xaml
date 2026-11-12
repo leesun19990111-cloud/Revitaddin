@@ -8,7 +8,7 @@
     <!-- 테마는 이 창의 Resources에만 로컬로 병합한다 - Application 리소스에 병합하면 Revit 리본/다른
          애드인 UI까지 우리 스타일이 번진다(NamerWindow.xaml 참고). -->
     <Window.Resources>
-        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+        <ResourceDictionary Source="Resources/Theme.xaml"/>
     </Window.Resources>
 
     <Grid Margin="16">
