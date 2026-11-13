@@ -37,3 +37,29 @@ internal sealed class TransactionDiagnostics : IDisposable
     }
     public void Dispose() => _app.FailuresProcessing -= Observe;
 }
+
+internal sealed class GuardhouseRoomNumberWarnings(HashSet<ElementId> changedRooms) : IFailuresPreprocessor
+{
+    internal int Acknowledged { get; private set; }
+
+    public FailureProcessingResult PreprocessFailures(FailuresAccessor accessor)
+    {
+        var doc = accessor.GetDocument();
+        foreach (var failure in accessor.GetFailureMessages())
+        {
+            if (failure.GetSeverity() != FailureSeverity.Warning ||
+                !failure.GetFailureDefinitionId().Equals(BuiltInFailures.GeneralFailures.DuplicateValue))
+                continue;
+
+            var involved = failure.GetFailingElementIds().Concat(failure.GetAdditionalElementIds()).Distinct().ToList();
+            if (!involved.Any(changedRooms.Contains) || involved.Any(id =>
+                doc.GetElement(id) is not { } room || room.Category?.Id.Value != (long)BuiltInCategory.OST_Rooms ||
+                room.get_Parameter(BuiltInParameter.ROOM_NUMBER)?.AsString() != "001"))
+                continue;
+
+            accessor.DeleteWarning(failure);
+            Acknowledged++;
+        }
+        return FailureProcessingResult.Continue;
+    }
+}

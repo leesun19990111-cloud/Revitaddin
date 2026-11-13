@@ -213,6 +213,11 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     req.CleanupRules ?? throw new InvalidOperationException("유형 정리 룰셋이 적용 요청에 없습니다. 룰셋을 다시 불러와 검토하세요.")).Select(w => new WriteAction(w.Set, w.Verify)).ToList();
                 else writes = PrepareAll(app, doc, reader, req.Edits);
                 var stairNames = removingLinks || transferring ? [] : StairTypeNames.Capture(doc, req.Edits);
+                var roomNumbers = req.Edits.Where(e => e.GuardhouseRoomSources != null && e.Mode == "입력" &&
+                    e.Original.Scope == "인스턴스" && e.Original.CategoryKey == RoomUsePlanner.RoomCategory &&
+                    e.Original.ParameterKey == GuardhouseRoomRules.NumberKey && e.Value == "001")
+                    .Select(e => doc.GetElement(e.Original.OwnerId)!.Id).ToHashSet();
+                var roomWarnings = roomNumbers.Count == 0 ? null : new GuardhouseRoomNumberWarnings(roomNumbers);
                 using var diagnostics = new TransactionDiagnostics(app, doc);
                 using (var group = new TransactionGroup(doc, "Sunny 매개변수 관리자"))
                 {
@@ -222,7 +227,9 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                         using var tx = new Transaction(doc, transferring ? "프로젝트 매개변수 정의 전송" : removingLinks ? "모든 링크·가져오기 완전 제거" : req.Edits.Any(e => e.DefinitionFix != null) ? "속성규격 매개변수 정의 정리" : "선택한 매개변수 값 변경");
                         if (tx.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집을 시작할 수 없습니다.");
                         editingStarted = true;
-                        tx.SetFailureHandlingOptions(tx.GetFailureHandlingOptions().SetForcedModalHandling(true));
+                        var failureOptions = tx.GetFailureHandlingOptions().SetForcedModalHandling(true);
+                        if (roomWarnings != null) failureOptions.SetFailuresPreprocessor(roomWarnings);
+                        tx.SetFailureHandlingOptions(failureOptions);
                         Step(transferring ? "기준 파일의 프로젝트 매개변수 정의 복사 중" : removingLinks ? "승인한 링크·가져오기 삭제 중" : "값 적용 중");
                         foreach (var w in writes) w.Set();
                         var committed = tx.Commit();
@@ -263,6 +270,8 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 result.Applied = transferring ? transferredDefinitions : removingLinks ? req.LinkRemoval!.Affected.Count : writes.Count;
                 result.Success = true;
                 result.Message = doc.IsWorkshared ? "중앙 동기화 및 차용 요소·모든 작업세트 소유권 반환 호출이 완료되었습니다. 반환 후 검사에서 현재 사용자 소유권 잔존이 발견되지 않았습니다. 다른 사용자의 로컬은 최신 내용 가져오기가 필요합니다." : "파일 저장이 완료되었습니다.";
+                if (roomWarnings is { Acknowledged: > 0 })
+                    result.Message += $"\n초소 룸 중복 번호 경고 {roomWarnings.Acknowledged:N0}건을 자동 확인했습니다.";
                 if (restoredStairNames > 0) result.Message += $"\n매개변수 확정 중 재생성된 계단진행 유형 {restoredStairNames:N0}개의 이름을 승인한 이름으로 보존하고 재검증했습니다.";
                 if (removingLinks) result.Message = $"링크 정의·가져오기 완전 제거 및 승인한 종속 요소 삭제: 총 {result.Applied:N0}개. 외부 원본 파일은 변경하지 않았습니다.\n" + result.Message;
                 if (transferring) result.Message = $"기준 모델의 프로젝트 매개변수 정의 {result.Applied:N0}개를 카테고리 연결과 함께 추가했습니다. 값은 복사하지 않았습니다.\n" + result.Message;

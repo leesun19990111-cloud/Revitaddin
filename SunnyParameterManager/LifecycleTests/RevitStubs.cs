@@ -46,13 +46,22 @@ namespace Autodesk.Revit.DB
   public static HashSet<long> OwnedIds = [];
   public static ApplicationServices.Application App = null!;
   public static FailureSeverity? Failure;
+  public static bool DuplicateNumber, NonRoomWarning;
   public static bool OtherDocFailure, UnreadableFailure, DeletedAfterCommit;
   public static void Reset() { FailRelinquish = LeaveBorrowed = LeaveWorkset = FailOwnershipCheck = false; OwnedIds = []; GroupEdit = null; GroupChangesAfterSet = false; Doc = new(); SourceDoc = null; SourceFile = ""; Info = new(); Events = []; TypeOwnerId = "type-1"; MaterialMissing = false; Failure = null; OtherDocFailure = UnreadableFailure = DeletedAfterCommit = false; FailSave = FailSync = FailClose = FailCommit = FailSet = VerifyMismatch = OwnedOther = MaterialChangesAfterSet = TypeChangesAfterSet = false; }
  }
  public enum FailureSeverity { Warning, Error, DocumentCorruption }
+ public enum FailureProcessingResult { Continue }
+ public interface IFailuresPreprocessor { FailureProcessingResult PreprocessFailures(FailuresAccessor accessor); }
+ public sealed record FailureDefinitionId(string Name);
+ public static class BuiltInFailures
+ {
+  public static class GeneralFailures { public static FailureDefinitionId DuplicateValue { get; } = new("duplicate"); }
+ }
  public sealed class FailureMessageAccessor
  {
   public FailureSeverity GetSeverity() => State.Failure!.Value;
+  public FailureDefinitionId GetFailureDefinitionId() => State.DuplicateNumber ? BuiltInFailures.GeneralFailures.DuplicateValue : new("other");
   public string GetDescriptionText() => "요소를 결합된 상태로 유지할 수 없습니다.";
   public IEnumerable<ElementId> GetFailingElementIds() => [new(101), new(102)];
   public IEnumerable<ElementId> GetAdditionalElementIds() => [new(102), new(103)];
@@ -61,10 +70,12 @@ namespace Autodesk.Revit.DB
  {
   public Document GetDocument() => doc;
   public IEnumerable<FailureMessageAccessor> GetFailureMessages() => State.Failure == null ? [] : [new()];
+  public void DeleteWarning(FailureMessageAccessor warning) => State.Events.Add("ack-room-number");
   public void Dispose() { }
  }
  public enum StorageType { String, Integer, Double, ElementId }
- public enum BuiltInParameter { ELEM_PARTITION_PARAM = -100 }
+ public enum BuiltInParameter { ELEM_PARTITION_PARAM = -100, ROOM_NUMBER = -1006901 }
+ public enum BuiltInCategory { OST_Rooms = -2000160 }
  public enum CheckoutStatus { OwnedByOtherUser, OwnedByCurrentUser, NotOwned }
  public enum TransactionStatus { Uninitialized, Started, Committed, RolledBack }
  public enum DetachFromCentralOption { DoNotDetach, DetachAndPreserveWorksets }
@@ -78,12 +89,13 @@ namespace Autodesk.Revit.DB
   public StorageType StorageType { get; set; } = StorageType.String;
   public Definition Definition { get; } = new();
   public string Value { get; set; } = "기존";
+  public string AsString() => Value;
   public bool Set(string v) { State.Events.Add("set"); if (State.Doc.IsWorkshared) State.OwnedIds.Add(10); if (State.FailSet) return false; Value = State.VerifyMismatch ? "다른값" : v; return true; }
   public bool Set(int v) => Set(v.ToString());
   public bool Set(double v) => Set(v.ToString(System.Globalization.CultureInfo.InvariantCulture));
   public bool Set(ElementId v) => Set(v.Value.ToString());
  }
- public class Element { public ElementId Id { get; set; } = new(10); public string UniqueId { get; set; } = "type-1"; public virtual string Name { get; set; } = "기존 이름"; public Category? Category { get; set; } = new(); public Parameter Parameter { get; } = new(); }
+ public class Element { public ElementId Id { get; set; } = new(10); public string UniqueId { get; set; } = "type-1"; public virtual string Name { get; set; } = "기존 이름"; public Category? Category { get; set; } = new(); public Parameter Parameter { get; } = new(); public Parameter? get_Parameter(BuiltInParameter id) => id == BuiltInParameter.ROOM_NUMBER ? Parameter : null; }
  public class Category { public ElementId Id { get; set; } = new(-2000919); }
  public class ElementType : Element { public string FamilyName { get; set; } = "일체형 계단진행"; public bool CanBeRenamed { get; set; } = true; }
  public sealed class Material : Element { }
@@ -100,6 +112,7 @@ namespace Autodesk.Revit.DB
   public bool Missing;
   public ModelPath GetWorksharingCentralModelPath() => new(CentralPathOverride ?? State.Info.CentralPath);
   public Element? GetElement(string id) => Missing || State.DeletedAfterCommit && State.Events.Contains("tx-commit") ? null : Types.GetValueOrDefault(id, Element);
+  public Element? GetElement(ElementId id) => new Element { Category = new() { Id = new(State.NonRoomWarning ? 1 : (long)BuiltInCategory.OST_Rooms) }, Parameter = { Value = Element.Parameter.Value } };
   public object GetUnits() => new();
   public void Save() { State.Events.Add("save"); if (State.FailSave) throw new IOException("테스트 저장 실패"); }
   public void SynchronizeWithCentral(TransactWithCentralOptions transact, SynchronizeWithCentralOptions sync)
@@ -144,7 +157,12 @@ namespace Autodesk.Revit.DB
  }
  public sealed class OpenOptions : IDisposable { public DetachFromCentralOption DetachFromCentralOption { get; set; } public void SetOpenWorksetsConfiguration(WorksetConfiguration config) { } public void Dispose() { } }
  public sealed class WorksetConfiguration(WorksetConfigurationOption option) { }
- public sealed class FailureOptions { public FailureOptions SetForcedModalHandling(bool enabled) { if (!enabled) throw new Exception(); return this; } }
+ public sealed class FailureOptions
+ {
+  public IFailuresPreprocessor? Preprocessor;
+  public FailureOptions SetForcedModalHandling(bool enabled) { if (!enabled) throw new Exception(); return this; }
+  public FailureOptions SetFailuresPreprocessor(IFailuresPreprocessor value) { Preprocessor = value; return this; }
+ }
  public sealed class Transaction(Document doc, string name) : IDisposable
  {
   public TransactionStatus Start() { State.Events.Add("tx-start"); return TransactionStatus.Started; }

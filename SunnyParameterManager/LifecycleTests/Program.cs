@@ -253,6 +253,31 @@ internal static class Program
    Check(!result.Success && result.Message.Contains("RolledBack") && result.Message.Contains("101"), "Revit 확정 취소에도 오류 상세 유지");
    r = Setup(); State.Failure = FailureSeverity.Warning; result = Run(r);
    Check(result.Success && State.Events.Contains("save") && State.App.Observers == 0, "경고만 있는 정상 작업은 저장 및 이벤트 해제");
+   State.Failure = FailureSeverity.Warning;
+   State.DuplicateNumber = true;
+   State.Doc.Element.Parameter.Value = "001";
+   using (var accessor = new FailuresAccessor(State.Doc))
+   {
+    var handler = new GuardhouseRoomNumberWarnings([new(101)]);
+    Check(handler.PreprocessFailures(accessor) == FailureProcessingResult.Continue &&
+        handler.Acknowledged == 1 && State.Events.Contains("ack-room-number"), "초소 룸 001 중복 번호 경고 확인 처리");
+    State.NonRoomWarning = true;
+    handler.PreprocessFailures(accessor);
+    State.NonRoomWarning = false;
+    State.Failure = FailureSeverity.Error;
+    handler.PreprocessFailures(accessor);
+    State.Failure = FailureSeverity.Warning;
+    State.DuplicateNumber = false;
+    handler.PreprocessFailures(accessor);
+    State.DuplicateNumber = true;
+    State.Doc.Element.Parameter.Value = "002";
+    handler.PreprocessFailures(accessor);
+    State.Doc.Element.Parameter.Value = "001";
+    var unrelated = new GuardhouseRoomNumberWarnings([new(999)]);
+    unrelated.PreprocessFailures(accessor);
+    Check(handler.Acknowledged == 1 && unrelated.Acknowledged == 0, "다른 경고·오류·번호·요소는 자동 처리 제외");
+   }
+   State.DuplicateNumber = false;
    r = Setup(); State.Failure = FailureSeverity.Error; State.OtherDocFailure = true; result = Run(r);
    Check(result.Success, "다른 문서 오류는 현재 파일 실패로 오인하지 않기");
    r = Setup(); State.UnreadableFailure = true; result = Run(r);
