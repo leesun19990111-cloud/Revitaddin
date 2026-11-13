@@ -643,6 +643,13 @@ public partial class MainWindow : Window
         var available = _models.SelectMany(m => m.Snapshot!.Owners.Concat(m.Snapshot.Rows));
         // 속성규격(버전5)은 값이 아니라 모델별 매개변수 정의 목록으로 평가한다.
         RulePlan plan = file.Version == 5 ? SpecRulePlanner.Plan(file, _models.Select(m => m.Snapshot!), _edits.Values) : RulePlanner.Plan(file, available, _edits.Values, _sample);
+        string? guardhouseReport = null;
+        if (file.GuardhouseRooms)
+        {
+            if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("초소 룸 정리 룰셋을 다시 불러오세요.");
+            guardhouseReport = GuardhouseRoomWorkbook.PathForRule(_loadedRulePath);
+            GuardhouseRoomWorkbook.Save(guardhouseReport, plan.GuardhouseRoomFindings);
+        }
         string? typeCodeReport = null;
         if (file.TypeCodeFix)
         {
@@ -656,6 +663,7 @@ public partial class MainWindow : Window
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
         RuleSummary.Text = $"불러온 룰셋: {file.Name}\n대상 파일: {string.Join(", ", _models.Select(m => m.Title))}\n" + string.Join("\n", plan.Notes.Take(file.Version == 5 ? 40 : int.MaxValue)) +
             (file.Version == 5 && plan.Notes.Count > 40 ? $"\n… 확인 항목 전체 {plan.Notes.Count:N0}줄은 ‘처리 결과’ 탭과 검사 결과 파일(CSV)에서 확인하세요." : "") +
+            (guardhouseReport == null ? "" : $"\n이름·실명 확인 대상 {plan.GuardhouseRoomFindings.Count:N0}개 · 엑셀: {guardhouseReport}") +
             (typeCodeReport == null ? "" : "\n엑셀 점검 목록: " + typeCodeReport) +
             "\n※ 불러올 당시의 결과입니다. 이후 제외/직접 입력한 내용은 아래 목록이 최종 기준입니다.";
         RuleSummaryPanel.Visibility = Visibility.Visible;

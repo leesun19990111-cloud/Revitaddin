@@ -2,6 +2,8 @@ using System.Text.RegularExpressions;
 
 namespace SunnyParameterManager.Core;
 
+public sealed record GuardhouseRoomFinding(string Model, string ElementId, string Number, string Name, string RealName, string Fields);
+
 public static class GuardhouseRoomRules
 {
     public const string NameKey = "builtin:-1006900";
@@ -50,6 +52,13 @@ public static class GuardhouseRoomRules
         return result;
     }
 
+    private static bool IsOtherName(string value)
+    {
+        var name = value.Trim();
+        return name.Length > 0 && name is not ("초소" or "캐노피" or "처마") &&
+            !name.Equals("ND", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void PlanRoom(RuleSet file, List<ParameterRow> rows, RulePlan plan, Dictionary<string, string> assignments)
     {
         plan.MatchedOwners++;
@@ -69,6 +78,13 @@ public static class GuardhouseRoomRules
         string Text(ParameterRow? row) => row?.HasValue == true ? row.Raw : "";
         var realText = Text(realName);
         var nameText = Text(name);
+        bool nameDiffers = IsOtherName(nameText);
+        bool realNameDiffers = IsOtherName(realText);
+        if (nameDiffers || realNameDiffers)
+        {
+            var fields = nameDiffers && realNameDiffers ? "이름, 실명" : nameDiffers ? "이름" : "실명";
+            plan.GuardhouseRoomFindings.Add(new(Path.GetFileName(first.ModelPath), first.ElementId, Text(number), nameText, realText, fields));
+        }
         var effectiveName = realName?.Storage != "String" ? "" : string.IsNullOrWhiteSpace(realText) ? nameText : realText;
         var trimmed = effectiveName.Trim();
         var canopy = trimmed is "캐노피" or "처마";

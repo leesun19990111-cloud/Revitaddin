@@ -1,3 +1,7 @@
+using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
+using SunnyParameterManager.Desktop;
 using SunnyParameterManager.Core;
 
 internal static class GuardhouseRoomTests
@@ -21,8 +25,35 @@ internal static class GuardhouseRoomTests
             .Concat(Room("7", "", "외부 창고", "1F", "일반동-SP"))
             .Concat(Room("8", "", "초소", "지상 1층 / 1F"))
             .Concat(Room("9", "ND", "초소", "1F / 2F"))
+            .Concat(Room("10", "대기실", "초소", "2F"))
+            .Concat(Room("11", "", "창고", "2F"))
             .ToList();
         var plan = RulePlanner.Plan(rule, rows, [], false);
+        check(plan.GuardhouseRoomFindings.Select(x => (x.ElementId, x.Fields)).SequenceEqual(
+            [("2", "이름"), ("6", "이름, 실명"), ("10", "실명"), ("11", "이름")]),
+            "기존 이름·실명 중 하나라도 목록 밖이면 룸당 한 행, 공란·비대상 모델 제외");
+        var folder = Path.Combine(Path.GetTempPath(), "SunnyGuardhouseTest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var rulePath = Path.Combine(folder, "초소_룸_정리.sunnyrules.json");
+            File.WriteAllText(rulePath, json);
+            var report = GuardhouseRoomWorkbook.PathForRule(rulePath);
+            GuardhouseRoomWorkbook.Save(report, plan.GuardhouseRoomFindings);
+            using var zip = ZipFile.OpenRead(report);
+            using var stream = zip.GetEntry("xl/worksheets/sheet1.xml")!.Open();
+            var sheet = XDocument.Load(stream);
+            XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var exported = sheet.Descendants(ns + "row").Select(row =>
+                row.Descendants(ns + "t").Select(cell => cell.Value).ToArray()).ToList();
+            check(Path.GetDirectoryName(report) == folder && exported.Count == 5 &&
+                exported[0].SequenceEqual(["모델 파일", "룸 요소 ID", "기존 번호", "기존 이름", "기존 실명", "확인 항목"]) &&
+                exported.Any(row => row.SequenceEqual(["정문초소-SP.rvt", "2", "200", "기존 이름", "ND", "이름"])) &&
+                exported.Any(row => row.SequenceEqual(["정문초소-SP.rvt", "11", "200", "창고", "", "이름"])) &&
+                (string?)sheet.Descendants(ns + "autoFilter").Single().Attribute("ref") == "A1:F5",
+                "검토 XLSX에 기존값·확인 항목·정확한 필터 범위 저장");
+        }
+        finally { Directory.Delete(folder, true); }
         var byRoom = plan.Edits.ToLookup(e => e.Original.OwnerId);
         string? Value(string room, string field) => byRoom[room].SingleOrDefault(e => (field switch { "이름" => e.Original.ParameterKey == GuardhouseRoomRules.NameKey, "번호" => e.Original.ParameterKey == GuardhouseRoomRules.NumberKey, _ => e.Field == field }))?.Value;
         check(Value("1", "실명") == "캐노피" && Value("1", "이름") == "캐노피" &&
