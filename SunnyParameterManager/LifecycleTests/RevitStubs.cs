@@ -81,7 +81,7 @@ namespace Autodesk.Revit.DB
  public enum DetachFromCentralOption { DoNotDetach, DetachAndPreserveWorksets }
  public enum WorksetConfigurationOption { OpenAllWorksets, CloseAllWorksets }
  public enum WorksetKind { UserWorkset }
- public sealed record ElementId(long Value);
+ public sealed record ElementId(long Value) { public static ElementId InvalidElementId { get; } = new(-1); }
  public sealed class Definition { public object GetDataType() => new(); }
  public sealed class Parameter
  {
@@ -95,7 +95,7 @@ namespace Autodesk.Revit.DB
   public bool Set(double v) => Set(v.ToString(System.Globalization.CultureInfo.InvariantCulture));
   public bool Set(ElementId v) => Set(v.Value.ToString());
  }
- public class Element { public ElementId Id { get; set; } = new(10); public string UniqueId { get; set; } = "type-1"; public virtual string Name { get; set; } = "기존 이름"; public Category? Category { get; set; } = new(); public Parameter Parameter { get; } = new(); public Parameter? get_Parameter(BuiltInParameter id) => id == BuiltInParameter.ROOM_NUMBER ? Parameter : null; }
+ public class Element { public ElementId Id { get; set; } = new(10); public string UniqueId { get; set; } = "type-1"; public virtual string Name { get; set; } = "기존 이름"; public Category? Category { get; set; } = new(); public ElementId GroupId { get; set; } = ElementId.InvalidElementId; public object? Location { get; set; } = new(); public Parameter Parameter { get; } = new(); public Parameter? get_Parameter(BuiltInParameter id) => id == BuiltInParameter.ROOM_NUMBER ? Parameter : null; }
  public class Category { public ElementId Id { get; set; } = new(-2000919); }
  public class ElementType : Element { public string FamilyName { get; set; } = "일체형 계단진행"; public bool CanBeRenamed { get; set; } = true; }
  public sealed class Material : Element { }
@@ -113,6 +113,13 @@ namespace Autodesk.Revit.DB
   public ModelPath GetWorksharingCentralModelPath() => new(CentralPathOverride ?? State.Info.CentralPath);
   public Element? GetElement(string id) => Missing || State.DeletedAfterCommit && State.Events.Contains("tx-commit") ? null : Types.GetValueOrDefault(id, Element);
   public Element? GetElement(ElementId id) => new Element { Category = new() { Id = new(State.NonRoomWarning ? 1 : (long)BuiltInCategory.OST_Rooms) }, Parameter = { Value = Element.Parameter.Value } };
+  public bool DeleteExtra { get; set; }
+  public ICollection<ElementId> Delete(ElementId id)
+  {
+   State.Events.Add("delete-room");
+   Missing = true;
+   return DeleteExtra ? [id, new(99)] : [id];
+  }
   public object GetUnits() => new();
   public void Save() { State.Events.Add("save"); if (State.FailSave) throw new IOException("테스트 저장 실패"); }
   public void SynchronizeWithCentral(TransactWithCentralOptions transact, SynchronizeWithCentralOptions sync)
@@ -186,7 +193,7 @@ namespace Autodesk.Revit.DB
   public TransactionStatus Start() { _original = doc.Element.Parameter.Value; _names = doc.Types.ToDictionary(p => p.Key, p => p.Value.Name); State.Events.Add("group-start"); return _status = TransactionStatus.Started; }
   public TransactionStatus GetStatus() => _status;
   public TransactionStatus Assimilate() { State.Events.Add("assimilate"); return _status = TransactionStatus.Committed; }
-  public void RollBack() { State.Events.Add("rollback"); doc.Element.Parameter.Value = _original; foreach (var pair in _names) doc.Types[pair.Key].Name = pair.Value; _status = TransactionStatus.RolledBack; }
+  public void RollBack() { State.Events.Add("rollback"); doc.Element.Parameter.Value = _original; if (State.Events.Contains("delete-room")) doc.Missing = false; foreach (var pair in _names) doc.Types[pair.Key].Name = pair.Value; _status = TransactionStatus.RolledBack; }
   public void Dispose() { }
  }
  public sealed class RelinquishOptions(bool all) : IDisposable { public bool All => all; public void Dispose() { } }
@@ -235,6 +242,7 @@ namespace SunnyParameterManager.Bridge
  }
  internal sealed class ParameterReader(Document doc, ModelSnapshot model)
  {
+  internal static bool IsUnplacedRoom(Element owner) => owner.Category?.Id.Value == (int)BuiltInCategory.OST_Rooms && owner.Location == null;
   public MaterialEvidence ReadMaterial(Element owner, bool fresh = false) => State.MaterialMissing && !(State.MaterialChangesAfterSet && State.Events.Contains("set"))
    ? new() { FallbackAllowed = true, Reason = "유형 재료 없음" }
    : new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = State.MaterialChangesAfterSet && State.Events.Contains("set") ? "material-v2" : "material-v1" };

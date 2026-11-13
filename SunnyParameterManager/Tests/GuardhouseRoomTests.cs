@@ -11,9 +11,9 @@ internal static class GuardhouseRoomTests
         const string json = """{"Version":13,"Name":"초소 룸 정리","Rules":[],"GuardhouseRooms":true}""";
         var rule = RulePlanner.Parse(json);
         var query = QueryPlan.FromRules(rule);
-        check(query.IncludeRoomUse && !query.IncludeOtherElements && query.RoomIdentityVersion == 2 &&
+        check(query.IncludeRoomUse && !query.IncludeOtherElements && query.RoomIdentityVersion == 3 &&
             query.Keys.Contains(GuardhouseRoomRules.LevelKey), "초소 룰셋은 Room 및 기본 레벨만 선택 조회");
-        reject(() => QueryPlan.RequireCoverage([new ModelSnapshot { RoomIdentityVersion = 1 }], rule), "이전 Room 조회는 초소 룰셋에 재사용하지 않음");
+        reject(() => QueryPlan.RequireCoverage([new ModelSnapshot { RoomIdentityVersion = 2 }], rule), "배치 상태 없는 이전 Room 조회는 재사용하지 않음");
         reject(() => RulePlanner.Parse(json.Replace("\"Rules\":[]", "\"Rules\":[],\"RoomReview\":true")), "초소 룰셋과 읽기 전용 룸 검토 혼합 거부");
 
         var rows = Room("1", "", "처마", "지하 2층")
@@ -77,6 +77,29 @@ internal static class GuardhouseRoomTests
         var floor = byRoom["2"].Single(e => e.Field == "층");
         check(floor.GuardhouseRoomSources!.Any(r => r.ParameterKey == GuardhouseRoomRules.LevelKey), "층 수정에 레벨 조회 근거 포함");
         reject(() => RulePlanner.Plan(rule, rows, [new ValueEdit { Original = floor.Original, Value = "03" }], false), "이전 층 변경 예정과 충돌하면 검토 보류");
+        var unplaced = Room("x", "", "초소", "1F");
+        foreach (var row in unplaced) row.RoomUnplaced = true;
+        var otherModel = Room("y", "", "초소", "배치 안 됨", "일반동-SP");
+        foreach (var row in otherModel) row.RoomUnplaced = true;
+        var extendedRows = Room("s", "초소", "단초소", "2F")
+            .Concat(Room("t", "", "TVOR초소", "1F"))
+            .Concat(Room("p", "초소", "필로티", "1F"))
+            .Concat(Room("z", "초소", "초소", "배치 안 됨"))
+            .Concat(unplaced).Concat(otherModel).ToList();
+        var extended = RulePlanner.Plan(rule, extendedRows, [], false);
+        var deletion = extended.Edits.Single(e => e.DeleteUnplacedRoom);
+        check(deletion.Original.OwnerId == "x" && extended.Edits.Count(e => e.Original.OwnerId == "x") == 1 &&
+            extended.Edits.Any(e => e.Original.OwnerId == "z") && extended.Edits.All(e => e.Original.OwnerId != "y"),
+            "실제 미배치 초소 룸만 삭제하고 다른 모델과 위치가 있는 룸은 보존");
+        string? Extended(string id, string field) => extended.Edits.SingleOrDefault(e => e.Original.OwnerId == id && e.Field == field)?.Value;
+        check(Extended("s", "실명") == "단초소" && Extended("s", "층") == "02" &&
+            Extended("t", "실명") == "TVOR초소" && Extended("t", "층") == "01" &&
+            Extended("p", "실명") == "필로티" && Extended("p", "층") == null && extended.GuardhouseRoomFindings.Count == 0,
+            "단초소·TVOR초소의 이름과 층을 반영하고 필로티는 실명 복사");
+        check(RulePlanner.Plan(rule, extendedRows, [deletion], false).Edits.Count(e => e.DeleteUnplacedRoom) == 1,
+            "삭제 예정인 상태에서 재검토해도 같은 룸을 한 번만 표시");
+        reject(() => RulePlanner.Plan(rule, extendedRows, [new ValueEdit { Original = unplaced[0], Value = "초소" }], false),
+            "삭제 대상 룸의 이전 값 변경과 충돌하면 검토 보류");
         foreach (var edit in plan.Edits)
         {
             edit.Original.Raw = edit.Value;

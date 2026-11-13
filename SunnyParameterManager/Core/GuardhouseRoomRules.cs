@@ -32,7 +32,7 @@ public static class GuardhouseRoomRules
         foreach (var model in rooms)
         {
             var modelName = Path.GetFileNameWithoutExtension(model.Key);
-            if (!modelName.Contains("초소", StringComparison.Ordinal) && !modelName.Contains("망루", StringComparison.Ordinal))
+            if (!IsGuardhouseModel(model.Key))
             {
                 result.Notes.Add($"{modelName} · 파일명에서 초소 또는 망루를 확인할 수 없어 제외");
                 continue;
@@ -40,22 +40,36 @@ public static class GuardhouseRoomRules
             foreach (var room in model.GroupBy(r => r.OwnerId))
                 PlanRoom(file, room.ToList(), result, assignments);
         }
+        var deletions = result.Edits.Where(e => e.DeleteUnplacedRoom)
+            .ToDictionary(e => (e.Original.ModelPath.ToUpperInvariant(), e.Original.OwnerId));
         foreach (var edit in pending)
         {
             var row = edit.Original;
+            var deletion = deletions.GetValueOrDefault((row.ModelPath.ToUpperInvariant(), row.OwnerId));
+            if (deletion != null && edit.DeleteUnplacedRoom && deletion.Original.Key == row.Key) continue;
             bool isInput = row.Scope == "인스턴스" && row.CategoryKey == RoomUsePlanner.RoomCategory &&
                 (row.ParameterKey is NameKey or NumberKey or LevelKey || row.Name is "실명" or "지상지하" or "층");
-            if (isInput && (!assignments.TryGetValue(row.Key, out var value) || edit.Mode != "입력" || edit.Value != value))
+            if (deletion != null || edit.DeleteUnplacedRoom ||
+                isInput && (!assignments.TryGetValue(row.Key, out var value) || edit.Mode != "입력" || edit.Value != value))
                 throw new InvalidOperationException($"{row.ModelTitle} / 룸 {row.ElementId} / {row.Name}: 기존 변경 예정이 초소 룸 정리 결과와 다릅니다. 해당 변경을 제외하고 다시 검토하세요.");
         }
-        result.Notes.Insert(0, $"초소 룸 {result.MatchedOwners:N0}개 검토 · 변경 {result.Edits.Count:N0}개");
+        int deleteCount = result.Edits.Count(e => e.DeleteUnplacedRoom);
+        result.Notes.Insert(0, $"초소 룸 {result.MatchedOwners:N0}개 검토 · 값 변경 {result.Edits.Count - deleteCount:N0}건 · 미배치 룸 삭제 {deleteCount:N0}개");
         return result;
     }
+
+    public static bool IsGuardhouseModel(string path)
+    {
+        var name = Path.GetFileNameWithoutExtension(path);
+        return name.Contains("초소", StringComparison.Ordinal) || name.Contains("망루", StringComparison.Ordinal);
+    }
+
+    private static bool CopyRoomName(string name) => name is "단초소" or "TVOR초소" or "필로티";
 
     private static bool IsOtherName(string value)
     {
         var name = value.Trim();
-        return name.Length > 0 && name is not ("초소" or "캐노피" or "처마") &&
+        return name.Length > 0 && !CopyRoomName(name) && name is not ("초소" or "캐노피" or "처마") &&
             !name.Equals("ND", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -85,6 +99,18 @@ public static class GuardhouseRoomRules
             var fields = nameDiffers && realNameDiffers ? "이름, 실명" : nameDiffers ? "이름" : "실명";
             plan.GuardhouseRoomFindings.Add(new(Path.GetFileName(first.ModelPath), first.ElementId, Text(number), nameText, realText, fields));
         }
+        if (first.RoomUnplaced)
+        {
+            var identity = number ?? name ?? rows.FirstOrDefault(r => r.ParameterKey.Length > 0);
+            if (identity == null)
+                throw new InvalidOperationException($"{label} · 미배치 룸의 식별 정보를 읽을 수 없습니다. 다시 조회하세요.");
+            plan.Edits.Add(new ValueEdit
+            {
+                Original = identity, DeleteUnplacedRoom = true, Value = "일람표에서도 제거",
+                Reason = "레벨: 배치 안 됨", RoomName = nameText
+            });
+            return;
+        }
         static string NormalizeAlias(string value) => value.Trim() switch
         {
             "내부" => "초소",
@@ -92,11 +118,13 @@ public static class GuardhouseRoomRules
             _ => value
         };
         var normalizedName = NormalizeAlias(nameText);
+        var trimmedName = normalizedName.Trim();
         var effectiveName = realName?.Storage != "String" ? "" :
+            CopyRoomName(trimmedName) ? trimmedName :
             string.IsNullOrWhiteSpace(realText) ? normalizedName : NormalizeAlias(realText);
         var trimmed = effectiveName.Trim();
         var canopy = trimmed is "캐노피" or "처마";
-        var guardhouse = trimmed == "초소" || trimmed.Equals("ND", StringComparison.OrdinalIgnoreCase);
+        var guardhouse = trimmed is "초소" or "단초소" or "TVOR초소" || trimmed.Equals("ND", StringComparison.OrdinalIgnoreCase);
         var finalName = trimmed == "처마" ? "캐노피" : effectiveName;
         if (realName != null && realName.Storage != "String")
         {

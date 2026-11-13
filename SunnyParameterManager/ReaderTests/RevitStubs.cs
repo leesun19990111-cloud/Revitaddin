@@ -41,6 +41,7 @@ namespace Autodesk.Revit.DB
   private static long _next;
   public ElementId Id { get; } = new(++_next); public string UniqueId { get; } = Guid.NewGuid().ToString();
   public virtual string Name { get; set; } = "대상"; public Category? Category { get; set; } = new();
+  public object? Location { get; set; } = new();
   public Guid VersionGuid { get; set; } = Guid.NewGuid();
   public bool FailGroupRead { get; set; }
   private ElementId _groupId = ElementId.InvalidElementId;

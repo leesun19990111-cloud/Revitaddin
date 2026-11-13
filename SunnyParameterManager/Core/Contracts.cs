@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.7.0";
+    public const string Release = "0.7.1";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -115,6 +115,8 @@ public sealed class ParameterRow
     public string TypeName { get; set; } = "";
     public string TypeOwnerId { get; set; } = "";
     public string ElementName { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RoomUnplaced { get; set; }
     public string SheetNumber { get; set; } = "";
     [JsonIgnore] public string TargetName => Scope == "시트" ? (SheetNumber + " · " + ElementName).Trim(' ', '·') : Scope == "뷰" ? ElementName : TypeName;
     public string ParameterKey { get; set; } = "";
@@ -174,6 +176,8 @@ public sealed class ValueEdit
     public string RoomName { get; set; } = "";
     public MaterialEvidence? MaterialSource { get; set; }
     public List<ParameterRow>? GuardhouseRoomSources { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool DeleteUnplacedRoom { get; set; }
     public bool KacCleanup { get; set; }
     // 대상 모델에 없는 공유 매개변수를 프로젝트 정보에 새로 연결한 뒤 값을 넣는다. 룰셋이 명시한 경우만 생성된다.
     public SharedParameterAddition? AddParameter { get; set; }
@@ -184,7 +188,7 @@ public sealed class ValueEdit
         Original.Scope is "뷰" or "시트" ? Original.Scope + " : " + Original.TargetName :
         Original.Scope == "인스턴스" && Original.CategoryKey == RoomUsePlanner.RoomCategory && Original.ElementName.Length > 0
             ? "Room : " + Original.ElementName : Original.Family + " : " + Original.TypeName;
-    [JsonIgnore] public string Field => Original.Name;
+    [JsonIgnore] public string Field => DeleteUnplacedRoom ? "미배치 룸 삭제" : Original.Name;
     [JsonIgnore] public string Before => Original.ValueLabel;
 }
 

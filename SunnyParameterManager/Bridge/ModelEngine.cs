@@ -171,6 +171,9 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 if (ownership.Length > 0) throw new InvalidOperationException(ownership);
                 var reader = new ParameterReader(doc, metadata);
                 List<WriteAction> writes;
+                bool deletingRooms = req.Edits.Any(e => e.DeleteUnplacedRoom);
+                if (deletingRooms && (transferring || removingLinks || req.Edits.Any(e => e.DefinitionFix != null || e.KacCleanup)))
+                    throw new InvalidOperationException("미배치 룸 삭제와 다른 정리 작업을 같은 모델에 섞을 수 없습니다.");
                 if (transferring)
                 {
                     var expectedSource = req.TransferSource!;
@@ -224,7 +227,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     if (group.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집 묶음을 시작할 수 없습니다.");
                     try
                     {
-                        using var tx = new Transaction(doc, transferring ? "프로젝트 매개변수 정의 전송" : removingLinks ? "모든 링크·가져오기 완전 제거" : req.Edits.Any(e => e.DefinitionFix != null) ? "속성규격 매개변수 정의 정리" : "선택한 매개변수 값 변경");
+                        using var tx = new Transaction(doc, transferring ? "프로젝트 매개변수 정의 전송" : removingLinks ? "모든 링크·가져오기 완전 제거" : deletingRooms ? "초소 룸 값 변경 및 미배치 룸 삭제" : req.Edits.Any(e => e.DefinitionFix != null) ? "속성규격 매개변수 정의 정리" : "선택한 매개변수 값 변경");
                         if (tx.Start() != TransactionStatus.Started) throw new InvalidOperationException("편집을 시작할 수 없습니다.");
                         editingStarted = true;
                         var failureOptions = tx.GetFailureHandlingOptions().SetForcedModalHandling(true);
@@ -272,6 +275,8 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 result.Message = doc.IsWorkshared ? "중앙 동기화 및 차용 요소·모든 작업세트 소유권 반환 호출이 완료되었습니다. 반환 후 검사에서 현재 사용자 소유권 잔존이 발견되지 않았습니다. 다른 사용자의 로컬은 최신 내용 가져오기가 필요합니다." : "파일 저장이 완료되었습니다.";
                 if (roomWarnings is { Acknowledged: > 0 })
                     result.Message += $"\n초소 룸 중복 번호 경고 {roomWarnings.Acknowledged:N0}건을 자동 확인했습니다.";
+                if (deletingRooms)
+                    result.Message += $"\n미배치 룸 {req.Edits.Count(e => e.DeleteUnplacedRoom):N0}개를 모델에서 삭제했습니다.";
                 if (restoredStairNames > 0) result.Message += $"\n매개변수 확정 중 재생성된 계단진행 유형 {restoredStairNames:N0}개의 이름을 승인한 이름으로 보존하고 재검증했습니다.";
                 if (removingLinks) result.Message = $"링크 정의·가져오기 완전 제거 및 승인한 종속 요소 삭제: 총 {result.Applied:N0}개. 외부 원본 파일은 변경하지 않았습니다.\n" + result.Message;
                 if (transferring) result.Message = $"기준 모델의 프로젝트 매개변수 정의 {result.Applied:N0}개를 카테고리 연결과 함께 추가했습니다. 값은 복사하지 않았습니다.\n" + result.Message;
@@ -328,12 +333,19 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
 
     internal sealed record WriteAction(Action Set, Action Verify);
 
-    private static List<WriteAction> PrepareAll(RevitApplication app, Document doc, ParameterReader reader, IEnumerable<ValueEdit> edits)
+    private static List<WriteAction> PrepareAll(RevitApplication app, Document doc, ParameterReader reader, IReadOnlyCollection<ValueEdit> edits)
     {
+        var deleteOwners = edits.Where(e => e.DeleteUnplacedRoom).Select(e => e.Original.OwnerId).ToHashSet();
+        if (edits.Count(e => deleteOwners.Contains(e.Original.OwnerId)) != deleteOwners.Count)
+            throw new InvalidOperationException("삭제 예정인 룸의 중복 변경을 제외하고 다시 적용하세요.");
         var writes = new List<WriteAction>(); var issues = new List<string>(); int count = 0;
         foreach (var edit in edits)
         {
-            try { writes.Add(edit.AddParameter != null ? SharedParameterAdder.Prepare(app, doc, reader, edit) : Prepare(doc, reader, edit)); }
+            try
+            {
+                writes.Add(edit.DeleteUnplacedRoom ? PrepareUnplacedRoomDelete(doc, edit) :
+                    edit.AddParameter != null ? SharedParameterAdder.Prepare(app, doc, reader, edit) : Prepare(doc, reader, edit));
+            }
             catch (InvalidOperationException ex)
             {
                 count++;
@@ -343,6 +355,29 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         if (count > 0) throw new InvalidOperationException($"적용 전 재검증에서 {count:N0}개 변경 항목을 보류했습니다. 이 모델에는 값을 쓰지 않았습니다.\n" +
             string.Join("\n\n", issues) + (count > issues.Count ? $"\n외 {count - issues.Count:N0}개 항목. 이 파일을 다시 조회하세요." : ""));
         return writes;
+    }
+
+    private static WriteAction PrepareUnplacedRoomDelete(Document doc, ValueEdit edit)
+    {
+        var expected = edit.Original;
+        var owner = doc.GetElement(expected.OwnerId);
+        if (!GuardhouseRoomRules.IsGuardhouseModel(expected.ModelPath) || !expected.RoomUnplaced ||
+            edit.AddParameter != null || owner == null || owner.UniqueId != expected.OwnerId ||
+            owner.Id.Value.ToString(Invariant) != expected.ElementId ||
+            !ParameterReader.IsUnplacedRoom(owner) || owner.GroupId != ElementId.InvalidElementId)
+            throw new InvalidOperationException($"룸 {expected.ElementId} · 삭제 대상의 식별 또는 미배치 상태가 조회 결과와 다릅니다. 다시 조회하세요.");
+
+        var id = owner.Id;
+        return new WriteAction(() =>
+        {
+            var deleted = doc.Delete(id);
+            if (deleted.Count != 1 || !deleted.Contains(id))
+                throw new InvalidOperationException($"룸 {id.Value} · Revit이 승인 범위와 다른 요소를 삭제하여 이번 모델의 변경을 취소합니다.");
+        }, () =>
+        {
+            if (doc.GetElement(expected.OwnerId) != null)
+                throw new InvalidOperationException($"룸 {id.Value} · 미배치 룸 삭제 결과를 확인하지 못했습니다.");
+        });
     }
 
     internal static BasicFileInfo ReadFileInfo(string source, Action<string> step, Action<int>? wait = null)

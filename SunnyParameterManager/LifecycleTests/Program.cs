@@ -27,6 +27,28 @@ internal static class Program
    // 실제 RVT가 아닌 대역 검사용 텍스트 파일. 사용자 파일은 사용하지 않는다.
    File.WriteAllText(_source, "테스트 대역 원본"); File.WriteAllText(_central, "테스트 대역 중앙");
    StairNameTests.Run(Check);
+   Request RoomDeletion()
+   {
+    var request = Setup();
+    request.Path = Path.Combine(_root, "초소-SP.rvt");
+    File.Copy(_source, request.Path, true);
+    request.CanonicalPath = ModelEngine.Canonical(request.Path);
+    State.Doc.Element.Category = new() { Id = new((long)BuiltInCategory.OST_Rooms) };
+    State.Doc.Element.Location = null;
+    request.Edits = [new() { Original = new() { ModelPath = request.Path, OwnerId = State.Doc.Element.UniqueId, ElementId = "10",
+      Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory, ParameterKey = GuardhouseRoomRules.NumberKey, RoomUnplaced = true },
+      DeleteUnplacedRoom = true }];
+    return request;
+   }
+   var deletion = RoomDeletion();
+   var deleted = Run(deletion);
+   Check(deleted.Success && State.Doc.Missing && State.Events.Contains("delete-room") && State.Events.Contains("save"), "미배치 룸은 요소를 삭제하고 저장");
+   deletion = RoomDeletion(); State.Doc.Element.Location = new();
+   deleted = Run(deletion);
+   Check(!deleted.Success && !State.Doc.Missing && !State.Events.Contains("tx-start"), "조회 뒤 배치된 룸은 트랜잭션 전에 차단");
+   deletion = RoomDeletion(); State.Doc.DeleteExtra = true;
+   deleted = Run(deletion);
+   Check(!deleted.Success && !State.Doc.Missing && State.Events.Contains("rollback") && !State.Events.Contains("save"), "승인 범위 밖 요소 삭제가 발생하면 이번 모델을 롤백");
    var r = Setup(); r.Operation = "조회"; var result = Run(r);
    Check(result.Success && result.Snapshot!.Rows.Count == 1 && State.Events.SequenceEqual(new[] { "open", "close" }), "조회는 저장/트랜잭션 없이 닫기");
    r = Setup(); State.InfoFailures = 2; int waits = 0;
