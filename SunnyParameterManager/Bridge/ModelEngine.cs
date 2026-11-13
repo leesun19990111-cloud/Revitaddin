@@ -389,6 +389,16 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         var p = ParameterReader.Resolve(owner, expected.ParameterKey) ?? throw new InvalidOperationException("매개변수가 없거나 중복됩니다: " + expected.Name);
         var actual = reader.Read(owner, p);
         EditPlanner.CheckFresh(expected, actual);
+        if (edit.GuardhouseRoomSources != null)
+        {
+            foreach (var source in edit.GuardhouseRoomSources)
+            {
+                var sourceParameter = ParameterReader.Resolve(owner, source.ParameterKey);
+                var current = sourceParameter == null ? null : reader.Read(owner, sourceParameter);
+                if (current == null || current.HasValue != source.HasValue || current.Raw != source.Raw || current.Display != source.Display)
+                    throw new InvalidOperationException($"{expected.ElementId} / {source.Name}: 초소 룸 판정 근거가 바뀌었습니다. 다시 조회하고 검토하세요.");
+            }
+        }
         if (edit.MaterialSource != null) KacRulePlanner.CheckMaterial(edit, reader.ReadMaterial(owner, true));
         if (doc.IsWorkshared && WorksharingUtils.GetCheckoutStatus(doc, owner.Id) == CheckoutStatus.OwnedByOtherUser)
             throw new InvalidOperationException("다른 사용자가 소유하고 있습니다: " + expected.TypeName);
@@ -442,7 +452,9 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             var freshParameter = ParameterReader.Resolve(freshOwner, expected.ParameterKey) ?? throw new InvalidOperationException("확정 후 대상 매개변수가 없어졌습니다: " + expected.Name + " / 요소 ID: " + expected.ElementId);
             var verified = reader.Read(freshOwner, freshParameter);
             EditPlanner.CheckGroupFresh(expected, verified);
-            if (expected.TypeOwnerId != verified.TypeOwnerId || expected.TypeKey != verified.TypeKey)
+            if (expected.TypeOwnerId != verified.TypeOwnerId || (edit.GuardhouseRoomSources != null && expected.TypeOwnerId.Length == 0
+                ? expected.Scope != verified.Scope || expected.CategoryKey != verified.CategoryKey
+                : expected.TypeKey != verified.TypeKey))
                 throw new InvalidOperationException($"Revit 확정 후 요소의 유형 정보가 달라 이번 묶음을 취소합니다.\n요소 ID: {expected.ElementId} / 항목: {expected.Name}\n적용 전: {expected.Family} / {expected.TypeName} / 유형 식별자 {expected.TypeOwnerId}\n적용 후: {verified.Family} / {verified.TypeName} / 유형 식별자 {verified.TypeOwnerId}\n같은 작업을 반복하지 말고 원본 요소 확인 후 다시 조회하세요.");
             if (expected.OwnerId != verified.OwnerId || expected.ParameterKey != verified.ParameterKey || expected.DataType != verified.DataType || expected.Storage != verified.Storage)
                 throw new InvalidOperationException("확정 후 대상 매개변수의 식별 정보가 달라 이번 묶음을 취소합니다: " + expected.Name + " / 요소 ID: " + expected.ElementId);

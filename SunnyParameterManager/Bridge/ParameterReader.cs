@@ -67,6 +67,15 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
             }
             if (query?.IncludeTypeCodeFix == true) continue;
             var parameters = element.Parameters.Cast<Parameter>().ToList();
+            if (element.Category?.Id.Value == (int)BuiltInCategory.OST_Rooms &&
+                (query == null || query.RoomIdentityVersion >= 2))
+            {
+                foreach (var id in new[] { BuiltInParameter.ROOM_NAME, BuiltInParameter.ROOM_NUMBER, BuiltInParameter.ROOM_LEVEL_ID })
+                {
+                    var parameter = element.get_Parameter(id);
+                    if (parameter != null && parameters.All(p => p.Id != parameter.Id)) parameters.Add(parameter);
+                }
+            }
             // 소속 작업세트는 일부 요소의 열거에 없더라도 직접 접근이 지원된다.
             if (element is not ElementType && element is not ProjectInfo && element is not View && doc.IsWorkshared)
             {
@@ -102,7 +111,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         }
         Notices.Add(query == null ? "모델 유형·인스턴스, 프로젝트 정보, 뷰·시트의 매개변수를 조회합니다. 뷰 템플릿 자체와 내부 뷰는 제외합니다. 링크 내부는 원본 파일을 별도로 등록하세요." :
             "룰셋 선택 조회: " + string.Join(", ", query.Names) + ". 다른 항목은 미조회이며 빈 값이 아닙니다. 링크 내부는 원본 파일을 별도로 등록하세요.");
-        if (query == null || query.IncludeRoomUse) model.RoomIdentityVersion = 1;
+        if (query == null || query.IncludeRoomUse) model.RoomIdentityVersion = query?.RoomIdentityVersion >= 2 || query == null ? 2 : 1;
         return result;
     }
 

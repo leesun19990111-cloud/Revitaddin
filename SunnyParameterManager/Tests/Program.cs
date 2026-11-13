@@ -25,6 +25,7 @@ internal static class Program
             KacRuleTests.Run(Check, Reject);
             SpaceRuleTests.Run(Check, Reject);
             RoomUseTests.Run(Check, Reject);
+            GuardhouseRoomTests.Run(Check, Reject);
             RoomReviewTests.Run(Check, Reject);
             TransferTempCleanupTests.Run(Check);
             SpecRuleTests.Run(Check, Reject);

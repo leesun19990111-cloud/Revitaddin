@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.6.6";
+    public const string Release = "0.6.7";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -173,6 +173,7 @@ public sealed class ValueEdit
     public string Reason { get; set; } = "직접 입력";
     public string RoomName { get; set; } = "";
     public MaterialEvidence? MaterialSource { get; set; }
+    public List<ParameterRow>? GuardhouseRoomSources { get; set; }
     public bool KacCleanup { get; set; }
     // 대상 모델에 없는 공유 매개변수를 프로젝트 정보에 새로 연결한 뒤 값을 넣는다. 룰셋이 명시한 경우만 생성된다.
     public SharedParameterAddition? AddParameter { get; set; }

@@ -449,7 +449,7 @@ public partial class MainWindow : Window
         CopyExpander.IsExpanded = file.ProjectParameterTransfer;
         TransferSourceHint.Visibility = file.ProjectParameterTransfer ? Visibility.Visible : Visibility.Collapsed;
         EditActions.Visibility = file.ProjectParameterTransfer ? Visibility.Collapsed : Visibility.Visible;
-        ReviewExplanation.Text = file.RoomReview ? "ROOM 전체를 모델별 20열 엑셀로 저장합니다. RVT 값은 변경하지 않습니다." : file.ProjectParameterTransfer
+        ReviewExplanation.Text = file.GuardhouseRooms ? "파일명에 초소 또는 망루가 포함된 RVT의 룸을 정리합니다. 같은 모델의 룸 번호를 모두 001로 설정합니다." : file.RoomReview ? "ROOM 전체를 모델별 20열 엑셀로 저장합니다. RVT 값은 변경하지 않습니다." : file.ProjectParameterTransfer
             ? "기준 파일과 대상 파일을 확인합니다. 적용할 때 각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행하고 '프로젝트 매개변수'만 선택합니다."
             : "아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요.";
         _loadedRulePath = sourcePath;

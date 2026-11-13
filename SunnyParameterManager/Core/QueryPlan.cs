@@ -37,8 +37,9 @@ public sealed class QueryPlan
             throw new InvalidOperationException("중앙모델 재생성은 파일 상태만 별도로 조회합니다.");
         if (TransferOnly && (IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix || IncludeOuterMaterial))
             throw new InvalidOperationException("매개변수 전송 조회는 다른 점검·정리 작업과 함께 실행하지 않습니다.");
-        if (IncludeRoomUse && (RoomIdentityVersion is < 0 or > 1 || !Scopes.Contains("인스턴스") ||
-            !IncludeOtherElements && (Scopes.Count != 1 || IncludeOuterMaterial) || !Names.Contains("실명") || !Names.Contains("용도") ||
+        if (IncludeRoomUse && (RoomIdentityVersion is < 0 or > 2 || !Scopes.Contains("인스턴스") ||
+            !IncludeOtherElements && (Scopes.Count != 1 || IncludeOuterMaterial) || !Names.Contains("실명") ||
+            (!Names.Contains("용도") && !Keys.Contains(GuardhouseRoomRules.LevelKey)) ||
             TransferOnly || IncludeCentralRebuild || IncludeProjectBasePointAudit || IncludeDefinitions || IncludeCleanup || IncludeMaterialAudit || IncludeTypeCodeFix))
             throw new InvalidOperationException("Room 용도 판정은 Room 인스턴스의 실명·용도 필드를 읽습니다.");
     }
@@ -57,7 +58,15 @@ public sealed class QueryPlan
         RulePlanner.Validate(rules);
         var plan = new QueryPlan();
         if (rules.Version == 10) return ProjectParameterTransfer.DefinitionQuery();
-        if (rules.Version == 12)
+        if (rules.Version == 13)
+        {
+            plan.Scopes = ["인스턴스"];
+            plan.Names = ["실명", "지상지하", "층"];
+            plan.Keys = [GuardhouseRoomRules.NameKey, GuardhouseRoomRules.NumberKey, GuardhouseRoomRules.LevelKey];
+            plan.IncludeRoomUse = true;
+            plan.RoomIdentityVersion = 2;
+        }
+        else if (rules.Version == 12)
         {
             plan.Scopes = ["인스턴스"];
             plan.Names = RoomReviewRules.Fields.ToList();
