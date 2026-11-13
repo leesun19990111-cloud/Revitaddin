@@ -14,7 +14,7 @@ public static class GuardhouseRoomWorkbook
         return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, FileName);
     }
 
-    public static void Save(string path, IEnumerable<GuardhouseRoomFinding> findings) =>
+    public static string Save(string path, IEnumerable<GuardhouseRoomFinding> findings) =>
         TypeCodeWorkbook.SaveTable(path, "이름·실명 검토",
             ["모델 파일", "룸 요소 ID", "기존 번호", "기존 이름", "기존 실명", "확인 항목"],
             [46, 18, 16, 34, 34, 20],

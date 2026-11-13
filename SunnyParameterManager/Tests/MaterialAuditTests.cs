@@ -37,10 +37,11 @@ internal static class MaterialAuditTests
             check(xml.Descendants(ns + "c").Any(c => (string?)c.Attribute("r") == "J2" && (string?)c.Element(ns + "v") == "3") &&
                 xml.Descendants(ns + "autoFilter").Any(), "점검 XLSX 숫자 수량·필터");
             zip.Dispose();
-            MaterialAuditWorkbook.Save(path, []);
-            using var replaced = ZipFile.OpenRead(path);
-            check(Directory.GetFiles(folder, "*.xlsx").SequenceEqual([path]) && replaced.GetEntry("xl/worksheets/sheet1.xml") != null,
-                "반복 저장은 같은 XLSX 한 파일만 갱신");
+            var original = File.ReadAllBytes(path);
+            var second = MaterialAuditWorkbook.Save(path, []);
+            using var replaced = ZipFile.OpenRead(second);
+            check(second != path && File.ReadAllBytes(path).SequenceEqual(original) && replaced.GetEntry("xl/worksheets/sheet1.xml") != null,
+                "반복 저장 시 재료 점검 원본 유지");
             replaced.Dispose();
         }
         finally { Directory.Delete(folder, true); }

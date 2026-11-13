@@ -52,8 +52,9 @@ internal static class TypeCodeTests
             var cells = xml.Descendants(ns + "t").Select(e => e.Value).ToArray();
             check(cells.Contains("현재 유형명") && cells.Contains("변경 후 유형명") && cells.Contains("KAC-S-FR1230_바닥") && xml.Descendants(ns + "autoFilter").Any(), "XLSX 이름 전후·필터 기록");
             zip.Dispose();
-            TypeCodeWorkbook.Save(report, []);
-            check(Directory.GetFiles(folder, "*.xlsx").SequenceEqual([report]), "보고서 한 파일만 갱신");
+            var original = File.ReadAllBytes(report);
+            var second = TypeCodeWorkbook.Save(report, []);
+            check(second != report && File.Exists(second) && File.ReadAllBytes(report).SequenceEqual(original), "이전 유형 코드 보고서 보존");
         }
         finally { Directory.Delete(folder, true); }
     }

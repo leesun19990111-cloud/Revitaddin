@@ -69,8 +69,9 @@ internal static class ProjectBasePointTests
                 check(survey.Descendants(main + "t").Any(t => (string?)t == "측량 기준점 없음"),
                     "측량 기준점 부재를 해당 시트에 표시");
             }
-            ProjectBasePointWorkbook.Save(report, rows);
-            check(Directory.GetFiles(folder, "*.xlsx").SequenceEqual([report]), "반복 저장은 같은 엑셀 한 파일만 갱신");
+            var original = File.ReadAllBytes(report);
+            var second = ProjectBasePointWorkbook.Save(report, rows);
+            check(second != report && File.Exists(second) && File.ReadAllBytes(report).SequenceEqual(original), "같은 날의 기준점 보고서 보존");
         }
         finally { Directory.Delete(folder, true); }
     }

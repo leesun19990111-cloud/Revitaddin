@@ -85,7 +85,15 @@ public static class GuardhouseRoomRules
             var fields = nameDiffers && realNameDiffers ? "이름, 실명" : nameDiffers ? "이름" : "실명";
             plan.GuardhouseRoomFindings.Add(new(Path.GetFileName(first.ModelPath), first.ElementId, Text(number), nameText, realText, fields));
         }
-        var effectiveName = realName?.Storage != "String" ? "" : string.IsNullOrWhiteSpace(realText) ? nameText : realText;
+        static string NormalizeAlias(string value) => value.Trim() switch
+        {
+            "내부" => "초소",
+            "외부" => "캐노피",
+            _ => value
+        };
+        var normalizedName = NormalizeAlias(nameText);
+        var effectiveName = realName?.Storage != "String" ? "" :
+            string.IsNullOrWhiteSpace(realText) ? normalizedName : NormalizeAlias(realText);
         var trimmed = effectiveName.Trim();
         var canopy = trimmed is "캐노피" or "처마";
         var guardhouse = trimmed == "초소" || trimmed.Equals("ND", StringComparison.OrdinalIgnoreCase);
@@ -114,7 +122,8 @@ public static class GuardhouseRoomRules
             plan.Notes.Add($"{label} · 복사할 이름이 없어 실명 유지");
         else if (realName?.Storage == "String" && finalName.Length > 0)
             Set(realName, finalName);
-        if (canopy && nameText.Trim() == "처마") Set(name, "캐노피");
+        if (canopy && normalizedName.Trim() == "처마") normalizedName = "캐노피";
+        if (normalizedName != nameText) Set(name, normalizedName);
         if (canopy || guardhouse) Set(Find("지상지하"), "F");
         if (floor != null) Set(Find("층"), floor);
         Set(number, "001");

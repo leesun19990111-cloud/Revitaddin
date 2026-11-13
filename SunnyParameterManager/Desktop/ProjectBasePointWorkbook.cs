@@ -31,7 +31,7 @@ public static class ProjectBasePointWorkbook
         return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, $"{date}_{ReportFileName}");
     }
 
-    public static void Save(string path, IEnumerable<ModelSnapshot> models)
+    public static string Save(string path, IEnumerable<ModelSnapshot> models)
     {
         var rows = models.ToList();
         if (rows.Any(m => m.ProjectBasePointAudit == null))
@@ -43,7 +43,7 @@ public static class ProjectBasePointWorkbook
         try
         {
             WriteWorkbook(temporary, rows);
-            File.Move(temporary, fullPath, true);
+            return WorkbookOutput.Publish(temporary, fullPath);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }

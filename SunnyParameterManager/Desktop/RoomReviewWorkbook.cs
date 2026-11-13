@@ -22,7 +22,7 @@ public static class RoomReviewWorkbook
         return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, ReportFileName);
     }
 
-    public static void Save(string path, IEnumerable<ModelSnapshot> models, IEnumerable<RoomSpaceFinding> findings)
+    public static string Save(string path, IEnumerable<ModelSnapshot> models, IEnumerable<RoomSpaceFinding> findings)
     {
         var modelList = models.ToList();
         if (modelList.Count == 0) throw new InvalidOperationException("공간정보를 점검할 모델이 없습니다.");
@@ -57,7 +57,7 @@ public static class RoomReviewWorkbook
                 Write(zip, "xl/_rels/workbook.xml.rels", relationships.ToString());
                 Write(zip, "xl/styles.xml", Styles);
             }
-            File.Move(temporary, fullPath, true);
+            return WorkbookOutput.Publish(temporary, fullPath);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }

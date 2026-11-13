@@ -19,11 +19,11 @@ public static class TypeCodeWorkbook
         return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, ReportFileName);
     }
 
-    public static void Save(string path, IEnumerable<TypeCodeFinding> findings) =>
+    public static string Save(string path, IEnumerable<TypeCodeFinding> findings) =>
         SaveTable(path, "유형 코드 점검", Headers, [35, 20, 27, 18, 45, 45, 42],
             findings.Select(item => new[] { item.Model, item.Category, item.Family, item.ElementId, item.CurrentName, item.ProposedName, item.Status }));
 
-    internal static void SaveTable(string path, string sheetName, string[] headers, int[] widths, IEnumerable<string[]> rows)
+    internal static string SaveTable(string path, string sheetName, string[] headers, int[] widths, IEnumerable<string[]> rows)
     {
         var fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
@@ -51,7 +51,7 @@ public static class TypeCodeWorkbook
                 if (rowNumber > 1) writer.Write($"<autoFilter ref=\"A1:{(char)('A' + headers.Length - 1)}{rowNumber}\"/>");
                 writer.Write("</worksheet>");
             }
-            File.Move(temporary, fullPath, true);
+            return WorkbookOutput.Publish(temporary, fullPath);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }

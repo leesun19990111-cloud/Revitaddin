@@ -67,6 +67,13 @@ internal static class GuardhouseRoomTests
         check(byRoom["6"].Count() == 1 && !byRoom["7"].Any() &&
             new[] { "1", "2", "3", "4", "5", "6", "8", "9" }.All(r => Value(r, "번호") == "001") &&
             plan.Edits.Select(e => e.Original.Key).Distinct().Count() == plan.Edits.Count, "초소 모델 룸 번호만 001로 설정하고 중복 변경 없음");
+        var aliases = RulePlanner.Plan(rule, Room("a", "외부", "내부", "2F")
+            .Concat(Room("b", "", "외부", "2F")).Concat(Room("c", "내부", "유지", "2F")), [], false);
+        string? Alias(string id, string key) => aliases.Edits.SingleOrDefault(e => e.Original.OwnerId == id && e.Original.ParameterKey == key)?.Value;
+        check(Alias("a", "id:21") == "캐노피" && Alias("a", GuardhouseRoomRules.NameKey) == "초소" && Alias("a", "id:23") == "01" &&
+            Alias("b", "id:21") == "캐노피" && Alias("b", GuardhouseRoomRules.NameKey) == "캐노피" && Alias("b", "id:23") == "01" &&
+            Alias("c", "id:21") == "초소" && Alias("c", GuardhouseRoomRules.NameKey) == null && Alias("c", "id:23") == "02",
+            "이름·실명 별칭을 독립 변환하고 보완된 실명으로 층 판정");
         var floor = byRoom["2"].Single(e => e.Field == "층");
         check(floor.GuardhouseRoomSources!.Any(r => r.ParameterKey == GuardhouseRoomRules.LevelKey), "층 수정에 레벨 조회 근거 포함");
         reject(() => RulePlanner.Plan(rule, rows, [new ValueEdit { Original = floor.Original, Value = "03" }], false), "이전 층 변경 예정과 충돌하면 검토 보류");

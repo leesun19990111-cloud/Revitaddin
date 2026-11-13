@@ -488,8 +488,7 @@ public partial class MainWindow : Window
         var review = _additionalRules.SingleOrDefault(r => r.File.RoomReview);
         if (review != null)
         {
-            var path = RoomReviewWorkbook.PathForRule(review.Path);
-            RoomReviewWorkbook.Save(path, snapshots, RoomSpaceAudit.Inspect(snapshots));
+            var path = RoomReviewWorkbook.Save(RoomReviewWorkbook.PathForRule(review.Path), snapshots, RoomSpaceAudit.Inspect(snapshots));
             plan.Notes.Add("룸 검토 엑셀 (조회 당시 값) · " + path);
         }
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
@@ -591,8 +590,7 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("룸 검토 룰셋을 다시 선택하세요.");
             var snapshots = _models.Select(m => m.Snapshot!).ToList();
             var findings = RoomSpaceAudit.Inspect(snapshots);
-            var path = RoomReviewWorkbook.PathForRule(_loadedRulePath);
-            RoomReviewWorkbook.Save(path, snapshots, findings);
+            var path = RoomReviewWorkbook.Save(RoomReviewWorkbook.PathForRule(_loadedRulePath), snapshots, findings);
             var roomCount = snapshots.Sum(m => m.Owners.Concat(m.Rows)
                 .Where(r => r.Scope == "인스턴스" && r.CategoryKey == RoomUsePlanner.RoomCategory)
                 .Select(r => r.OwnerId).Distinct().Count());
@@ -609,12 +607,11 @@ public partial class MainWindow : Window
         if (file.ProjectBasePointAudit)
         {
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 프로젝트 기준점 점검 룰셋을 다시 불러오세요.");
-            var path = ProjectBasePointWorkbook.PathForRule(_loadedRulePath);
-            ProjectBasePointWorkbook.Save(path, _models.Select(m => m.Snapshot!));
+            var path = ProjectBasePointWorkbook.Save(ProjectBasePointWorkbook.PathForRule(_loadedRulePath), _models.Select(m => m.Snapshot!));
             var failed = _models.Count(m => m.Snapshot!.ProjectBasePointAudit is { } audit &&
                 (audit.Status != "확인" || audit.SurveyStatus != "확인"));
             RuleSummary.Text = $"읽기 전용 프로젝트·측량 기준점 점검 완료 · {_models.Count:N0}개 모델 · 확인 필요 {failed:N0}개\n" +
-                "첫 시트에는 프로젝트 기준점 좌표·진북각도, 둘째 시트에는 측량 기준점 좌표를 기록했습니다. 좌표는 정수 mm, 각도는 소수 둘째 자리 도 단위입니다. RVT는 변경하지 않았습니다.\n같은 날 다시 내보내면 해당 날짜의 보고서를 갱신합니다. 엑셀 파일: " + path;
+                "첫 시트에는 프로젝트 기준점 좌표·진북각도, 둘째 시트에는 측량 기준점 좌표를 기록했습니다. 좌표는 정수 mm, 각도는 소수 둘째 자리 도 단위입니다. RVT는 변경하지 않았습니다.\n엑셀 파일: " + path;
             RuleSummaryPanel.Visibility = Visibility.Visible;
             ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
             StatusText.Text = "프로젝트·측량 기준점 점검 엑셀을 저장했습니다: " + path;
@@ -626,11 +623,10 @@ public partial class MainWindow : Window
         {
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 재료 점검 룰셋을 다시 불러오세요.");
             var findings = _models.SelectMany(m => m.Snapshot!.MaterialAuditItems!).ToList();
-            var path = MaterialAuditWorkbook.PathForRule(_loadedRulePath ?? "");
-            MaterialAuditWorkbook.Save(path, findings);
+            var path = MaterialAuditWorkbook.Save(MaterialAuditWorkbook.PathForRule(_loadedRulePath ?? ""), findings);
             RuleSummary.Text = $"읽기 전용 재료 점검 완료 · {_models.Count:N0}개 모델 · {findings.Count:N0}개 확인 항목\n" +
                 $"인스턴스 재료 매개변수 {findings.Count(x => x.Issue == "인스턴스 재료 매개변수"):N0}건 · KAC- 이외 재료 {findings.Count(x => x.Issue == "KAC- 이외 재료"):N0}건 · 확인 필요 {findings.Count(x => x.Issue == "재료 확인 필요"):N0}건\n" +
-                "실제 배치된 유형만 묶었으며 배치 요소 수와 예시 ID를 함께 기록했습니다. RVT는 변경하지 않았습니다.\n같은 파일명으로 이전 보고서를 교체했습니다. 엑셀 파일: " + path;
+                "실제 배치된 유형만 묶었으며 배치 요소 수와 예시 ID를 함께 기록했습니다. RVT는 변경하지 않았습니다.\n엑셀 파일: " + path;
             RuleSummaryPanel.Visibility = Visibility.Visible;
             ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
             StatusText.Text = "재료 점검 엑셀을 저장했습니다: " + path;
@@ -647,15 +643,13 @@ public partial class MainWindow : Window
         if (file.GuardhouseRooms)
         {
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("초소 룸 정리 룰셋을 다시 불러오세요.");
-            guardhouseReport = GuardhouseRoomWorkbook.PathForRule(_loadedRulePath);
-            GuardhouseRoomWorkbook.Save(guardhouseReport, plan.GuardhouseRoomFindings);
+            guardhouseReport = GuardhouseRoomWorkbook.Save(GuardhouseRoomWorkbook.PathForRule(_loadedRulePath), plan.GuardhouseRoomFindings);
         }
         string? typeCodeReport = null;
         if (file.TypeCodeFix)
         {
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 유형 코드 보정 룰셋을 다시 불러오세요.");
-            typeCodeReport = TypeCodeWorkbook.PathForRule(_loadedRulePath);
-            TypeCodeWorkbook.Save(typeCodeReport, plan.TypeCodeFindings);
+            typeCodeReport = TypeCodeWorkbook.Save(TypeCodeWorkbook.PathForRule(_loadedRulePath), plan.TypeCodeFindings);
         }
         foreach (var item in _models)
         foreach (var notice in item.Snapshot!.Notices.Where(n => n.StartsWith("다른 사용자 소유로 감지된 대상", StringComparison.Ordinal)))

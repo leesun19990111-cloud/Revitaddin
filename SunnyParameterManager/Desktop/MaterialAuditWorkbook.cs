@@ -24,7 +24,7 @@ public static class MaterialAuditWorkbook
         return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(rulePath))!, ReportFileName);
     }
 
-    public static void Save(string path, IEnumerable<MaterialAuditItem> items)
+    public static string Save(string path, IEnumerable<MaterialAuditItem> items)
     {
         var rows = items.ToList();
         var fullPath = Path.GetFullPath(path);
@@ -34,7 +34,7 @@ public static class MaterialAuditWorkbook
         try
         {
             WriteWorkbook(temporary, rows);
-            File.Move(temporary, fullPath, true);
+            return WorkbookOutput.Publish(temporary, fullPath);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
