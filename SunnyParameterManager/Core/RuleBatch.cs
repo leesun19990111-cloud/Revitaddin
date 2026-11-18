@@ -36,7 +36,7 @@ public static class RuleBatch
         {
             var relevant = file.RoomUse == null ? staged.Values.AsEnumerable() :
                 staged.Values.Where(e => e.Original.CategoryKey == RoomUsePlanner.RoomCategory &&
-                    e.Original.Scope == "인스턴스" && e.Field == "용도");
+                    e.Original.Scope == "인스턴스" && RoomUsePlanner.WritesField(file.RoomUse, e.Field));
             try { return RulePlanner.Plan(file, rows, relevant, sample); }
             catch (InvalidOperationException ex)
             { throw new InvalidOperationException($"{file.Name}: {ex.Message}", ex); }
@@ -54,6 +54,7 @@ public static class RuleBatch
                         throw new InvalidOperationException($"{file.Name}: {edit.Model} / {edit.Field}의 변경값이 충돌합니다.");
                     edit.AddParameter ??= prior.AddParameter;
                     edit.MaterialSource ??= prior.MaterialSource;
+                    edit.RoomUseSource ??= prior.RoomUseSource;
                     if (edit.RoomName.Length == 0) edit.RoomName = prior.RoomName;
                 }
                 staged[edit.Original.Key] = edit;

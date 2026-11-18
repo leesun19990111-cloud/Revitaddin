@@ -22,7 +22,7 @@ public sealed class RuleSet
     public bool RebuildCentral { get; set; }
     // 기준 RVT 하나에서 선택한 프로젝트 매개변수 정의를 여러 모델로 전송한다.
     public bool ProjectParameterTransfer { get; set; }
-    // Room의 실명만 판정해 용도 한 필드에 입력한다.
+    // Room의 실명으로 용도와 선택한 공간분류코드를 판정한다.
     public RoomUseProfile? RoomUse { get; set; }
     // Room 전체를 읽기 전용 20열 Excel로 내보낸다.
     public bool RoomReview { get; set; }

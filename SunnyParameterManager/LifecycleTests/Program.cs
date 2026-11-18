@@ -49,6 +49,22 @@ internal static class Program
    deletion = RoomDeletion(); State.Doc.DeleteExtra = true;
    deleted = Run(deletion);
    Check(!deleted.Success && !State.Doc.Missing && State.Events.Contains("rollback") && !State.Events.Contains("save"), "승인 범위 밖 요소 삭제가 발생하면 이번 모델을 롤백");
+   Request RoomSourceEdit()
+   {
+    State.RoomSourceChangesAfterSet = false;
+    var request = Setup();
+    request.Edits[0].RoomUseSource = new ParameterReader(State.Doc, new()).Read(State.Doc.Element, State.Doc.RoomSourceParameter);
+    return request;
+   }
+   var sourceEdit = RoomSourceEdit();
+   Check(Run(sourceEdit).Success, "실명 근거가 같은 룸 판정 변경은 저장");
+   sourceEdit = RoomSourceEdit(); State.Doc.RoomSourceParameter.Value = "새 실명";
+   var sourceResult = Run(sourceEdit);
+   Check(!sourceResult.Success && !State.Events.Contains("tx-start") && sourceResult.Message.Contains("실명이 바뀌었습니다"), "조회 뒤 실명 변경은 쓰기 전 차단");
+   sourceEdit = RoomSourceEdit(); State.RoomSourceChangesAfterSet = true;
+   sourceResult = Run(sourceEdit);
+   Check(!sourceResult.Success && State.Events.Contains("rollback") && !State.Events.Contains("save"), "같은 적용 중 판정 실명이 바뀌면 모델 묶음 롤백");
+   State.RoomSourceChangesAfterSet = false;
    var r = Setup(); r.Operation = "조회"; var result = Run(r);
    Check(result.Success && result.Snapshot!.Rows.Count == 1 && State.Events.SequenceEqual(new[] { "open", "close" }), "조회는 저장/트랜잭션 없이 닫기");
    r = Setup(); State.InfoFailures = 2; int waits = 0;

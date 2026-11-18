@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.7.1";
+    public const string Release = "0.7.2";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -174,6 +174,7 @@ public sealed class ValueEdit
     public string ReferenceKey { get; set; } = "";
     public string Reason { get; set; } = "직접 입력";
     public string RoomName { get; set; } = "";
+    public ParameterRow? RoomUseSource { get; set; }
     public MaterialEvidence? MaterialSource { get; set; }
     public List<ParameterRow>? GuardhouseRoomSources { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

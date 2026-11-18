@@ -433,6 +433,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
         var p = ParameterReader.Resolve(owner, expected.ParameterKey) ?? throw new InvalidOperationException("매개변수가 없거나 중복됩니다: " + expected.Name);
         var actual = reader.Read(owner, p);
         EditPlanner.CheckFresh(expected, actual);
+        if (edit.RoomUseSource != null) CheckRoomUseSource(owner, reader, edit.RoomUseSource);
         if (edit.GuardhouseRoomSources != null)
         {
             foreach (var source in edit.GuardhouseRoomSources)
@@ -495,6 +496,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             var freshOwner = doc.GetElement(expected.OwnerId) ?? throw new InvalidOperationException("확정 후 대상 요소가 없어져 이번 묶음을 취소합니다. 요소 ID: " + expected.ElementId);
             var freshParameter = ParameterReader.Resolve(freshOwner, expected.ParameterKey) ?? throw new InvalidOperationException("확정 후 대상 매개변수가 없어졌습니다: " + expected.Name + " / 요소 ID: " + expected.ElementId);
             var verified = reader.Read(freshOwner, freshParameter);
+            if (edit.RoomUseSource != null) CheckRoomUseSource(freshOwner, reader, edit.RoomUseSource);
             EditPlanner.CheckGroupFresh(expected, verified);
             if (expected.TypeOwnerId != verified.TypeOwnerId || (edit.GuardhouseRoomSources != null && expected.TypeOwnerId.Length == 0
                 ? expected.Scope != verified.Scope || expected.CategoryKey != verified.CategoryKey
@@ -508,6 +510,17 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
             var same = freshParameter.StorageType == StorageType.Double ? Math.Abs(double.Parse(check, Invariant) - double.Parse(raw, Invariant)) <= Math.Max(1e-9, Math.Abs(double.Parse(raw, Invariant)) * 1e-10) : check == raw;
             if (!same) throw new InvalidOperationException("Revit 확정 후 값이 요청과 달라 이번 묶음을 취소합니다: " + expected.Name);
         });
+    }
+
+    private static void CheckRoomUseSource(Element owner, ParameterReader reader, ParameterRow source)
+    {
+        var parameter = ParameterReader.Resolve(owner, source.ParameterKey);
+        var current = parameter == null ? null : reader.Read(owner, parameter);
+        if (source.Scope != "인스턴스" || source.CategoryKey != RoomUsePlanner.RoomCategory || source.Name != "실명" ||
+            current == null || current.OwnerId != source.OwnerId || current.CategoryKey != source.CategoryKey ||
+            current.Name != source.Name || current.DataType != source.DataType || current.Storage != source.Storage ||
+            current.HasValue != source.HasValue || current.Raw != source.Raw)
+            throw new InvalidOperationException($"{source.ElementId} · 판정 기준 실명이 바뀌었습니다. 다시 조회하고 룰셋을 검토하세요.");
     }
 
     private static void Require(bool ok) { if (!ok) throw new InvalidOperationException("Revit이 매개변수 값 변경을 거부했습니다."); }

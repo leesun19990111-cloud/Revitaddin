@@ -77,6 +77,7 @@ public sealed class QueryPlan
         {
             plan.Scopes = ["인스턴스"];
             plan.Names = ["실명", "용도"];
+            if (rules.RoomUse!.SpaceClassification) plan.Names.Add("공간분류코드");
             plan.IncludeRoomUse = true;
         }
         else if (rules.Version == 9)

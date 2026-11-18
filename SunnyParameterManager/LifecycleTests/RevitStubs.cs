@@ -42,6 +42,7 @@ namespace Autodesk.Revit.DB
   public static bool RegenerateStairName, FailNameRestore;
   public static GroupEditEvidence? GroupEdit;
   public static bool GroupChangesAfterSet;
+  public static bool RoomSourceChangesAfterSet;
   public static bool FailRelinquish, LeaveBorrowed, LeaveWorkset, FailOwnershipCheck;
   public static HashSet<long> OwnedIds = [];
   public static ApplicationServices.Application App = null!;
@@ -108,6 +109,7 @@ namespace Autodesk.Revit.DB
   public Guid WorksharingCentralGUID => throw new InvalidOperationException("The current document is a file-based model.");
   public string? CentralPathOverride;
   public Element Element { get; } = new();
+  public Parameter RoomSourceParameter { get; } = new();
   public Dictionary<string, Element> Types { get; } = [];
   public bool Missing;
   public ModelPath GetWorksharingCentralModelPath() => new(CentralPathOverride ?? State.Info.CentralPath);
@@ -248,8 +250,15 @@ namespace SunnyParameterManager.Bridge
    : new() { Name = "KAC-테스트재료", Basis = "벽 외측층", Fingerprint = State.MaterialChangesAfterSet && State.Events.Contains("set") ? "material-v2" : "material-v1" };
   public List<string> Notices { get; } = [];
   public List<ParameterRow> ReadAll(QueryPlan? query = null) { model.Query = query; return State.ReadOutOfMemory ? throw new OutOfMemoryException("조회 메모리 대역") : [Read(doc.Element, doc.Element.Parameter)]; }
-  public ParameterRow Read(Element owner, Parameter p) => new() { GroupEdit = State.GroupChangesAfterSet && State.Events.Contains("set") ? new() { Identity = "변경된그룹", Reason = "그룹 제한" } : State.GroupEdit, ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = doc.Types.GetValueOrDefault(State.TypeOwnerId)?.Name ?? "W1", Family = (doc.Types.GetValueOrDefault(State.TypeOwnerId) as ElementType)?.FamilyName ?? "", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
-  internal static Parameter? Resolve(Element owner, string key) => key == "id:1" ? owner.Parameter : null;
+  public ParameterRow Read(Element owner, Parameter p)
+  {
+   if (ReferenceEquals(p, doc.RoomSourceParameter))
+    return new() { OwnerId = "owner", Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory,
+     Name = "실명", ParameterKey = "id:2", DataType = "text", Storage = "String", HasValue = true,
+     Raw = State.RoomSourceChangesAfterSet && State.Events.Contains("set") ? "변경된 실명" : p.Value };
+   return new() { GroupEdit = State.GroupChangesAfterSet && State.Events.Contains("set") ? new() { Identity = "변경된그룹", Reason = "그룹 제한" } : State.GroupEdit, ModelPath = model.Path, ModelTitle = model.Title, OwnerId = "owner", ParameterKey = "id:1", Scope = State.Scope, TypeName = doc.Types.GetValueOrDefault(State.TypeOwnerId)?.Name ?? "W1", Family = (doc.Types.GetValueOrDefault(State.TypeOwnerId) as ElementType)?.FamilyName ?? "", TypeOwnerId = State.TypeChangesAfterSet && State.Events.Contains("set") ? "type-2" : State.TypeOwnerId, Name = "재료명", DataType = "text", Storage = "String", Editor = "텍스트", HasValue = true, Raw = p.Value, Display = p.Value };
+  }
+  internal static Parameter? Resolve(Element owner, string key) => key == "id:1" ? owner.Parameter : key == "id:2" ? State.Doc.RoomSourceParameter : null;
   internal static string Raw(Parameter p) => p.Value;
  }
 }
