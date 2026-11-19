@@ -132,6 +132,7 @@ internal static class Program
         {
             _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             QueryTests.Run(Check, Reject);
+            ApplyConfirmationTest();
             var w = new MainWindow();
             Check(((FrameworkElement)w.FindName("WelcomePanel")).Visibility == Visibility.Visible, "첫 화면 파일 선택 안내");
             Check(!((Expander)w.FindName("AdvancedSettings")).IsExpanded && !((Expander)w.FindName("CopyExpander")).IsExpanded, "세부 설정 기본 숨김");
@@ -266,6 +267,58 @@ internal static class Program
         Render(w, "field-search", 1080, 700);
     }
     private static void Invoke(MainWindow w, string method) => typeof(MainWindow).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, [w, new RoutedEventArgs()]);
+
+    private static void ApplyConfirmationTest()
+    {
+        var owner = new Window { Width = 400, Height = 280, ShowActivated = false, ShowInTaskbar = false };
+        owner.Show();
+        try
+        {
+            var details = string.Join("\n", Enumerable.Range(1, 250).Select(i => $"검증 모델 {i}.rvt: {i:N0}건")) +
+                "\n\n중앙 동기화 안내 끝";
+            foreach (bool confirmed in new[] { false, true })
+            {
+                var dialog = new ApplyConfirmationWindow(owner, 250, details) { Height = 350 };
+                bool reachedEnd = false;
+                bool buttonsVisible = false;
+                bool cancelDefault = false;
+                dialog.ContentRendered += (_, _) =>
+                {
+                    var scroll = (ScrollViewer)dialog.FindName("DetailsScroll");
+                    var yes = (Button)dialog.FindName("YesButton");
+                    var no = (Button)dialog.FindName("NoButton");
+                    var content = (FrameworkElement)dialog.Content;
+                    var initial = yes.TranslatePoint(new Point(0, 0), content);
+                    scroll.ScrollToEnd();
+                    dialog.UpdateLayout();
+                    reachedEnd = scroll.ScrollableHeight > 0 && Math.Abs(scroll.VerticalOffset - scroll.ScrollableHeight) < 1 &&
+                        ((TextBlock)dialog.FindName("DetailsText")).Text.EndsWith("중앙 동기화 안내 끝");
+                    var footer = no.TranslatePoint(new Point(0, no.ActualHeight), content);
+                    var final = yes.TranslatePoint(new Point(0, 0), content);
+                    buttonsVisible = yes.IsVisible && no.IsVisible && footer.Y <= content.ActualHeight &&
+                        (final - initial).Length < 1;
+                    if (!buttonsVisible)
+                        Console.WriteLine($"확인 창 버튼 위치 {initial} → {final}, 하단 {footer.Y:0.##}/{content.ActualHeight:0.##}, 가시성 {yes.IsVisible}/{no.IsVisible}");
+                    cancelDefault = no.IsDefault && no.IsCancel && !yes.IsDefault;
+                    if (!confirmed)
+                    {
+                        scroll.ScrollToTop();
+                        dialog.UpdateLayout();
+                        Render(dialog, "apply-confirmation", 655, 300);
+                    }
+                    var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(confirmed ? yes : no);
+                    ((System.Windows.Automation.Provider.IInvokeProvider)peer).Invoke();
+                };
+                var result = dialog.ShowDialog();
+                Check(reachedEnd, "작은 변경 확인 창에서 안내 끝까지 스크롤");
+                Check(buttonsVisible, "스크롤해도 예·아니오 버튼이 창 하단에 표시");
+                Check(cancelDefault && (result == true) == confirmed,
+                    confirmed ? "예 버튼에서 적용 승인" : "기본 아니오 버튼으로 취소");
+            }
+        }
+        finally { owner.Close(); }
+    }
+
     private static void Render(Window w, string name, int width, int height)
     {
         var content = (FrameworkElement)w.Content;

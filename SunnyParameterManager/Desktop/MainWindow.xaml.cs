@@ -814,7 +814,7 @@ public partial class MainWindow : Window
             return $"{Path.GetFileName(g.Key)}: {g.Count() - deletions:N0}건" +
                 (deletions > 0 ? $" · 미배치 룸 삭제 {deletions:N0}개" : "");
         }));
-        var text = "아래 변경을 실제 RVT에 저장하고, 작업공유 모델은 중앙에 동기화할까요?\n\n" + summary +
+        var details = summary +
             "\n\n그룹 제한 항목은 변경 목록에서 제외하며 현재 값을 유지합니다. ‘그룹 제한 항목’ 탭을 검토한 뒤 진행하세요. 그룹 해제나 매개변수 설정 변경은 하지 않습니다." +
             "\n\n작업공유 모델은 중앙 동기화 후 현재 사용자의 차용 요소·모든 작업세트 소유권을 반환합니다. 같은 모델을 다른 Revit/로컬에서 편집 중이면 먼저 그 작업을 동기화하고 닫으세요. 반환 확인 실패 시 나머지 모델은 중단합니다." +
             "\n\n모델별 순차 처리이며 여러 모델을 한 번에 되돌릴 수 없습니다. 유형 값은 그 유형을 사용하는 모든 요소에 영향을 줍니다. 작업세트/치수/재료 변경은 모델 동작에 영향을 줄 수 있습니다.\n운영 모델 적용 전 별도 테스트 중앙에서 검증해 주세요." +
@@ -825,7 +825,7 @@ public partial class MainWindow : Window
                 "\n정확한 이름이며 프로젝트 정보에만 연결된 항목을 삭제합니다. 삭제 항목의 값은 다른 매개변수로 옮기지 않습니다. 건축물번호와 다른 카테고리에도 연결된 구조는 유지합니다. 삭제 전 복구 사본을 보관합니다." :
                 _edits.Values.Any(v => v.DefinitionFix != null) ? $"\n\n매개변수 정의 정리 {_edits.Values.Count(v => v.DefinitionFix != null):N0}건(그룹·카테고리·유형/인스턴스·공유 매개변수 추가·중복 병합). 중복 병합은 값을 기준 매개변수로 옮긴 뒤 이전 매개변수 연결을 제거하며, 같은 요소에 다른 값이 있으면 그 모델 전체를 보류합니다. 확정 후 값 보존을 다시 검사합니다." : "") +
             (_edits.Values.Any(v => v.AddParameter != null) ? $"\n\n매개변수 추가: {_edits.Values.Where(v => v.AddParameter != null).Select(v => v.Original.ModelPath).Distinct().Count():N0}개 모델의 프로젝트 정보에 공유 매개변수 ‘{string.Join("·", _edits.Values.Where(v => v.AddParameter != null).Select(v => v.AddParameter!.Name).Distinct())}’를 새로 추가한 뒤 값을 입력합니다(다른 모델과 같은 GUID·그룹)." : "");
-        if (MessageBox.Show(this, text, "실제 파일 변경 확인", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        if (new ApplyConfirmationWindow(this, groups.Count, details).ShowDialog() != true) return;
         await Run(async () =>
         {
             await _worker.Connect(RevitPathBox.Text.Trim());
