@@ -5,14 +5,16 @@ namespace SunnyParameterManager.Core;
 // 사용자 작업절차의 실 종류 사전을 데이터로 보관한다. RVT 적용 시 외부 파일이나 스크립트를 실행하지 않는다.
 public sealed class RoomUseProfile
 {
-    // 1은 기존 룰셋, 2는 2026-11-13 작업절차의 명시적 매칭어·우선순위를 사용한다.
+    // 1은 기존 룰셋, 2는 11-13 판정, 3은 11-19 용도 작업절차의 명시적 일치만 사용한다.
     public int ProcedureVersion { get; set; } = 1;
     public bool SpaceClassification { get; set; }
     public bool EstimateUncertain { get; set; }
+    public bool ClearUnmatchedRoomValues { get; set; }
     public Dictionary<string, string[]> EstimateCodeCandidates { get; set; } = [];
     public string SpaceSource { get; set; } = "";
     public string SpaceSourceSha256 { get; set; } = "";
     public List<RoomUseSemanticTerm> UseAliases { get; set; } = [];
+    public List<RoomUseSemanticTerm> CaseStudyAliases { get; set; } = [];
     public string Source { get; set; } = "";
     public string SourceSha256 { get; set; } = "";
     public List<RoomUseTerm> Terms { get; set; } = [];
@@ -59,10 +61,12 @@ public static class RoomUsePlanner
             file.Kac != null || file.Space != null || file.Spec != null || file.Cleanup || file.MaterialAudit || file.TypeCodeFix ||
             file.ProjectBasePointAudit || file.RebuildCentral || file.ProjectParameterTransfer || file.RoomReview || file.PreserveWorksets?.Count != 0 ||
             p == null || string.IsNullOrWhiteSpace(p.Source) || !Regex.IsMatch(p.SourceSha256 ?? "", "^[0-9A-Fa-f]{64}$") ||
-            p.ProcedureVersion is not (1 or 2) || p.UseAliases == null || p.UseAliases.Count > 100 ||
+            p.ProcedureVersion is not (1 or 2 or 3) || p.UseAliases == null || p.UseAliases.Count > 100 ||
+            p.CaseStudyAliases == null || p.CaseStudyAliases.Count > 500 ||
+            p.ProcedureVersion != 3 && (p.CaseStudyAliases.Count > 0 || p.ClearUnmatchedRoomValues) ||
             p.ProcedureVersion == 1 && (p.SpaceClassification || p.UseAliases.Count > 0) ||
             p.EstimateCodeCandidates == null || p.EstimateCodeCandidates.Count > 500 ||
-            p.EstimateUncertain && (p.ProcedureVersion != 2 || !p.SpaceClassification) ||
+            p.EstimateUncertain && (p.ProcedureVersion == 1 || !p.SpaceClassification) ||
             p.SpaceClassification && (string.IsNullOrWhiteSpace(p.SpaceSource) || !Regex.IsMatch(p.SpaceSourceSha256 ?? "", "^[0-9A-Fa-f]{64}$")) ||
             p.Terms == null || p.Terms.Count is < 1 or > 400 || p.SemanticTerms == null || p.SemanticTerms.Count > 100 ||
             p.AuditFields == null || p.AuditFields.Count > 0 && !p.AuditFields.SequenceEqual(RequiredAuditFields))
@@ -89,12 +93,13 @@ public static class RoomUsePlanner
                 string.IsNullOrWhiteSpace(term.Basis) || term.Basis.Length > 120)
                 throw new InvalidOperationException("Room 의미 단서의 문구·용도·판정 근거를 확인하세요.");
         var aliases = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var term in p.UseAliases)
+        foreach (var term in p.UseAliases.Concat(p.CaseStudyAliases))
             if (term == null || string.IsNullOrWhiteSpace(term.Phrase) || term.Phrase.Length > 200 ||
+                RoomProcedureClassifier.Normalize(term.Phrase).Length == 0 ||
                 !aliases.Add(RoomProcedureClassifier.Normalize(term.Phrase)) || !Choices.Contains(term.Use) ||
                 string.IsNullOrWhiteSpace(term.Basis) || term.Basis.Length > 120)
                 throw new InvalidOperationException("Room 용도 공통 매칭어를 확인하세요.");
-        if (p.ProcedureVersion == 2 && (p.Terms.Any(t => t.NameMatches == null) || p.SemanticTerms.Count > 0))
+        if (p.ProcedureVersion >= 2 && (p.Terms.Any(t => t.NameMatches == null) || p.SemanticTerms.Count > 0))
             throw new InvalidOperationException("새 작업절차는 명시적 세분류명 매칭어와 용도 공통 매칭어를 사용합니다.");
     }
 
@@ -162,7 +167,7 @@ public static class RoomUsePlanner
 
     public static (string Use, string Basis) Classify(string roomName, RoomUseProfile profile)
     {
-        if (profile.ProcedureVersion == 2) return new RoomProcedureClassifier(profile).Use(roomName);
+        if (profile.ProcedureVersion >= 2) return new RoomProcedureClassifier(profile).Use(roomName);
         if (string.IsNullOrWhiteSpace(roomName)) return ("", "실명 공란");
         var name = Clean(roomName);
         var original = Regex.Replace(roomName, @"\s+", "").ToUpperInvariant();
@@ -190,7 +195,7 @@ public static class RoomUsePlanner
     {
         Validate(file);
         var profile = file.RoomUse!;
-        var classifier = profile.ProcedureVersion == 2 ? new RoomProcedureClassifier(profile) : null;
+        var classifier = profile.ProcedureVersion >= 2 ? new RoomProcedureClassifier(profile) : null;
         var pendingList = pending.ToList();
         if (pendingList.Any(e => e.Original.CategoryKey != RoomCategory || !WritesField(profile, e.Original.Name) || e.Original.Scope != "인스턴스" ||
             e.DeleteUnplacedRoom || e.DefinitionFix != null || e.AddParameter != null))
@@ -221,12 +226,23 @@ public static class RoomUsePlanner
             var name = source.HasValue ? source.Raw.Trim() : "";
             var roomName = name.Length == 0 ? "(실명 없음)" : name;
             var use = classifier?.UseDecision(name) ?? LegacyUse(name);
+            plan.MatchedOwners++;
+            if (profile.ClearUnmatchedRoomValues && use.Item1.Length == 0)
+            {
+                string reason = name.Length == 0 ? "실명 공란 — 기존 값 비움" : "용도 미확정 — 기존 값 비움";
+                Propose("용도", "", reason, false, false);
+                if (profile.SpaceClassification) Propose("공간분류코드", "", reason, false, false);
+                continue;
+            }
+
             var code = profile.SpaceClassification ? classifier!.Code(name) : default;
             var useEstimated = profile.EstimateUncertain && use.Item3;
             var codeEstimated = false;
             if (profile.EstimateUncertain && string.IsNullOrEmpty(code.Code))
             {
-                var estimate = classifier!.EstimateCode(name, use.Item1);
+                // 공간분류코드 추정의 기준은 공간분류 작업절차를 따른다. 새 용도 판정과 분리한다.
+                var codeUse = profile.ProcedureVersion == 3 ? classifier!.LegacyUseDecision(name).Use : use.Item1;
+                var estimate = classifier!.EstimateCode(name, codeUse);
                 if (estimate.Term is { } term)
                 {
                     code = (term.Code, $"{estimate.Basis} → {term.Name} ({term.Code})");
@@ -238,7 +254,6 @@ public static class RoomUsePlanner
             Propose("용도", use.Item1, use.Item2, classifier != null && use.Item1.Length == 0, useEstimated);
             if (profile.SpaceClassification)
                 Propose("공간분류코드", code.Code, code.Basis, code.Code.Length == 0, codeEstimated);
-            plan.MatchedOwners++;
 
             void Propose(string field, string value, string basis, bool keep, bool estimated)
             {

@@ -53,8 +53,62 @@ internal static class RoomProcedureTests
         Editor = "텍스트", HasValue = value.Length > 0, Raw = value, Display = value
     };
 
+    private static void VerifyStrictUse(Action<bool, string> check, Action<Action, string> reject)
+    {
+        var rule = Rules();
+        var profile = rule.RoomUse!;
+        profile.ProcedureVersion = 3;
+        profile.EstimateUncertain = true;
+        profile.Terms.Add(Term("33199", "기타 공용공간", "C"));
+        profile.Terms.Add(Term("33499", "기타 유틸리티 공간", "U"));
+        profile.Terms.Add(Term("33699", "기타 업무공간", "R"));
+        profile.UseAliases.Add(new() { Phrase = "EPS 및 창고", Use = "U", Basis = "부록 B" });
+        profile.CaseStudyAliases =
+        [
+            new() { Phrase = "카페", Use = "R", Basis = "부록 C" },
+            new() { Phrase = "휴게공간(카페)", Use = "C", Basis = "부록 C" },
+            new() { Phrase = "확정 표기", Use = "E", Basis = "부록 C" }
+        ];
+        var parsed = RulePlanner.Parse(JsonSerializer.Serialize(rule));
+        var classifier = new RoomProcedureClassifier(parsed.RoomUse!);
+        foreach (var (name, use) in new[]
+        {
+            ("휴게공간(카페)", "C"), ("카페", "R"), ("EPS 및 창고", "U"), ("시설(창고)", "R"),
+            ("확정 표기", "E"), ("장비동 확정 표기", ""), ("AL", ""), ("CPS", ""), ("홀내부표식", ""),
+            ("PIT장비", ""), ("회사명", ""), (")창고(", ""), ("창고?", ""), ("", ""), ("ND", "Z"), ("OPEN", "C")
+        })
+            check(classifier.Use(name).Use == use, "11-19 용도 판정: " + name);
+        var plan = RoomUsePlanner.Plan(parsed,
+            [Row("1", "실명", "CPS"), Row("1", "용도", "C"), Row("1", "공간분류코드", ""),
+             Row("2", "실명", "휴게공간(카페)"), Row("2", "용도", "R"), Row("2", "공간분류코드", "")], []);
+        check(plan.Edits.Count(e => e.Field == "용도") == 1 &&
+              plan.Edits.Any(e => e.Field == "용도" && e.Original.OwnerId == "2" && e.Value == "C") &&
+              plan.Edits.Any(e => e.Field == "공간분류코드" && e.Original.OwnerId == "1" && e.Value == "33499") &&
+              plan.RoomEstimates.All(e => e.Field == "공간분류코드"),
+            "미확정 용도는 유지하고 공간분류코드는 별도 판정");
+        profile.ClearUnmatchedRoomValues = true;
+        var clearing = RoomUsePlanner.Plan(RulePlanner.Parse(JsonSerializer.Serialize(rule)),
+            [Row("1", "실명", "CPS"), Row("1", "용도", "C"), Row("1", "공간분류코드", "33499"),
+             Row("2", "실명", ""), Row("2", "용도", ""), Row("2", "공간분류코드", "33499"),
+             Row("3", "실명", "PIT장비"), Row("3", "용도", "U"), Row("3", "공간분류코드", "33117"),
+             Row("4", "실명", "ND"), Row("4", "용도", "R"), Row("4", "공간분류코드", "기존"),
+             Row("5", "실명", "창고"), Row("5", "용도", "U"), Row("5", "공간분류코드", "기존")], []);
+        var clears = clearing.Edits.Where(e => e.Value.Length == 0).ToList();
+        check(clears.Count == 5 && clears.All(e => e.Original.OwnerId is "1" or "2" or "3" &&
+              e.Original.HasValue && e.RoomUseSource != null && e.RoomEstimate == null && e.Reason.Contains("비움")) &&
+              clearing.RoomEstimates.Count == 0,
+            "미확정 실명과 빈 실명의 용도·공간분류코드를 기존 값에 상관없이 공란으로 제안");
+        check(clearing.Edits.Any(e => e.Original.OwnerId == "4" && e.Field == "용도" && e.Value == "Z") &&
+              clearing.Edits.Any(e => e.Original.OwnerId == "5" && e.Value == "33227") &&
+              clearing.Edits.Any(e => e.Original.OwnerId == "5" && e.Value == "R"),
+            "확정 용도와 공간분류는 판정대로 입력");
+        profile.CaseStudyAliases.Add(new() { Phrase = "eps및창고", Use = "R", Basis = "중복" });
+        reject(() => RoomUsePlanner.Validate(rule), "부록 B/C의 정규화 중복 차단");
+    }
+
     public static void Run(Action<bool, string> check, Action<Action, string> reject)
     {
+        VerifyStrictUse(check, reject);
         var rule = RulePlanner.Parse(JsonSerializer.Serialize(Rules()));
         var classifier = new RoomProcedureClassifier(rule.RoomUse!);
         foreach (var (name, use, code) in new[]

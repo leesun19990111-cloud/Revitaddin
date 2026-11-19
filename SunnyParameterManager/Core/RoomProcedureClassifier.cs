@@ -8,6 +8,8 @@ public sealed class RoomProcedureClassifier
     private readonly Dictionary<string, List<RoomUseTerm>> _names;
     private readonly Dictionary<string, List<RoomUseTerm>> _cases;
     private readonly Dictionary<string, RoomUseSemanticTerm> _aliases;
+    private readonly Dictionary<string, RoomUseSemanticTerm> _caseStudyAliases;
+    private readonly bool _strictUse;
     private readonly Dictionary<string, RoomUseTerm> _byCode;
     private readonly Dictionary<string, string[]> _codeCandidates;
     private readonly List<(string Text, List<RoomUseTerm> Terms)> _tails;
@@ -23,6 +25,8 @@ public sealed class RoomProcedureClassifier
         _names = Index(t => t.NameMatches ?? [t.Name]);
         _cases = Index(t => t.Cases);
         _aliases = profile.UseAliases.ToDictionary(t => Normalize(t.Phrase));
+        _caseStudyAliases = profile.CaseStudyAliases.ToDictionary(t => Normalize(t.Phrase));
+        _strictUse = profile.ProcedureVersion == 3;
         _byCode = profile.Terms.ToDictionary(t => t.Code);
         _codeCandidates = profile.EstimateCodeCandidates.ToDictionary(x => Normalize(x.Key), x => x.Value);
         _tails = _names.Keys.Concat(_cases.Keys).Distinct().Select(word =>
@@ -137,7 +141,47 @@ public sealed class RoomProcedureClassifier
         return (decision.Use, decision.Basis);
     }
 
-    internal (string Use, string Basis, bool Estimated) UseDecision(string name)
+    internal (string Use, string Basis, bool Estimated) UseDecision(string name) =>
+        _strictUse ? StrictUseDecision(name) : LegacyUseDecision(name);
+
+    private (string Use, string Basis, bool Estimated) StrictUseDecision(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return ("", "실명 공란 — 기존 용도 유지", false);
+        var text = Normalize(name);
+        if (text == "ND") return ("Z", "실명 ND", false);
+        if (text == "OPEN") return ("C", "실명 OPEN", false);
+        if (Invalid(text) || text is "공실" or "확인필요" or "편의시설")
+            return ("", "실명 미확정 — 기존 용도 유지", false);
+
+        // 전체 실명을 명시한 사례를 괄호 안의 별도 실명으로 덮지 않는다. 예: 휴게공간(Cafe).
+        if (_caseStudyAliases.TryGetValue(text, out var fullCase))
+        {
+            var exact = Exact(text, false);
+            return exact is { } matched ? (matched.Value, matched.Basis, false) : (fullCase.Use, fullCase.Basis, false);
+        }
+
+        var candidates = Candidates(name).Where(c => c is not ("공실" or "확인필요" or "편의시설")).ToList();
+        foreach (var candidate in candidates)
+        {
+            if (Exact(candidate, false) is { } exact)
+                return (exact.Value, exact.Basis, false);
+            if (_aliases.TryGetValue(candidate, out var alias) || _caseStudyAliases.TryGetValue(candidate, out alias))
+                return (alias.Use, alias.Basis, false);
+            var abbreviation = candidate switch
+            {
+                "ELEV" or "ESC" => "E",
+                "AD" or "PD" or "OA" or "EA" or "EPS" or "PS" or "UPS" or "TPS" or "NAF(소화가스)" or "DA" => "U",
+                _ => null
+            };
+            if (abbreviation != null) return (abbreviation, "단독 약어: " + candidate, false);
+        }
+
+        foreach (var candidate in candidates)
+            if (Tail(candidate, false) is { } tail) return (tail.Value, tail.Basis, false);
+        return ("", "일치하는 용도 매칭어 없음 — 기존 용도 유지", false);
+    }
+
+    internal (string Use, string Basis, bool Estimated) LegacyUseDecision(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return ("", "실명 공란 — 기존 용도 유지", false);
         var text = Normalize(name);
