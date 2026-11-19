@@ -116,7 +116,7 @@ namespace WallSplitter
                 var window = new PatternStudioWindow(
                     new List<PatternDefinition> { definition },
                     PatternStudioCommand.CollectPatternNames(document));
-                new WindowInteropHelper(window) { Owner = commandData.Application.MainWindowHandle };
+                new WindowInteropHelper(window) { Owner = commandData.Application.GetMainWindowHandle() };
                 if (window.ShowDialog() != true || window.SaveRequest == null) return Result.Cancelled;
 
                 stage = "Revit 패턴 저장";

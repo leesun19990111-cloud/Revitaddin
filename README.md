@@ -1,8 +1,10 @@
 # Sunny Tools (WallSplitter)
 
-Revit용 실무 편의 애드인 모음입니다. Revit 리본에 전용 탭 **"Sunny Tools"**를 추가하며, **Revit 2023 ~ 2027**을 하나의 소스로 지원합니다.
+Revit용 실무 편의 애드인 모음입니다. Revit 리본에 전용 탭 **"Sunny Tools"**를 추가하며, **Revit 2017과 2023~2027**을 하나의 소스로 지원합니다.
 
 ## 주요 기능
+
+- **Revit 2017 지원 (v1.1.8)** — .NET Framework 4.8 이상이 필요합니다. 2017에서는 패턴 타공·복원과 경고Pick을 제공하지 않습니다. 벽체 분리는 편집한 프로파일이 없는 벽, 바닥 분리는 형태 편집·경사·호스트 개구부가 없는 평바닥을 지원합니다. 링크를 포함한 일반 요소 일람표의 편집은 Revit 2024 이상에서 지원합니다.
 
 - **창 열기 오류 수정** — 룸 경계 ON/OFF와 경고Pick 등에서 다른 버전의 화면 리소스와 충돌해 창을 열지 못하던 문제를 수정했습니다.
 
@@ -346,7 +348,7 @@ CAD 링크를 Revit에서 스냅해 따라 그린 모델선 또는 상세선을 
 
 ## 설치 (사용자용)
 
-1. 저장소 루트의 `SunnyTools_Installer_v.1.1.7.zip`을 내려받아 압축을 풉니다.
+1. 저장소 루트의 `SunnyTools_Installer_v.1.1.8.zip`을 내려받아 압축을 풉니다.
 2. 실행 중인 Revit을 모두 종료한 뒤 `SunnyTools_Install.exe`를 실행합니다. 설치된 Revit 버전을 자동으로 감지해 해당 버전에 맞는 파일과 `.addin` 매니페스트를 설치합니다.
 3. Revit을 실행하면 리본에 "Sunny Tools" 탭이 나타납니다.
 
@@ -358,16 +360,16 @@ CAD 링크를 Revit에서 스냅해 따라 그린 모델선 또는 상세선을 
 # 애드인만 특정 연도로 빌드
 dotnet build WallSplitter/WallSplitter.csproj -c Release2026
 
-# 설치 프로그램 빌드 (5개 연도 전체를 자동으로 빌드해 포함)
+# 설치 프로그램 빌드 (지원하는 6개 연도를 자동으로 빌드해 포함)
 dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release
 ```
 
-같은 소스를 `Debug2023`~`Release2027` 10개 Configuration으로 빌드하며, 각 Configuration의 4자리 연도가 `$(RevitVersion)`으로 읽혀 대상 프레임워크와 `Nice3point.Revit.Api.RevitAPI`/`RevitAPIUI` 패키지 버전을 결정합니다.
+같은 소스를 `Debug2017`/`Release2017` 및 2023~2027 연도별 Configuration으로 빌드합니다. 연도 접미사가 대상 프레임워크와 API 참조를 결정합니다.
 
 ## 프로젝트 구조
 
 - `WallSplitter/` — 애드인 본체 (벽체 분리, 바닥 분리, NAMER, 재료 지정, 모델간 변경 반영, 패턴 스튜디오, 모델선 패턴 캡처, 패턴 타공, 커스텀 버튼, 경고Pick, 룸 구분선, 룸 경계 ON/OFF, 매개변수 조합, 설정 UI)
-- `SunnyToolsInstaller/` — 5개 연도 빌드를 감지·설치하는 독립 설치 프로그램
+- `SunnyToolsInstaller/` — 6개 연도 빌드를 감지·설치하는 독립 설치 프로그램
 - `WallSplitter.slnx` — 솔루션 파일
 - `Old_Versions/` — 과거 설치 프로그램 빌드 산출물 보관용 (최신 산출물은 루트에 별도 유지)
 - `docs/` — 기능별 상세 설계/이력 문서 (`CLAUDE.md`가 이 폴더로 라우팅됨):

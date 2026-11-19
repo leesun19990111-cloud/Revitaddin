@@ -112,7 +112,7 @@ namespace WallSplitter
                     // 벽의 "프로파일 편집"보다 근본적으로 더 복잡한 개념(정점/능선 단위 편집)이라 이번 범위 밖.
                     // Floor.SlabShapeEditor: 2023은 프로퍼티, 2024부터는 GetSlabShapeEditor() 메서드로 개명됨
                     // (MetadataLoadContext로 5개 연도 패키지를 모두 리플렉션해 확인 - csproj의 DefineConstants 참고).
-#if REVIT2023
+#if REVIT2017 || REVIT2023
                     SlabShapeEditor shapeEditor = floor.SlabShapeEditor;
 #else
                     SlabShapeEditor shapeEditor = floor.GetSlabShapeEditor();
@@ -123,6 +123,14 @@ namespace WallSplitter
                         continue;
                     }
 
+#if REVIT2017
+                    if (!LegacySplitGeometry.IsFlatFloorWithoutInserts(floor))
+                    {
+                        skipReasons.Add($"{floor.Id}: Revit 2017에서는 평평하고 호스트된 개구부가 없는 바닥만 분리할 수 있어 건너뜀");
+                        continue;
+                    }
+                    var boundaryLoops = new List<CurveLoop>();
+#else
                     if (floor.SketchId == ElementId.InvalidElementId || !(doc.GetElement(floor.SketchId) is Sketch sketch))
                     {
                         skipReasons.Add($"{floor.Id}: 경계 스케치를 읽을 수 없어 건너뜀");
@@ -144,6 +152,7 @@ namespace WallSplitter
                         skipReasons.Add($"{floor.Id}: 경계 곡선을 읽을 수 없어 건너뜀");
                         continue;
                     }
+#endif
 
                     Parameter? heightOffsetParam = floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM);
                     double originalHeightOffset = heightOffsetParam?.AsDouble() ?? 0;
@@ -259,7 +268,7 @@ namespace WallSplitter
                         string header = $"'{prep.Floor.FloorType.Name}' 바닥 분리 - 레이어 {items.Count}개에 적용할 유형을 검색하여 지정하세요.";
 
                         LayerTypeAssignmentWindow pickerWindow = new LayerTypeAssignmentWindow(header, items, availableTypes, warningMessage);
-                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.MainWindowHandle };
+                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.GetMainWindowHandle() };
                         if (pickerWindow.ShowDialog() != true)
                             return Result.Cancelled; // 취소 시 바닥 분리 전체 작업을 취소 (벽체 분리와 동일한 규칙)
 
@@ -307,10 +316,21 @@ namespace WallSplitter
                             // 만들어도 분리된 바닥이 두께와 무관하게 전부 레벨에 딱 붙어 생성되는 것으로 재현).
                             // 그래서 원본 경계 곡선은 그대로 쓰고, 생성 직후 그 파라미터를 명시적으로 설정해야
                             // 실제로 레이어 두께만큼 오프셋된다.
+#if REVIT2017
+                            Floor newFloor = LegacySplitGeometry.CopyFloor(doc, prep.Floor, targetFloorType);
+#else
                             Floor newFloor = Floor.Create(doc, prep.BoundaryLoops, targetFloorType.Id, prep.LevelId, /*isStructural*/ false, /*slopeArrow*/ null!, /*slope*/ 0);
+#endif
 
                             Parameter? offsetParam = newFloor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM);
+#if REVIT2017
+                            double targetOffset = prep.OriginalHeightOffset - d.TopOffset;
+                            if (offsetParam == null || (Math.Abs(offsetParam.AsDouble() - targetOffset) > 1e-9 &&
+                                    (offsetParam.IsReadOnly || !offsetParam.Set(targetOffset))))
+                                throw new InvalidOperationException($"바닥 {prep.FloorId}: 새 레이어의 높이 오프셋을 지정할 수 없습니다.");
+#else
                             offsetParam?.Set(prep.OriginalHeightOffset - d.TopOffset);
+#endif
                         }
 
                         if (oneLayer)

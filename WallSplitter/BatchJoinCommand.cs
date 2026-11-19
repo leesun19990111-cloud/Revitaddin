@@ -27,7 +27,7 @@ namespace WallSplitter
             ICollection<ElementId> selection = uidoc.Selection.GetElementIds();
 
             BatchJoinWindow window = new BatchJoinWindow(doc, selection, doc.ActiveView);
-            new WindowInteropHelper(window) { Owner = uiapp.MainWindowHandle };
+            new WindowInteropHelper(window) { Owner = uiapp.GetMainWindowHandle() };
             window.ShowDialog();
             return Result.Succeeded;
         }

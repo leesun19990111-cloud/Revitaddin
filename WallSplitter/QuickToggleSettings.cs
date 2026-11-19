@@ -71,7 +71,7 @@ namespace WallSplitter
     {
         public static int ToInt(this ElementId id)
         {
-#if REVIT2023
+#if REVIT2017 || REVIT2023
             return id.IntegerValue;
 #else
             return (int)id.Value;

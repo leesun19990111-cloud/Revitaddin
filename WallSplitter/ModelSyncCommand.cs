@@ -29,7 +29,7 @@ namespace WallSplitter
                 .ToList();
 
             ModelSyncWindow window = new ModelSyncWindow(activeDoc, eligibleDocs);
-            new WindowInteropHelper(window) { Owner = commandData.Application.MainWindowHandle };
+            new WindowInteropHelper(window) { Owner = commandData.Application.GetMainWindowHandle() };
             bool? dialogResult = window.ShowDialog();
             if (dialogResult != true || window.SelectedEntries == null || window.TargetDocuments == null)
                 return Result.Cancelled;
@@ -38,7 +38,7 @@ namespace WallSplitter
             foreach (Document targetDoc in window.TargetDocuments)
             {
                 ReplaySummary summary = ChangeReplayEngine.RunForDocument(
-                    commandData.Application.MainWindowHandle, targetDoc, window.SelectedEntries);
+                    commandData.Application.GetMainWindowHandle(), targetDoc, window.SelectedEntries);
                 summaries.Add(summary);
             }
 

@@ -26,7 +26,7 @@ namespace WallSplitter
                 Document host = app.ActiveUIDocument.Document;
                 var sources = Collect(host, materials, app);
                 var window = new UnifiedEditWindow(sources, materials);
-                new WindowInteropHelper(window) { Owner = app.MainWindowHandle };
+                new WindowInteropHelper(window) { Owner = app.GetMainWindowHandle() };
                 bool? accepted = window.ShowDialog();
                 if (window.CurrentOnly) return currentOnly();
                 if (accepted != true) return Result.Cancelled;

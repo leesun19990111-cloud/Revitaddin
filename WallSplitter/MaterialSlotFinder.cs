@@ -83,7 +83,7 @@ namespace WallSplitter
                 if (def == null) continue;
 
                 bool isMaterialParam;
-                try { isMaterialParam = def.GetDataType() == SpecTypeId.Reference.Material; }
+                try { isMaterialParam = def.IsMaterial(); }
                 catch { isMaterialParam = false; }
                 if (!isMaterialParam) continue;
 

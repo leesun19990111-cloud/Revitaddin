@@ -56,7 +56,7 @@ namespace WallSplitter
                 "편집할 링크 파일 하나를 선택하세요. 공유폴더의 중앙 RVT만 지원합니다.\n중첩 링크·클라우드·Revit Server 모델은 제외됩니다.",
                 links, e => e.Name + " — " + DisplayPath((RevitLinkType)e));
             picker.Title = title + " — 링크 중앙모델 선택";
-            new WindowInteropHelper(picker) { Owner = app.MainWindowHandle };
+            new WindowInteropHelper(picker) { Owner = app.GetMainWindowHandle() };
             if (picker.ShowDialog() != true || picker.Result is not RevitLinkType selected) return false;
             link = selected;
             return true;
@@ -94,7 +94,11 @@ namespace WallSplitter
         // Revit 조회 API는 파일 경로도 기본 ModelPath 래퍼로 반환할 수 있다.
         // FilePath로의 형 변환 여부 대신 API의 경로 속성으로 판별한다.
         internal static bool IsFileBasedPath(ModelPath? path) =>
+#if REVIT2017
+            path != null && !path.Empty && !path.ServerPath;
+#else
             path != null && !path.Empty && !path.ServerPath && !path.CloudPath;
+#endif
 
         // 같은 Revit 세션의 편집 가능한 문서만 찾는다. 링크의 읽기 전용 문서는 대상이 아니다.
         internal static Document? FindOpenTarget(UIApplication app, string centralPath)

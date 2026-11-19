@@ -21,7 +21,7 @@ namespace WallSplitter
             }
 
             RoomBoundingWindow window = new RoomBoundingWindow(doc);
-            new WindowInteropHelper(window) { Owner = uiapp.MainWindowHandle };
+            new WindowInteropHelper(window) { Owner = uiapp.GetMainWindowHandle() };
             window.ShowDialog();
             return Result.Succeeded;
         }

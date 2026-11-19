@@ -26,7 +26,7 @@ namespace WallSplitter
             {
                 List<PatternDefinition> sources = CollectPatterns(document);
                 var window = new PatternStudioWindow(sources, CollectPatternNames(document));
-                new WindowInteropHelper(window) { Owner = commandData.Application.MainWindowHandle };
+                new WindowInteropHelper(window) { Owner = commandData.Application.GetMainWindowHandle() };
                 if (window.ShowDialog() != true || window.SaveRequest == null) return Result.Cancelled;
                 request = window.SaveRequest;
             }

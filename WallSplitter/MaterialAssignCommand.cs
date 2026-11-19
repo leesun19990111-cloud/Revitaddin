@@ -29,7 +29,7 @@ namespace WallSplitter
             List<ElementId> preSelected = uiDoc.Selection.GetElementIds().ToList();
 
             MaterialAssignWindow window = new MaterialAssignWindow(doc, preSelected);
-            new WindowInteropHelper(window) { Owner = app.MainWindowHandle };
+            new WindowInteropHelper(window) { Owner = app.GetMainWindowHandle() };
             bool? dialogResult = window.ShowDialog();
             if (dialogResult != true)
                 return Result.Cancelled;

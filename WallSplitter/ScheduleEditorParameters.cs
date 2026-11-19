@@ -16,12 +16,21 @@ namespace WallSplitter
             if (p.StorageType == StorageType.String) return p.AsString() ?? "";
             if (p.StorageType == StorageType.Double)
             {
+#if REVIT2017
+                var spec = p.Definition.UnitType;
+                if (spec == UnitType.UT_Undefined) throw new InvalidOperationException("숫자 단위 식별 불가");
+#else
                 var spec = p.Definition.GetDataType();
                 if (!UnitUtils.IsMeasurableSpec(spec)) throw new InvalidOperationException("숫자 단위 식별 불가");
+#endif
                 using var options = new FormatValueOptions();
                 using var format = field.GetFormatOptions();
                 if (!format.UseDefault) options.SetFormatOptions(format);
+#if REVIT2017
+                return UnitFormatUtils.Format(host.GetUnits(), spec, p.AsDouble(), false, false, options);
+#else
                 return UnitFormatUtils.Format(host.GetUnits(), spec, p.AsDouble(), false, options);
+#endif
             }
             if (p.StorageType == StorageType.ElementId)
                 return p.AsValueString() ?? owner.GetElement(p.AsElementId())?.Name ?? "";
@@ -65,11 +74,19 @@ namespace WallSplitter
             }
             if (p.StorageType == StorageType.Double)
             {
-                try { v.UnitLabel = LabelUtils.GetLabelForUnit(p.GetUnitTypeId()); } catch { v.UnitLabel = "프로젝트 단위"; }
+                try
+                {
+#if REVIT2017
+                    v.UnitLabel = LabelUtils.GetLabelFor(p.DisplayUnitType);
+#else
+                    v.UnitLabel = LabelUtils.GetLabelForUnit(p.GetUnitTypeId());
+#endif
+                }
+                catch { v.UnitLabel = "프로젝트 단위"; }
             }
             if (p.StorageType != StorageType.ElementId || p.IsReadOnly) return;
             string builtin = int.TryParse(p.Id.ToString(), out int id) ? Enum.GetName(typeof(BuiltInParameter), id) ?? "" : "";
-            bool material = p.Definition.GetDataType() == SpecTypeId.Reference.Material;
+            bool material = p.Definition.IsMaterial();
             bool level = new[] { "LEVEL_PARAM", "FAMILY_LEVEL_PARAM", "SCHEDULE_LEVEL_PARAM", "WALL_BASE_CONSTRAINT", "WALL_HEIGHT_TYPE", "ROOF_BASE_LEVEL_PARAM", "STAIRS_BASE_LEVEL_PARAM", "STAIRS_TOP_LEVEL_PARAM" }.Contains(builtin);
             if (!material && !level) return;
             v.ReferenceKind = material ? "재료" : "레벨";

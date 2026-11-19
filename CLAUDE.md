@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" ribbon tab), supporting **Revit 2023–2027** from a single codebase (multi-targeted, one build per year). The detailed engineering history (features, live bugs, root causes, "don't revert this" warnings) is split by feature area into `docs/<area>/CLAUDE.md` files — this root file only holds absolute rules and the routing table below.
+A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" ribbon tab), supporting **Revit 2017 and 2023–2027** from a single codebase (multi-targeted, one build per year). The detailed engineering history (features, live bugs, root causes, "don't revert this" warnings) is split by feature area into `docs/<area>/CLAUDE.md` files — this root file only holds absolute rules and the routing table below.
 
 ## 절대 규칙
 
@@ -50,8 +50,8 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 
 ## Commands
 
-- 애드인 한 연도만 빌드: `dotnet build WallSplitter/WallSplitter.csproj -c Release2026` (또는 `Debug2026`, 2023~2027 아무 연도나).
-- 설치 프로그램 빌드(5개 연도 자동 포함): `dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release`
+- 애드인 한 연도만 빌드: `dotnet build WallSplitter/WallSplitter.csproj -c Release2026` (또는 `Debug2026`, 2017 및 2023~2027 중 하나).
+- 설치 프로그램 빌드(6개 연도 자동 포함): `dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release`
 - 독립 매개변수 관리자 빌드/테스트/배포: `node SunnyParameterManager/build-release.cjs` (기존 출력 덮어쓰기 금지), 패키지 재검증: 같은 명령에 `--verify`.
 - 독립 프로그램 테스트는 `SunnyParameterManager/Tests` 및 `LifecycleTests`. 기존 애드인 전체를 위한 통합 CI는 없음.
 - 참고: 해당 연도 애드인이 Revit에 로드된 상태면 빌드의 마지막 DLL 복사 단계만 실패한다 (컴파일 자체는 실패하지 않으며, 그 연도 Configuration에만 영향).

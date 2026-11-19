@@ -21,7 +21,7 @@ namespace WallSplitter
             }
 
             ParamCombineWindow window = new ParamCombineWindow(doc);
-            new WindowInteropHelper(window) { Owner = uiapp.MainWindowHandle };
+            new WindowInteropHelper(window) { Owner = uiapp.GetMainWindowHandle() };
             window.ShowDialog();
 
             // 규칙(감시할 카테고리)이나 실시간 켜짐 여부가 바뀌었을 수 있으므로 열려 있는 모든 문서의

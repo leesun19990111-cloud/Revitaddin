@@ -293,10 +293,14 @@ namespace WallSplitter
         private static readonly BuiltInCategory[] OtherLinkCategories =
         {
             BuiltInCategory.OST_RvtLinks,          // Revit 링크 (IFC 링크 포함)
+#if !REVIT2017
             BuiltInCategory.OST_TopographyLink,    // 지형 링크
             BuiltInCategory.OST_ToposolidLink,     // 지형솔리드 링크 (2024+에서 실제로 쓰임)
+#endif
             BuiltInCategory.OST_PointClouds,       // 포인트 클라우드
+#if !REVIT2017
             BuiltInCategory.OST_Coordination_Model, // 좌표 모델 (NWD/NWC 등 외부 좌표 모델)
+#endif
         };
 
         private static readonly Dictionary<string, LinkScan> LinkScans = new Dictionary<string, LinkScan>();
@@ -727,12 +731,21 @@ namespace WallSplitter
                         // 칠한다"고 할 때 실제로 쓰는 방식과 동일. 투영면/절단면 둘 다 적용해 단면도에서도
                         // 같은 색으로 보이게 한다.
                         ElementId? solidFill = ResolveFillPatternId(doc, SolidFillPatternName);
+#if REVIT2017
+                        ogs.SetProjectionFillPatternVisible(true);
+                        if (solidFill != null) ogs.SetProjectionFillPatternId(solidFill);
+                        ogs.SetProjectionFillColor(c);
+                        ogs.SetCutFillPatternVisible(true);
+                        if (solidFill != null) ogs.SetCutFillPatternId(solidFill);
+                        ogs.SetCutFillColor(c);
+#else
                         ogs.SetSurfaceForegroundPatternVisible(true);
                         if (solidFill != null) ogs.SetSurfaceForegroundPatternId(solidFill);
                         ogs.SetSurfaceForegroundPatternColor(c);
                         ogs.SetCutForegroundPatternVisible(true);
                         if (solidFill != null) ogs.SetCutForegroundPatternId(solidFill);
                         ogs.SetCutForegroundPatternColor(c);
+#endif
                     }
 
                     if (transparency.HasValue) ogs.SetSurfaceTransparency(transparency.Value);
@@ -767,7 +780,11 @@ namespace WallSplitter
             try
             {
                 OverrideGraphicSettings ogs = view.GetCategoryOverrides(new ElementId(categoryId));
+#if REVIT2017
+                Autodesk.Revit.DB.Color c = ogs.ProjectionFillColor;
+#else
                 Autodesk.Revit.DB.Color c = ogs.SurfaceForegroundPatternColor;
+#endif
                 int? color = c.IsValid ? ((c.Red << 16) | (c.Green << 8) | c.Blue) : (int?)null;
                 return (color, ogs.Transparency);
             }

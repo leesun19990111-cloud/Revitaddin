@@ -250,9 +250,13 @@ namespace WallSplitter
         {
             try
             {
+#if REVIT2017
+                string label = LabelUtils.GetLabelFor(definition.ParameterGroup);
+#else
                 ForgeTypeId group = definition.GetGroupTypeId();
                 if (group == null || string.IsNullOrEmpty(group.TypeId)) return "기타";
                 string label = LabelUtils.GetLabelForGroup(group);
+#endif
                 return string.IsNullOrWhiteSpace(label) ? "기타" : label;
             }
             catch
@@ -342,8 +346,7 @@ namespace WallSplitter
         {
             try
             {
-                ForgeTypeId type = p.Definition.GetDataType();
-                return type != null && type.TypeId == SpecTypeId.Boolean.YesNo.TypeId;
+                return p.Definition.IsYesNo();
             }
             catch
             {

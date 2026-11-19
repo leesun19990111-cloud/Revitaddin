@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Win32;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -7,11 +8,11 @@ Console.OutputEncoding = Encoding.UTF8;
 if (Directory.Exists(Path.Combine(AppContext.BaseDirectory, "ParameterManager")))
     return ParameterManagerInstaller.Run();
 
-Console.WriteLine("=== Sunny Tools Revit 애드인 설치 프로그램 (Revit 2023~2027 지원) ===");
+Console.WriteLine("=== Sunny Tools Revit 애드인 설치 프로그램 (Revit 2017 및 2023~2027 지원) ===");
 Console.WriteLine();
 
 // WallSplitter.csproj가 net48/net8.0-windows/net10.0-windows용으로 각각 미리 빌드해 둔 결과물.
-string[] supportedYears = { "2023", "2024", "2025", "2026", "2027" };
+string[] supportedYears = { "2017", "2023", "2024", "2025", "2026", "2027" };
 // 패턴 형상 연산은 모든 연도에서 Clipper2Lib을 사용한다. 누락된 패키지를 성공으로
 // 표시하면 설치 후 Revit에서 명령 시작 자체가 실패하므로 복사 전에 필수 파일을 확인한다.
 string[] requiredPayloadFiles = { "WallSplitter.dll", "Clipper2Lib.dll" };
@@ -29,18 +30,16 @@ if (Process.GetProcessesByName("Revit").Length > 0)
     return 2;
 }
 
-// 이 컴퓨터에 실제로 설치되어 있는 Revit 버전을 감지 (기본 설치 경로 기준).
-List<string> detectedYears = supportedYears
-    .Where(year => File.Exists(Path.Combine(@"C:\Program Files\Autodesk\Revit " + year, "Revit.exe")))
-    .ToList();
+// 기본 경로와 Autodesk에 등록된 설치 경로를 확인한다.
+List<string> detectedYears = supportedYears.Where(IsRevitInstalled).ToList();
 
 // 감지된 버전이 하나도 없으면(비표준 설치 경로 등) 안전하게 지원하는 모든 연도에 설치를 시도한다.
 List<string> targetYears = detectedYears.Count > 0 ? detectedYears : supportedYears.ToList();
 
 if (detectedYears.Count == 0)
 {
-    Console.WriteLine("이 컴퓨터에서 기본 경로(C:\\Program Files\\Autodesk\\Revit <연도>)로 설치된 Revit을 찾지 못했습니다.");
-    Console.WriteLine("혹시 몰라 지원하는 모든 버전(2023~2027)에 대해 설치를 시도합니다.");
+    Console.WriteLine("이 컴퓨터에서 지원하는 Revit의 설치 경로를 찾지 못했습니다.");
+    Console.WriteLine("지원하는 모든 버전(2017 및 2023~2027)에 대해 설치를 시도합니다.");
 }
 else
 {
@@ -53,6 +52,13 @@ var failed = new List<string>();
 
 foreach (string year in targetYears)
 {
+    if (year == "2017" && !HasNet48())
+    {
+        Console.WriteLine("[2017] 설치 실패: .NET Framework 4.8 이상을 먼저 설치해 주세요.");
+        failed.Add(year);
+        continue;
+    }
+
     string sourceDir = Path.Combine(payloadRoot, year);
     string[] missingPayloadFiles = requiredPayloadFiles
         .Where(file => !File.Exists(Path.Combine(sourceDir, file)))
@@ -72,7 +78,7 @@ foreach (string year in targetYears)
         Directory.CreateDirectory(installDir);
 
         // WallSplitter.dll뿐 아니라 같은 폴더의 모든 DLL을 복사한다.
-        // net48(2023/2024) 빌드는 System.Text.Json 등 프레임워크에 내장되지 않은 의존 DLL이
+        // net48(2017/2023/2024) 빌드는 System.Text.Json 등 프레임워크에 내장되지 않은 의존 DLL이
         // 함께 필요하므로, WallSplitter.dll 하나만 복사하면 Revit에서 로드에 실패한다.
         foreach (string file in Directory.GetFiles(sourceDir, "*.dll"))
             File.Copy(file, Path.Combine(installDir, Path.GetFileName(file)), overwrite: true);
@@ -122,6 +128,29 @@ if (failed.Count > 0)
 
 Pause();
 return installed.Count > 0 ? 0 : 1;
+
+static bool IsRevitInstalled(string year)
+{
+    if (File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "Autodesk", "Revit " + year, "Revit.exe")))
+        return true;
+
+    using var productYear = Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Autodesk\Revit\{year}");
+    if (productYear == null) return false;
+    foreach (string keyName in productYear.GetSubKeyNames())
+    {
+        using var product = productYear.OpenSubKey(keyName);
+        if (product?.GetValue("InstallationLocation") is string directory && directory.Length > 0 &&
+            File.Exists(Path.Combine(directory, "Revit.exe")))
+            return true;
+    }
+
+    return false;
+}
+
+static bool HasNet48() =>
+    Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full", "Release", null)
+        is int release && release >= 528040;
 
 static void Pause()
 {

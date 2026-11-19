@@ -19,7 +19,9 @@ namespace WallSplitter
         private const string ModelSyncPanelName = "모델간 변경 반영";
         private const string PatternPanelName = "패턴";
         private const string QuickTogglePanelName = "커스텀 버튼";
+#if !REVIT2017
         private const string WarningPickPanelName = "경고Pick";
+#endif
         private const string RoomSeparatorPanelName = "룸 경계";
         private const string ParamCombinePanelName = "매개변수 조합";
         private const string BatchJoinPanelName = "일괄 결합금지/허용";
@@ -195,6 +197,10 @@ namespace WallSplitter
                 ToolTip = "현재 평면·입면·단면에서 모델선 또는 상세선으로 그린 한 단위를 패턴으로 가져옵니다. 첫 모서리→첫 변 끝→둘째 변 끝을 ㄱ자 순서로 지정해 직사각형 범위를 만들며 Revit 기본 스냅 표식을 그대로 사용합니다.",
                 Image = RibbonIcons.ModelLineCapture(16),
             };
+#if REVIT2017
+            captureButtonData.LargeImage = RibbonIcons.ModelLineCapture(32);
+            RegisterRibbonCommandId(patternPanel, patternPanel.AddItem(captureButtonData));
+#else
             PushButtonData punchButtonData = new PushButtonData(
                 "WallSplitter_PatternPunch",
                 "패턴 타공",
@@ -215,11 +221,13 @@ namespace WallSplitter
             };
             foreach (RibbonItem patternStacked in patternPanel.AddStackedItems(captureButtonData, punchButtonData, restorePunchButtonData))
                 RegisterRibbonCommandId(patternPanel, patternStacked);
+#endif
 
             RibbonPanel quickTogglePanel = application.GetRibbonPanels(TabName).Find(p => p.Name == QuickTogglePanelName)
                 ?? application.CreateRibbonPanel(TabName, QuickTogglePanelName);
             AddQuickToggleStack(quickTogglePanel, assemblyPath);
 
+#if !REVIT2017
             RibbonPanel warningPickPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == WarningPickPanelName)
                 ?? application.CreateRibbonPanel(TabName, WarningPickPanelName);
 
@@ -235,6 +243,7 @@ namespace WallSplitter
                 warningPickButton.LargeImage = RibbonIcons.WarningPick(32);
                 warningPickButton.Image = RibbonIcons.WarningPick(16);
             }
+#endif
 
             RibbonPanel roomSeparatorPanel = application.GetRibbonPanels(TabName).Find(p => p.Name == RoomSeparatorPanelName)
                 ?? application.CreateRibbonPanel(TabName, RoomSeparatorPanelName);
@@ -322,10 +331,12 @@ namespace WallSplitter
             application.ControlledApplication.DocumentClosing += OnDocumentClosing;
             application.Idling += OnQuickToggleIdling;
 
+#if !REVIT2017
             // 경고Pick 창이 열려 있는 동안 경고가 생기거나 사라지면 새로고침을 누르지 않아도 목록이 따라
             // 바뀌게 한다(2026-09-03 요청). DocumentChanged는 트랜잭션이 커밋될 때마다 한 번씩만 발생하므로
             // Idling(초당 여러 번)보다 훨씬 적합하다 - 경고는 모델이 바뀔 때만 달라지기 때문이다.
             application.ControlledApplication.DocumentChanged += OnWarningPickDocumentChanged;
+#endif
 
             // "매개변수 조합"의 실시간 반영은 DocumentChanged가 아니라 Revit의 Dynamic Model Update(IUpdater)로
             // 한다 - DocumentChanged는 트랜잭션이 **끝난 뒤** 알려주는 읽기 전용 알림이라 거기서 모델을 고칠 수
@@ -338,6 +349,7 @@ namespace WallSplitter
             return Result.Succeeded;
         }
 
+#if !REVIT2017
         // Revit 이벤트 콜백이므로 예외가 밖으로 새면 안 된다(이 파일의 다른 콜백들과 같은 방침).
         // 여기서는 무거운 조회를 하지 않고 창에 "다시 읽어라"는 요청만 넘긴다 - 실제 조회는 기존
         // "새로고침"과 똑같이 WarningPickExternalEventHandler가 유효한 컨텍스트에서 수행한다.
@@ -349,6 +361,7 @@ namespace WallSplitter
                 // 무시 - 실패해도 사용자가 "새로고침"으로 언제든 직접 갱신할 수 있다.
             }
         }
+#endif
 
         public Result OnShutdown(UIControlledApplication application)
         {

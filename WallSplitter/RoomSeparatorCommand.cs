@@ -22,7 +22,7 @@ namespace WallSplitter
 
             RoomSeparatorWindow window = new RoomSeparatorWindow(doc);
             // Revit 메인 창을 소유자로 지정 - 그러지 않으면 창이 Revit 뒤로 숨을 수 있다(다른 창과 같은 처리).
-            new WindowInteropHelper(window) { Owner = uiapp.MainWindowHandle };
+            new WindowInteropHelper(window) { Owner = uiapp.GetMainWindowHandle() };
             window.ShowDialog();
             return Result.Succeeded;
         }

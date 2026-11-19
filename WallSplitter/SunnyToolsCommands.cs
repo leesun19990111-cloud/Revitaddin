@@ -68,9 +68,11 @@ namespace WallSplitter
             ("모델간 변경 반영", typeof(ModelSyncCommand).FullName!),
             ("패턴 스튜디오", typeof(PatternStudioCommand).FullName!),
             ("모델선 패턴 캡처", typeof(ModelLinePatternCaptureCommand).FullName!),
+#if !REVIT2017
             ("패턴 타공", typeof(PatternPunchCommand).FullName!),
             ("패턴 타공 복원", typeof(PatternPunchRestoreCommand).FullName!),
             ("경고Pick", typeof(WarningPickCommand).FullName!),
+#endif
             ("룸 구분선", typeof(RoomSeparatorCommand).FullName!),
             ("룸경계 ON/OFF", typeof(RoomBoundingCommand).FullName!),
             ("일괄 결합금지/허용", typeof(BatchJoinCommand).FullName!),

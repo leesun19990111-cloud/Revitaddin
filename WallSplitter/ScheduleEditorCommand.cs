@@ -23,10 +23,10 @@ namespace WallSplitter
                 var app = commandData.Application; var host = app.ActiveUIDocument.Document;
                 var schedules = new FilteredElementCollector(host).OfClass(typeof(ViewSchedule)).Cast<ViewSchedule>().Where(s => !s.IsTemplate).Cast<Element>().ToList();
                 var picker = new ElementPickerWindow("수정할 일람표를 선택하세요. 일람표의 정렬·필터를 유지한 데이터 행을 읽습니다.", schedules) { Title = "Schedule Editor · 일람표 선택" };
-                new WindowInteropHelper(picker) { Owner = app.MainWindowHandle };
+                new WindowInteropHelper(picker) { Owner = app.GetMainWindowHandle() };
                 if (picker.ShowDialog() != true || picker.Result is not ViewSchedule schedule) return Result.Cancelled;
                 var data = ScheduleEditorService.Read(app, schedule);
-                var window = new ScheduleEditorWindow(data); new WindowInteropHelper(window) { Owner = app.MainWindowHandle };
+                var window = new ScheduleEditorWindow(data); new WindowInteropHelper(window) { Owner = app.GetMainWindowHandle() };
                 if (window.ShowDialog() != true) return Result.Cancelled;
                 var batches = data.Pending.Values.GroupBy(r => r.Source.Key).OrderBy(g => g.First().Source.IsHost ? 1 : 0).ToList();
                 UnifiedEditService.Preflight(app, batches.Select(g => g.First().Source));

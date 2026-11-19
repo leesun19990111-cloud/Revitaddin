@@ -72,7 +72,7 @@ namespace WallSplitter
             _uiapp = uiapp;
             Instance = this;
 
-            new WindowInteropHelper(this) { Owner = uiapp.MainWindowHandle };
+            new WindowInteropHelper(this) { Owner = uiapp.GetMainWindowHandle() };
 
             // 우측 끝 고정 "설정"(톱니바퀴) 버튼 - 상태에 따라 모양이 바뀌지 않으므로 여기서 한 번만
             // 그려두면 되고, RefreshState가 매 Idling 틱마다 손댈 일이 없다.
@@ -619,7 +619,7 @@ namespace WallSplitter
             // 오프셋으로 환산해 저장해서, 다음에 메인 창이 움직여도 사용자가 고른 상대 위치를 유지한다.
             if (_cachedDoc == null) return;
 
-            IntPtr mainHandle = _uiapp.MainWindowHandle;
+            IntPtr mainHandle = _uiapp.GetMainWindowHandle();
             if (mainHandle == IntPtr.Zero || !NativeMethods.GetWindowRect(mainHandle, out NativeMethods.RECT rect))
                 return;
 
@@ -658,7 +658,7 @@ namespace WallSplitter
 
         private void RepositionToMainWindow()
         {
-            IntPtr mainHandle = _uiapp.MainWindowHandle;
+            IntPtr mainHandle = _uiapp.GetMainWindowHandle();
             if (mainHandle == IntPtr.Zero) return;
             if (!NativeMethods.GetWindowRect(mainHandle, out NativeMethods.RECT rect)) return;
 

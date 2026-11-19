@@ -37,7 +37,7 @@ namespace WallSplitter
             if (NamerWindow.Instance == null)
             {
                 NamerWindow window = new NamerWindow(doc, preSelected);
-                new WindowInteropHelper(window) { Owner = uiApp.MainWindowHandle };
+                new WindowInteropHelper(window) { Owner = uiApp.GetMainWindowHandle() };
                 window.Show();
             }
             else
@@ -290,7 +290,7 @@ namespace WallSplitter
                     Definition? def = p.Definition;
                     if (def == null) continue;
                     bool isMaterialParam;
-                    try { isMaterialParam = def.GetDataType() == SpecTypeId.Reference.Material; }
+                    try { isMaterialParam = def.IsMaterial(); }
                     catch { isMaterialParam = false; }
                     if (!isMaterialParam) continue;
 

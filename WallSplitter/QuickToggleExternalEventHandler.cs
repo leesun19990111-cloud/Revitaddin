@@ -153,7 +153,7 @@ namespace WallSplitter
             QuickToggleSettingsWindow window = new QuickToggleSettingsWindow(doc);
             // Revit 메인 창을 소유자로 지정 - 창이 Revit 뒤로 숨거나 작업 표시줄에 따로 뜨는 것을 방지
             // (QuickToggleSettingsCommand와 같은 처리).
-            new System.Windows.Interop.WindowInteropHelper(window) { Owner = app.MainWindowHandle };
+            new System.Windows.Interop.WindowInteropHelper(window) { Owner = app.GetMainWindowHandle() };
             window.ShowDialog();
             // 저장했다면 창 자신이 ForceReloadSettings/RefreshState를 이미 호출한다 - 취소했을 때를
             // 위해 여기서 한 번 더 부르지는 않는다(불필요한 재빌드로 클릭이 씹히는 걸 피하려는 이 파일의 방침).

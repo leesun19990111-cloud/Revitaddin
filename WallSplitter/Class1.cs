@@ -141,6 +141,13 @@ namespace WallSplitter
                         LevelId = wall.LevelId,
                     };
 
+#if REVIT2017
+                    if (!LegacySplitGeometry.IsUnsketchedWall(doc, wall))
+                    {
+                        skipReasons.Add($"{wall.Id}: Revit 2017에서는 편집한 벽 프로파일을 보존하며 분리할 수 없어 건너뜀");
+                        continue;
+                    }
+#else
                     // 프로파일 편집(Edit Profile)으로 기본 직사각형이 아닌 형태를 가진 벽이라면,
                     // 원본 벽을 삭제하기 전에 스케치 프로파일 곡선을 미리 읽어 캐시해 둔다.
                     if (wall.SketchId != ElementId.InvalidElementId)
@@ -149,6 +156,7 @@ namespace WallSplitter
                         prep.OriginalProfile = originalSketch?.Profile;
                         prep.HasEditedProfile = prep.OriginalProfile != null;
                     }
+#endif
 
                     // 원본 벽이 양 끝에서 어떤 요소와 결합되어 있었는지 미리 기록 (분리 후 같은 재료끼리 재결합하기 위함)
                     for (int end = 0; end < 2; end++)
@@ -280,7 +288,7 @@ namespace WallSplitter
                         string header = $"'{prep.Wall.WallType.Name}' 벽 분리 - 레이어 {items.Count}개에 적용할 유형을 검색하여 지정하세요.";
 
                         LayerTypeAssignmentWindow pickerWindow = new LayerTypeAssignmentWindow(header, items, availableTypes, warningMessage);
-                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.MainWindowHandle };
+                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.GetMainWindowHandle() };
                         if (pickerWindow.ShowDialog() != true)
                             return Result.Cancelled; // 취소 시 벽체분리 전체 작업을 취소 (확인된 요구사항)
 
@@ -364,6 +372,7 @@ namespace WallSplitter
                             WallUtils.DisallowWallJoinAtEnd(newWall, 0);
                             WallUtils.DisallowWallJoinAtEnd(newWall, 1);
 
+#if !REVIT2017
                             // 원본이 프로파일 편집된(비직사각형) 벽이었다면 여기서는 기본 프로파일 스케치만 만들어 두고,
                             // 실제 곡선 복사는 이 트랜잭션이 커밋된 뒤에 한다.
                             // (SketchEditScope는 열려 있는 트랜잭션 안에서는 시작할 수 없다는 API 제약 때문)
@@ -398,6 +407,7 @@ namespace WallSplitter
                                     profileWarnings.Add($"{newTypeName}: 이 벽 유형은 프로파일 편집을 지원하지 않습니다.");
                                 }
                             }
+#endif
 
                             if (!createdMap.TryGetValue((prep.WallId, targetWallType.Id), out List<Wall> sameTypeWalls))
                             {
@@ -431,6 +441,7 @@ namespace WallSplitter
                     tx.Commit();
                 }
 
+#if !REVIT2017
                 // [2차: 프로파일 복사] SketchEditScope는 자체적으로 트랜잭션을 관리하므로 1차 커밋 후 수행
                 foreach (ProfileTask task in profileTasks)
                 {
@@ -438,6 +449,7 @@ namespace WallSplitter
                     if (warning != null)
                         profileWarnings.Add($"{task.WallTypeName}: {warning}");
                 }
+#endif
 
                 // [3차: 재결합] 선택된 원본 벽들끼리 결합되어 있던 끝에서, 같은 재료(WallType)로
                 // 분리된 새 벽들의 위치선을 실제 코너 교차점까지 트림한 뒤 결합을 허용한다.
@@ -815,6 +827,7 @@ namespace WallSplitter
         // 주의: SketchEditScope는 열려 있는 트랜잭션 안에서 시작할 수 없고,
         // 스코프 안의 문서 수정은 반드시 내부 트랜잭션으로 감싸야 한다. (Revit API 제약)
         // 실패 시 새 벽은 기본 사각형 프로파일로 남고, 실패 사유 문자열을 반환한다(성공 시 null).
+#if !REVIT2017
         private static string TryCopyProfileSketch(Document doc, ProfileTask task)
         {
             SketchEditScope scope = new SketchEditScope(doc, "프로파일 복사");
@@ -859,6 +872,7 @@ namespace WallSplitter
                 scope.Dispose();
             }
         }
+#endif
 
         // curve를 mapping으로 변환한다. 직선 벽(평행 이동)에서는 항상 성공한다.
         // 호 벽(비등방 반경 스케일)에서는 원본 곡선이 Arc/Ellipse 등일 경우 변환 결과가 Revit이 표현할 수 없는

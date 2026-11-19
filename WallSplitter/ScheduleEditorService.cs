@@ -35,7 +35,7 @@ namespace WallSplitter
             var definition = (host.GetElement(field.ParameterId) as ParameterElement)?.GetDefinition();
             if (!isHost && id > 0 && shared == null && definition == null) return null;
             return new ScheduleEditorParameterIdentity { Id = id, Guid = shared?.GuidValue.ToString() ?? "", Name = definition?.Name ?? "",
-                DataType = definition?.GetDataType().TypeId ?? "", IsHost = isHost, IsType = field.FieldType == ScheduleFieldType.ElementType,
+                DataType = definition?.DataTypeKey() ?? "", IsHost = isHost, IsType = field.FieldType == ScheduleFieldType.ElementType,
                 IsProjectInfo = field.FieldType == ScheduleFieldType.ProjectInfo };
         }
         private static (Element Owner, Parameter Parameter)? Resolve(Document host, ScheduleField field, Candidate candidate)
@@ -57,7 +57,7 @@ namespace WallSplitter
                 }
                 if (key.Id < 0) return owner.get_Parameter((BuiltInParameter)key.Id);
                 var matches = owner.Parameters.Cast<Parameter>().Where(p => key.IsHost ? p.Id.ToString() == key.Id.ToString() :
-                    !p.IsShared && p.Definition.Name == key.Name && p.Definition.GetDataType().TypeId == key.DataType &&
+                    !p.IsShared && p.Definition.Name == key.Name && p.Definition.DataTypeKey() == key.DataType &&
                     document.GetElement(p.Id) is ParameterElement).ToList();
                 return matches.Count == 1 ? matches[0] : null;
             }
@@ -107,8 +107,8 @@ namespace WallSplitter
                     candidates.Add(new Candidate { Document = host, Element = e, Source = sources[0], Placement = "host" });
             if (definition.IncludeLinkedFiles)
             {
-#if REVIT2023
-                throw new InvalidOperationException("Revit 2023은 링크 포함 일람표의 정확한 행 조회를 지원하지 않습니다. 이 일람표는 Revit 2024 이상에서 실행하세요.");
+#if REVIT2017 || REVIT2023
+                throw new InvalidOperationException($"Revit {app.Application.VersionNumber}은 링크를 포함한 일반 요소 일람표의 정확한 행 조회를 지원하지 않습니다. 이 일람표는 Revit 2024 이상에서 실행하세요.");
 #else
                 foreach (RevitLinkInstance instance in new FilteredElementCollector(host).OfClass(typeof(RevitLinkInstance)))
                 {
@@ -132,7 +132,9 @@ namespace WallSplitter
             foreach (var field in shownFields)
                 data.Fields.Add(new ScheduleEditorField { Id = field.FieldId.ToString(), Name = field.ColumnHeading.Length > 0 ? field.ColumnHeading : field.GetName(),
                     IsType = field.FieldType == ScheduleFieldType.ElementType, IsProjectInfo = field.FieldType == ScheduleFieldType.ProjectInfo,
+#if !REVIT2017
                     IsIfcEntity = field.ParameterId == new ElementId(BuiltInParameter.IFC_EXPORT_ELEMENT_AS) || field.ParameterId == new ElementId(BuiltInParameter.IFC_EXPORT_ELEMENT_TYPE_AS),
+#endif
                     Reason = field.IsCalculatedField || field.IsCombinedParameterField || field.DisplayType != ScheduleFieldDisplayType.Standard ||
                         (field.FieldType != ScheduleFieldType.Instance && field.FieldType != ScheduleFieldType.ElementType && field.FieldType != ScheduleFieldType.ProjectInfo)
                         ? "계산식·합성·관련 요소·합계 필드는 직접 편집할 수 없습니다." : "" });

@@ -34,7 +34,7 @@ namespace WallSplitter
             if (p.Id == new ElementId(BuiltInParameter.ELEM_PARTITION_PARAM) && p.StorageType == StorageType.Integer && doc.IsWorkshared)
                 return doc.GetWorksetTable().GetWorkset(new WorksetId(p.AsInteger()))?.Name ?? p.AsValueString() ?? "";
             if (p.StorageType == StorageType.String) return p.AsString() ?? "";
-            if (p.StorageType == StorageType.Integer && p.Definition.GetDataType() == SpecTypeId.Boolean.YesNo)
+            if (p.StorageType == StorageType.Integer && p.Definition.IsYesNo())
                 return p.AsInteger() == 0 ? "아니요" : "예";
             if (p.StorageType == StorageType.ElementId)
                 return p.AsValueString() ?? doc.GetElement(p.AsElementId())?.Name ?? "";
@@ -43,8 +43,8 @@ namespace WallSplitter
         internal static UnifiedRow Snapshot(Document doc, Element owner, Parameter p, UnifiedSource source)
         {
             var v = new ProjectInformationValue { Identity = Identity(p), Name = p.Definition.Name, Storage = (int)p.StorageType,
-                DataType = p.Definition.GetDataType().TypeId, Raw = Raw(p), YesNo = p.Definition.GetDataType() == SpecTypeId.Boolean.YesNo,
-                Integer = p.Definition.GetDataType() == SpecTypeId.Int.Integer };
+                DataType = p.Definition.DataTypeKey(), Raw = Raw(p), YesNo = p.Definition.IsYesNo(),
+                Integer = p.Definition.IsInteger() };
             v.ReadOnlyReason = doc.IsLinked ? "원본 로컬 미연결 — 같은 Revit에 원본 로컬을 연 뒤 다시 조회하세요." : p.IsReadOnly ? "읽기 전용 — Revit에서 변경 불가" :
                 p.StorageType == StorageType.ElementId || p.StorageType == StorageType.None ? "Revit 전용 선택/설정 항목 — 기본 특성에서 수정" :
                 p.StorageType == StorageType.Integer && !v.YesNo && !v.Integer ? "Revit 전용 열거값 — 기본 특성에서 수정" : "";
@@ -62,9 +62,9 @@ namespace WallSplitter
             {
                 if (parameter.Definition == null) continue;
                 var value = new ProjectInformationValue { Identity = Identity(parameter), Name = parameter.Definition.Name,
-                    Storage = (int)parameter.StorageType, DataType = parameter.Definition.GetDataType().TypeId, Raw = Raw(parameter),
-                    YesNo = parameter.Definition.GetDataType() == SpecTypeId.Boolean.YesNo,
-                    Integer = parameter.Definition.GetDataType() == SpecTypeId.Int.Integer };
+                    Storage = (int)parameter.StorageType, DataType = parameter.Definition.DataTypeKey(), Raw = Raw(parameter),
+                    YesNo = parameter.Definition.IsYesNo(),
+                    Integer = parameter.Definition.IsInteger() };
                 value.ReadOnlyReason = doc.IsLinked ? "원본 로컬 미연결 — 같은 Revit에 원본 로컬을 연 뒤 다시 조회하세요." : parameter.IsReadOnly ? "읽기 전용 — Revit에서 변경 불가" :
                     parameter.StorageType == StorageType.ElementId || parameter.StorageType == StorageType.None ? "Revit 전용 선택/설정 항목 — 기본 프로젝트 정보에서 수정" :
                     parameter.StorageType == StorageType.Integer && !value.YesNo && !value.Integer ? "Revit 전용 열거값 — 기본 프로젝트 정보에서 수정" : "";
@@ -91,7 +91,7 @@ namespace WallSplitter
             if (matches.Count != 1) throw new InvalidOperationException(expected.Name + ": 매개변수가 삭제되거나 중복되었습니다.");
             Parameter p = matches[0];
             if ((forWrite && (p.IsReadOnly || !row.Editable)) || p.Definition.Name != expected.Name || (int)p.StorageType != expected.Storage ||
-                p.Definition.GetDataType().TypeId != expected.DataType || Raw(p) != expected.Raw)
+                p.Definition.DataTypeKey() != expected.DataType || Raw(p) != expected.Raw)
                 throw new InvalidOperationException(expected.Name + ": 조회 이후 값/정의/편집 권한이 변경되었습니다. 다시 조회하세요.");
             // 같은 내부 값이라도 단위 표시가 바뀌면 입력값을 잘못 해석할 수 있다.
             if (Value(doc, p) != row.Original) throw new InvalidOperationException(expected.Name + ": 표시 단위가 변경되었습니다. 다시 조회하세요.");
