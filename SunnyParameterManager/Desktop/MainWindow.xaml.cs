@@ -451,7 +451,7 @@ public partial class MainWindow : Window
         EditActions.Visibility = file.ProjectParameterTransfer ? Visibility.Collapsed : Visibility.Visible;
         ReviewExplanation.Text = file.GuardhouseRooms ? "파일명에 초소 또는 망루가 포함된 RVT의 룸을 정리합니다. 배치된 룸의 번호는 001로 설정하고 미배치 룸은 삭제 예정으로 표시합니다." : file.RoomReview ? "ROOM 전체를 모델별 20열 엑셀로 저장합니다. RVT 값은 변경하지 않습니다." : file.ProjectParameterTransfer
             ? "기준 파일과 대상 파일을 확인합니다. 적용할 때 각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행하고 '프로젝트 매개변수'만 선택합니다."
-            : file.RoomUse?.EstimateUncertain == true ? "실명으로 용도와 공간분류코드를 판정합니다. 애매한 실명의 임시값과 근거는 룰셋 폴더의 별도 엑셀에서 검토하세요."
+            : file.RoomUse?.EstimateUncertain == true ? "애매한 실명의 임시값과 근거를 변경 목록에서 확인하세요. 최종 적용 후 룰셋 폴더에 결과 엑셀을 저장합니다."
             : file.RoomUse?.SpaceClassification == true ? "실명으로 용도와 공간분류코드를 판정합니다. 각 필드의 기존 값·제안 값·근거를 확인한 뒤 저장하세요. 공간분류코드를 확정할 수 없는 룸은 기존 값을 유지합니다."
             : "아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요.";
         _loadedRulePath = sourcePath;
@@ -493,7 +493,7 @@ public partial class MainWindow : Window
             var path = RoomReviewWorkbook.Save(RoomReviewWorkbook.PathForRule(review.Path), snapshots, RoomSpaceAudit.Inspect(snapshots));
             plan.Notes.Add($"룸 검토 미배치 룸 {snapshots.Sum(m => RoomReviewRules.UnplacedRooms(m).Count):N0}개 · 엑셀 첫 시트에서 확인\n룸 검토 엑셀 (조회 당시 값) · " + path);
         }
-        SaveRoomEstimateReview(plan);
+        AddRoomEstimateReviewNote(plan);
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
         RuleSummary.Text = string.Join("\n", plan.Notes);
         RuleSummaryPanel.Visibility = Visibility.Visible;
@@ -515,11 +515,10 @@ public partial class MainWindow : Window
         return string.IsNullOrWhiteSpace(path) ? null : Path.GetDirectoryName(Path.GetFullPath(path));
     }
 
-    private void SaveRoomEstimateReview(RulePlan plan)
+    private static void AddRoomEstimateReviewNote(RulePlan plan)
     {
-        if (plan.RoomEstimates.Count == 0 || _sample || RoomEstimateFolder() is not { } folder) return;
-        var path = RoomEstimateWorkbook.Save(folder, false, plan.RoomEstimates);
-        plan.Notes.Insert(0, $"용도·공간분류코드 임시값 {plan.RoomEstimates.Count:N0}건 · 변경 검토 엑셀: {path}");
+        if (plan.RoomEstimates.Count > 0)
+            plan.Notes.Insert(0, $"용도·공간분류코드 임시값 검토 {plan.RoomEstimates.Count:N0}건 · 최종 적용 후 결과 엑셀 저장");
     }
     private void InvalidateProjectTransfer()
     {
@@ -669,7 +668,7 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 유형 코드 보정 룰셋을 다시 불러오세요.");
             typeCodeReport = TypeCodeWorkbook.Save(TypeCodeWorkbook.PathForRule(_loadedRulePath), plan.TypeCodeFindings);
         }
-        SaveRoomEstimateReview(plan);
+        AddRoomEstimateReviewNote(plan);
         foreach (var item in _models)
         foreach (var notice in item.Snapshot!.Notices.Where(n => n.StartsWith("다른 사용자 소유로 감지된 대상", StringComparison.Ordinal)))
             plan.Notes.Add($"조회 당시 소유권 안내 — {item.Title}\n{notice}\n실제 적용할 대상은 저장 직전에 다시 확인합니다.");
@@ -881,7 +880,7 @@ public partial class MainWindow : Window
                     string folder = RoomEstimateFolder() ?? _worker.SessionFolder;
                     try
                     {
-                        var path = RoomEstimateWorkbook.Save(folder, true, estimates);
+                        var path = RoomEstimateWorkbook.Save(folder, estimates);
                         ReportBox.AppendText("\n용도·공간분류코드 임시값 적용 결과 엑셀: " + path + "\n");
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

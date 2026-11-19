@@ -138,15 +138,21 @@ internal static class RoomProcedureTests
         var folder = Path.Combine(Path.GetTempPath(), "SunnyRoomEstimate-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var review = RoomEstimateWorkbook.Save(folder, false, plan.RoomEstimates);
-            var applied = RoomEstimateWorkbook.Save(folder, true,
-                plan.Edits.Where(e => e.RoomEstimate != null).Select(e => e.RoomEstimate! with { Status = "임시값 적용 완료" }));
-            using var zip = ZipFile.OpenRead(review);
+            var estimates = plan.Edits.Where(e => e.RoomEstimate != null)
+                .Select(e => e.RoomEstimate! with { Status = "임시값 적용 완료" }).ToList();
+            var applied = RoomEstimateWorkbook.Save(folder, estimates);
+            var original = File.ReadAllBytes(applied);
+            var second = RoomEstimateWorkbook.Save(folder, estimates.Select(e => e with { Status = "미반영 · 적용 실패" }));
+            var third = RoomEstimateWorkbook.Save(folder, estimates);
+            using var zip = ZipFile.OpenRead(applied);
             using var sheet = new StreamReader(zip.GetEntry("xl/worksheets/sheet1.xml")!.Open());
             var xml = sheet.ReadToEnd();
-            check(xml.Contains("원문 충돌 후보") && xml.Contains("임시 입력 예정") && xml.Contains("EPS(전기)") &&
-                review != applied && RoomEstimateWorkbook.Save(folder, false, plan.RoomEstimates) != review,
-                "임시값 검토·적용 결과를 별도로 보관하고 반복 저장에서 기존 파일을 보존");
+            check(xml.Contains("원문 충돌 후보") && xml.Contains("임시값 적용 완료") && xml.Contains("EPS(전기)") &&
+                Path.GetFileName(applied) == "용도_공간분류_임시값_적용결과.xlsx" &&
+                Path.GetFileName(second) == "용도_공간분류_임시값_적용결과_2.xlsx" &&
+                Path.GetFileName(third) == "용도_공간분류_임시값_적용결과_3.xlsx" &&
+                Directory.GetFiles(folder, "*.xlsx").Length == 3 && original.SequenceEqual(File.ReadAllBytes(applied)),
+                "회차별 임시값 적용 결과 한 파일과 기존 파일 내용 보존");
         }
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
         profile.EstimateCodeCandidates["오류사례"] = ["99999"];

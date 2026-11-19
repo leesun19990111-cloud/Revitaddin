@@ -5,10 +5,9 @@ namespace SunnyParameterManager.Desktop;
 
 public static class RoomEstimateWorkbook
 {
-    public static string Save(string folder, bool applied, IEnumerable<RoomEstimate> rows)
+    public static string Save(string folder, IEnumerable<RoomEstimate> rows)
     {
-        var name = applied ? "용도_공간분류_임시값_적용결과.xlsx" : "용도_공간분류_임시값_변경검토.xlsx";
-        return TypeCodeWorkbook.SaveTable(Path.Combine(folder, name), "임시값 확인",
+        return TypeCodeWorkbook.SaveTable(Path.Combine(folder, "용도_공간분류_임시값_적용결과.xlsx"), "임시값 확인",
             ["모델명", "룸 요소 ID", "실명", "확인 항목", "기존 값", "임시값", "처리 상태", "판정 근거", "모델 경로"],
             [46, 18, 38, 21, 14, 14, 24, 85, 72],
             rows.Distinct().OrderBy(r => r.Model, StringComparer.OrdinalIgnoreCase)
