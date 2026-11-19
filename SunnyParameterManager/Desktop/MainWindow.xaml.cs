@@ -490,7 +490,7 @@ public partial class MainWindow : Window
         if (review != null)
         {
             var path = RoomReviewWorkbook.Save(RoomReviewWorkbook.PathForRule(review.Path), snapshots, RoomSpaceAudit.Inspect(snapshots));
-            plan.Notes.Add("룸 검토 엑셀 (조회 당시 값) · " + path);
+            plan.Notes.Add($"룸 검토 미배치 룸 {snapshots.Sum(m => RoomReviewRules.UnplacedRooms(m).Count):N0}개 · 엑셀 첫 시트에서 확인\n룸 검토 엑셀 (조회 당시 값) · " + path);
         }
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
         RuleSummary.Text = string.Join("\n", plan.Notes);
@@ -596,6 +596,7 @@ public partial class MainWindow : Window
                 .Where(r => r.Scope == "인스턴스" && r.CategoryKey == RoomUsePlanner.RoomCategory)
                 .Select(r => r.OwnerId).Distinct().Count());
             RuleSummary.Text = $"읽기 전용 룸 검토 완료 · {_models.Count:N0}개 모델 · ROOM {roomCount:N0}개 · 확인할 셀 {findings.Count:N0}건\n" +
+                $"미배치 룸 {snapshots.Sum(m => RoomReviewRules.UnplacedRooms(m).Count):N0}개 · 엑셀 첫 시트에서 요소 ID·번호·이름과 삭제 요망 안내를 확인하세요.\n" +
                 "모델별 시트에 ROOM마다 한 행씩 20열로 기록했습니다. 모델명은 첫 행에만 표시하고, 확인이 필요한 셀은 색으로 강조합니다.\n" +
                 "이 룰셋은 용도 및 다른 매개변수를 수정하거나 RVT를 저장·동기화하지 않습니다. 엑셀: " + path;
             RuleSummaryPanel.Visibility = Visibility.Visible;

@@ -71,7 +71,7 @@ public sealed class QueryPlan
             plan.Scopes = ["인스턴스"];
             plan.Names = RoomReviewRules.Fields.ToList();
             plan.IncludeRoomUse = true;
-            plan.RoomIdentityVersion = 1;
+            plan.RoomIdentityVersion = 3;
         }
         else if (rules.Version == 11)
         {

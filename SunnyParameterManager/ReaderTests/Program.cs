@@ -118,6 +118,13 @@ Check(roomRows.Count == 2 && roomRows.All(r => r.OwnerId == room.UniqueId && r.E
     "Room 용도 판정은 실명·용도만 조회하고 Revit 이름 식별값 보존");
 var reviewQuery = QueryPlan.FromRules(new RuleSet { Version = 12, Name = "룸 검토", RoomReview = true });
 var reviewRows = slimReader.ReadAll(reviewQuery);
+room.Location = null;
+slimReader.ReadAll(reviewQuery);
+Check(slimModel.RoomIdentityVersion == 3 && slimModel.Owners.Single().RoomUnplaced,
+    "룸 검토 조회에 실제 미배치 상태와 최신 표식 저장");
+room.Location = new();
+slimReader.ReadAll(reviewQuery);
+Check(!slimModel.Owners.Single().RoomUnplaced, "위치가 있는 룸은 미배치로 분류하지 않음");
 Check(reviewRows.Count == 8 && reviewRows.Any(r => r.Name == "설명" && r.Raw == "기계실 설명") &&
     reviewRows.Any(r => r.Name == "실내재료마감-천장" && r.Raw == "천장 마감") &&
     reviewRows.All(r => r.OwnerId == room.UniqueId) && slimModel.Owners.Single().ElementName == "Revit 룸 이름",
