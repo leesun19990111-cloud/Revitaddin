@@ -110,6 +110,7 @@ public static class RoomReviewWorkbook
             values[0] = number == 1 ? model.Title : "";
             values[8] = identity.ElementName.Trim();
             var styles = new bool[Headers.Length];
+            var missingRequired = new bool[Headers.Length];
             for (var i = 0; i < Headers.Length; i++)
             {
                 var field = i == 7 ? "기존 실번호" : Headers[i];
@@ -122,8 +123,9 @@ public static class RoomReviewWorkbook
                     1 => Value(matches[0]),
                     _ => "동명 매개변수 확인 필요"
                 };
+                missingRequired[i] = RoomReviewRules.RequiredFields.Contains(field) && string.IsNullOrWhiteSpace(values[i]);
             }
-            Row(writer, ++number, values, styles);
+            Row(writer, ++number, values, styles, missingRequired: missingRequired);
         }
         writer.Write($"</sheetData><autoFilter ref=\"A1:T{number}\"/></worksheet>");
     }
@@ -138,28 +140,29 @@ public static class RoomReviewWorkbook
     private static string Value(ParameterRow row) => row.HasValue
         ? (row.Display.Length > 0 ? row.Display : row.Raw).Trim() : "";
 
-    private static void Row(StreamWriter writer, int number, IReadOnlyList<string> values, bool[]? problems = null, bool header = false)
+    private static void Row(StreamWriter writer, int number, IReadOnlyList<string> values, bool[]? problems = null,
+        bool header = false, bool[]? missingRequired = null)
     {
         writer.Write($"<row r=\"{number}\" ht=\"{(header ? 28 : 21)}\" customHeight=\"1\">");
         for (var i = 0; i < values.Count; i++)
         {
             var safe = new string((values[i] ?? "").Where(XmlConvert.IsXmlChar).Take(32767).ToArray());
-            var styleNumber = header ? 2 : problems?[i] == true ? 1 : i == 0 && safe.Length > 0 ? 4 : number % 2 == 0 ? 3 : 0;
+            var styleNumber = header ? 2 : missingRequired?[i] == true ? 5 : problems?[i] == true ? 1 : i == 0 && safe.Length > 0 ? 4 : number % 2 == 0 ? 3 : 0;
             var style = $" s=\"{styleNumber}\"";
             writer.Write($"<c r=\"{(char)('A' + i)}{number}\"{style} t=\"inlineStr\"><is><t xml:space=\"preserve\">{SecurityElement.Escape(safe)}</t></is></c>");
         }
         writer.Write("</row>");
     }
 
-    // 본문은 작은 글자와 연초록 행 교차색을 쓰고, 확인이 필요한 셀은 붉게 강조한다.
+    // 필수 공란은 해당 셀에 진한 붉은 배경·테두리를 쓰고 다른 점검 문제는 기존 연한 강조를 유지한다.
     private const string Styles = """
         <?xml version="1.0" encoding="utf-8"?>
         <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-          <fonts count="3"><font><sz val="9"/><color rgb="FF244036"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/></font><font><b/><sz val="9"/><color rgb="FF20543B"/></font></fonts>
-          <fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE8DE"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF256B4A"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF5EE"/><bgColor indexed="64"/></patternFill></fill></fills>
-          <borders count="1"><border/></borders>
+          <fonts count="4"><font><sz val="9"/><color rgb="FF244036"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/></font><font><b/><sz val="9"/><color rgb="FF20543B"/></font><font><b/><sz val="9"/><color rgb="FF9C0006"/></font></fonts>
+          <fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE8DE"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF256B4A"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF5EE"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFA8B0"/><bgColor indexed="64"/></patternFill></fill></fills>
+          <borders count="2"><border/><border><left style="thin"><color rgb="FFB91C1C"/></left><right style="thin"><color rgb="FFB91C1C"/></right><top style="thin"><color rgb="FFB91C1C"/></top><bottom style="thin"><color rgb="FFB91C1C"/></bottom></border></borders>
           <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-          <cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="4" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>
+          <cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="4" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs>
         </styleSheet>
         """;
 

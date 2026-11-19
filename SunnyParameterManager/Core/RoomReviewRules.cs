@@ -7,6 +7,10 @@ public static class RoomReviewRules
         "실명", "자산번호", "LOD", "공간분류코드", "구역", "실ID", "실내재료마감-걸레받이",
         "실내재료마감-바닥", "실내재료마감-벽", "실내재료마감-천장", "작성기준"];
 
+    // 사용자가 지정한 필수 입력 항목의 공란은 엑셀에서 해당 셀만 강하게 표시한다.
+    public static readonly string[] RequiredFields = ["용도", "지상지하", "층", "번호", "실명", "공간분류코드",
+        "실내재료마감-걸레받이", "실내재료마감-바닥", "실내재료마감-벽", "실내재료마감-천장"];
+
     public static void Validate(RuleSet? file)
     {
         if (file?.Version != 12 || !file.RoomReview || string.IsNullOrWhiteSpace(file.Name) || file.SampleOnly ||

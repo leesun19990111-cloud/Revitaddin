@@ -64,7 +64,7 @@ internal static class RoomReviewTests
             var styles = XDocument.Load(zip.GetEntry("xl/styles.xml")!.Open());
             static string Cell(XDocument xml, XNamespace ns, string key) =>
                 xml.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == key).Value;
-            bool Red(string key) => (string?)sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == key).Attribute("s") == "1";
+            bool Red(string key) => (string?)sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == key).Attribute("s") is "1" or "5";
             check(sheets.SequenceEqual(["A", "A (2)"]) &&
                 RoomReviewWorkbook.Headers.SequenceEqual(["모델명", "용도", "지상지하", "층", "설명", "번호", "실번호", "기존실번호", "이름", "실명", "자산번호", "LOD", "공간분류코드", "구역", "실ID", "실내재료마감-걸레받이", "실내재료마감-바닥", "실내재료마감-벽", "실내재료마감-천장", "작성기준"]) &&
                 Cell(sheet, ns, "A1") == "모델명" && Cell(sheet, ns, "T1") == "작성기준" &&
@@ -76,7 +76,7 @@ internal static class RoomReviewTests
                 sheet.Descendants(ns + "row").Count() == 3 && empty.Descendants(ns + "row").Count() == 1 &&
                 (string?)sheet.Descendants(ns + "autoFilter").Single().Attribute("ref") == "A1:T3",
                 "모델별 시트·20열 순서·ROOM별 한 행·모델명만 반복 생략");
-            check((string?)sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == "B3").Attribute("s") == "1" &&
+            check((string?)sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == "B3").Attribute("s") == "5" &&
                 (string?)sheet.Descendants(ns + "c").Single(c => (string?)c.Attribute("r") == "J3").Attribute("s") == "1" &&
                 styles.Descendants(ns + "font").SelectMany(f => f.Elements(ns + "sz")).Any(s => (string?)s.Attribute("val") == "9") &&
                 styles.Descendants(ns + "font").SelectMany(f => f.Elements(ns + "sz")).Any(s => (string?)s.Attribute("val") == "11") &&
@@ -94,6 +94,62 @@ internal static class RoomReviewTests
             number.Display = "01";
             check(RoomSpaceAudit.Inspect([first]).Any(f => f.ElementId == "1" && f.Field == "번호"),
                 "번호는 숫자 세 자리 필수");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+        CheckRequiredCells(check);
+    }
+
+    private static void CheckRequiredCells(Action<bool, string> check)
+    {
+        var model = new ModelSnapshot { Path = "C:/one/A.rvt", Title = "셀 강조 검증" };
+        var cases = new List<(string Id, string Field)>();
+        foreach (var field in RoomReviewRules.RequiredFields)
+        foreach (var state in new[] { "빈값", "공백", "미설정", "매개변수 없음" })
+        {
+            var id = field + "-" + state;
+            cases.Add((id, field));
+            model.Owners.Add(new() { OwnerId = id, ElementId = id, ElementName = id,
+                Scope = "인스턴스", CategoryKey = RoomUsePlanner.RoomCategory });
+            foreach (var parameter in RoomReviewRules.Fields)
+            {
+                if (parameter == field && state == "매개변수 없음") continue;
+                var row = Row(id, parameter, parameter switch
+                {
+                    "용도" => "R", "지상지하" => "F", "층" => "01", "번호" => "001",
+                    "실번호" => "RF01001", "기존 실번호" => "ND", _ => "입력"
+                });
+                if (parameter == field)
+                {
+                    row.Raw = row.Display = state == "공백" ? " \t " : "";
+                    row.HasValue = state != "미설정";
+                }
+                model.Rows.Add(row);
+            }
+        }
+        var path = Path.Combine(Path.GetTempPath(), "room-required-cells-" + Guid.NewGuid().ToString("N") + ".xlsx");
+        try
+        {
+            RoomReviewWorkbook.Save(path, [model], RoomSpaceAudit.Inspect([model]));
+            using var zip = ZipFile.OpenRead(path);
+            XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheet = XDocument.Load(zip.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+            var rows = sheet.Descendants(ns + "row").Skip(1).Select(r => r.Elements(ns + "c").ToList())
+                .ToDictionary(cells => cells[8].Value);
+            foreach (var (id, field) in cases)
+            {
+                int column = Array.IndexOf(RoomReviewWorkbook.Headers, field);
+                var cells = rows[id];
+                check(cells.Count == 20 && cells.Where(c => (string?)c.Attribute("s") == "5").Count() == 1 &&
+                    (string?)cells[column].Attribute("s") == "5" &&
+                    cells.Where((_, i) => i != column).All(c => (string?)c.Attribute("s") != "5"),
+                    "필수 누락 셀만 강한 강조: " + id);
+            }
+            var styles = XDocument.Load(zip.GetEntry("xl/styles.xml")!.Open());
+            var strong = styles.Root!.Element(ns + "cellXfs")!.Elements(ns + "xf").ElementAt(5);
+            check((string?)strong.Attribute("fillId") == "5" && (string?)strong.Attribute("borderId") == "1" &&
+                (string?)strong.Attribute("fontId") == "3" &&
+                styles.Descendants(ns + "fgColor").Any(c => (string?)c.Attribute("rgb") == "FFFFA8B0"),
+                "강조 셀의 진한 붉은 배경·글꼴·테두리 저장");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
