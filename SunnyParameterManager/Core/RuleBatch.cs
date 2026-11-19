@@ -46,6 +46,7 @@ public static class RuleBatch
             var plan = Evaluate(file);
             result.Notes.Add(file.Name);
             result.Notes.AddRange(plan.Notes);
+            result.RoomEstimates.AddRange(plan.RoomEstimates);
             foreach (var edit in plan.Edits)
             {
                 if (staged.TryGetValue(edit.Original.Key, out var prior))
@@ -55,6 +56,7 @@ public static class RuleBatch
                     edit.AddParameter ??= prior.AddParameter;
                     edit.MaterialSource ??= prior.MaterialSource;
                     edit.RoomUseSource ??= prior.RoomUseSource;
+                    edit.RoomEstimate ??= prior.RoomEstimate;
                     if (edit.RoomName.Length == 0) edit.RoomName = prior.RoomName;
                 }
                 staged[edit.Original.Key] = edit;

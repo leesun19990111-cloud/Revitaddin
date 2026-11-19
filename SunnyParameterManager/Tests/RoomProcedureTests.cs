@@ -1,5 +1,8 @@
 using System.Text.Json;
+using System.IO;
+using System.IO.Compression;
 using SunnyParameterManager.Core;
+using SunnyParameterManager.Desktop;
 
 internal static class RoomProcedureTests
 {
@@ -103,6 +106,50 @@ internal static class RoomProcedureTests
         foreach (var edit in plan.Edits)
         { edit.Original.Raw = edit.Original.Display = edit.Value; edit.Original.HasValue = true; }
         check(RoomUsePlanner.Plan(rule, rows, []).Edits.Count == 0, "복합 룰셋 재실행 동일값 제외");
+        CheckEstimates(check, reject);
     }
 
+    private static void CheckEstimates(Action<bool, string> check, Action<Action, string> reject)
+    {
+        var rule = Rules();
+        var profile = rule.RoomUse!;
+        profile.EstimateUncertain = true;
+        profile.Terms.AddRange([Term("34199", "기타 출입구 및 전실", "C", ["기타출입구및전실"]),
+            Term("33432", "EPS실", "U"), Term("33699", "기타 업무공간", "R")]);
+        profile.EstimateCodeCandidates["전실"] = ["34101", "34199"];
+        var rows = new List<ParameterRow>();
+        foreach (var (id, name, use, code) in new[]
+        {
+            ("1", "전실", "C", ""), ("2", "EPS(전기)", "R", "ND"), ("3", "전경대", "R", ""),
+            ("4", "ND", "R", ""), ("5", "", "R", "ND"), ("6", "창고", "U", "ND"),
+            ("7", "전실", "C", "34101")
+        })
+            rows.AddRange([Row(id, "실명", name), Row(id, "용도", use), Row(id, "공간분류코드", code)]);
+        var plan = RoomUsePlanner.Plan(rule, rows, []);
+        check(plan.RoomEstimates.Count == 6 && plan.RoomEstimates.Any(r => r is
+                { ElementId: "7", Proposed: "34101", Status: "기존값과 동일" }) &&
+            plan.Edits.Where(e => e.RoomEstimate != null).Count() == 4 &&
+            plan.Edits.Any(e => e.RoomEstimate is { RealName: "EPS(전기)", Field: "용도", Proposed: "U" }) &&
+            plan.Edits.Any(e => e.RoomEstimate is { RealName: "EPS(전기)", Field: "공간분류코드", Before: "ND", Proposed: "33432" }) &&
+            plan.Edits.Any(e => e.RoomEstimate is { RealName: "전경대", Proposed: "33699" }) &&
+            plan.Edits.Any(e => e.Original.OwnerId == "4" && e.Field == "용도" && e.Value == "Z" && e.RoomEstimate == null) &&
+            plan.Edits.All(e => e.Original.OwnerId != "5" || e.RoomEstimate == null),
+            "충돌·설비 약어·기타 공간 임시값을 적용 경로와 엑셀에 전달하고 ND의 Z 판정을 보존");
+        var folder = Path.Combine(Path.GetTempPath(), "SunnyRoomEstimate-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var review = RoomEstimateWorkbook.Save(folder, false, plan.RoomEstimates);
+            var applied = RoomEstimateWorkbook.Save(folder, true,
+                plan.Edits.Where(e => e.RoomEstimate != null).Select(e => e.RoomEstimate! with { Status = "임시값 적용 완료" }));
+            using var zip = ZipFile.OpenRead(review);
+            using var sheet = new StreamReader(zip.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+            var xml = sheet.ReadToEnd();
+            check(xml.Contains("원문 충돌 후보") && xml.Contains("임시 입력 예정") && xml.Contains("EPS(전기)") &&
+                review != applied && RoomEstimateWorkbook.Save(folder, false, plan.RoomEstimates) != review,
+                "임시값 검토·적용 결과를 별도로 보관하고 반복 저장에서 기존 파일을 보존");
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+        profile.EstimateCodeCandidates["오류사례"] = ["99999"];
+        reject(() => RulePlanner.Validate(rule), "사전에 없는 코드는 임시값 후보로 등록할 수 없음");
+    }
 }

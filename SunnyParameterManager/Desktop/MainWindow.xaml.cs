@@ -451,6 +451,7 @@ public partial class MainWindow : Window
         EditActions.Visibility = file.ProjectParameterTransfer ? Visibility.Collapsed : Visibility.Visible;
         ReviewExplanation.Text = file.GuardhouseRooms ? "파일명에 초소 또는 망루가 포함된 RVT의 룸을 정리합니다. 배치된 룸의 번호는 001로 설정하고 미배치 룸은 삭제 예정으로 표시합니다." : file.RoomReview ? "ROOM 전체를 모델별 20열 엑셀로 저장합니다. RVT 값은 변경하지 않습니다." : file.ProjectParameterTransfer
             ? "기준 파일과 대상 파일을 확인합니다. 적용할 때 각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행하고 '프로젝트 매개변수'만 선택합니다."
+            : file.RoomUse?.EstimateUncertain == true ? "실명으로 용도와 공간분류코드를 판정합니다. 애매한 실명의 임시값과 근거는 룰셋 폴더의 별도 엑셀에서 검토하세요."
             : file.RoomUse?.SpaceClassification == true ? "실명으로 용도와 공간분류코드를 판정합니다. 각 필드의 기존 값·제안 값·근거를 확인한 뒤 저장하세요. 공간분류코드를 확정할 수 없는 룸은 기존 값을 유지합니다."
             : "아래 변경만 저장합니다. 기존 값과 바뀔 값을 확인한 뒤 ‘RVT에 저장’을 누르세요.";
         _loadedRulePath = sourcePath;
@@ -492,6 +493,7 @@ public partial class MainWindow : Window
             var path = RoomReviewWorkbook.Save(RoomReviewWorkbook.PathForRule(review.Path), snapshots, RoomSpaceAudit.Inspect(snapshots));
             plan.Notes.Add($"룸 검토 미배치 룸 {snapshots.Sum(m => RoomReviewRules.UnplacedRooms(m).Count):N0}개 · 엑셀 첫 시트에서 확인\n룸 검토 엑셀 (조회 당시 값) · " + path);
         }
+        SaveRoomEstimateReview(plan);
         foreach (var edit in plan.Edits) _edits[edit.Original.Key] = edit;
         RuleSummary.Text = string.Join("\n", plan.Notes);
         RuleSummaryPanel.Visibility = Visibility.Visible;
@@ -504,6 +506,20 @@ public partial class MainWindow : Window
     private void TransferSourceChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_initialized && _loadedRules?.ProjectParameterTransfer == true) InvalidateProjectTransfer();
+    }
+
+    private string? RoomEstimateFolder()
+    {
+        var path = _loadedRules?.RoomUse?.EstimateUncertain == true ? _loadedRulePath :
+            _additionalRules.FirstOrDefault(r => r.File.RoomUse?.EstimateUncertain == true)?.Path;
+        return string.IsNullOrWhiteSpace(path) ? null : Path.GetDirectoryName(Path.GetFullPath(path));
+    }
+
+    private void SaveRoomEstimateReview(RulePlan plan)
+    {
+        if (plan.RoomEstimates.Count == 0 || _sample || RoomEstimateFolder() is not { } folder) return;
+        var path = RoomEstimateWorkbook.Save(folder, false, plan.RoomEstimates);
+        plan.Notes.Insert(0, $"용도·공간분류코드 임시값 {plan.RoomEstimates.Count:N0}건 · 변경 검토 엑셀: {path}");
     }
     private void InvalidateProjectTransfer()
     {
@@ -653,6 +669,7 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(file, _loadedRules)) throw new InvalidOperationException("선택한 유형 코드 보정 룰셋을 다시 불러오세요.");
             typeCodeReport = TypeCodeWorkbook.Save(TypeCodeWorkbook.PathForRule(_loadedRulePath), plan.TypeCodeFindings);
         }
+        SaveRoomEstimateReview(plan);
         foreach (var item in _models)
         foreach (var notice in item.Snapshot!.Notices.Where(n => n.StartsWith("다른 사용자 소유로 감지된 대상", StringComparison.Ordinal)))
             plan.Notes.Add($"조회 당시 소유권 안내 — {item.Title}\n{notice}\n실제 적용할 대상은 저장 직전에 다시 확인합니다.");
@@ -790,6 +807,7 @@ public partial class MainWindow : Window
         if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }
         MainTabs.SelectedIndex = 1;
         var groups = _edits.Values.GroupBy(e => e.Original.ModelPath).ToList();
+        var estimateRows = groups.SelectMany(g => g).Where(e => e.RoomEstimate != null).ToList();
         var local = groups.Any(g => _models.Single(m => m.Path == g.Key).Snapshot?.Kind == "로컬");
         var summary = string.Join("\n", groups.Select(g =>
         {
@@ -802,6 +820,7 @@ public partial class MainWindow : Window
             "\n\n작업공유 모델은 중앙 동기화 후 현재 사용자의 차용 요소·모든 작업세트 소유권을 반환합니다. 같은 모델을 다른 Revit/로컬에서 편집 중이면 먼저 그 작업을 동기화하고 닫으세요. 반환 확인 실패 시 나머지 모델은 중단합니다." +
             "\n\n모델별 순차 처리이며 여러 모델을 한 번에 되돌릴 수 없습니다. 유형 값은 그 유형을 사용하는 모든 요소에 영향을 줍니다. 작업세트/치수/재료 변경은 모델 동작에 영향을 줄 수 있습니다.\n운영 모델 적용 전 별도 테스트 중앙에서 검증해 주세요." +
             (local ? "\n\n주의: 기존 로컬에 저장된 다른 미동기화 작업도 중앙에 함께 반영됩니다." : "") +
+            (estimateRows.Count > 0 ? $"\n\n추정으로 정한 용도·공간분류코드 임시값 {estimateRows.Count:N0}건이 포함되어 있습니다." : "") +
             (_edits.Values.Any(v => v.DeleteUnplacedRoom) ? "\n\n미배치 룸 삭제 항목을 적용하면 룸 요소와 그 정보가 모델 및 일람표에서 영구 삭제됩니다." : "") +
             (_edits.Values.Any(v => v.DefinitionFix?.Action == SpecRulePlanner.ActionRemove) ? "\n\n삭제 전용: " + string.Join(" · ", _edits.Values.Select(v => v.Original.Name).Distinct()) +
                 "\n정확한 이름이며 프로젝트 정보에만 연결된 항목을 삭제합니다. 삭제 항목의 값은 다른 매개변수로 옮기지 않습니다. 건축물번호와 다른 카테고리에도 연결된 구조는 유지합니다. 삭제 전 복구 사본을 보관합니다." :
@@ -813,37 +832,66 @@ public partial class MainWindow : Window
             await _worker.Connect(RevitPathBox.Text.Trim());
             MainTabs.SelectedIndex = 2;
             int completed = 0;
-            foreach (var group in groups)
+            var estimateStatuses = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
             {
-                if (_stopRequested) { ReportBox.AppendText($"사용자 중지로 나머지 {groups.Count - groups.IndexOf(group)}개 모델은 처리하지 않았습니다. 변경 예정은 유지합니다.\n"); break; }
-                var item = _models.Single(m => m.Path == group.Key);
-                var snapshot = item.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.");
-                var result = await _worker.Send(new Request { Operation = "적용", Path = item.Path, Identity = snapshot.Identity, CanonicalPath = snapshot.CanonicalPath, Confirmed = true, LocalChangesConfirmed = local, Edits = group.ToList(), CleanupRules = group.Any(e => e.KacCleanup) ? _loadedRules : null });
-                ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {item.Title}\n{result.Stage} · {result.Message}\n작업/복구 경로: {result.RecoveryPath}\n변경 전 파일 백업: {result.BackupPath}\n");
-                if (result.Success)
+                foreach (var group in groups)
                 {
-                    foreach (var edit in group) _edits.Remove(edit.Original.Key);
-                    item.Status = "반영 완료 · 재조회 필요"; item.Snapshot = null; completed++;
+                    if (_stopRequested) { ReportBox.AppendText($"사용자 중지로 나머지 {groups.Count - groups.IndexOf(group)}개 모델은 처리하지 않았습니다. 변경 예정은 유지합니다.\n"); break; }
+                    var item = _models.Single(m => m.Path == group.Key);
+                    var snapshot = item.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.");
+                    estimateStatuses[group.Key] = "반영 여부 확인 필요";
+                    var result = await _worker.Send(new Request { Operation = "적용", Path = item.Path, Identity = snapshot.Identity, CanonicalPath = snapshot.CanonicalPath, Confirmed = true, LocalChangesConfirmed = local, Edits = group.ToList(), CleanupRules = group.Any(e => e.KacCleanup) ? _loadedRules : null });
+                    estimateStatuses[group.Key] = result.Success ? "임시값 적용 완료" :
+                        result.RequiresAttention ? "반영 여부 확인 필요" : "미반영 · 적용 실패";
+                    ReportBox.AppendText($"\n[{DateTime.Now:HH:mm:ss}] {item.Title}\n{result.Stage} · {result.Message}\n작업/복구 경로: {result.RecoveryPath}\n변경 전 파일 백업: {result.BackupPath}\n");
+                    if (result.Success)
+                    {
+                        foreach (var edit in group) _edits.Remove(edit.Original.Key);
+                        item.Status = "반영 완료 · 재조회 필요"; item.Snapshot = null; completed++;
+                    }
+                    else
+                    {
+                        snapshot.RequiresRequery = true;
+                        item.Status = result.RequiresAttention ? "반영 여부 확인 필요" : "적용 실패 · 원인 확인 후 재조회";
+                        ReportBox.AppendText("같은 변경 재실행을 차단했습니다. 원본의 원인을 확인한 뒤 ‘다시 조회’에서 이 파일만 새로 준비하세요. 기존 변경 목록은 검토/작업 저장용으로 유지합니다.\n");
+                    }
+                    if (!result.Success || result.RequiresAttention)
+                    {
+                        var remaining = groups.Count - groups.IndexOf(group) - 1;
+                        if (!_stopRequested && remaining > 0 && ApplyContinuation.CanOffer(result) && !_worker.NeedsAttention &&
+                            MessageBox.Show(this, $"{item.Title}\n{result.Message}\n\n이 파일은 변경 시작 전에 중단되었고 작업 문서는 닫혔습니다. " +
+                                $"실패한 파일은 재시도하지 않고, 처음 승인한 나머지 {remaining}개 모델의 변경을 계속 적용할까요?\n" +
+                                "실패 파일의 변경 예정은 보관하며 원인 해결 후 다시 조회해야 합니다.", "나머지 모델 계속 적용", MessageBoxButton.YesNo,
+                                MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                        { ReportBox.AppendText("사용자 승인으로 실패 파일을 제외하고 나머지 모델을 계속 처리합니다.\n"); continue; }
+                        ReportBox.AppendText($"나머지 {groups.Count - groups.IndexOf(group) - 1}개 모델은 처리하지 않았습니다.\n"); break;
+                    }
                 }
-                else
+                RefreshFields(); StatusText.Text = (_stopRequested ? "중지 요청 처리 종료 · " : "") + $"완료 {completed}/{groups.Count}개 모델 · 처리 결과를 확인하세요. 성공한 모델은 다시 조회할 수 있습니다.";
+            }
+            finally
+            {
+                if (estimateRows.Count > 0)
                 {
-                    snapshot.RequiresRequery = true;
-                    item.Status = result.RequiresAttention ? "반영 여부 확인 필요" : "적용 실패 · 원인 확인 후 재조회";
-                    ReportBox.AppendText("같은 변경 재실행을 차단했습니다. 원본의 원인을 확인한 뒤 ‘다시 조회’에서 이 파일만 새로 준비하세요. 기존 변경 목록은 검토/작업 저장용으로 유지합니다.\n");
-                }
-                if (!result.Success || result.RequiresAttention)
-                {
-                    var remaining = groups.Count - groups.IndexOf(group) - 1;
-                    if (!_stopRequested && remaining > 0 && ApplyContinuation.CanOffer(result) && !_worker.NeedsAttention &&
-                        MessageBox.Show(this, $"{item.Title}\n{result.Message}\n\n이 파일은 변경 시작 전에 중단되었고 작업 문서는 닫혔습니다. " +
-                            $"실패한 파일은 재시도하지 않고, 처음 승인한 나머지 {remaining}개 모델의 변경을 계속 적용할까요?\n" +
-                            "실패 파일의 변경 예정은 보관하며 원인 해결 후 다시 조회해야 합니다.", "나머지 모델 계속 적용", MessageBoxButton.YesNo,
-                            MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
-                    { ReportBox.AppendText("사용자 승인으로 실패 파일을 제외하고 나머지 모델을 계속 처리합니다.\n"); continue; }
-                    ReportBox.AppendText($"나머지 {groups.Count - groups.IndexOf(group) - 1}개 모델은 처리하지 않았습니다.\n"); break;
+                    var estimates = estimateRows.Select(e => e.RoomEstimate! with
+                    {
+                        Status = estimateStatuses.GetValueOrDefault(e.Original.ModelPath, "미처리")
+                    }).ToList();
+                    string folder = RoomEstimateFolder() ?? _worker.SessionFolder;
+                    try
+                    {
+                        var path = RoomEstimateWorkbook.Save(folder, true, estimates);
+                        ReportBox.AppendText("\n용도·공간분류코드 임시값 적용 결과 엑셀: " + path + "\n");
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        ReportBox.AppendText("\n임시값 적용 결과 엑셀 저장 실패: " + ex.Message + "\n");
+                        foreach (var estimate in estimates)
+                            ReportBox.AppendText($"{estimate.Model} / 룸 {estimate.ElementId} · {estimate.Field} {estimate.Proposed} · {estimate.Status}\n");
+                    }
                 }
             }
-            RefreshFields(); StatusText.Text = (_stopRequested ? "중지 요청 처리 종료 · " : "") + $"완료 {completed}/{groups.Count}개 모델 · 처리 결과를 확인하세요. 성공한 모델은 다시 조회할 수 있습니다.";
         });
     }
 

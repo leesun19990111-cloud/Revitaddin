@@ -8,6 +8,8 @@ public sealed class RoomProcedureClassifier
     private readonly Dictionary<string, List<RoomUseTerm>> _names;
     private readonly Dictionary<string, List<RoomUseTerm>> _cases;
     private readonly Dictionary<string, RoomUseSemanticTerm> _aliases;
+    private readonly Dictionary<string, RoomUseTerm> _byCode;
+    private readonly Dictionary<string, string[]> _codeCandidates;
     private readonly List<(string Text, List<RoomUseTerm> Terms)> _tails;
     private static readonly string[] PublicWords = ["홀", "복도", "로비", "계단", "대합실", "통로", "LOBBY", "HALL", "CORRIDOR"];
     private static readonly string[] TransitPrefixes = ["출발", "도착", "체크인", "입국", "출국", "환승"];
@@ -21,6 +23,8 @@ public sealed class RoomProcedureClassifier
         _names = Index(t => t.NameMatches ?? [t.Name]);
         _cases = Index(t => t.Cases);
         _aliases = profile.UseAliases.ToDictionary(t => Normalize(t.Phrase));
+        _byCode = profile.Terms.ToDictionary(t => t.Code);
+        _codeCandidates = profile.EstimateCodeCandidates.ToDictionary(x => Normalize(x.Key), x => x.Value);
         _tails = _names.Keys.Concat(_cases.Keys).Distinct().Select(word =>
             (Text: word, Terms: _names.GetValueOrDefault(word, []).Concat(_cases.GetValueOrDefault(word, []))
                 .DistinctBy(t => t.Code).ToList())).OrderByDescending(x => x.Text.Length).ToList();
@@ -129,19 +133,55 @@ public sealed class RoomProcedureClassifier
 
     public (string Use, string Basis) Use(string name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return ("", "실명 공란 — 기존 용도 유지");
+        var decision = UseDecision(name);
+        return (decision.Use, decision.Basis);
+    }
+
+    internal (string Use, string Basis, bool Estimated) UseDecision(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return ("", "실명 공란 — 기존 용도 유지", false);
         var text = Normalize(name);
-        if (text == "ND") return ("Z", "실명 ND");
-        if (text == "OPEN") return ("C", "실명 OPEN");
+        if (text == "ND") return ("Z", "실명 ND", false);
+        if (text == "OPEN") return ("C", "실명 OPEN", false);
         if (!Invalid(text))
             foreach (var candidate in Candidates(name))
             {
                 var match = Match(candidate, false);
-                if (match != null) return match.Value;
+                if (match is { } found) return (found.Value, found.Basis, false);
             }
-        if (PublicWords.Any(w => text.Contains(w, StringComparison.Ordinal))) return ("C", "공용구역 포함어");
-        if (Regex.IsMatch(text, @"^[A-Z]{1,4}(?:/[A-Z]{1,4})*$")) return ("U", "4자 이하 영문 약어");
-        return ("R", "그 외 기본값");
+        if (PublicWords.Any(w => text.Contains(w, StringComparison.Ordinal))) return ("C", "공용구역 포함어", true);
+        if (Regex.IsMatch(text, @"^[A-Z]{1,4}(?:/[A-Z]{1,4})*$")) return ("U", "4자 이하 영문 약어", true);
+        return ("R", "그 외 기본값", true);
+    }
+
+    internal (RoomUseTerm? Term, string Basis, bool Specific) EstimateCode(string name, string use)
+    {
+        var text = Normalize(name);
+        if (text == "ND" || !text.Any(char.IsLetter)) return (null, "공간을 특정할 실명 없음", false);
+        foreach (var candidate in Candidates(name))
+        {
+            if (!_codeCandidates.TryGetValue(candidate, out var codes)) continue;
+            var options = codes.Select(code => _byCode[code]).ToList();
+            // 용도와 일치하는 코드, 시설물 공통 코드, 사전 후보 순서로 선택한다.
+            var chosen = options.OrderByDescending(t => t.Use == use)
+                .ThenByDescending(t => t.Code.StartsWith("33", StringComparison.Ordinal)).First();
+            return (chosen, "원문 충돌 후보 " + string.Join(" / ", options.Select(t => $"{t.Code} {t.Name}")), true);
+        }
+        var acronyms = Regex.Matches(text, @"(?<![A-Z])(?:EPS|TPS|UPS|PS|AD|PD|OA|EA|NAF)(?![A-Z])")
+            .Select(m => m.Value == "NAF" ? "33414" : Acronym(m.Value, true)!).Distinct().ToList();
+        if (acronyms.Count > 0 && _byCode.TryGetValue(acronyms.Count == 1 ? acronyms[0] : "33499", out var utility))
+            return (utility, "실명에 설비 약어 포함", true);
+        // 괄호·물음표·복합어 때문에 확정하지 못한 경우에도 뚜렷한 공간명 단서를 검토한다.
+        var hints = _names.Where(n => n.Key.Length >= 2 && n.Key.Any(c => c > 127) && text.Contains(n.Key, StringComparison.Ordinal))
+            .OrderByDescending(n => n.Key.Length).ToList();
+        if (hints.Count > 0)
+        {
+            var longest = hints.TakeWhile(n => n.Key.Length == hints[0].Key.Length).ToList();
+            var options = longest.SelectMany(n => n.Value).DistinctBy(t => t.Code).ToList();
+            if (options.Count == 1) return (options[0], "실명에 포함된 세분류명 " + longest[0].Key, true);
+        }
+        var fallback = use switch { "C" => "33199", "U" => "33499", "R" => "33699", _ => "" };
+        return (_byCode.GetValueOrDefault(fallback), $"구체적인 분류 단서가 없어 용도 {use}를 기준으로 기타 공간 선택", false);
     }
 
     public (string Code, string Basis) Code(string name)

@@ -62,6 +62,7 @@ public sealed class RulePlan
     public List<string> Notes { get; } = [];
     public List<TypeCodeFinding> TypeCodeFindings { get; } = [];
     public List<GuardhouseRoomFinding> GuardhouseRoomFindings { get; } = [];
+    public List<RoomEstimate> RoomEstimates { get; } = [];
     public int MatchedOwners { get; set; }
 }
 

@@ -8,6 +8,8 @@ public sealed class RoomUseProfile
     // 1은 기존 룰셋, 2는 2026-11-13 작업절차의 명시적 매칭어·우선순위를 사용한다.
     public int ProcedureVersion { get; set; } = 1;
     public bool SpaceClassification { get; set; }
+    public bool EstimateUncertain { get; set; }
+    public Dictionary<string, string[]> EstimateCodeCandidates { get; set; } = [];
     public string SpaceSource { get; set; } = "";
     public string SpaceSourceSha256 { get; set; } = "";
     public List<RoomUseSemanticTerm> UseAliases { get; set; } = [];
@@ -36,6 +38,9 @@ public sealed class RoomUseSemanticTerm
     public string Basis { get; set; } = "";
 }
 
+public sealed record RoomEstimate(string Model, string ModelPath, string ElementId, string RealName, string Field,
+    string Before, string Proposed, string Basis, string Status);
+
 public static class RoomUsePlanner
 {
     public const string RoomCategory = "-2000160";
@@ -56,6 +61,8 @@ public static class RoomUsePlanner
             p == null || string.IsNullOrWhiteSpace(p.Source) || !Regex.IsMatch(p.SourceSha256 ?? "", "^[0-9A-Fa-f]{64}$") ||
             p.ProcedureVersion is not (1 or 2) || p.UseAliases == null || p.UseAliases.Count > 100 ||
             p.ProcedureVersion == 1 && (p.SpaceClassification || p.UseAliases.Count > 0) ||
+            p.EstimateCodeCandidates == null || p.EstimateCodeCandidates.Count > 500 ||
+            p.EstimateUncertain && (p.ProcedureVersion != 2 || !p.SpaceClassification) ||
             p.SpaceClassification && (string.IsNullOrWhiteSpace(p.SpaceSource) || !Regex.IsMatch(p.SpaceSourceSha256 ?? "", "^[0-9A-Fa-f]{64}$")) ||
             p.Terms == null || p.Terms.Count is < 1 or > 400 || p.SemanticTerms == null || p.SemanticTerms.Count > 100 ||
             p.AuditFields == null || p.AuditFields.Count > 0 && !p.AuditFields.SequenceEqual(RequiredAuditFields))
@@ -68,6 +75,13 @@ public static class RoomUsePlanner
                 term.NameMatches?.Count > 100 ||
                 (term.NameMatches ?? []).Concat(term.Cases).Any(s => string.IsNullOrWhiteSpace(s) || s.Length > 200))
                 throw new InvalidOperationException("Room 용도 사전의 세분류 코드·이름·용도·사례를 확인하세요.");
+        var candidateNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (name, candidates) in p.EstimateCodeCandidates)
+            if (name.Length > 200 || RoomProcedureClassifier.Normalize(name).Length == 0 ||
+                !candidateNames.Add(RoomProcedureClassifier.Normalize(name)) || candidates == null ||
+                candidates.Length is < 1 or > 20 || candidates.Distinct().Count() != candidates.Length ||
+                candidates.Any(candidate => !codes.Contains(candidate)))
+                throw new InvalidOperationException("공간분류코드 추정 후보에 잘못된 실명 또는 사전 코드가 있습니다.");
         var phrases = new HashSet<string>(StringComparer.Ordinal);
         foreach (var term in p.SemanticTerms)
             if (term == null || string.IsNullOrWhiteSpace(term.Phrase) || term.Phrase.Length is < 2 or > 30 ||
@@ -183,7 +197,7 @@ public static class RoomUsePlanner
             throw new InvalidOperationException("Room 용도 룰셋은 다른 변경 예정과 함께 적용하지 않습니다. 기존 변경을 먼저 적용·제외하거나 작업 파일로 보관하세요.");
         var plan = new RulePlan();
         var errors = new List<string>();
-        var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Reason, string RoomName, ParameterRow Source)>();
+        var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Reason, string RoomName, ParameterRow Source, RoomEstimate? Estimate)>();
         var skippedNames = 0;
         var owners = available.Where(r => r.Scope == "인스턴스" && r.CategoryKey == RoomCategory)
             .GroupBy(r => (r.ModelPath, r.OwnerId)).ToList();
@@ -206,16 +220,27 @@ public static class RoomUsePlanner
             { errors.Add(label + ": 실명은 텍스트 매개변수여야 합니다."); continue; }
             var name = source.HasValue ? source.Raw.Trim() : "";
             var roomName = name.Length == 0 ? "(실명 없음)" : name;
-            var use = classifier?.Use(name) ?? Classify(name, profile);
-            Propose("용도", use.Item1, use.Item2, classifier != null && use.Item1.Length == 0);
-            if (profile.SpaceClassification)
+            var use = classifier?.UseDecision(name) ?? LegacyUse(name);
+            var code = profile.SpaceClassification ? classifier!.Code(name) : default;
+            var useEstimated = profile.EstimateUncertain && use.Item3;
+            var codeEstimated = false;
+            if (profile.EstimateUncertain && string.IsNullOrEmpty(code.Code))
             {
-                var code = classifier!.Code(name);
-                Propose("공간분류코드", code.Code, code.Basis, code.Code.Length == 0);
+                var estimate = classifier!.EstimateCode(name, use.Item1);
+                if (estimate.Term is { } term)
+                {
+                    code = (term.Code, $"{estimate.Basis} → {term.Name} ({term.Code})");
+                    codeEstimated = true;
+                    if (useEstimated && estimate.Specific)
+                        use = (term.Use, $"{estimate.Basis} → {term.Name}의 용도 {term.Use}", true);
+                }
             }
+            Propose("용도", use.Item1, use.Item2, classifier != null && use.Item1.Length == 0, useEstimated);
+            if (profile.SpaceClassification)
+                Propose("공간분류코드", code.Code, code.Basis, code.Code.Length == 0, codeEstimated);
             plan.MatchedOwners++;
 
-            void Propose(string field, string value, string basis, bool keep)
+            void Propose(string field, string value, string basis, bool keep, bool estimated)
             {
                 var targets = rows.Where(r => r.Name == field).ToList();
                 if (targets.Count != 1)
@@ -228,8 +253,11 @@ public static class RoomUsePlanner
                 var same = target.HasValue ? target.Raw == value : value.Length == 0;
                 var validation = same ? "" : EditPlanner.Validate(target, value);
                 if (validation.Length > 0) { errors.Add($"{label}: {field} 변경 불가 — {validation}"); return; }
-                var reason = $"실명 '{roomName}' / {basis}";
-                assignments.Add(target.Key, (target, value, reason, roomName, source));
+                var estimate = estimated ? new RoomEstimate(target.ModelTitle, target.ModelPath, target.ElementId, name, field,
+                    target.HasValue ? target.Raw : "", value, basis, same ? "기존값과 동일" : "임시 입력 예정") : null;
+                if (estimate != null) plan.RoomEstimates.Add(estimate);
+                var reason = $"실명 '{roomName}' / " + (estimated ? "추정 · " : "") + basis;
+                assignments.Add(target.Key, (target, value, reason, roomName, source, estimate));
                 var proposed = keep ? "기존 값 유지" : value.Length == 0 ? "(공란)" : value;
                 plan.Notes.Add($"{label} · 실명 {roomName} · {field} · 기존 {target.ValueLabel} → 제안 {proposed} · {basis}");
             }
@@ -244,9 +272,15 @@ public static class RoomUsePlanner
                 (errors.Count > 12 ? $"\n외 {errors.Count - 12}개 문제" : ""));
         foreach (var a in assignments.Values.Where(a => a.Row.HasValue ? a.Row.Raw != a.Value : a.Value.Length > 0))
             foreach (var edit in EditPlanner.Stage([a.Row], a.Value))
-            { edit.Reason = "룰셋: " + file.Name + " / " + a.Reason; edit.RoomName = a.RoomName; edit.RoomUseSource = a.Source; plan.Edits.Add(edit); }
+            { edit.Reason = "룰셋: " + file.Name + " / " + a.Reason; edit.RoomName = a.RoomName; edit.RoomUseSource = a.Source; edit.RoomEstimate = a.Estimate; plan.Edits.Add(edit); }
         plan.Notes.Insert(0, $"용도 판정 Room {plan.MatchedOwners:N0}개 · 실명 매개변수 없음으로 제외 {skippedNames:N0}개 · 변경 {plan.Edits.Count:N0}개 · 기존과 같음 {assignments.Count - plan.Edits.Count:N0}개.");
         return plan;
+
+        (string Use, string Basis, bool Estimated) LegacyUse(string name)
+        {
+            var (value, basis) = Classify(name, profile);
+            return (value, basis, false);
+        }
     }
 
     public static bool WritesField(RoomUseProfile profile, string name) =>
