@@ -74,17 +74,21 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
         try
         {
             if (req == null) return;
-            if (_attention && !(req.Operation == "종료" && _readRestartAllowed)) throw new InvalidOperationException("이 작업 세션은 확인이 필요합니다. 결과와 작업용 Revit을 확인한 뒤 종료하세요. 자동 재실행하지 않습니다.");
+            bool recoveryExit = req.Operation == "복구 확인 후 종료";
+            if (_attention && !recoveryExit && !(req.Operation == "종료" && _readRestartAllowed)) throw new InvalidOperationException("이 작업 세션은 확인이 필요합니다. 결과와 작업용 Revit을 확인한 뒤 종료하세요. 자동 재실행하지 않습니다.");
             if (ui.Application.VersionNumber != "2026") throw new InvalidOperationException("첫 버전은 Revit 2026만 지원합니다.");
             bool transferRequest = req.Operation is "프로젝트 매개변수 전송" or "프로젝트 표준 전송 묶음 종료";
-            if (req.Operation != "프로젝트 표준 전송 완료" && HasUnexpectedDocuments(ui, transferRequest))
+            if (recoveryExit && (!req.Confirmed || HasUnexpectedDocuments(ui, requireUnmodifiedAnchor: true)))
+                throw new InvalidOperationException("작업용 Revit에 열린 모델이 있습니다. 이전 변경의 반영 여부와 필요한 저장·소유권 반환을 확인하고, 관련 문서를 직접 닫은 뒤 다시 시도하세요.");
+            if (!recoveryExit && req.Operation != "프로젝트 표준 전송 완료" && HasUnexpectedDocuments(ui, transferRequest))
                 throw new InvalidOperationException("작업용 Revit에 이미 문서가 열려 있습니다. 사용자 문서나 복구 문서를 임의로 닫거나 수정하지 않습니다.");
-            if (req.Operation == "종료")
+            if (req.Operation == "종료" || recoveryExit)
             {
                 var command = RevitCommandId.LookupPostableCommandId(PostableCommand.ExitRevit);
                 if (!ui.CanPostCommand(command)) throw new InvalidOperationException("현재 Revit을 종료할 수 없습니다.");
-                SafeWrite(req.Id + ".result.json", new Response { Id = req.Id, Success = true, Stage = "종료 요청", Message = "빈 작업용 Revit에 종료를 요청했습니다." });
+                if (recoveryExit) { _attention = true; _readRestartAllowed = false; }
                 ui.PostCommand(command);
+                SafeWrite(req.Id + ".result.json", new Response { Id = req.Id, Success = true, Stage = "종료 요청", Message = "작업용 Revit에 정상 종료를 요청했습니다." });
                 return;
             }
             Response result;
@@ -135,10 +139,11 @@ public sealed class WorkerApplication : IExternalApplication, IExternalEventHand
     }
 
     private void SafeWrite(string file, Response response) { try { if (_folder.Length > 0) Protocol.Write(Path.Combine(_folder, file), response); } catch { /* 기록 실패가 Revit으로 전파되지 않게 한다. */ } }
-    private bool HasUnexpectedDocuments(UIApplication ui, bool allowTransferSource = false)
+    private bool HasUnexpectedDocuments(UIApplication ui, bool allowTransferSource = false, bool requireUnmodifiedAnchor = false)
     {
         try { return ui.Application.Documents.Cast<Autodesk.Revit.DB.Document>().Any(d =>
-            (_anchorPath.Length == 0 || !string.Equals(d.PathName, _anchorPath, StringComparison.OrdinalIgnoreCase)) &&
+            (_anchorPath.Length == 0 || !string.Equals(d.PathName, _anchorPath, StringComparison.OrdinalIgnoreCase) ||
+                requireUnmodifiedAnchor && d.IsModified) &&
             !(allowTransferSource && _nativeTransfer?.HasCachedSource(d) == true)); }
         catch { return true; } // 확인 불가는 빈 작업 프로세스로 간주하지 않는다.
     }

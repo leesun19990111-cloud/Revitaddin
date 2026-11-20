@@ -407,12 +407,12 @@ internal static class NativeTransferDialog
         throw new TimeoutException("작업용 Revit의 기본 프로젝트 표준 전송 창이 열리지 않았습니다.");
     }
 
-    private static void RestoreWorkerWindow(int processId)
+    internal static void RestoreWorkerWindow(int processId)
     {
         using var process = Process.GetProcessById(processId);
         var handle = process.MainWindowHandle;
         if (handle == IntPtr.Zero)
-            throw new InvalidOperationException("작업용 Revit의 창을 찾지 못했습니다. 전송 창을 직접 확인해 주세요.");
+            throw new InvalidOperationException("작업용 Revit의 창을 찾지 못했습니다. 해당 창을 직접 확인해 주세요.");
         ShowWindow(handle, 9); // SW_RESTORE: 최소화된 Revit의 전송 항목을 접근성 트리에 표시한다.
         if (IsIconic(handle))
             throw new InvalidOperationException("작업용 Revit 창을 복원하지 못했습니다. 최소화된 창을 열고 다시 확인해 주세요.");

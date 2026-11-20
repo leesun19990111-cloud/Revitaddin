@@ -216,7 +216,17 @@ internal static class Program
         Refresh();
         Check(((Button)w.FindName("ApplyButton")).IsEnabled, "정상 미리보기는 적용 가능");
         models[0].Snapshot!.RequiresRequery = true; Refresh();
-        Check(!((Button)w.FindName("ApplyButton")).IsEnabled && !((Button)w.FindName("ReviewRulesButton")).IsEnabled, "실패 조회값 재적용 및 룰셋 반복 차단");
+        var applicable = (IEnumerable<ValueEdit>)typeof(MainWindow).GetMethod("ApplicableEdits", flags)!.Invoke(w, null)!;
+        Check(((Button)w.FindName("ApplyButton")).IsEnabled && applicable.Any() &&
+            applicable.All(e => e.Original.ModelPath != models[0].Path) &&
+            !((Button)w.FindName("ReviewRulesButton")).IsEnabled, "실패한 파일은 보류하고 다른 모델의 변경은 적용 가능");
+        var worker = typeof(MainWindow).GetField("_worker", flags)!.GetValue(w)!;
+        worker.GetType().GetProperty("NeedsAttention")!.SetValue(worker, true);
+        Refresh();
+        Check(((Button)w.FindName("ReviewRecoveryButton")).IsVisible || ((Border)w.FindName("RecoveryPanel")).Visibility == Visibility.Visible,
+            "이전 작업 확인이 필요하면 복구 버튼 표시");
+        Check(!((Button)w.FindName("ApplyButton")).IsEnabled, "작업용 Revit 확인 전에는 후속 저장 금지");
+        worker.GetType().GetProperty("NeedsAttention")!.SetValue(worker, false); Refresh();
         Reject(() => w.PrepareRules(new RuleSet()), "직접 룰셋 호출도 실패 조회값 차단");
         var restored = JsonSerializer.Deserialize<WorkspaceFile>(JsonSerializer.Serialize(new WorkspaceFile { Models = [models[0].Snapshot!] }))!;
         Check(restored.Models.Single().RequiresRequery, "작업 저장과 불러오기에서 실패 상태 보존");

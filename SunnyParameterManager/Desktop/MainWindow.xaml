@@ -26,6 +26,13 @@
     <Button x:Name="ReviewRulesButton" Content="룰셋 변경 검토" Click="ReviewLoadedRules" IsEnabled="False" ToolTip="등록한 모든 파일을 대상으로 변경을 준비합니다. 실제 저장은 하지 않습니다."/>
     <TextBlock x:Name="FileSummary" VerticalAlignment="Center" Foreground="#687785" Text="수정할 파일을 고르면 자동으로 읽어옵니다."/>
    </DockPanel>
+   <Border x:Name="RecoveryPanel" Visibility="Collapsed" Background="#FFF4DF" BorderBrush="#D6AA73" BorderThickness="1" Padding="10,6" Margin="0,8,0,0">
+    <DockPanel LastChildFill="True">
+     <Button DockPanel.Dock="Right" x:Name="ReviewRecoveryButton" Content="작업 결과 확인" Click="ConfirmRecovery" Margin="10,0,0,0"/>
+     <Button DockPanel.Dock="Right" x:Name="ShowRecoveryWorkerButton" Content="작업용 Revit 보기" Click="ShowRecoveryWorker" Margin="10,0,0,0"/>
+     <TextBlock Text="이전 작업의 결과를 확인한 뒤 다음 작업을 시작하세요." Foreground="#70442A" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+    </DockPanel>
+   </Border>
    <Expander x:Name="AdvancedSettings" Header="연결 설정 · 작업 보관" Margin="0,10,0,0" Foreground="#687785">
     <Border Background="White" Padding="10" BorderBrush="#CDD2D7" BorderThickness="1" Margin="0,7,0,0"><StackPanel>
      <DockPanel><Button DockPanel.Dock="Right" Content="작업용 Revit 종료" Click="StopWorker"/><Button DockPanel.Dock="Right" Content="연결 확인" Click="ConnectWorker"/>

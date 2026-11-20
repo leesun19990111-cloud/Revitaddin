@@ -20,7 +20,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <StackPanel Margin="0,0,0,12">
-                <TextBlock FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"
+                <TextBlock x:Name="QuestionText" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"
                            Text="아래 변경을 실제 RVT에 저장하고, 작업공유 모델은 중앙에 동기화할까요?"/>
                 <TextBlock x:Name="ModelCountText" Margin="0,6,0,0" Foreground="#526474"
                            AutomationProperties.Name="변경 대상 모델 수"/>

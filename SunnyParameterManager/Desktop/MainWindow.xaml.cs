@@ -77,6 +77,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { StatusText.Text = ex.Message; ReportBox.AppendText("\n" + DateTime.Now.ToString("HH:mm:ss") + " · " + ex.Message + "\n"); MessageBox.Show(this, ex.Message, "Sunny 매개변수 관리자", MessageBoxButton.OK, MessageBoxImage.Warning); }
         finally
         {
+            ProtectInterruptedModel();
             SetBusyState(false); RefreshRows(); UpdatePending();
             if (_stopRequested) StopStatusText.Text = "중지 요청 처리 종료 · 미처리 파일과 변경 예정은 유지합니다. 처리 결과를 확인하세요.";
         }
@@ -91,6 +92,74 @@ public partial class MainWindow : Window
         TopActions.IsEnabled = MainTabs.IsEnabled = FileActions.IsEnabled = WelcomePanel.IsEnabled = ShowAllModelsButton.IsEnabled = !busy;
         if (busy) { ApplyButton.IsEnabled = false; ReviewButton.IsEnabled = false; }
     }
+    private ModelItem? InterruptedModel(Request? request) =>
+        request?.Operation is "적용" or "중앙 재생성" or "링크 삭제" or "프로젝트 매개변수 전송" or "프로젝트 표준 전송 완료"
+            ? _models.FirstOrDefault(m => string.Equals(m.Path, request.Path, StringComparison.OrdinalIgnoreCase)) : null;
+
+    private void ProtectInterruptedModel()
+    {
+        if (!_worker.NeedsAttention || InterruptedModel(_worker.InterruptedRequest) is not { } item) return;
+        if (item.Snapshot != null) item.Snapshot.RequiresRequery = true;
+        else item.ReadFailed = true;
+        item.Status = "작업 결과 확인 필요 · 재적용 보류";
+    }
+
+    private void ShowRecoveryWorker(object sender, RoutedEventArgs e) => Guard(_worker.ShowWorkerWindow);
+
+    private async void ConfirmRecovery(object sender, RoutedEventArgs e) => await Run(async () =>
+    {
+        var review = await _worker.InspectRecovery();
+        var request = review.Request;
+        var response = review.Result;
+        bool transferDialogOnly = request?.Operation == "프로젝트 매개변수 전송" && response?.Success == true;
+        var lines = new List<string>();
+        if (request != null)
+            lines.Add(request.Path.Length > 0 ? request.Operation + " · " + Path.GetFileName(request.Path) : request.Operation);
+        if (response == null) lines.Add("최종 결과를 확인할 수 없습니다.");
+        else if (transferDialogOnly) lines.Add("기본 표준 전송 창을 연 기록입니다. 저장·동기화 여부는 확인이 필요합니다.");
+        else
+        {
+            lines.Add($"{response.Stage} · 적용 기록 {response.Applied:N0}건");
+            if (response.CentralSynchronized) lines.Add(response.OwnershipReleased ? "중앙 동기화와 소유권 반환이 확인되었습니다." : "중앙 동기화는 확인되었고 소유권 반환 확인이 필요합니다.");
+            if (response.Message.Length > 0) lines.Add(response.Message);
+            if (response.RecoveryPath.Length > 0) lines.Add("복구 경로\n" + response.RecoveryPath);
+            if (response.BackupPath.Length > 0) lines.Add("백업 경로\n" + response.BackupPath);
+        }
+        if (review.Detail.Length > 0 && review.Detail != response?.Message) lines.Add(review.Detail);
+        lines.Add("작업 기록\n" + review.Folder);
+        if (review.ProcessId is int pid) lines.Add($"작업용 Revit 프로세스 ID {pid}");
+        var details = string.Join("\n\n", lines);
+        MainTabs.SelectedIndex = 2;
+        ReportBox.AppendText("\n[" + DateTime.Now.ToString("HH:mm:ss") + "] 이전 작업 확인\n" + details + "\n");
+        ReportBox.ScrollToEnd();
+        var nextStep = !review.CanContinue
+            ? "결과가 도착하거나 해당 Revit을 정상 종료한 뒤 다시 확인하세요."
+            : "다음 작업은 새 Revit에 연결합니다. 이전 작업 대상에는 재조회 전까지 다시 적용하지 않습니다. 열린 복구 모델이 있으면 작업용 Revit에서 직접 확인하고 닫아주세요.";
+        if (new ApplyConfirmationWindow(this, details + "\n\n" + nextStep, review.CanContinue).ShowDialog() != true)
+            return;
+
+        await _worker.CompleteRecovery(review);
+        if (InterruptedModel(request) is { } item)
+        {
+            // 늦게 도착한 성공 응답은 같은 요청의 변경만 처리 완료로 반영한다.
+            if (request?.Operation == "적용" && response?.Success == true && response.Applied == request.Edits.Count)
+            {
+                foreach (var edit in request.Edits)
+                    if (_edits.TryGetValue(edit.Original.Key, out var pending) && ReferenceEquals(pending, edit))
+                        _edits.Remove(edit.Original.Key);
+            }
+            if (item.Snapshot != null) item.Snapshot.RequiresRequery = true;
+            else item.ReadFailed = true;
+            item.Status = response?.CentralSynchronized == true || response?.Success == true && !transferDialogOnly
+                ? "반영 확인 · 재조회 필요" : "결과 확인 처리 · 재조회 필요";
+            _centralRebuildReviewed = false;
+            if (_transferReviewed) InvalidateProjectTransfer();
+        }
+        ReportBox.AppendText("\n이전 작업 확인 처리 완료 · 다음 작업에서 새 Revit 연결을 시작합니다.\n");
+        StatusText.Text = "이전 작업 확인 처리를 마쳤습니다. 다음 작업을 시작할 수 있습니다.";
+        RefreshFields();
+    });
+
     private void RequestTaskStop(object sender, RoutedEventArgs e)
     {
         if (!_busy || _stopRequested) return;
@@ -736,14 +805,18 @@ public partial class MainWindow : Window
     private void UpdatePending()
     {
         RefreshGroupRestrictions();
+        RecoveryPanel.Visibility = _worker.NeedsAttention ? Visibility.Visible : Visibility.Collapsed;
+        ShowRecoveryWorkerButton.Visibility = _worker.NeedsAttention && _worker.HasRunningWorker ? Visibility.Visible : Visibility.Collapsed;
         EditsGrid.ItemsSource = _edits.Values.OrderBy(e => e.Model).ThenBy(e => e.Type).ThenBy(e => e.Field).ToList();
         var rebuildReady = _loadedRules?.RebuildCentral == true && _centralRebuildReviewed && _edits.Count == 0 && _models.Count > 0 && _models.All(m => m.Snapshot?.CentralRebuild?.FormatVersion == 2 && !m.Snapshot.RequiresRequery);
         var transferCount = _transferReviewed ? _transferPlans.Count : 0;
+        int applicableCount = ApplicableEdits().Count();
+        int heldCount = _edits.Count - applicableCount;
         PendingText.Text = _loadedRules?.ProjectParameterTransfer == true
             ? _transferReviewed ? $"기준 {_transferSource?.Title} · 기본 표준 전송 대상 {transferCount:N0}개 모델 · 실제 파일 반영 전" : "기준 파일 선택 → 룰셋 변경 검토를 진행하세요."
-            : rebuildReady ? $"새 중앙 재생성 대상 {_models.Count:N0}개 모델 · 아직 적용 전" : $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
+            : rebuildReady ? $"새 중앙 재생성 대상 {_models.Count:N0}개 모델 · 아직 적용 전" : $"변경 예정 {_edits.Count:N0}건 / {_edits.Values.Select(e => e.Original.ModelPath).Distinct().Count()}개 모델" + (_sample ? " · 샘플: 실제 적용 불가" : heldCount > 0 ? $" · 재조회 전 보류 {heldCount:N0}건" : " · 최종 적용 전에는 파일을 수정하지 않습니다.");
         ApplyButton.IsEnabled = !_busy && !_sample && (_additionalRules.Count == 0 || _batchReviewed) && _loadedRules?.MaterialAudit != true && _loadedRules?.ProjectBasePointAudit != true && _loadedRules?.RoomReview != true &&
-            (_loadedRules?.ProjectParameterTransfer == true ? transferCount > 0 : rebuildReady || _edits.Count > 0) && !_worker.NeedsAttention && !HasFailedPending();
+            (_loadedRules?.ProjectParameterTransfer == true ? transferCount > 0 : rebuildReady || applicableCount > 0) && !_worker.NeedsAttention;
         ApplyButton.Content = _loadedRules?.ProjectParameterTransfer == true ? "프로젝트 매개변수 전송 · 중앙 동기화" : _loadedRules?.RebuildCentral == true ? "새 중앙으로 교체 · 동기화" : "RVT에 저장 · 중앙 동기화";
         ReviewButton.IsEnabled = !_busy && (_loadedRules?.ProjectParameterTransfer == true ? _transferReviewed : rebuildReady || _edits.Count > 0);
         ReviewButton.Content = _loadedRules?.ProjectParameterTransfer == true ? $"③ 기본 전송 검토 ({transferCount:N0})" : rebuildReady ? $"③ 중앙 재생성 검토 ({_models.Count:N0})" : $"③ 변경 내용 확인 ({_edits.Count:N0})";
@@ -778,7 +851,11 @@ public partial class MainWindow : Window
         GroupRestrictionsGrid.ItemsSource = rows.Where(r => search.Length == 0 ||
             string.Join(" ", r.ModelTitle, r.GroupEdit!.Name, r.GroupEdit.ElementId, r.ElementId, r.TargetName, r.Name, r.GroupEdit.Reason).Contains(search, StringComparison.CurrentCultureIgnoreCase)).ToList();
     }
-    private bool HasFailedPending() => _models.Any(m => m.Snapshot?.RequiresRequery == true && _edits.Values.Any(e => string.Equals(e.Original.ModelPath, m.Path, StringComparison.OrdinalIgnoreCase)));
+    private IEnumerable<ValueEdit> ApplicableEdits()
+    {
+        var ready = _models.Where(m => m.Snapshot is { RequiresRequery: false }).Select(m => m.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _edits.Values.Where(e => ready.Contains(e.Original.ModelPath));
+    }
     private void OpenLinkRemoval(object sender, RoutedEventArgs e) => Guard(() =>
     {
         if (_sample || _models.Count == 0) throw new InvalidOperationException("실제 RVT 파일을 먼저 등록하세요. 샘플에서는 삭제하지 않습니다.");
@@ -795,17 +872,22 @@ public partial class MainWindow : Window
             RefreshFields(); UpdatePending();
         }) { Owner = this, Resources = Resources };
         dialog.ShowDialog();
+        ProtectInterruptedModel();
+        UpdatePending();
     });
     private async void ApplyChanges(object sender, RoutedEventArgs e)
     {
         if (_loadedRules?.ProjectParameterTransfer == true) { await ApplyProjectParameterTransfer(); return; }
         if (_loadedRules?.RebuildCentral == true) { await ApplyCentralRebuild(); return; }
         if (_busy || _sample || _additionalRules.Count > 0 && !_batchReviewed || _loadedRules?.MaterialAudit == true || _loadedRules?.ProjectBasePointAudit == true || _loadedRules?.RoomReview == true || _edits.Count == 0) return;
-        try { ValidateRemovalApproval(); ValidateCleanupApproval(); }
+        if (_worker.NeedsAttention) return;
+        var approvedEdits = ApplicableEdits().ToList();
+        if (approvedEdits.Count == 0) return;
+        var groups = approvedEdits.GroupBy(e => e.Original.ModelPath).ToList();
+        var snapshots = groups.Select(g => _models.Single(m => m.Path == g.Key).Snapshot!).ToList();
+        try { ValidateRemovalApproval(snapshots, approvedEdits); ValidateCleanupApproval(snapshots, approvedEdits); }
         catch (Exception ex) { StatusText.Text = ex.Message; MessageBox.Show(this, ex.Message, "적용 전 검증", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        if (HasFailedPending()) { MessageBox.Show(this, "실패한 파일의 기존 변경을 다시 적용할 수 없습니다. 처리 결과의 원인을 확인하고 ‘다시 조회’를 눌러주세요."); return; }
         MainTabs.SelectedIndex = 1;
-        var groups = _edits.Values.GroupBy(e => e.Original.ModelPath).ToList();
         var estimateRows = groups.SelectMany(g => g).Where(e => e.RoomEstimate != null).ToList();
         var local = groups.Any(g => _models.Single(m => m.Path == g.Key).Snapshot?.Kind == "로컬");
         var summary = string.Join("\n", groups.Select(g =>
@@ -815,16 +897,17 @@ public partial class MainWindow : Window
                 (deletions > 0 ? $" · 미배치 룸 삭제 {deletions:N0}개" : "");
         }));
         var details = summary +
+            (_edits.Count > approvedEdits.Count ? $"\n\n재조회가 필요한 변경 예정 {_edits.Count - approvedEdits.Count:N0}건은 이번 작업에서 보류합니다." : "") +
             "\n\n그룹 제한 항목은 변경 목록에서 제외하며 현재 값을 유지합니다. ‘그룹 제한 항목’ 탭을 검토한 뒤 진행하세요. 그룹 해제나 매개변수 설정 변경은 하지 않습니다." +
             "\n\n작업공유 모델은 중앙 동기화 후 현재 사용자의 차용 요소·모든 작업세트 소유권을 반환합니다. 같은 모델을 다른 Revit/로컬에서 편집 중이면 먼저 그 작업을 동기화하고 닫으세요. 반환 확인 실패 시 나머지 모델은 중단합니다." +
             "\n\n모델별 순차 처리이며 여러 모델을 한 번에 되돌릴 수 없습니다. 유형 값은 그 유형을 사용하는 모든 요소에 영향을 줍니다. 작업세트/치수/재료 변경은 모델 동작에 영향을 줄 수 있습니다.\n운영 모델 적용 전 별도 테스트 중앙에서 검증해 주세요." +
             (local ? "\n\n주의: 기존 로컬에 저장된 다른 미동기화 작업도 중앙에 함께 반영됩니다." : "") +
             (estimateRows.Count > 0 ? $"\n\n추정으로 정한 용도·공간분류코드 임시값 {estimateRows.Count:N0}건이 포함되어 있습니다." : "") +
-            (_edits.Values.Any(v => v.DeleteUnplacedRoom) ? "\n\n미배치 룸 삭제 항목을 적용하면 룸 요소와 그 정보가 모델 및 일람표에서 영구 삭제됩니다." : "") +
-            (_edits.Values.Any(v => v.DefinitionFix?.Action == SpecRulePlanner.ActionRemove) ? "\n\n삭제 전용: " + string.Join(" · ", _edits.Values.Select(v => v.Original.Name).Distinct()) +
+            (approvedEdits.Any(v => v.DeleteUnplacedRoom) ? "\n\n미배치 룸 삭제 항목을 적용하면 룸 요소와 그 정보가 모델 및 일람표에서 영구 삭제됩니다." : "") +
+            (approvedEdits.Any(v => v.DefinitionFix?.Action == SpecRulePlanner.ActionRemove) ? "\n\n삭제 전용: " + string.Join(" · ", approvedEdits.Select(v => v.Original.Name).Distinct()) +
                 "\n정확한 이름이며 프로젝트 정보에만 연결된 항목을 삭제합니다. 삭제 항목의 값은 다른 매개변수로 옮기지 않습니다. 건축물번호와 다른 카테고리에도 연결된 구조는 유지합니다. 삭제 전 복구 사본을 보관합니다." :
-                _edits.Values.Any(v => v.DefinitionFix != null) ? $"\n\n매개변수 정의 정리 {_edits.Values.Count(v => v.DefinitionFix != null):N0}건(그룹·카테고리·유형/인스턴스·공유 매개변수 추가·중복 병합). 중복 병합은 값을 기준 매개변수로 옮긴 뒤 이전 매개변수 연결을 제거하며, 같은 요소에 다른 값이 있으면 그 모델 전체를 보류합니다. 확정 후 값 보존을 다시 검사합니다." : "") +
-            (_edits.Values.Any(v => v.AddParameter != null) ? $"\n\n매개변수 추가: {_edits.Values.Where(v => v.AddParameter != null).Select(v => v.Original.ModelPath).Distinct().Count():N0}개 모델의 프로젝트 정보에 공유 매개변수 ‘{string.Join("·", _edits.Values.Where(v => v.AddParameter != null).Select(v => v.AddParameter!.Name).Distinct())}’를 새로 추가한 뒤 값을 입력합니다(다른 모델과 같은 GUID·그룹)." : "");
+                approvedEdits.Any(v => v.DefinitionFix != null) ? $"\n\n매개변수 정의 정리 {approvedEdits.Count(v => v.DefinitionFix != null):N0}건(그룹·카테고리·유형/인스턴스·공유 매개변수 추가·중복 병합). 중복 병합은 값을 기준 매개변수로 옮긴 뒤 이전 매개변수 연결을 제거하며, 같은 요소에 다른 값이 있으면 그 모델 전체를 보류합니다. 확정 후 값 보존을 다시 검사합니다." : "") +
+            (approvedEdits.Any(v => v.AddParameter != null) ? $"\n\n매개변수 추가: {approvedEdits.Where(v => v.AddParameter != null).Select(v => v.Original.ModelPath).Distinct().Count():N0}개 모델의 프로젝트 정보에 공유 매개변수 ‘{string.Join("·", approvedEdits.Where(v => v.AddParameter != null).Select(v => v.AddParameter!.Name).Distinct())}’를 새로 추가한 뒤 값을 입력합니다(다른 모델과 같은 GUID·그룹)." : "");
         if (new ApplyConfirmationWindow(this, groups.Count, details).ShowDialog() != true) return;
         await Run(async () =>
         {
@@ -1010,20 +1093,20 @@ public partial class MainWindow : Window
         });
     }
 
-    private void ValidateRemovalApproval()
+    private void ValidateRemovalApproval(List<ModelSnapshot> snapshots, List<ValueEdit> edits)
     {
-        if (_loadedRules?.Spec?.RemoveOnly != true && !_edits.Values.Any(e => e.DefinitionFix?.Action == SpecRulePlanner.ActionRemove)) return;
+        if (_loadedRules?.Spec?.RemoveOnly != true && !edits.Any(e => e.DefinitionFix?.Action == SpecRulePlanner.ActionRemove)) return;
         if (_loadedRules?.Spec?.RemoveOnly != true) throw new InvalidOperationException("삭제 전용 룰셋을 불러온 뒤 변경 내용을 다시 검토하세요.");
-        SpecRulePlanner.Plan(_loadedRules, _models.Select(m => m.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.")), _edits.Values);
+        SpecRulePlanner.Plan(_loadedRules, snapshots, edits);
     }
 
-    private void ValidateCleanupApproval()
+    private void ValidateCleanupApproval(List<ModelSnapshot> snapshots, List<ValueEdit> edits)
     {
-        if (!_edits.Values.Any(e => e.KacCleanup)) return;
+        if (!edits.Any(e => e.KacCleanup)) return;
         if (_loadedRules?.Version is not (4 or 7)) throw new InvalidOperationException("유형 이름 룰셋을 다시 선택하고 변경 내용을 검토하세요.");
-        var available = _models.SelectMany(m => (m.Snapshot ?? throw new InvalidOperationException("대상 모델을 다시 조회하세요.")).Owners.Concat(m.Snapshot.Rows));
+        var available = snapshots.SelectMany(m => m.Owners.Concat(m.Rows));
         var expected = RulePlanner.Plan(_loadedRules, available, [], _sample).Edits.ToDictionary(e => e.Original.Key);
-        foreach (var edit in _edits.Values)
+        foreach (var edit in edits)
             if (!edit.KacCleanup || !expected.TryGetValue(edit.Original.Key, out var proposed) || proposed.Value != edit.Value || proposed.ReferenceKey != edit.ReferenceKey)
                 throw new InvalidOperationException("유형 정리 룰셋과 변경 목록이 일치하지 않습니다. 기존 작업세트 변경을 제외하고 룰셋으로 다시 검토하세요.");
     }

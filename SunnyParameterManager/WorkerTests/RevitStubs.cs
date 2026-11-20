@@ -1,6 +1,6 @@
 // 실제 WorkerApplication의 실패·문서 보호 흐름 검사. 실제 Revit 종료/동기화를 대신하지 않는다.
 using SunnyParameterManager.Core;
-namespace Autodesk.Revit.DB { public sealed class Document { public string PathName { get; set; } = ""; } }
+namespace Autodesk.Revit.DB { public sealed class Document { public string PathName { get; set; } = ""; public bool IsModified { get; set; } } }
 namespace Autodesk.Revit.ApplicationServices
 {
     public sealed class Application
@@ -95,5 +95,14 @@ namespace SunnyParameterManager.Bridge
             Result.Id = request.Id;
             return Result;
         }
+    }
+}
+
+namespace SunnyParameterManager.Desktop
+{
+    internal static class NativeTransferDialog
+    {
+        internal static Task Run(int processId, string message, Action<string>? progress) => throw new NotSupportedException();
+        internal static void RestoreWorkerWindow(int processId) => throw new NotSupportedException();
     }
 }

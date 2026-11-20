@@ -2,6 +2,8 @@ using SunnyParameterManager.Core;
 using SunnyParameterManager.Bridge;
 using Autodesk.Revit.UI;
 using System.Reflection;
+using System.Diagnostics;
+using SunnyParameterManager.Desktop;
 
 internal static class Program
 {
@@ -17,9 +19,9 @@ internal static class Program
             var worker = new WorkerApplication();
             var ui = new UIApplication();
             Set(worker, "_folder", folder);
-            Response Run(string operation)
+            Response Run(string operation, bool confirmed = false)
             {
-                var request = new Request { Operation = operation };
+                var request = new Request { Operation = operation, Confirmed = confirmed };
                 Set(worker, "_pending", request);
                 worker.Execute(ui);
                 return Protocol.Read<Response>(Path.Combine(folder, request.Id + ".result.json"));
@@ -91,9 +93,65 @@ internal static class Program
             result = Run("프로젝트 매개변수 전송");
             Check(!result.Success && result.RequiresAttention && NativeProjectTransferSession.Started == 1,
                 "기준 문서 외 다른 문서가 있으면 다음 전송 거부");
+            Reset(); ModelEngine.Result = new() { RequiresAttention = true };
+            Run("적용");
+            Check(!Run("복구 확인 후 종료").Success && ui.Posted == 0, "사용자 확인 없는 복구 종료 거부");
+            Check(Run("복구 확인 후 종료", true).Success && ui.Posted == 1 && ModelEngine.Calls == 1,
+                "사용자 확인 후 빈 작업용 Revit에만 정상 종료 요청");
+            Check(!Run("적용").Success && ModelEngine.Calls == 1, "종료가 게시된 작업용 Revit에 후속 변경 금지");
+            Reset(); ModelEngine.Result = new() { RequiresAttention = true }; ModelEngine.LeaveDocument = true;
+            Run("적용");
+            Check(!Run("복구 확인 후 종료", true).Success && ui.Posted == 0 && ui.Application.Documents.Count == 1,
+                "열린 복구 또는 사용자 모델이 남으면 종료하거나 저장하지 않음");
+            ui.Application.Documents.Clear();
+            Check(Run("복구 확인 후 종료", true).Success && ui.Posted == 1, "문서를 직접 확인하고 닫은 뒤 정상 종료 가능");
+            Reset(); Set(worker, "_anchorPath", "빈 모델"); ui.Application.Documents.Add(new() { PathName = "빈 모델", IsModified = true });
+            Check(!Run("복구 확인 후 종료", true).Success && ui.Posted == 0, "작업용 빈 모델에도 수정이 생겼으면 종료 보류");
+            ui.Application.Documents[0].IsModified = false;
+            Check(Run("복구 확인 후 종료", true).Success && ui.Posted == 1, "수정 없는 작업용 빈 모델은 정상 종료 가능");
+            CheckProgressAndRecovery(folder).GetAwaiter().GetResult();
             Console.WriteLine($"PASS {count} worker 안전 경계 검사"); return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         finally { Directory.Delete(folder, true); }
+    }
+
+    private static async Task CheckProgressAndRecovery(string folder)
+    {
+        var client = new WorkerClient();
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        void Field(string name, object? value) => typeof(WorkerClient).GetField(name, flags)!.SetValue(client, value);
+        using var live = Process.GetCurrentProcess();
+        Field("_folder", folder);
+        Field("_process", live);
+        typeof(WorkerClient).GetProperty(nameof(WorkerClient.Connected))!.SetValue(client, true);
+        var request = new Request { Operation = "적용", Path = "test.rvt", Confirmed = true };
+        string progress = Path.Combine(folder, request.Id + ".progress.json");
+        string result = Path.Combine(folder, request.Id + ".result.json");
+        string queue = Path.Combine(folder, "request.json");
+        Protocol.Write(progress, new Response { Id = request.Id, Stage = "동기화" });
+        using (File.Open(progress, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var sending = client.Send(request);
+            await Task.Delay(900);
+            Check(!sending.IsCompleted && !client.NeedsAttention, "진행률 공유 위반 중에도 최종 결과 대기를 유지");
+            Protocol.Write(result, new Response { Id = request.Id, Success = true, CentralSynchronized = true, Applied = 3 });
+            Check((await sending.WaitAsync(TimeSpan.FromSeconds(4))).CentralSynchronized, "같은 요청의 늦은 최종 응답 수신");
+        }
+        try { Protocol.Write(queue, new Request(), overwrite: false); throw new Exception("대기 요청 덮어씀"); }
+        catch (IOException) { Check(Protocol.Read<Request>(queue).Id == request.Id, "대기 중인 원래 요청 덮어쓰기 차단"); }
+        typeof(WorkerClient).GetProperty(nameof(WorkerClient.NeedsAttention))!.SetValue(client, true);
+        Field("_attentionRequest", request);
+        Check(!(await client.InspectRecovery()).CanContinue, "대기 요청이 남은 동안 종료 요청 보류");
+        File.Delete(queue);
+        File.Delete(result);
+        Check(!(await client.InspectRecovery()).CanContinue, "작업용 Revit이 살아 있고 최종 결과를 모르면 대기");
+        Protocol.Write(result, new Response { Id = request.Id, Success = true, CentralSynchronized = true, Applied = 3 });
+        var review = await client.InspectRecovery();
+        Check(review.CanContinue && review.Result?.Applied == 3, "같은 작업의 늦은 성공 결과를 확인");
+        Field("_process", null); // 종료가 확인된 상태를 대역으로 구성한다.
+        await client.CompleteRecovery(review);
+        Check(!client.NeedsAttention && !client.Connected && File.Exists(result) && !File.Exists(queue),
+            "종료 확인 후에만 새 연결 허용·기록 보존·자동 재적용 없음");
     }
 }

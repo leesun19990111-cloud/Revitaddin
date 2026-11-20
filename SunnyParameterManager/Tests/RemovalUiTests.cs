@@ -34,7 +34,8 @@ internal static class RemovalUiTests
         check(((TextBlock)w.FindName("QuerySummary")).Text.Contains("삭제 전용 (2개)"), "삭제 선택 완료 표시와 실제 항목 수 일치");
         void Approval()
         {
-            try { typeof(MainWindow).GetMethod("ValidateRemovalApproval", flags)!.Invoke(w, null); }
+            var models = ((ListBox)w.FindName("ModelsList")).Items.Cast<ModelItem>().Select(m => m.Snapshot!).ToList();
+            try { typeof(MainWindow).GetMethod("ValidateRemovalApproval", flags)!.Invoke(w, [models, edits.Items.Cast<ValueEdit>().ToList()]); }
             catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException reason) { throw reason; }
         }
         Approval(); check(true, "새 삭제 룰셋·조회와 일치한 적용 승인 검사 통과");

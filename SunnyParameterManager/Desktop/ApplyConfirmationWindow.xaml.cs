@@ -8,11 +8,28 @@ public partial class ApplyConfirmationWindow : Window
 {
     private const uint MonitorDefaultToNearest = 2;
 
-    public ApplyConfirmationWindow(Window owner, int modelCount, string details)
+    public ApplyConfirmationWindow(Window owner, int modelCount, string details) : this(owner, details)
+    {
+        ModelCountText.Text = $"변경 대상 모델 {modelCount:N0}개";
+    }
+
+    internal ApplyConfirmationWindow(Window owner, string details, bool canContinue) : this(owner, details)
+    {
+        Title = "작업 결과 확인";
+        QuestionText.Text = canContinue
+            ? "아래 결과를 확인한 뒤 다음 작업으로 넘어갈까요?"
+            : "작업용 Revit에서 이전 작업 상태를 확인하세요.";
+        ModelCountText.Visibility = Visibility.Collapsed;
+        System.Windows.Automation.AutomationProperties.SetName(DetailsScroll, "이전 작업 결과와 복구 경로");
+        YesButton.Content = "확인하고 계속";
+        YesButton.Visibility = canContinue ? Visibility.Visible : Visibility.Collapsed;
+        NoButton.Content = "닫기";
+    }
+
+    private ApplyConfirmationWindow(Window owner, string details)
     {
         InitializeComponent();
         Owner = owner;
-        ModelCountText.Text = $"변경 대상 모델 {modelCount:N0}개";
         DetailsText.Text = details;
         FitOwnerScreen(owner);
     }

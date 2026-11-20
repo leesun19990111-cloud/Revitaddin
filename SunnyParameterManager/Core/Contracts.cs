@@ -6,11 +6,11 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.7.9";
+    public const string Release = "0.8.0";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
-    public static void Write<T>(string path, T value)
+    public static void Write<T>(string path, T value, bool overwrite = true)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -19,7 +19,7 @@ public static class Protocol
             // 전체 JSON 문자열을 한꺼번에 만들지 않고 파일로 순차 기록한다.
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 JsonSerializer.Serialize(stream, value, Json);
-            File.Move(temp, path, true);
+            File.Move(temp, path, overwrite);
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
