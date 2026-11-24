@@ -42,11 +42,13 @@ namespace WallSplitter
             public List<CurveLoop> BoundaryLoops = new List<CurveLoop>();
             public List<FloorLayerDescriptor> LayerDescriptors = new List<FloorLayerDescriptor>();
             public List<ElementId> DirectTypeIds = new List<ElementId>();
+            public int SelectedRawLayerIndex = -1;
         }
 
         // 바닥 레이어 하나에서 실제로 단일 바닥을 만드는 데 필요한 정보 (두께 0 레이어는 제외).
         private class FloorLayerDescriptor
         {
+            public int RawIndex;
             public double LayerWidth;  // ft
             public double TopOffset;   // ft, 원본 바닥 윗면(TopZ)에서 이 레이어 윗면까지의 하강 깊이 (항상 0 이상)
             public ElementId MaterialId = ElementId.InvalidElementId;
@@ -55,6 +57,12 @@ namespace WallSplitter
         }
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+            => ExecuteCore(commandData, ref message, elements, false);
+
+        internal Result ExecuteOneLayer(ExternalCommandData commandData, ref string message, ElementSet elements)
+            => ExecuteCore(commandData, ref message, elements, true);
+
+        private Result ExecuteCore(ExternalCommandData commandData, ref string message, ElementSet elements, bool oneLayer)
         {
             UIDocument uiDoc = commandData.Application.ActiveUIDocument;
             Document doc = uiDoc.Document;
@@ -104,7 +112,7 @@ namespace WallSplitter
                     // 벽의 "프로파일 편집"보다 근본적으로 더 복잡한 개념(정점/능선 단위 편집)이라 이번 범위 밖.
                     // Floor.SlabShapeEditor: 2023은 프로퍼티, 2024부터는 GetSlabShapeEditor() 메서드로 개명됨
                     // (MetadataLoadContext로 5개 연도 패키지를 모두 리플렉션해 확인 - csproj의 DefineConstants 참고).
-#if REVIT2023
+#if REVIT2017 || REVIT2023
                     SlabShapeEditor shapeEditor = floor.SlabShapeEditor;
 #else
                     SlabShapeEditor shapeEditor = floor.GetSlabShapeEditor();
@@ -115,6 +123,14 @@ namespace WallSplitter
                         continue;
                     }
 
+#if REVIT2017
+                    if (!LegacySplitGeometry.IsFlatFloorWithoutInserts(floor))
+                    {
+                        skipReasons.Add($"{floor.Id}: Revit 2017에서는 평평하고 호스트된 개구부가 없는 바닥만 분리할 수 있어 건너뜀");
+                        continue;
+                    }
+                    var boundaryLoops = new List<CurveLoop>();
+#else
                     if (floor.SketchId == ElementId.InvalidElementId || !(doc.GetElement(floor.SketchId) is Sketch sketch))
                     {
                         skipReasons.Add($"{floor.Id}: 경계 스케치를 읽을 수 없어 건너뜀");
@@ -136,6 +152,7 @@ namespace WallSplitter
                         skipReasons.Add($"{floor.Id}: 경계 곡선을 읽을 수 없어 건너뜀");
                         continue;
                     }
+#endif
 
                     Parameter? heightOffsetParam = floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM);
                     double originalHeightOffset = heightOffsetParam?.AsDouble() ?? 0;
@@ -162,6 +179,52 @@ namespace WallSplitter
 
                 foreach (FloorPrepData prep in preps)
                     prep.LayerDescriptors = BuildLayerDescriptors(doc, prep, skipReasons);
+
+                if (oneLayer)
+                {
+                    var chosenByType = new Dictionary<ElementId, int>();
+                    var eligible = new List<FloorPrepData>();
+                    foreach (FloorPrepData prep in preps)
+                    {
+                        IList<CompoundStructureLayer> layers = prep.Structure.GetLayers();
+                        string? reason = null;
+                        if (prep.Floor.Pinned)
+                            reason = "고정된 바닥은 잔여 레이어 위치를 바꿀 수 없어 제외합니다";
+                        else if (prep.Floor.FindInserts(true, true, true, true).Count > 0)
+                            reason = "호스트된 개구부가 있어 새 레이어에 구멍을 복제할 수 없어 제외합니다";
+                        else if (layers.Count < 2 || layers[0].Width < MinLayerWidth || layers[layers.Count - 1].Width < MinLayerWidth)
+                            reason = "위아래 끝에 두께가 있는 레이어가 2개 이상 필요합니다";
+
+                        if (reason != null)
+                        {
+                            skipReasons.Add($"{prep.FloorId}: {reason}");
+                            continue;
+                        }
+
+                        ElementId sourceTypeId = prep.Floor.FloorType.Id;
+                        if (!chosenByType.TryGetValue(sourceTypeId, out int selected))
+                        {
+                            int? answer = EdgeLayerSelection.Choose("바닥", prep.Floor.FloorType.Name,
+                                LayerMaterialName(doc, layers[0].MaterialId), layers[0].Width * 304.8,
+                                LayerMaterialName(doc, layers[layers.Count - 1].MaterialId), layers[layers.Count - 1].Width * 304.8,
+                                layers.Count);
+                            if (!answer.HasValue) return Result.Cancelled;
+                            selected = answer.Value;
+                            chosenByType.Add(sourceTypeId, selected);
+                        }
+
+                        FloorLayerDescriptor chosen = prep.LayerDescriptors.Single(d => d.RawIndex == selected);
+                        prep.LayerDescriptors = new List<FloorLayerDescriptor> { chosen };
+                        prep.SelectedRawLayerIndex = selected;
+                        eligible.Add(prep);
+                    }
+                    preps = eligible;
+                    if (preps.Count == 0)
+                    {
+                        TaskDialog.Show("한 레이어 분리", "분리 가능한 바닥이 없습니다.\n" + string.Join("\n", skipReasons));
+                        return Result.Cancelled;
+                    }
+                }
 
                 // [유형 지정 단계] DirectType 모드면 Tx를 열기 전에 원본 바닥마다 레이어별 유형을 확정해 둔다.
                 // (모달 창은 열린 트랜잭션 안에서 띄우지 않는다 - NamerCommand/SplitWallCommand와 같은 원칙)
@@ -205,7 +268,7 @@ namespace WallSplitter
                         string header = $"'{prep.Floor.FloorType.Name}' 바닥 분리 - 레이어 {items.Count}개에 적용할 유형을 검색하여 지정하세요.";
 
                         LayerTypeAssignmentWindow pickerWindow = new LayerTypeAssignmentWindow(header, items, availableTypes, warningMessage);
-                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.MainWindowHandle };
+                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.GetMainWindowHandle() };
                         if (pickerWindow.ShowDialog() != true)
                             return Result.Cancelled; // 취소 시 바닥 분리 전체 작업을 취소 (벽체 분리와 동일한 규칙)
 
@@ -221,6 +284,8 @@ namespace WallSplitter
                 using (Transaction tx = new Transaction(doc, "단일 바닥 유형 생성 및 바닥 분리"))
                 {
                     tx.Start();
+
+                    var remainingTypes = new Dictionary<(ElementId, int), FloorType>();
 
                     foreach (FloorPrepData prep in preps)
                     {
@@ -251,16 +316,47 @@ namespace WallSplitter
                             // 만들어도 분리된 바닥이 두께와 무관하게 전부 레벨에 딱 붙어 생성되는 것으로 재현).
                             // 그래서 원본 경계 곡선은 그대로 쓰고, 생성 직후 그 파라미터를 명시적으로 설정해야
                             // 실제로 레이어 두께만큼 오프셋된다.
+#if REVIT2017
+                            Floor newFloor = LegacySplitGeometry.CopyFloor(doc, prep.Floor, targetFloorType);
+#else
                             Floor newFloor = Floor.Create(doc, prep.BoundaryLoops, targetFloorType.Id, prep.LevelId, /*isStructural*/ false, /*slopeArrow*/ null!, /*slope*/ 0);
+#endif
 
                             Parameter? offsetParam = newFloor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM);
+#if REVIT2017
+                            double targetOffset = prep.OriginalHeightOffset - d.TopOffset;
+                            if (offsetParam == null || (Math.Abs(offsetParam.AsDouble() - targetOffset) > 1e-9 &&
+                                    (offsetParam.IsReadOnly || !offsetParam.Set(targetOffset))))
+                                throw new InvalidOperationException($"바닥 {prep.FloorId}: 새 레이어의 높이 오프셋을 지정할 수 없습니다.");
+#else
                             offsetParam?.Set(prep.OriginalHeightOffset - d.TopOffset);
+#endif
+                        }
+
+                        if (oneLayer)
+                        {
+                            FloorType sourceType = prep.Floor.FloorType;
+                            var key = (sourceType.Id, prep.SelectedRawLayerIndex);
+                            if (!remainingTypes.TryGetValue(key, out FloorType? remainingType))
+                            {
+                                remainingType = CreateRemainingFloorType(doc, sourceType, prep.SelectedRawLayerIndex);
+                                remainingTypes.Add(key, remainingType);
+                            }
+                            prep.Floor.FloorType = remainingType;
+                            if (prep.SelectedRawLayerIndex == 0)
+                            {
+                                Parameter? originalOffset = prep.Floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM);
+                                if (originalOffset == null || originalOffset.IsReadOnly)
+                                    throw new InvalidOperationException($"바닥 {prep.FloorId}: 잔여 바닥의 높이 오프셋을 변경할 수 없습니다.");
+                                originalOffset.Set(prep.OriginalHeightOffset - prep.LayerDescriptors[0].LayerWidth);
+                            }
                         }
                     }
 
                     // 원본 복합 바닥은 새 바닥들을 모두 만든 뒤 삭제
-                    foreach (FloorPrepData prep in preps)
-                        doc.Delete(prep.FloorId);
+                    if (!oneLayer)
+                        foreach (FloorPrepData prep in preps)
+                            doc.Delete(prep.FloorId);
 
                     tx.Commit();
                 }
@@ -303,8 +399,10 @@ namespace WallSplitter
             // 여기서부터 레이어 두께만큼씩 아래(-Z 방향)로 내려가며 각 레이어의 윗면 깊이를 구한다.
             double runningDepth = 0;
 
+            int rawIndex = 0;
             foreach (CompoundStructureLayer layer in prep.Structure.GetLayers())
             {
+                int currentIndex = rawIndex++;
                 double layerWidth = layer.Width;
                 double topOffset = runningDepth;
                 runningDepth += layerWidth;
@@ -326,6 +424,7 @@ namespace WallSplitter
 
                 result.Add(new FloorLayerDescriptor
                 {
+                    RawIndex = currentIndex,
                     LayerWidth = layerWidth,
                     TopOffset = topOffset,
                     MaterialId = materialId,
@@ -334,6 +433,28 @@ namespace WallSplitter
                 });
             }
 
+            return result;
+        }
+
+        private static string LayerMaterialName(Document doc, ElementId materialId) =>
+            materialId != ElementId.InvalidElementId && doc.GetElement(materialId) is Material material
+                ? material.Name : "지정되지않음";
+
+        private static FloorType CreateRemainingFloorType(Document doc, FloorType sourceType, int removedIndex)
+        {
+            string side = removedIndex == 0 ? "상단" : "하단";
+            string baseName = sourceType.Name + "_" + side + "1층분리잔여";
+            string name = baseName;
+            int suffix = 2;
+            while (new FilteredElementCollector(doc).OfClass(typeof(FloorType)).Cast<FloorType>().Any(t => t.Name == name))
+                name = baseName + "(" + suffix++ + ")";
+            FloorType result = sourceType.Duplicate(name) as FloorType
+                ?? throw new InvalidOperationException($"바닥 유형 '{sourceType.Name}'의 잔여 유형을 만들지 못했습니다.");
+            CompoundStructure remaining = result.GetCompoundStructure()
+                ?? throw new InvalidOperationException($"바닥 유형 '{sourceType.Name}'의 잔여 구조를 읽지 못했습니다.");
+            if (!remaining.DeleteLayer(removedIndex))
+                throw new InvalidOperationException($"바닥 유형 '{sourceType.Name}'의 {side} 레이어를 구조에서 제거하지 못했습니다.");
+            result.SetCompoundStructure(remaining);
             return result;
         }
 

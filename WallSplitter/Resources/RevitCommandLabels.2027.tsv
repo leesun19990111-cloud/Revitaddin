@@ -1,0 +1,1844 @@
+# Autodesk Revit 2027 default command labels
+# Source (English): https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/RVTKeyboardShortcuts.xlsx
+# Source (Korean): https://revit.downloads.autodesk.com/download/2027RVT_RTM/Docs/InProd/RVTKeyboardShortcuts_kor.xlsx
+# CommandId	English	Korean
+Control_Revit_ExplodedViewMode	Toggle Highlight Displacement Sets	변위 세트 하이라이트 전환
+CustomCtrl_%CustomCtrl_%Add-Ins%FormIt Converter%Convert RFA to FormIt	Convert RFAto FormIt	RFA를 FormIt으로 변환
+CustomCtrl_%CustomCtrl_%Add-Ins%RevitDBLink%RevitDBLink	Revit DB Link	Revit DB Link
+CustomCtrl_%CustomCtrl_%Add-Ins%eTransmit%eTransmit	Transmit model(s)	모델 전송
+CustomCtrl_%CustomCtrl_%Add-Ins%eTransmit%eTransmitAbout	About	정보
+CustomCtrl_%CustomCtrl_%Add-Ins%eTransmit%eTransmitHelp	Help	도움말
+CustomCtrl_%CustomCtrl_%Analyze%Energy Analysis%GenerateResults	Lighting	조명
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%MNU_ROOM_GROUP_Lvl1%Add Room Group	Room Group:Add Room Group	룸 그룹:룸 그룹 추가
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%MNU_ROOM_GROUP_Lvl1%Edit Room Group	Room Group:Edit Room Group	룸 그룹:룸 그룹 편집
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%MNU_BB_QID_Lvl1%Hide/Show IDs by Category	Buildingbook IDs:Hide/Show IDs by Category	Buildingbook ID:카테고리별로 ID 숨기기/표시
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%MNU_BB_QID_Lvl1%Material IDs: Hide All	Buildingbook IDs:Material IDs: Hide All	Buildingbook ID:재료 ID: 모두 숨기기
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%MNU_BB_QID_Lvl1%Material IDs: Show All	Buildingbook IDs:Material IDs: Show All	Buildingbook ID:재료 ID: 모두 표시
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%MNU_BB_QID_Lvl1%Purge discontinued versions data	Buildingbook IDs:Purge discontinued versions data	Buildingbook ID:중단된 버전 데이터 소거
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%MNU_BB_QID_Lvl1%Quantity IDs: Hide All	Buildingbook IDs:Quantity IDs: Hide All	Buildingbook ID:수량 ID: 모두 숨기기
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%MNU_BB_QID_Lvl1%Quantity IDs: Show All	Buildingbook IDs:Quantity IDs: Show All	Buildingbook ID:수량 ID: 모두 표시
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%MNU_BB_QID_Lvl1%Select Building Parts by ID	Buildingbook IDs:Select Building Parts by ID	Buildingbook ID:ID별로 건물 부품 선택
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%RIBBON_PANEL_ROOMBOOK%RIBBON_RMQ_SurfMat_Lvl1%Apply Surface Materials to Rooms	Surface Materials:Apply Surface Materials to Rooms	표면 재료:룸에 표면 재료 적용
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%RIBBON_PANEL_ROOMBOOK%RIBBON_RMQ_SurfMat_Lvl1%Edit Surface Materials	Surface Materials:Edit Surface Materials	표면 재료:표면 재료 편집
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%RIBBON_PANEL_ROOMBOOK%RIBBON_RMQ_ToggleSym_Lvl1%Hide/Show Finish IDs	Roombook IDs:Hide/Show Finish IDs	Roombook ID:마감 ID 숨기기/표시
+CustomCtrl_%CustomCtrl_%CustomCtrl_%Quantification%RIBBON_PANEL_ROOMBOOK%RIBBON_RMQ_ToggleSym_Lvl1%Hide/Show Quantity IDs	Roombook IDs:Hide/Show Quantity IDs	Roombook ID:수량 ID 숨기기/표시
+CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%Add/Edit Floor Area	Add/Edit Floor Area	바닥 면적 추가/편집
+CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%Calculate Areas	Calculate Areas	면적 계산
+CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%Calculation Settings	Calculation Settings	계산 설정
+CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%Edit Room	Edit Room	룸 편집
+CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%Edit Room Assignment Type	Edit Room Assignment Type	Edit Room Assignment Type(룸 지정 유형 편집)
+CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%Hide/Show Areabook IDs	Hide/Show Areabook IDs	Areabook ID 숨기기/표시
+CustomCtrl_%CustomCtrl_%Quantification%Areabook Extension%Set language	Set language	언어 설정
+CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%Calculate Building Part Quantities	Calculate Building Part Quantities	건물 부품 수량 계산
+CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%Calculation Settings	Calculation Settings	계산 설정
+CustomCtrl_%CustomCtrl_%Quantification%Buildingbook Extension%Set language	Set language	언어 설정
+CustomCtrl_%CustomCtrl_%Quantification%RIBBON_PANEL_ROOMBOOK%Calculate Room Quantities	Calculate Room Quantities	Calculate Room Quantities(룸 수량 계산)
+CustomCtrl_%CustomCtrl_%Quantification%RIBBON_PANEL_ROOMBOOK%Calculation Settings	Calculation Settings	계산 설정
+CustomCtrl_%CustomCtrl_%Quantification%RIBBON_PANEL_ROOMBOOK%Set language	Set language	언어 설정
+CustomCtrl_%CustomCtrl_%panelTurnOff%Precast Updates%DisablePrecastUpdates	Precast Updates:Disable	프리캐스트 업데이트:사용 안 함
+CustomCtrl_%CustomCtrl_%panelTurnOff%Precast Updates%EnablePrecastUpdates	Precast Updates:Enable	프리캐스트 업데이트:사용
+CustomCtrl_%PanelConfiguration%Configuration	Configuration	구성
+CustomCtrl_%PanelConnections%MountingParts	MountingParts	MountingParts
+CustomCtrl_%PanelParts%PRECAST_INTERNAL_UPDATE	PRECAST_INTERNAL_UPDATE	PRECAST_INTERNAL_UPDATE
+CustomCtrl_%PanelParts%Split	Split	분할
+CustomCtrl_%idCarbonAnalysis%idRunCarbonAnalysis	Analyze	해석
+CustomCtrl_%idCarbonAnalysis%idShowCarbonAnalysis	View	뷰
+CustomCtrl_%panelConstruction%CAMExport	CAMExport	CAMExport
+CustomCtrl_%panelConstruction%ShopDrawings	ShopDrawings	ShopDrawings
+CustomCtrl_%panelReinforcement%CFSConfig	CFS Config	CFS 구성
+CustomCtrl_%panelReinforcement%CustomFabricSheet	CustomFabric Sheet	CustomFabric Sheet
+CustomCtrl_%panelReinforcement%Reinforcement	Reinforcement	철근 배근
+Dialog_BuildingSystems_3dSnapping:Control_BuildingSystems_3dSnapping	Change Slope	경사 변경
+Dialog_BuildingSystems_3dSnapping:Control_BuildingSystems_MaintainSlope	Add Vertical	수직 추가
+Dialog_BuildingSystems_EditPipingSystemGroup:Control_BuildingSystems_EditPipingSystemGroup	Edit System	시스템 편집
+Dialog_BuildingSystems_EditPipingSystemGroup:Control_BuildingSystems_EditPipingSystemGroupDisconnectBaseObject	Disconnect Equipment	장비 연결 해제
+Dialog_BuildingSystems_EditPipingSystemGroup:Control_BuildingSystems_EditPipingSystemGroupSelectBaseObject	Select Equipment	장비 선택
+Dialog_BuildingSystems_EditPipingSystemGroup:Control_BuildingSystems_SplitPipingSystemGroup	Divide System	시스템 분할
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsAssignSpace	Assign Space	공간 지정
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsAssignSpare	Assign Spare	예비 지정
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsGroupUngroup	Group/ Ungroup	그룹/그룹 해제
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsLockUnlock	Lock/ Unlock	잠금/잠금 해제
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsMoveAcross	Move Across	가로로 이동
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsMoveDown	Move Down	아래로 이동
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsMoveTo	Move To	이동 위치
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsMoveUp	Move Up	위로 이동
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsRemoveSpareSpace	Remove Spare/Space	예비/공간 제거
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsRenumber	Renumber Indexes	색인 번호 재설정
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsSwitchPhase	Switch Phases	공정 전환
+Dialog_BuildingSystems_PanelScheduleCircuitDlgbar:Control_BuildingSystems_CircuitsUpdateNames	Update Names	이름 업데이트
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreateCommunicationCircuit	Communication	통신
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreateControlsCircuit	Controls	조정
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreateDataCircuit	Data	패널 >
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreateFireAlarmCircuit	Fire Alarm	화재 경보
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreateNurseCallCircuit	Nurse Call	간호사 호출
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreatePowerCircuit	Power	전력
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreateSecurityCircuit	Security	보안
+Dialog_BuildingSystems_RbsCreateCircuitGroup:Control_BuildingSystems_RbsCreateTelephoneCircuit	Telephone	전화
+Dialog_BuildingSystems_RbsCreateHvacSystemGroup:Control_BuildingSystems_RbsCreateDuctSystem	Duct	덕트
+Dialog_BuildingSystems_RbsCreatePipingSystemGroup:Control_BuildingSystems_RbsCreatePipingSystem	Piping	파이프
+Dialog_BuildingSystems_RbsDuctSizingBar:Control_BuildingSystems_RbsBtnSizing	Duct/Pipe Sizing	덕트/배관 크기 조정
+Dialog_BuildingSystems_RbsEditCircuitGroup:Control_BuildingSystems_RbsDisconnectPanel	Disconnect Panel	패널 연결 해제
+Dialog_BuildingSystems_RbsEditCircuitGroup:Control_BuildingSystems_RbsEditCircuitGroup	Edit Circuit	회로 편집
+Dialog_BuildingSystems_RbsEditCircuitGroup:Control_BuildingSystems_RbsEditCircuitGroupSelectPanel	Select Panel	패널 선택
+Dialog_BuildingSystems_RbsEditCircuitGroup:Control_BuildingSystems_RbsEditCircuitPath	Edit Path	경로 편집
+Dialog_BuildingSystems_RbsEditSwitchSystem:Control_BuildingSystems_RbsEditSwitchSystem	Edit Switch System	스위치 시스템 편집
+Dialog_BuildingSystems_RbsEditSwitchSystem:Control_BuildingSystems_RbsEditSwitchSystemDisconnectSwitch	Disconnect Switch	단로기
+Dialog_BuildingSystems_RbsEditSwitchSystem:Control_BuildingSystems_RbsEditSwitchSystemSelectSwitch	Select Switch	스위치 선택
+Dialog_BuildingSystems_RbsEditSystemGroup:Control_BuildingSystems_RbsDisconnectBaseObject	Disconnect Equipment	장비 연결 해제
+Dialog_BuildingSystems_RbsEditSystemGroup:Control_BuildingSystems_RbsEditSystemGroup	Edit System	시스템 편집
+Dialog_BuildingSystems_RbsEditSystemGroup:Control_BuildingSystems_RbsEditSystemGroupSelectBaseObject	Select Equipment	장비 선택
+Dialog_BuildingSystems_RbsEditSystemGroup:Control_BuildingSystems_SplitHvacSystemGroup	Divide System	시스템 분할
+Dialog_BuildingSystems_RbsInsulationLiningThickness:Control_BuildingSystems_AddDuctInsulation	Add Insulation	단열재 추가
+Dialog_BuildingSystems_RbsInsulationLiningThickness:Control_BuildingSystems_AddDuctLining	Add Lining	라이닝 추가
+Dialog_BuildingSystems_RbsInsulationLiningThickness:Control_BuildingSystems_EditDuctInsulation	Edit Insulation	단열재 편집
+Dialog_BuildingSystems_RbsInsulationLiningThickness:Control_BuildingSystems_EditDuctLining	Edit Lining	라이닝 편집
+Dialog_BuildingSystems_RbsInsulationLiningThickness:Control_BuildingSystems_RemoveDuctInsulation	Remove Insulation	단열재 제거
+Dialog_BuildingSystems_RbsInsulationLiningThickness:Control_BuildingSystems_RemoveDuctLining	Remove Lining	라이닝 제거
+Dialog_BuildingSystems_RbsLayoutOptionsBar:Control_BuildingSystems_3dSnapping	Change Slope	경사 변경
+Dialog_BuildingSystems_RbsLayoutOptionsBar:Control_BuildingSystems_InheritElevation	Inherit Elevation	고도 상속
+Dialog_BuildingSystems_RbsLayoutOptionsBar:Control_BuildingSystems_InheritSize	Inherit Size	크기 상속
+Dialog_BuildingSystems_RbsLayoutOptionsBar:Control_BuildingSystems_MaintainSlope	Add Vertical	수직 추가
+Dialog_BuildingSystems_RbsLayoutOptionsBar:Control_BuildingSystems_RbsBtnAutoconnect	Automatically Connect	자동 연결
+Dialog_BuildingSystems_RbsLayoutOptionsBar:Control_BuildingSystems_RbsBtnJustification	Justification	자리맞추기
+Dialog_BuildingSystems_RbsLayoutOptionsBar:Control_BuildingSystems_RbsBtnTagonplacement	Tag on Placement	태그 삽입
+Dialog_BuildingSystems_RbsPanelScheduleCreateupdateDlgbar:Control_BuildingSystems_ChooseTemplate	Create Panel Schedules	패널 일람표 작성
+Dialog_BuildingSystems_RbsPanelScheduleCreateupdateDlgbar:Control_BuildingSystems_RbsPanelScheduleCreate	Create Panel Schedules	패널 일람표 작성
+Dialog_BuildingSystems_RbsPanelScheduleCreateupdateDlgbar:Control_BuildingSystems_RbsPanelScheduleUpdate	Edit Panel Schedule	패널 일람표 편집
+Dialog_BuildingSystems_RbsPipeInsulationThickness:Control_BuildingSystems_AddPipeInsulation	Add Insulation	단열재 추가
+Dialog_BuildingSystems_RbsPipeInsulationThickness:Control_BuildingSystems_EditPipeInsulation	Edit Insulation	단열재 편집
+Dialog_BuildingSystems_RbsPipeInsulationThickness:Control_BuildingSystems_RemovePipeInsulation	Remove Insulation	단열재 제거
+Dialog_BuildingSystems_RbsRoutepathModify:Control_BuildingSystems_RbsBtnUsing3DElements	3D Elements	3D 요소
+Dialog_BuildingSystems_RbsRoutepathModify:Control_BuildingSystems_RbsBtnUsingPlaceholders	Placeholders	자리 표시자
+Dialog_BuildingSystems_RbsRoutepathModify:Control_BuildingSystems_RbsFinish	Finish	마감
+Dialog_BuildingSystems_RbsRoutepathModify:Control_BuildingSystems_RbsRoutingSolutionQuit	Cancel	취소
+Dialog_BuildingSystems_RbsSystemInspectBar:Control_BuildingSystems_RbsSystemInspectorInspect	System Inspector	시스템 조사기
+Dialog_CurtainGridFamily_CurtaSystemEdit:Control_CurtainGridFamily_RedoCurtaSystem	Update to Face	면으로 업데이트
+Dialog_CurtainGridFamily_CurtainGridDialog:Control_CurtainGridFamily_ExcludeSegs	All Except Picked	선택된 항목을 제외한 모든 항목
+Dialog_CurtainGridFamily_CurtainGridDialog:Control_CurtainGridFamily_FinishGirdLine	Restart Curtain Grid	커튼 그리드 다시 시작
+Dialog_CurtainGridFamily_CurtainGridDialog:Control_CurtainGridFamily_OneSeg	One Segment	하나의 세그먼트
+Dialog_CurtainGridFamily_CurtainGridDialog:Control_CurtainGridFamily_WholeGrid	All Segments	모든 세그먼트
+Dialog_CurtainGridFamily_MullionJoinsBar:Control_CurtainGridFamily_SetMillionJoinsButt	Break at Join	분할
+Dialog_CurtainGridFamily_MullionJoinsBar:Control_CurtainGridFamily_SetMillionJoinsConti	Make Continuous	결합
+Dialog_CurtainGridFamily_MullionPlacement:Control_CurtainGridFamily_RadioMullionGrid	All Grid Lines	모든 그리드 선
+Dialog_CurtainGridFamily_MullionPlacement:Control_CurtainGridFamily_RadioMullionLine	Grid Line	그리드 선
+Dialog_CurtainGridFamily_MullionPlacement:Control_CurtainGridFamily_RadioMullionSegment	Grid Line Segment	그리드 선 세그먼트
+Dialog_Essentials_AdjustHeightOrOverhang:Control_Essentials_RadioHeight	Adjust Height	높이 조정
+Dialog_Essentials_AdjustHeightOrOverhang:Control_Essentials_RadioOverhang	Adjust Overhang	돌출부 조정
+Dialog_Essentials_CurveVisibilityDbar:Control_Essentials_Visibility	Visibility Settings	가시성 설정
+Dialog_Essentials_EditLeadersDialogBar:Control_Essentials_HideAllLeaders	Select None	선택 안 함
+Dialog_Essentials_EditLeadersDialogBar:Control_Essentials_SelectLeadersCancel	Cancel	취소
+Dialog_Essentials_EditLeadersDialogBar:Control_Essentials_SelectLeadersFinish	Finish	마감
+Dialog_Essentials_EditLeadersDialogBar:Control_Essentials_ShowAllLeaders	Select All	모두 선택
+Dialog_Essentials_ImportInstanceExplode:Control_Essentials_ImportDeleteLayers	Delete Layers	레이어 삭제
+Dialog_Essentials_ImportInstanceExplode:Control_Essentials_ImportExplode	Explode	분해
+Dialog_Essentials_ImportInstanceExplode:Control_Essentials_ImportPartialExplode	Explode	분해
+Dialog_Essentials_ImportInstanceExplode:Control_Essentials_ImportQuery	Query	조회
+Dialog_Essentials_ImportInstanceExplode:Control_Essentials_SketchVisibility	Visibility Settings	가시성 설정
+Dialog_Essentials_RbsConnectorLinkConnectorBar:Control_Essentials_RbsConnectorBtnLinkConnector	Link Connectors	커넥터 링크
+Dialog_Essentials_RbsConnectorLinkConnectorBar:Control_Essentials_RbsConnectorBtnPrimary	Re-assign Primary	1차 재지정
+Dialog_Essentials_RbsConnectorLinkConnectorBar:Control_Essentials_RbsConnectorBtnRemoveLink	Remove Link	링크 제거
+Dialog_Essentials_RbsConnectorPlacementBar:Control_Essentials_PlaceByWorkplane	Place on Work Plane	작업 기준면에 배치
+Dialog_Essentials_RbsConnectorPlacementBar:Control_Essentials_PlaceByXface	Place on Face	면에 배치
+Dialog_Essentials_SectionBar:Control_Essentials_SplitSectionSegment	Split Segment	세그먼트 분할
+Dialog_Family_FamInstDbarRvtLink:Control_Family_EditInplaceFamRvtLink	Edit In-Place RvtLink	내부 Rvtlink 편집
+Dialog_Family_ManyInstDbar:Control_Family_NewInplaceAny	Model In-place	내부편집 모델링
+Dialog_Family_NewStructuralColumn:Control_Family_FromArchColumn	At Architectural Columns	건축 기둥에서
+Dialog_Family_NewStructuralColumn:Control_Family_GridIntersection	At Grid Intersection	그리드 교차에서
+Dialog_HostObj_DividedSurfaceEditRefSelectionDbar:Control_HostObj_DividedSurfaceCancelMultiPickDbar	Cancel	취소
+Dialog_HostObj_DividedSurfaceEditRefSelectionDbar:Control_HostObj_DividedSurfaceFinishMultiPickDbar	Finish	마감
+Dialog_HostObj_FaceRoofEdit:Control_HostObj_EditFaceRoof	Edit Face Selection	면 선택 편집
+Dialog_HostObj_FaceRoofEdit:Control_HostObj_RedoFaceRoof	Update to Face	면으로 업데이트
+Dialog_HostObj_FaceToposolidEdit:Control_HostObj_EditFaceToposolid	Edit Face Selection	면 선택 편집
+Dialog_HostObj_FaceToposolidEdit:Control_HostObj_RedoFaceToposolid	Update to Face	면으로 업데이트
+Dialog_HostObj_OpeningDbar:Control_HostObj_EditSketch	Edit Sketch	스케치 편집
+Dialog_HostObj_RedoFaceBased:Control_HostObj_RedoFaceBased	Update to Face	면으로 업데이트
+Dialog_HostObj_RoofByFaceEditDbar:Control_HostObj_CancelMultiPickDbar	Clear Selection	선택 항목 지우기
+Dialog_HostObj_RoofByFaceEditDbar:Control_HostObj_FinishMultiPickDbar	Recreate Roof	지붕 재작성
+Dialog_HostObj_ToposolidByFaceEditDbar:Control_HostObj_CancelMultiPickDbar	Clear Selection	선택 항목 지우기
+Dialog_HostObj_ToposolidByFaceEditDbar:Control_HostObj_FinishMultiPickDbar	Recreate Toposolid	지형 솔리드 재작성
+Dialog_Rebar_2CLickParaPerpHorizVert:Control_Rebar_2ClickPlaceParallel	Place Parallel to Work Plane	작업 기준면에 평행하게 배치
+Dialog_Rebar_2CLickParaPerpHorizVert:Control_Rebar_2ClickPlacePerpHoriz	Place Perpendicular to Work Plane and Horizontal	작업 기준면 및 수평 기준면에 수직으로 배치
+Dialog_Rebar_2CLickParaPerpHorizVert:Control_Rebar_2ClickPlacePerpVert	Place Perpendicular to Work Plane and Vertical	작업 기준면 및 수직 기준면에 수직으로 배치
+Dialog_Rebar_2CLickParaPerpHorizVertStraight:Control_Rebar_2ClickPlaceParallelStraight	Place Parallel to Work Plane	작업 기준면에 평행하게 배치
+Dialog_Rebar_2CLickParaPerpHorizVertStraight:Control_Rebar_2ClickPlacePerpHorizStraight	Place Perpendicular to Work Plane and Horizontal	작업 기준면 및 수평 기준면에 수직으로 배치
+Dialog_Rebar_2CLickParaPerpHorizVertStraight:Control_Rebar_2ClickPlacePerpVertStraight	Place Perpendicular to Work Plane and Vertical	작업 기준면 및 수직 기준면에 수직으로 배치
+Dialog_Rebar_2CLickParaPerpHorizVertStraight:Control_Rebar_2ClickPlacePointsStraight	Place with Major Segment Perpendicular to Work Plane	작업 기준면에 수직으로 주근 세그먼트 배치
+Dialog_Rebar_ConstraintPlacement:Control_Rebar_ConstraintPlacement	Constrained Placement	구속된 배치
+Dialog_Rebar_DistributionType:Control_Rebar_DistributionType	Varying Rebar Set	다양한 보강 철근 세트
+Dialog_Rebar_FreeFormDistribPath:Control_Rebar_DistribPath	Host Surface	호스트 표면
+Dialog_Rebar_FreeFormDistribPathParallel:Control_Rebar_DistribPathParallel	Parallel Face	평행 면
+Dialog_Rebar_FreeFormDistribPathPerp:Control_Rebar_DistribPathPerp	Perpendicular Face	수직 면
+Dialog_Rebar_FreeFormHostFacesTransversal:Control_Rebar_HostFacesTransversal	Path	경로
+Dialog_Rebar_FreeFormOrientationFace:Control_Rebar_OrientationFace	Host Surface	호스트 표면
+Dialog_Rebar_RebarPlaceMultiPlanarOrientDbar:Control_Rebar_RebarPlaceLookingAtBack	Place with Back Side Orientation Parallel to Work Plane	뒷면 방향을 작업 기준면에 평행하게 배치
+Dialog_Rebar_RebarPlaceMultiPlanarOrientDbar:Control_Rebar_RebarPlaceLookingAtBottom	Place with Bottom Side Orientation Parallel to Work Plane	맨 아랫면 방향을 작업 기준면에 평행하게 배치
+Dialog_Rebar_RebarPlaceMultiPlanarOrientDbar:Control_Rebar_RebarPlaceLookingAtFront	Place with Front Side Orientation Parallel to Work Plane	앞면 방향을 작업 기준면에 평행하게 배치
+Dialog_Rebar_RebarPlaceMultiPlanarOrientDbar:Control_Rebar_RebarPlaceLookingAtLeft	Place with Left Side Orientation Parallel to Work Plane	왼쪽 면 방향을 작업 기준면에 평행하게 배치
+Dialog_Rebar_RebarPlaceMultiPlanarOrientDbar:Control_Rebar_RebarPlaceLookingAtRight	Place with Right Side Orientation Parallel to Work Plane	오른쪽 면 방향을 작업 기준면에 평행하게 배치
+Dialog_Rebar_RebarPlaceMultiPlanarOrientDbar:Control_Rebar_RebarPlaceLookingAtTop	Place with Top Side Orientation Parallel to Work Plane	맨 윗면 방향을 작업 기준면에 평행하게 배치
+Dialog_Rebar_RebarPlaceParaPerpDbar:Control_Rebar_RebarPlaceParallel1	Place Parallel to Work Plane	작업 기준면에 평행하게 배치
+Dialog_Rebar_RebarPlaceParaPerpDbar:Control_Rebar_RebarPlacePerpParallelToCover	Place Perpendicular to Work Plane and Parallel to Nearest Cover Reference	작업 기준면에 수직으로 및 가장 가까운 쪽 피복 참조에 평행하게 배치
+Dialog_Rebar_RebarPlaceParaPerpDbar:Control_Rebar_RebarPlacePerpendicular1	Place Perpendicular to Work Plane and Perpendicular to Nearest Cover Reference	작업 기준면에 수직으로 및 가장 가까운 쪽 피복 참조에 수직으로 배치
+Dialog_Rebar_RebarPlacementPlaneDbar:Control_Rebar_RebarOnCurrentWorkPlane	Place on Current Work Plane	현재 작업 기준면에 배치
+Dialog_Rebar_RebarPlacementPlaneDbar:Control_Rebar_RebarOnFarCover	Place on Far Cover Reference	먼 쪽 피복 참조에 배치
+Dialog_Rebar_RebarPlacementPlaneDbar:Control_Rebar_RebarOnNearCover	Place on Near Cover Reference	가까운 쪽 피복 참조에 배치
+Dialog_Rebar_Selection:Control_Rebar_Clear	Clear Selection	선택 항목 지우기
+Dialog_Rebar_Selection:Control_Rebar_Multiple	Select Multiple	다중 선택
+Dialog_Rebar_ShowTooltip:Control_Rebar_ToggleTooltip	Show Help Tooltip	도움말 툴팁 표시
+Dialog_Revit_DrawOrder:Control_Revit_BringForward	Bring to Front	앞으로 가져오기
+Dialog_Revit_DrawOrder:Control_Revit_BringToFront	Bring to Front	앞으로 가져오기
+Dialog_Revit_DrawOrder:Control_Revit_SendBackward	Send to Back	뒤로 보내기
+Dialog_Revit_DrawOrder:Control_Revit_SendToBack	Send to Back	뒤로 보내기
+Dialog_Revit_ScheduleBar:Control_Revit_BtnScheduleShow	Highlight in Model	모델에서 하이라이트
+Dialog_Revit_ScheduleBar:Control_Revit_DeleteRows	Delete Row	행 삭제
+Dialog_Revit_ScheduleBar:Control_Revit_GroupHeaders	Group Headers; Group Headers	머리글 그룹화, 머리글 그룹화
+Dialog_Revit_ScheduleBar:Control_Revit_InsertRow	New Row	새 행
+Dialog_Revit_ScheduleBar:Control_Revit_UngroupHeaders	Ungroup Headers; Ungroup Headers	머리글 그룹 해제; 머리글 그룹 해제
+Dialog_Revit_WalkthroughModify:Control_Revit_BtnEditActivateview	Open Walkthrough	보행시선 열기
+Dialog_Revit_WalkthroughModify:Control_Revit_BtnNextCkp	Next Key Frame	다음 키 프레임
+Dialog_Revit_WalkthroughModify:Control_Revit_BtnNextFrame	Next Frame	다음 프레임
+Dialog_Revit_WalkthroughModify:Control_Revit_BtnPlay	Play	재생
+Dialog_Revit_WalkthroughModify:Control_Revit_BtnPrevCkp	Previous Key Frame	이전 키 프레임
+Dialog_Revit_WalkthroughModify:Control_Revit_BtnPrevFrame	Previous Frame	이전 프레임
+Dialog_Revit_WalkthroughModify:Control_Revit_BtnResetDirections	Reset Cameras	카메라 재설정
+Dialog_RoomAreaPlan_AreaTagDlgBar:Control_RoomAreaPlan_TagRoomOnPlacement	Tag on Placement	태그 삽입
+Dialog_RoomAreaPlan_RoomTagDlgBar:Control_RoomAreaPlan_FindAllRooms	Place Rooms Automatically	자동으로 룸 배치
+Dialog_RoomAreaPlan_RoomTagDlgBar:Control_RoomAreaPlan_FindAllSpaces	Place Spaces Automatically	자동으로 공간 배치
+Dialog_RoomAreaPlan_RoomTagDlgBar:Control_RoomAreaPlan_ShowAllRoomBounds	Highlight Boundaries	경계 하이라이트
+Dialog_RoomAreaPlan_RoomTagDlgBar:Control_RoomAreaPlan_TagRoomOnPlacement	Tag on Placement	태그 삽입
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElemCleaveButton	Add Profile	프로파일 추가
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElemDissolveButton	Dissolve	분해
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElemRehost	Pick New Host	새 호스트 선택
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElemSplitButton	Add Edge	모서리 추가
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElementConstrainProfile	Lock Profiles	프로파일 잠금
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElementSketchEdit	Edit Profile	프로파일 편집
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElementUnconstrainProfile	Unlock Profiles	프로파일 잠금 해제
+Dialog_Sculpting_FormElementEditDlgbar:Control_Sculpting_FormElementXRay	X-Ray	X-레이
+Dialog_StairRamp_UnsupportedObjectWarnDbar:Control_StairRamp_UnsupportedObjectWarn	Unsupported Object	지원되지 않는 객체
+Dialog_StructuralAnalysis_ManyMembersDbar:Control_StructuralAnalysis_AnalyticalMemberStartPointDef	Start/End Point Definition	시작점/끝점 정의
+Dialog_StructuralAnalysis_ManyMembersDbar:Control_StructuralAnalysis_AnalyticalMemberTopPointDef	Top Point Definition	맨 위 점 정의
+Dialog_Structural_ManyBcDbar:Control_Structural_AreaBc	Area Boundary Condition	면적 경계 조건
+Dialog_Structural_ManyBcDbar:Control_Structural_LineBc	Line Boundary Condition	선 경계 조건
+Dialog_Structural_ManyBcDbar:Control_Structural_PointBc	Point Boundary Condition	점 경계 조건
+Dialog_Structural_NewStructuralBeam:Control_Structural_CreateBeamOnGrid	On Grid Lines	그리드 선에서
+Dialog_Structural_TagOnPlacementDlg:Control_Structural_TagOnPlacementCheckbox	Tag on Placement	태그 삽입
+Dialog_Structural_TrussEditProfileSketch:Control_Structural_AttachTrusses	Attach Top/Bottom	상단/하단 부착
+Dialog_Structural_TrussEditProfileSketch:Control_Structural_DetachTrusses	Detach Top/Bottom	상단/하단 분리
+Dialog_Structural_TrussEditProfileSketch:Control_Structural_EditTrussSketch	Edit Profile	프로파일 편집
+Dialog_Structural_TrussEditProfileSketch:Control_Structural_ExplodeTruss	Remove Truss Family	트러스 패밀리 제거
+Dialog_Structural_TrussEditProfileSketch:Control_Structural_ResetTruss	Reset Truss	트러스 재설정
+Dialog_Structural_TrussEditProfileSketchRem:Control_Structural_AttachTrusses	Attach Top/Bottom	상단/하단 부착
+Dialog_Structural_TrussEditProfileSketchRem:Control_Structural_DetachTrusses	Detach Top/Bottom	상단/하단 분리
+Dialog_Structural_TrussEditProfileSketchRem:Control_Structural_EditTrussSketch	Edit Profile	프로파일 편집
+Dialog_Structural_TrussEditProfileSketchRem:Control_Structural_ExplodeTruss	Remove Truss Family	트러스 패밀리 제거
+Dialog_Structural_TrussEditProfileSketchRem:Control_Structural_RemoveTrussSketch	Reset Profile	프로파일 재설정
+Dialog_Structural_TrussEditProfileSketchRem:Control_Structural_ResetTruss	Reset Truss	트러스 재설정
+Dialog_Structural_VerticalSlantedColumnsDialogBar:Control_Structural_SlantedColumns	Slanted Column	경사 기둥
+Dialog_Structural_VerticalSlantedColumnsDialogBar:Control_Structural_VerticalColumns	Vertical Column	수직 기둥
+IDC_APPLYAREARULES_OPTIONS	Apply Area Rules	면적 규칙 적용
+IDC_ATTACHTOGRID	Attach to Grid	그리드에 부착
+IDC_CHANGE_SWEEP_RETURNS	Modify Returns; Modify Returns	굴곡부 수정; 굴곡부 수정
+IDC_CURTA_GRID_LINE_ADD_REMOVE_SEGS	Add/Remove Segments	세그먼트 추가/제거
+IDC_DETACH_WALLS_FROM_ALL	Detach:Detach All	분리:모두 분리
+IDC_DRAW_ON_FACE	Draw on Face	면에 그리기
+IDC_DRAW_ON_WORKPLANE	Draw on Work Plane	작업 기준면에 그리기
+IDC_EDIT_LOADED_FAM	Edit Family	패밀리 편집
+IDC_EDIT_SWEEP_HOST	Add/Remove Segments	세그먼트 추가/제거
+IDC_EDIT_WALL_SWEEP	Add/Remove Walls; Add/Remove Walls	벽 추가/제거; 벽 추가/제거
+IDC_EDIT_WITNESS_REFS	Edit Witness Lines	치수 보조선 편집
+IDC_FABRIC_REHOST	Pick New Host	새 호스트 선택
+IDC_FINISH_CORNICE_REVEAL	Restart Wall Sweep; Restart Reveal	벽 스윕 다시 시작; 모서리 받침 다시 시작
+IDC_FINISH_SWEEP_HOST	Restart Slab Edge; Restart Gutter; Restart Fascia	슬래브 모서리 다시 시작; 거터 다시 시작; 처마돌림 다시 시작
+IDC_MITER_HORIZONTAL	Horizontal	수평
+IDC_MITER_NORMAL_TO_PATH	Perpendicular	수직
+IDC_MITER_SWEEP_HOST	Modify Mitering	연귀 수정
+IDC_MITER_VERTICAL	Vertical	수직
+IDC_NEXT_JOIN	Next	다음
+IDC_PICK_MAIN_HOST	Pick Primary Host	주 호스트 선택
+IDC_PLACE_BY_INSERT	Place on Vertical Face; Place on Vertical Face	수직 면에 배치; 수직 면에 배치
+IDC_PLACE_BY_WORKPLANE	Place on Work Plane; Place on Work Plane	작업 기준면에 배치; 작업 기준면에 배치
+IDC_PLACE_BY_XFACE	Place on Face; Place on Face	면에 배치; 면에 배치
+IDC_PREV_JOIN	Previous	이전
+IDC_RADIO_ARC_3_PNT	Default:Start-End-Radius Arc	기본값:시작-끝-반지름 호
+IDC_RADIO_ARC_CENTER	Default:Center-ends Arc	기본값:중간-끝 호
+IDC_RADIO_ARC_FILLET	Default:Fillet Arc	기본값:모깎기 호
+IDC_RADIO_ARC_TAN_END	Default:Tangent End Arc	기본값:접선 끝 호
+IDC_RADIO_CIRCLE	Default:Circle	기본값:원
+IDC_RADIO_CIRCUMSCRIBED_POLYGON	Default:Circumscribed Polygon	기본값:외접 다각형
+IDC_RADIO_COPY_CURVE	Default:Pick Lines	기본값:선 선택
+IDC_RADIO_FULL_ELLIPSE	Default:Ellipse	기본값:타원
+IDC_RADIO_INSCRIBED_POLYGON	Default:Inscribed Polygon	기본값:내접 다각형
+IDC_RADIO_LINE	Default:Line	기본값:선
+IDC_RADIO_LINEAR_ARRAY	Linear	선형
+IDC_RADIO_PARTIAL_ELLIPSE	Default:Partial Ellipse	기본값:부분 타원
+IDC_RADIO_RADIAL_ARRAY	Radial	반지름
+IDC_RADIO_RECT	Default:Rectangle	기본값:직사각형
+IDC_RADIO_RETURN	Return	복귀
+IDC_RADIO_SPLINE	Default:Spline	기본값:스플라인
+IDC_RADIO_STRAIGHT_CUT	Straight Cut	직선 절단
+IDC_REBAR_REHOST	Pick New Host	새 호스트 선택
+IDC_REINFORCEMENT_SELECT_HOST	Select Host	호스트 선택
+IDC_RESET_VTX_CONNECTIONS	Reset Vertex Connect	정점 연결 재설정
+IDC_SCALE_GRAPH	Graphical	그래픽
+IDC_SCALE_NUM	Numerical	숫자
+IDC_SHIFT_CCW	Twist Left	왼쪽으로 틀기
+IDC_SHIFT_CW	Twist Right	오른쪽으로 틀기
+IDC_SPLINE_ADD_CONTROL	Add Control	컨트롤 추가
+IDC_SPLINE_DELETE_CONTROL	Delete Control	컨트롤 삭제
+IDC_VIEW_FRAME_CROPREGION_ACTIVITY	Crop (Uncrop) View	뷰 자르기(자르기 해제)
+IDC_VIEW_FRAME_CROPREGION_VISIBILITY	Show (Hide) Crop Region	자르기 영역 표시(숨기기)
+IDC_VTX_CTRL_ON_LOOP_0	Controls on Base	베이스의 컨트롤
+IDC_VTX_CTRL_ON_LOOP_1	Controls on Top	상단의 컨트롤
+IDC_WALLS_DEFINE_BEAM_SYSTEM_SLOPE	Walls Define Slope	벽 경사 정의
+IDC_WALL_END_JOINABLE	Allow Join	결합 허용
+IDC_WALL_END_NOTJOINABLE	Disallow Join	결합 금지
+IDC_WALL_JOIN_BUTT	Butt	맞대기
+IDC_WALL_JOIN_MITER	Miter	마이터
+IDC_WALL_JOIN_SQUARE_OFF	Square Off	사각 정리
+IDD_COLUMN_ATTACH_DETACH:ID_ATTACH_COLUMNS	Attach Top/Base	상단/베이스 부착
+IDD_COLUMN_ATTACH_DETACH:ID_DETACH_COLUMNS	Detach Top/Base	상단/베이스 분리
+IDD_MULTIPICK_DBAR:ID_CANCEL_MULTI_PICK_DBAR	Cancel	취소
+IDD_MULTIPICK_DBAR:ID_FINISH_MULTI_PICK_DBAR	Finish	마감
+IDD_MULTIPICK_DBAR:ID_SEL_MULTI_CHECK	Select Multiple	다중 선택
+IDR_STRUCT_CONNECTION_BREAK	Break	끊기
+IDR_STRUCT_CONNECTION_MODIFY_PARAMETERS	Modify Parameters	매개변수 수정
+IDS_CONDUCTOR_CABLE_DIALOG	MEP Settings:Electrical Conductor and Cable Settings	MEP 설정:전기 도체 및 케이블 설정
+IDS_RBS_ANALYTICAL_LOADZONE	Area Based Load; Create an Area Based Load	영역 부하; 영역 부하 작성
+ID_ABS_IMPORT_GBXML	Import gbXML	gbXML 가져오기
+ID_ACQUIRE_ASSEMBLY_VIEWS	Acquire Views	뷰 획득
+ID_ACTIVATE_CONTEXTUAL_TAB	Activate the first contextual tab	첫 번째 상황별 탭 활성화
+ID_ADD_ALL_LEVEL_LANDINGS	Add Landings	계단참 추가
+ID_ADD_CONNECTED_LEVELS_TO_MULTISTORY_STAIRS	Connect Levels	레벨 연결
+ID_ADD_ELEMENT_TO_ASSEMBLY	Add to Assembly	조합에 추가
+ID_ADD_ELEMENT_TO_DIVISION	Add	추가
+ID_ADD_IN_MANAGER	Add-Ins Manager	애드인 관리자
+ID_ADD_LIGHT_TO_GROUP	Add to Group	그룹에 추가
+ID_ADD_PARAMETER	Create Parameter	매개변수 작성
+ID_ADD_REMOVE_CONNECTED_LEVELS	Connect/Disconnect Levels	레벨 연결/연결 해제
+ID_ALIGN	Align	정렬
+ID_ALIGNMENT_STATION_LABEL	Alignment Station; Alignment Station	선형 측점; 선형 측점
+ID_ALIGNMENT_STATION_LABEL_SET	Alignment Station:Alignment Station Set	선형 측정:선형 측점 세트
+ID_ALIGN_BOTTOM	Align Text Bottom	문자 아래쪽 정렬
+ID_ALIGN_CENTER	Align Text Center	문자 중심 정렬
+ID_ALIGN_LEFT	Align Text Left	문자 왼쪽 정렬
+ID_ALIGN_MIDDLE	Align Text Middle	문자 가운데 정렬
+ID_ALIGN_RIGHT	Align Text Right	문자 오른쪽 정렬
+ID_ALIGN_SPAN_DIR	Align Perpendicular	수직 정렬
+ID_ALIGN_TOP	Align Text Top	문자 위쪽 정렬
+ID_ANALYTICAL_AUTOMATION_EDIT_LEVELS	Select Levels	레벨 선택
+ID_ANALYTICAL_AUTOMATION_EDIT_MODE_ADD	Add elements	요소 추가
+ID_ANALYTICAL_AUTOMATION_EDIT_MODE_CANCEL	Cancel	취소
+ID_ANALYTICAL_AUTOMATION_EDIT_MODE_FINISH	Finish	마감
+ID_ANALYTICAL_AUTOMATION_EDIT_MODE_REMOVE	Remove elements	요소 제거
+ID_ANALYTICAL_AUTOMATION_EDIT_PLANES	Select Planes	평면 선택
+ID_ANALYTICAL_AUTOMATION_EDIT_SELECTION	Select Elements	요소 선택
+ID_ANALYTICAL_AUTOMATION_PLAYLIST_DYNAMO	Analytical Automation:Automation Customization	해석 자동화:자동화 사용자화
+ID_ANALYTICAL_AUTOMATION_RUN	Run Automation	자동화 실행
+ID_ANALYTICAL_ELEMENT_ALIGN_XAXIS	Align X Axis	X축 정렬
+ID_ANALYTICAL_ELEMENT_ALIGN_ZAXIS	Flip Z Axis; Align Z Axis	Z축 반전; Z축 정렬
+ID_ANALYTICAL_MODEL_AREA_LOAD_DEFINE_BOUNDARY	Define Boundary	경계 정의
+ID_ANALYTICAL_MODEL_AREA_LOAD_ON_HOST	Area Load; On Host	면하중; 호스트에서
+ID_ANALYTICAL_MODEL_LINE_LOAD_DEFINE_PATH	Define Path	경로 재정의
+ID_ANALYTICAL_MODEL_LINE_LOAD_ON_HOST	Line Load; On Host	선하중; 호스트에서
+ID_ANALYTICAL_MODEL_LOADS	Loads	하중
+ID_ANALYTICAL_MODEL_MEMBERS	Analytical Member	해석 부재
+ID_ANALYTICAL_MODEL_PANEL_ARC_CENTER_ENDS	Create Analytical Panel - Arc Center Ends	해석 패널 작성 - 호 중심 끝
+ID_ANALYTICAL_MODEL_PANEL_ARC_FILLET	Create Analytical Panel - Fillet Arc	해석 패널 작성 - 모깎기 호
+ID_ANALYTICAL_MODEL_PANEL_ARC_TAN_END	Create Analytical Panel - Arc Tangent	해석 패널 작성 - 호 접선
+ID_ANALYTICAL_MODEL_PANEL_ARC_THREE_PNT	Create Analytical Panel - Arc from Three Points	해석 패널 작성 - 세 점의 호
+ID_ANALYTICAL_MODEL_PANEL_CIRCLE	Create Analytical Panel - Circle	해석 패널 작성 - 원
+ID_ANALYTICAL_MODEL_PANEL_FULL_ELLIPSE	Create Analytical Panel - Ellipse	해석 패널 작성 - 타원
+ID_ANALYTICAL_MODEL_PANEL_LINE	Create Analytical Panel - Line	해석 패널 작성 - 선
+ID_ANALYTICAL_MODEL_PANEL_PARTIAL_ELLIPSE	Create Analytical Panel - Partial Ellipse	해석 패널 작성 - 부분 타원
+ID_ANALYTICAL_MODEL_PANEL_PICK_LINES	Create Analytical Panel - Pick Lines	해석 패널 작성 - 선 선택
+ID_ANALYTICAL_MODEL_PANEL_POLY_CIRCUMSCRIBED	Create Analytical Panel - Circumscribed Polygon	해석 패널 작성 - 외접 다각형
+ID_ANALYTICAL_MODEL_PANEL_POLY_INSCRIBED	Create Analytical Panel - Inscribed Polygon	해석 패널 작성 - 내접 다각형
+ID_ANALYTICAL_MODEL_PANEL_RECT	Create Analytical Panel - Rectangle	해석 패널 작성 - 직사각형
+ID_ANALYTICAL_MODEL_PANEL_SPLINE	Create Analytical Panel - Spline	해석 패널 작성 - 스플라인
+ID_ANALYTICAL_MODEL_POINT_LOAD_ON_ENDPOINT	Point Load; On End Point	지점 부하; 끝점에서
+ID_ANALYTICAL_MODEL_POINT_PICK_POSITION	Pick Position	위치 선택
+ID_ANALYTICAL_OPENING	Opening by Face	면별 개구부
+ID_ANALYTICAL_RELATIONSHIP_EDIT_MODE_ADD	Add to Relation	관계에 추가
+ID_ANALYTICAL_RELATIONSHIP_EDIT_MODE_CANCEL	Cancel	취소
+ID_ANALYTICAL_RELATIONSHIP_EDIT_MODE_FINISH	Finish	마감
+ID_ANALYTICAL_RELATIONSHIP_EDIT_MODE_REMOVE	Remove from Relation	관계에서 제거
+ID_ANALYTICAL_TO_PHYSICAL_RUN_DYNAMO	Analytical Automation:Run Analytical to Physical For Buildings	해석 자동화:해석모델 기반 실제모델 생성 실행
+ID_ANNOTATIONS_DIMENSION_ALIGNED	Aligned Dimension	정렬 치수
+ID_ANNOTATIONS_DIMENSION_ANGULAR	Angular Dimension	각도 치수
+ID_ANNOTATIONS_DIMENSION_ARCLENGTH	Arc Length Dimension	호 길이 치수
+ID_ANNOTATIONS_DIMENSION_DIAMETER	Diameter Dimension	지름 치수
+ID_ANNOTATIONS_DIMENSION_LINEAR	Linear Dimension	선형 치수
+ID_ANNOTATIONS_DIMENSION_RADIAL	Radial Dimension	반지름 치수
+ID_ANNOTATION_SYMBOL_NEW	Annotation Symbol	주석 기호
+ID_APPLY_VIEW_TEMPLATE	View Templates:Apply Template Properties to Current View	뷰 템플릿:현재 뷰에 템플릿 특성 적용
+ID_APPMENU_PROJECT_OPEN	Project	프로젝트
+ID_APP_ABOUT	About Autodesk Revit 2026	Autodesk Revit 2026 정보
+ID_APP_EXIT	Exit Revit	Revit 종료
+ID_AREA_REINFORCEMENT_SYMBOL_AUTO_PLACE	Auto Place	자동 배치
+ID_ASSEMBLY_DISASSEMBLE	Disassemble	분해
+ID_ATTACH_TRUSS	Attach Top/Bottom	상단/하단 부착
+ID_AUTO_CEILING	Auto Ceiling	자동 천장
+ID_AUTO_FINISH_JOIN	Auto Join	자동 결합
+ID_AUTO_FINISH_JOIN_LOCK	Auto Join & Lock	자동 결합 및 잠금
+ID_AUTO_FLOOR	Auto Floor	자동 바닥
+ID_BATCH_PRINT	Batch Print	Batch Print
+ID_BEAM_ANNOTATION_PLACEMENT	Beam Annotations	보 주석
+ID_BEAM_SYSTEM_TAG_AUTO_PLACE	Auto Place	자동 배치
+ID_BENDING_DETAIL_ADD_REMOVE_HOST	Add / Remove Host	호스트 추가/제거
+ID_BENDING_DETAIL_ADD_REMOVE_HOST_PLACEMENT	Add / Remove Host	호스트 추가/제거
+ID_BENDING_DETAIL_CLEAR_SELECTION	Clear Selection	선택 항목 지우기
+ID_BENDING_DETAIL_CREATE_MULTIPLE	Create Details	상세 정보 작성
+ID_BENDING_DETAIL_MODE_REALISTIC	Realistic	사실적
+ID_BENDING_DETAIL_MODE_SCHEMATIC	Schematic	스키매틱
+ID_BENDING_DETAIL_ORTHO_PLACEMENT	Align to Bar	철근에 정렬
+ID_BENDING_DETAIL_PARALLEL_TO_VIEW	Parallel To View	뷰에 평행
+ID_BENDING_DETAIL_PICK_HOST	Pick New Host	새 호스트 선택
+ID_BENDING_DETAIL_RESET	Reset Position	위치 재설정
+ID_BENDING_DETAIL_SELECT_HOST	Select Host	호스트 선택
+ID_BENDING_DETAIL_SELECT_MULTIPLE	Select Multiple	다중 선택
+ID_BIND_LINK_AS_GROUP	Bind Link	링크 결합
+ID_BROWSER_ORGANIZATION	Browser Organization	탐색기 구성
+ID_BTN_FILTER_SELECTION	Filter	필터
+ID_BUTTON_BRACING_ELEVATION	Elevation; Elevation:Framing Elevation	고도; 고도:프레임 입면
+ID_BUTTON_DELETE	Delete	삭제
+ID_BUTTON_INTERIOR_ROOM_ELEVATION	Elevation:Building Elevation	입면:건물 입면도
+ID_BUTTON_REDO	Redo	명령복구
+ID_BUTTON_SELECT	Modify	수정
+ID_BUTTON_STAIRS_BOUNDARY	Boundary	경계
+ID_BUTTON_STAIRS_LANDING_SKETCH	Boundary	경계
+ID_BUTTON_STAIRS_PATH	Stairs Path; Stair Path	계단 경로; 계단 경로
+ID_BUTTON_STAIRS_RISER	Riser	라이저
+ID_BUTTON_STAIRS_RUN_BOUNDARY	Boundary	경계
+ID_BUTTON_TAG	Tag by Category; Tag by Category	카테고리별 태그; 카테고리별 태그
+ID_BUTTON_TAG_ALL	Tag Room:Tag All Not Tagged; Tag Area:Tag All Not Tagged	룸 태그 지정:태그가 지정되지 않은 모든 항목 태그; 영역 태그 지정:태그가 지정되지 않은 모든 항목 태그
+ID_BUTTON_UNDO	Undo	명령 취소
+ID_CANCEL_ASSEMBLY_EDIT	Cancel	취소
+ID_CANCEL_ATTACHED_GROUP_EDIT_MODE	Cancel	취소
+ID_CANCEL_DPART_EDIT	Cancel Edit Mode	편집 모드 취소
+ID_CANCEL_EDITOR	Finish Walkthrough	보행시선 완료
+ID_CANCEL_GROUP_EDIT_MODE	Cancel	취소
+ID_CANCEL_LIGHT_GROUP_EDIT	Cancel	취소
+ID_CANCEL_MULTI_PICK_DBAR	Cancel; Clear Selection; Clear Selection	취소; 선택 지우기; 선택 지우기
+ID_CANCEL_SFILTER_EDIT_MODE	Cancel Selection	선택사항 취소
+ID_CANCEL_SKETCH	Cancel Edit Mode	편집 모드 취소
+ID_CANCEL_VIEW_POSITION_EDIT_MODE	Cancel	취소
+ID_CANVAS_THEME_SWITCH	Canvas Theme	캔버스 주제
+ID_CBP_DISSOLVE	Dissolve	분해
+ID_CEA_VIEW_ENERGY_DATA	Energy Settings	에너지 설정
+ID_CHANGE_BEAM_END_REFERENCE	Change End Reference	끝 참조 변경
+ID_CHANGE_CURVE_TYPE	Change Type	변경 유형
+ID_CHECK_SPELLING	Check Spelling	철자 검사
+ID_CLEAN_MANUALLY_ADJUSTED	Reset Manual Edge Offsets	수동 모서리 간격띄우기 재설정
+ID_COLLABORATE	Collaborate	공동작업
+ID_COLLABORATE_360	Collaborate in Cloud	클라우드에서 공동작업
+ID_COMPONENTREPEATER_REMOVEREPEATER	Remove Repeater	리피터 제거
+ID_CONCRETE_COVER	Edit Rebar Cover	보강 철근 피복 편집
+ID_CONNECTOR_PICK_HOST	Pick New Host	새 호스트 선택
+ID_CONTENT_CATALOG_APP	Content Catalog:Launch as App	컨텐츠 카탈로그:앱으로 실행
+ID_CONTENT_CATALOG_BROWSER	Content Catalog:Launch in Browser	컨텐츠 카탈로그:탐색기에서 실행
+ID_CONTENT_CATALOG_DOCKED_WINDOW	Content Catalog:Launch in Docked Window	컨텐츠 카탈로그:고정 창에서 실행
+ID_CONVERT_1LINE_PATH_LAYOUT	Convert Placeholder	자리 표시자 변환
+ID_CONVERT_FOLDING_LINES	Convert Folding Lines	접기 선 변환
+ID_CONVERT_LINES	Convert To Model Line; Convert Lines	모델 선으로 변환; 선 변환
+ID_COORDINATIONMODEL_ADD_AUTODESKDOCS	Coordination Model:Autodesk Docs	협업 모델:Autodesk Docs
+ID_COORDINATIONMODEL_ADD_LOCAL	Coordination Model:Local	협업 모델:로컬
+ID_COORDINATIONMODEL_CHANGESREVIEW	Coordination Model Changes	협업 모델 변경사항
+ID_COORDINATION_ADD_LOCAL_ASSOCIATION	Add Association	연결 추가
+ID_COORDINATION_APPLICABLE_RULES	Applicable Rules	적용 가능한 규칙
+ID_COORDINATION_CHECK_CHANGES	Check Changes	변경 사항 확인
+ID_COORDINATION_HIGHLIGHT_ASSOCIATIONS	Highlight Association	연관 하이라이트
+ID_COORDINATION_REMOVE_ASSOCIATION	Remove Association	연관 제거
+ID_COPING	Cope; Apply Coping	코핑; 코핑 적용
+ID_COPY_SETTINGS	Coordination Settings	좌표 설정
+ID_COPY_WATCH_CURRENT	Copy/ Monitor:Use Current Project	복사/ 감시:현재 프로젝트 사용
+ID_COPY_WATCH_LINK	Copy/ Monitor:Select Link	복사/ 감시:링크 선택
+ID_CPWTCH_COPY	Copy	복사
+ID_CPWTCH_FINISH	Finish	마감
+ID_CPWTCH_QUIT	Cancel	취소
+ID_CPWTCH_SETTINGS	Options	옵션
+ID_CPWTCH_WATCH	Monitor	감시
+ID_CREATEFORMELEM	Create Form	양식 작성
+ID_CREATEVOIDFORM	Create Form:Void Form	양식 작성:보이드 양식
+ID_CREATE_ANALYTICAL_LINK	Analytical Link	해석 링크
+ID_CREATE_ANALYTICAL_MODEL_PANEL	Panel:Panel by Boundary	패널:경계에 따른 패널
+ID_CREATE_ANALYTICAL_MODEL_PANEL_BY_EXTRUSION	Panel:Panel by Extrusion	패널:돌출에 따른 패널
+ID_CREATE_ASSEMBLY	Create Assembly	조립품 작성
+ID_CREATE_DEPENDENT_VIEW	Duplicate View:Duplicate as Dependent	뷰 복제:의존적으로 복제
+ID_CREATE_DORMER_OPENING_TB	Dormer Opening	지붕창 개구부
+ID_CREATE_EXT_ENTITY_ANCHOR	Bolts:Anchors	볼트:앵커
+ID_CREATE_EXT_ENTITY_BEAM_COPE	Cope Skewed	기울어진 코핑
+ID_CREATE_EXT_ENTITY_BOLT	Bolts	볼트
+ID_CREATE_EXT_ENTITY_CONTOUR	Contour Cut	등고선 절단
+ID_CREATE_EXT_ENTITY_CORNER_CUT	Corner Cut	모서리 절단
+ID_CREATE_EXT_ENTITY_HOLE	Bolts:Holes	볼트:구멍
+ID_CREATE_EXT_ENTITY_PLATE	Plate	플레이트
+ID_CREATE_EXT_ENTITY_SHEAR_STUD	Bolts:Shear Studs	볼트:전단 스터드
+ID_CREATE_EXT_ENTITY_SHORTENING	Shorten	줄이기
+ID_CREATE_EXT_ENTITY_WELD	Welds	용접
+ID_CREATE_FASCIA_TB	Roof:Roof: Fascia	지붕:지붕: 처마돌림
+ID_CREATE_FOOTING_BY_GRID_INTERSECTION	At Grid Intersection	그리드 교차에서
+ID_CREATE_FOOTING_FROM_STRUCTURAL_COLUMN	At Structural Column	구조 기둥에서
+ID_CREATE_GUIDE_GRID	Guide Grid	가이드 그리드
+ID_CREATE_GUTTER_TB	Roof:Roof: Gutter	지붕:지붕: 거터
+ID_CREATE_MULTISTORYSTAIRS	Select Levels	레벨 선택
+ID_CREATE_OPENING_BY_FACE_TB	Opening by Face	면별 개구부
+ID_CREATE_PARTS	Create Parts	부품 작성
+ID_CREATE_SHAFT_OPENING_TB	Shaft Opening	샤프트 개구부
+ID_CREATE_SHOP_DRAWING	Create Views	뷰 작성
+ID_CREATE_SLAB_EDGE_TB	Floor:Floor: Slab Edge; Slab:Floor: Slab Edge	바닥:바닥: 슬래브 모서리; 슬래브:바닥: 슬래브 모서리
+ID_CREATE_SOFFIT_TB	Roof:Roof: Soffit	지붕:지붕: 처마밑면
+ID_CREATE_VERTICAL_OPENING_TB	Vertical Opening	수직 개구부
+ID_CREATE_VIEW_TEMPLATE	View Templates:Create Template from Current View	뷰 템플릿:현재 뷰에서 템플릿 작성
+ID_CREATE_WALL_OPENING	Wall Opening	벽 개구부
+ID_CREATE_WALL_OPENING_TB	Wall Opening	벽 개구부
+ID_CURTA_SYSTEM_PICK_FACES	Curtain System by Face	면으로 커튼 시스템 만들기
+ID_CURVE_VISIBILITY_SETTINGS	Visibility Settings	가시성 설정
+ID_CUT_HOST	Cut; Cut Geometry	절단; 형상 절단
+ID_DATUM_PROPAGATE_EXTENTS	Propagate Extents	연장 범위
+ID_DEFAULT_ROTATION_CENTER	Center of rotation on center of selection set	회전 중심을 선택 세트의 중심에 맞추기
+ID_DEFINE_ROTATION_CENTER	Place center of rotation	회전 중심 배치
+ID_DELETE_ROWS	Delete	삭제
+ID_DEL_INNER_SEG	Delete Inner Segment	내부 세그먼트 삭제
+ID_DETACH_TRUSS	Detach Top/Bottom	상단/하단 분리
+ID_DETAIL_LEVEL	Additional Settings:Detail Level	추가 설정:상세 수준
+ID_DETAIL_LEVEL_COARSE	Coarse Detail	낮음 상세 수준
+ID_DETAIL_LEVEL_FINE	Fine Detail	높음 상세 수준
+ID_DETAIL_LEVEL_MEDIUM	Medium Detail	중간 상세
+ID_DIM_OPTIONS	Options	옵션
+ID_DISABLE_CONSTRAINTS	Disable All	모두 사용 안 함
+ID_DISABLE_CURRENT_CONSTRAINT	Disable Current	현재 항목 사용 안 함
+ID_DISABLE_ENERGY_ANALYSIS	Delete Energy Model	에너지 모델 삭제
+ID_DISASSOCIATE_STRUCTURAL_SYSTEMS	Remove Beam System; Remove Truss Family	보 시스템 제거; 트러스 패밀리 제거
+ID_DISPLACEMENT_ADD_ELEMENT	Add to Displacement	변위에 추가
+ID_DISPLACEMENT_CANCEL_EDIT	Cancel	취소
+ID_DISPLACEMENT_CREATE	Displace Elements	요소 변위
+ID_DISPLACEMENT_EDIT	Edit	편집
+ID_DISPLACEMENT_FINISH_EDIT	Finish	마감
+ID_DISPLACEMENT_PATH	Path	경로
+ID_DISPLACEMENT_REMOVE_ELEMENT	Remove from Displacement	변위에서 제거
+ID_DISPLACEMENT_RESET	Reset	재설정
+ID_DIVIDED_ELEMENT_INTRST_LIST	Intersects:Intersecting References; Intersects:Intersects List	교차:교차 참조; 교차:교차 리스트
+ID_DIVIDED_ELEMENT_INTRST_PICK	Intersects:Intersects	교차:교차
+ID_DIVIDED_PATH_APPLY_LAYOUT	Layout	배치
+ID_DIVIDED_PATH_SHOW_COMP	Component	구성요소
+ID_DIVIDED_PATH_SHOW_PATH	Path	경로
+ID_DIVIDED_SURFACE_GRIDLINES_U	U Grid	U 그리드
+ID_DIVIDED_SURFACE_GRIDLINES_V	V Grid	V 그리드
+ID_DIVIDED_SURFACE_SHOW_COMP	Component	구성요소
+ID_DIVIDED_SURFACE_SHOW_PTRN	Pattern	패턴
+ID_DIVIDED_SURFACE_SHOW_SURF	Surface	표면
+ID_DIVIDED_VOLUME_INTRST_LIST	Intersecting References	교차 참조
+ID_DIVIDE_PATH	Divide Path; Divide Path	경로 분할; 경로 분할
+ID_DRAW_SLAB_SHAPE_LINES	Add Split Line	분할선 추가
+ID_DRAW_SLAB_SHAPE_VERTEX	Add Point	점 추가
+ID_DUCT_1LINE_PATH	Duct Placeholder	덕트 자리 표시자
+ID_DUPLICATE_EMPTY_SHEET	Duplicate Sheet:Duplicate Empty Sheet	시트 복제:빈 시트 복제
+ID_DUPLICATE_SHEET_WITH_DETAILING	Duplicate Sheet:Duplicate with Sheet Detailing	시트 복제:시트 상세 복제
+ID_DUPLICATE_SHEET_WITH_VIEWS	Duplicate Sheet:Duplicate with Views	시트 복제:뷰 복제
+ID_DUPLICATE_WITH_DETAILING	Duplicate View:Duplicate with Detailing	뷰 복제:상세 복제
+ID_EDITGROUP_ADD_TO_GROUP	Add to Group	그룹에 추가
+ID_EDITGROUP_ATTACH_ELEM_TO_GROUP	Add to Group	그룹에 추가
+ID_EDITGROUP_ATTACH_TO_GROUP	Attach Detail Group	상세 그룹 부착
+ID_EDITGROUP_DETACH_ELEM_FROM_GROUP	Remove from Group	그룹에서 제거
+ID_EDITGROUP_GROUP_EDIT	Edit Group	그룹 편집
+ID_EDITGROUP_REMOVE_FROM_GROUP	Remove from Group	그룹에서 제거
+ID_EDITGROUP_UNGROUP	Ungroup	그룹해제
+ID_EDITSFILTER_ADD_TO_FILTER	Add to Selection	선택에 추가
+ID_EDITSFILTER_REMOVE_FROM_FILTER	Remove from Selection	선택에서 제거
+ID_EDIT_ADDTODESIGNOPTIONSET	Add to Set	세트에 추가
+ID_EDIT_BEAM_JOINS	Beam/Column Joins	보/기둥 결합
+ID_EDIT_BLEND_BASE	Edit Base	기준 편집
+ID_EDIT_BLEND_TOP	Edit Top	상단 편집
+ID_EDIT_COLORSCHEME	Edit Color Scheme	색상표 편집
+ID_EDIT_CONTINUOUS_RAIL	Edit Rail	난간 편집
+ID_EDIT_CONTINUOUS_RAIL_JOINS	Edit Rail Joins	난간 결합 편집
+ID_EDIT_CONTINUOUS_RAIL_PATH	Edit Path	경로 편집
+ID_EDIT_COPY	Copy to Clipboard	클립보드로 복사
+ID_EDIT_CREATE_PATTERN	Array	배열
+ID_EDIT_CREATE_SIMILAR	Create Similar	유사 작성
+ID_EDIT_CURTA_SYSTEM	Edit Face Selection	면 선택 편집
+ID_EDIT_CUT	Cut to Clipboard	클립보드로 잘라내기
+ID_EDIT_CUT_BOUNDARY	Cut Profile	프로파일 잘라내기
+ID_EDIT_DEMOLISH	Demolish	철거
+ID_EDIT_DESIGNOPTIONS	Design Options	설계 옵션
+ID_EDIT_DORMER_OPENING	Edit Dormer Opening	지붕창 개구부 편집
+ID_EDIT_ELEVATION_SKETCH	Edit Profile; Edit Profile	프로파일 편집; 프로파일 편집
+ID_EDIT_GROUP	Model Group:Create Group; Detail Group:Create Group	모델 그룹:그룹 작성; 상세 그룹:그룹 작성
+ID_EDIT_INPLACE_FAMILY	Edit In-Place	내부편집
+ID_EDIT_INSERT_REHOST	Pick New Host	새 호스트 선택
+ID_EDIT_LINEWORK	Linework	라인워크
+ID_EDIT_MATCH_TYPE	Match Type Properties	유형 일치 특성
+ID_EDIT_MIRROR	Mirror - Pick Axis	대칭 - 축 선택
+ID_EDIT_MIRROR_LINE	Mirror - Draw Axis	대칭 - 축 그리기
+ID_EDIT_MOVE	Move	이동
+ID_EDIT_MOVE_COPY	Copy	복사
+ID_EDIT_PAINT	Paint	페인트
+ID_EDIT_PASTE	Paste; Paste from Clipboard	붙여넣기; 클립보드에서 붙여넣기
+ID_EDIT_PASTE_ALIGNED	Paste:Aligned to Current View	붙여넣기:현재 뷰에 정렬
+ID_EDIT_PASTE_ALIGNED_LEVEL_BY_NAME	Paste:Aligned to Selected Levels	붙여넣기:선택한 레벨에 정렬
+ID_EDIT_PASTE_ALIGNED_PICK_LEVEL	Paste:Aligned to Picked Level	붙여넣기:선택된 레벨에 정렬
+ID_EDIT_PASTE_ALIGNED_SAME_PLACE	Paste:Aligned to Same Place	붙여넣기:동일 위치에 정렬
+ID_EDIT_PASTE_ALIGNED_VIEWS_BY_NAME	Paste:Aligned to Selected Views	붙여넣기:선택한 뷰에 정렬
+ID_EDIT_PICKS_OPTION	Pick to Edit	편집하기 위해 선택
+ID_EDIT_RASTER_SYMBOLS	Manage Images	이미지 관리
+ID_EDIT_REBAR_ELEMENT_SHAPE_FAMILY	Edit Family	패밀리 편집
+ID_EDIT_REBAR_JOINS	Edit Constraints	구속조건 편집
+ID_EDIT_REDO	Redo Text Edit	문자 편집 재실행
+ID_EDIT_ROOF_SKETCH	Vertical Opening	수직 개구부
+ID_EDIT_ROTATE	Rotate	회전
+ID_EDIT_SCALE	Scale	축척
+ID_EDIT_SELECTIONS	Edit Selection	선택 편집
+ID_EDIT_SELECT_CANCEL	Cancel	취소
+ID_EDIT_SELECT_FINISH	Finish	마감
+ID_EDIT_SELECT_HIDE_ALL	Hide all rebars for the selection	선택한 모든 보강 철근 숨기기
+ID_EDIT_SELECT_PREVIOUS	Select Previous	이전 선택
+ID_EDIT_SELECT_SHOW_ALL	Show all rebars for the selection	선택한 모든 보강 철근 표시
+ID_EDIT_SKETCH	Edit Sketch; Edit Extrusion; Edit Base; Edit Sketch; Edit Boundary; Edit Footprint; Edit Path; Edit Revolve; Edit Boundary; Edit Profile	스케치 편집; 돌출 편집; 베이스 편집; 스케치 편집; 경계 편집; 외곽설정 편집; 경로 편집; 회전 편집; 경계 편집; 프로파일 편집
+ID_EDIT_SKETCHPLANE	Edit Work Plane	작업 기준면 편집
+ID_EDIT_SKETCH_BENDPROFILE	Edit Sketch	스케치 편집
+ID_EDIT_SKETCH_BLEND_TOP	Edit Top	상단 편집
+ID_EDIT_SKETCH_CROP_AREA	Edit Crop	자르기 편집
+ID_EDIT_SKETCH_REBAR	Edit Sketch	스케치 편집
+ID_EDIT_SKETCH_SWEEP	Edit Sweep	스윕 편집
+ID_EDIT_SKETCH_SWEEPPROFILE	Edit Profile; Edit Profile	프로파일 편집; 프로파일 편집
+ID_EDIT_SKETCH_SWEPTBLEND	Edit Swept Blend	스윕 혼합 편집
+ID_EDIT_SKETCH_SWEPTBLEND_VISIBILITY	Visibility Settings	가시성 설정
+ID_EDIT_SKETCH_VISIBILITY	Visibility Settings	가시성 설정
+ID_EDIT_SUBSTITUTION_TEXT	Edit Label	레이블 편집
+ID_EDIT_TAG_EDITOR	Add / Remove Host	호스트 추가/제거
+ID_EDIT_TAG_EDITOR_DURING_PLACEMENT	Add / Remove Host	호스트 추가/제거
+ID_EDIT_TYPE	Type Properties	유형 특성
+ID_EDIT_UNDO	Undo Text Edit	문자 편집 실행취소
+ID_EDIT_UNPAINT	Paint:Remove Paint	페인트:페인트 제거
+ID_EDIT_VERTEX_CONNECTIONS	Edit Vertices	정점 편집
+ID_EDIT_VIEW_RANGE	View Range	뷰 범위
+ID_EDIT_WALL_JOINS	Wall Joins	벽 결합
+ID_EDIT_WP_REHOST	Pick New Work Plane	새 작업 기준면 선택
+ID_ELEM_GROUP_EXCLUDED_MEMBER	Restore Excluded Member	제외된 부재 복원
+ID_ENABLE_ANALYTICAL_ASSISTED_ASSOCIATION	Assisted Association	지원 연관
+ID_ENABLE_CONSTRAINTS	Reset All	모두 재설정
+ID_ENABLE_CURRENT_CONSTRAINT	Reset Current	현재 항목 재설정
+ID_ENABLE_ENERGY_ANALYSIS	Create Energy Model	에너지 모델 작성
+ID_ENABLE_RASTER_IMAGE_SNAPS	Enable Snaps	스냅 사용
+ID_ENABLE_TEMPORARY_VIEW_PROPERTIES	Enable Temporary View Properties	임시 뷰 특성 사용
+ID_END_INPLACE_FAMILY	Finish Model	모델 완료
+ID_END_INPLACE_MASS	Finish Mass	매스 마감
+ID_END_INPLACE_ZONE	Finish	마감
+ID_ESSENTIALS_EDIT_TEXT	Edit Model Text	입체 문자 편집
+ID_ESSENTIALS_LOAD_FAMILY	Load Profile	프로파일 로드
+ID_ESSENTIALS_SKETCHVISIBILITY	Visibility Settings; Visibility Settings	가시성 설정; 가시성 설정
+ID_ESSENTIALS_VISIBILITY	Visibility Settings	가시성 설정
+ID_EXCLUDE_GROUP_MEMBERS	Exclude	제외
+ID_EXCLUDE_PART	Exclude Parts	부품 제외
+ID_EXIT_PICK_LEVELS_EDITOR	Edit Stairs	계단 편집
+ID_EXPORT_DGN	DGN	DGN
+ID_EXPORT_DWF	DWF/DWFx	DWF/DWFx
+ID_EXPORT_DWG	DWG	DWG
+ID_EXPORT_DXF	DXF	DXF
+ID_EXPORT_FABRICATION_PCF	Create PCF; Export Fabrication PCF	PCF 작성; 제작 PCF 내보내기
+ID_EXPORT_FAB_MAJ	Export Job File; MEP Fabrication Job	작업 파일 내보내기; MEP 제작 작업
+ID_EXPORT_FAM_TYPES	Family Types; Export Types...	패밀리 유형; 유형 내보내기...
+ID_EXPORT_FBX	FBX	FBX
+ID_EXPORT_GBXML	gbXML	gbXML
+ID_EXPORT_IFC	IFC	IFC
+ID_EXPORT_OBJ	OBJ	OBJ
+ID_EXPORT_PDF	PDF	PDF
+ID_EXPORT_PDF_IN_PRINT	PDF	PDF
+ID_EXPORT_SAT	ACIS (SAT)	ACIS(SAT)
+ID_EXPORT_STEP	STEP	STEP
+ID_EXPORT_STL	STL	STL
+ID_EXTEND_WALLS_BASE	Attach:Attach Base	부착:베이스 부착
+ID_EXTEND_WALLS_TOP	Attach:Attach Top	부착:상단 부착
+ID_EXT_ENTITY_ANCHOR	Anchor	앵커
+ID_EXT_ENTITY_ANCHOR_CIRCLE	Create Circular Anchor Pattern	원형 앵커 패턴 작성
+ID_EXT_ENTITY_ANCHOR_RECT	Create Rectangular Anchor Pattern	직사각형 앵커 패턴 작성
+ID_EXT_ENTITY_BOLT	Bolt	볼트
+ID_EXT_ENTITY_BOLT_CIRCLE	Create Circular Bolt Pattern	원형 볼트 패턴 작성
+ID_EXT_ENTITY_BOLT_RECT	Create Rectangular Bolt Pattern	직사각형 볼트 패턴 작성
+ID_EXT_ENTITY_CONTOUR	Contour	등고선
+ID_EXT_ENTITY_CONTOUR_ARC_CENTER_ENDS	Create Contour - Arc Center Ends	등고선 작성 - 호 중심 끝
+ID_EXT_ENTITY_CONTOUR_ARC_FILLET	Create Contour - Fillet Arc	등고선 작성 - 모깎기 호
+ID_EXT_ENTITY_CONTOUR_ARC_TAN	Create Contour - Arc Tangent	등고선 작성 - 호 접선
+ID_EXT_ENTITY_CONTOUR_ARC_THREE_PNT	Create Contour - Arc from Three Points	등고선 작성 - 세 점의 호
+ID_EXT_ENTITY_CONTOUR_CIRCLE	Create Contour - Circle	등고선 작성 - 원
+ID_EXT_ENTITY_CONTOUR_LINE	Create Contour - Line	등고선 작성 - 선
+ID_EXT_ENTITY_CONTOUR_POLY_CIRCUMSCRIBED	Create Contour - Circumscribed Polygon	등고선 작성 - 외접 다각형
+ID_EXT_ENTITY_CONTOUR_POLY_INSCRIBED	Create Contour - Inscribed Polygon	등고선 작성 - 내접 다각형
+ID_EXT_ENTITY_CONTOUR_RECT	Create Contour - Rectangle	등고선 작성 - 직사각형
+ID_EXT_ENTITY_EDIT_SKETCH	Edit Boundary; Edit Pattern Boundary; Edit Boundary	경계 편집; 패턴 경계 편집; 경계 편집
+ID_EXT_ENTITY_HOLE	Hole	구멍
+ID_EXT_ENTITY_HOLE_CIRCLE	Create Circular Bolt Pattern	원형 볼트 패턴 작성
+ID_EXT_ENTITY_HOLE_RECT	Create Rectangular Bolt Pattern	직사각형 볼트 패턴 작성
+ID_EXT_ENTITY_PLATE	Steel Plate	스틸 판
+ID_EXT_ENTITY_PLATE_ARC_CENTER_ENDS	Create Steel Plate - Arc Center Ends	스틸 판 작성 - 호 중심 끝
+ID_EXT_ENTITY_PLATE_ARC_FILLET	Create Steel Plate - Fillet Arc	스틸 판 작성 - 모깎기 호
+ID_EXT_ENTITY_PLATE_ARC_TAN	Create Steel Plate - Arc Tangent	스틸 판 작성 - 호 접선
+ID_EXT_ENTITY_PLATE_ARC_THREE_PNT	Create Steel Plate - Arc from Three points	스틸 판 작성 - 세 점의 호
+ID_EXT_ENTITY_PLATE_CIRCLE	Create Steel Plate - Circle	스틸 판 작성 - 원
+ID_EXT_ENTITY_PLATE_LINE	Create Steel Plate - Line	스틸 판 작성 - 선
+ID_EXT_ENTITY_PLATE_POLY_CIRCUMSCRIBED	Create Steel Plate - Circumscribed Polygon	스틸 판 작성 - 외접 다각형
+ID_EXT_ENTITY_PLATE_POLY_INSCRIBED	Create Steel Plate - Inscribed Polygon	스틸 판 작성 - 내접 다각형
+ID_EXT_ENTITY_PLATE_RECT	Create Steel Plate - Rectangle	스틸 판 작성 - 직사각형
+ID_EXT_ENTITY_SHEAR_STUD	Create Shear Anchor	전단 앵커 작성
+ID_EXT_ENTITY_SHEAR_STUD_CIRCLE	Create Circular Shear Anchor	원형 전단 앵커 작성
+ID_EXT_ENTITY_SHEAR_STUD_RECT	Create Rectangular Shear Anchor	직사각형 전단 앵커 작성
+ID_FABRICATION_ABOUT	About this addin	이 애드인 정보
+ID_FABRICATION_ANCILLARY_EXPORT	Setup Ancillary Data Export	보조 데이터 내보내기 설정
+ID_FABRICATION_ANCILLARY_REPORT	Setup Ancillary Reports	보조 항목 보고서 설정
+ID_FABRICATION_HANGER_ATTACH	Attach To Structure	구조에 부착
+ID_FABRICATION_ITEM_EXPORT	Setup Item Data Export	항목 데이터 내보내기 설정
+ID_FABRICATION_ITEM_REPORT	Setup Item Reports	항목 보고서 설정
+ID_FABRICATION_LINEAR_NEST_EXPORT	Setup Linear Nest Data Export	선형 내포 데이터 내보내기 설정
+ID_FABRICATION_LINEAR_NEST_REPORT	Setup Linear Nest Reports	선형 내포 보고서 설정
+ID_FABRICATION_NETWORK_CHANGE_SERVICE	Change Service	서비스 변경
+ID_FABRICATION_NETWORK_CHANGE_SERVICE_CANCEL_EDITMODE	Cancel	취소
+ID_FABRICATION_NETWORK_CHANGE_SERVICE_FINISH_EDITMODE	Finish	마감
+ID_FABRICATION_NETWORK_CHANGE_SIZE	Change Size	크기 변경
+ID_FABRICATION_NETWORK_CHANGE_SIZE_CANCEL_EDITMODE	Cancel	취소
+ID_FABRICATION_NETWORK_CHANGE_SIZE_FINISH_EDITMODE	Finish	마감
+ID_FABRICATION_OPTIMIZE_LENGTH	Optimize Lengths	길이 최적화
+ID_FABRICATION_PART_CHANGE_SLOPE	Change Slope	경사 변경
+ID_FABRICATION_PART_CONNECT_AS_TAP	Connect as Tap	탭으로 연결
+ID_FABRICATION_PART_INSERT	Insert Part	부품 삽입
+ID_FABRICATION_PART_MAINTAIN_SLOPE	Add Vertical	수직 추가
+ID_FABRICATION_PART_POST_TOGGLE_CONNECTOR	Toggle Connector	커넥터 전환
+ID_FABRICATION_PART_PRE_ROTATE	Rotate Part	부품 회전
+ID_FABRICATION_PART_ROTATE_180DEGREES	Rotate 180°	180° 회전
+ID_FABRICATION_PART_ROTATE_45DEGREES	Rotate 45°	45° 회전
+ID_FABRICATION_PART_ROTATE_90DEGREES	Rotate 90°	90° 회전
+ID_FABRICATION_PART_ROUTE_AND_FILL	Route and Fill	라우팅 및 채우기
+ID_FABRICATION_PART_ROUTE_CANCEL_EDIT_MODE	Cancel	취소
+ID_FABRICATION_PART_ROUTE_CUT_INTO	Cut Into	절단
+ID_FABRICATION_PART_ROUTE_FINISH_EDIT_MODE	Finish	마감
+ID_FABRICATION_PART_ROUTE_NEXT	Next Solution	다음 솔루션
+ID_FABRICATION_PART_ROUTE_PREVIOUS	Previous Solution	이전 솔루션
+ID_FABRICATION_PART_ROUTE_SMART_SNAPPING	Smart Snapping	스마트 스냅
+ID_FABRICATION_PART_ROUTE_TOGGLE_FABPART_BROWSER	Fabrication Part	제작 부품
+ID_FABRICATION_PART_SHOW_SERVICE_IN_PART_BROWSER	Show Service	서비스 표시
+ID_FABRICATION_PART_SHOW_TOOLTIP	Show Help Tooltip	도움말 툴팁 표시
+ID_FABRICATION_PART_SMART_SNAPPING	Smart Snapping	스마트 스냅
+ID_FABRICATION_PART_START_MPR	Multi-Point Routing	다중점 라우팅
+ID_FABRICATION_PART_TAKEOFF_DIALOG	Edit Part	부품 편집
+ID_FABRICATION_PART_TOGGLE_CONNECTOR	Toggle Connector	커넥터 전환
+ID_FABRICATION_PRINTER_SETUP	Printer Setup	프린터 설정
+ID_FABRICATION_PRINT_REPORTS	Print Reports	보고서 인쇄
+ID_FABRICATION_RUN_EXPORT_DATA	Export Fabrication Data	Export Fabrication Data(제작 데이터 내보내기)
+ID_FABRICATION_USE_DEFAULT_PRINTER_SETUP	Use Default Printer Setup	기본 프린터 설정 사용
+ID_FABRICATION_WORKSHEET	Setup Worksheets	워크시트 설정
+ID_FABRIC_DISTR_SYSTEM_SKETCH	Structural Fabric Area	구조 용접 철망 영역
+ID_FABRIC_DISTR_SYSTEM_SKETCH_HOST	Structural Fabric Area	구조 용접 철망 영역
+ID_FABRIC_SHEET_SYMBOL_AUTO_PLACE	Auto Place	자동 배치
+ID_FABRIC_SINGLE_PLACEMENT	Single Fabric Sheet Placement	단일 용접 철망 시트 배치
+ID_FABRIC_SKETCH_BENDING	Sketch Bending Line on Work Plane	작업 기준면에서 구부림 선 스케치
+ID_FABRIC_SYSTEM_PLACE_SPANSYMBOL	Fabric Reinforcement Symbol	선조립 철근 배근 기호
+ID_FAMILY_LOAD	Load Family; Load Framing Family; Load Shapes	패밀리 로드; 프레임 패밀리 로드; 모양 로드
+ID_FAMILY_LOAD_CLOUD	Load Autodesk Family	Autodesk 패밀리 로드
+ID_FAMILY_NEW	Family	패밀리
+ID_FAMILY_OPEN	Family	패밀리
+ID_FAMILY_TYPE	Family Types	패밀리 유형
+ID_FAMINST_ADDLEADER	Add Leader	지시선 추가
+ID_FAMINST_RMVLEADER	Remove Leader	지시선 제거
+ID_FILE_BACKUPS	Restore Backup	백업 복원
+ID_FILE_CADFORMAT_LINK	Link CAD	CAD 링크
+ID_FILE_EXPORT_ODBC	ODBC Database	ODBC 데이터베이스
+ID_FILE_EXPORT_SCHEDULE	Schedule	일람표
+ID_FILE_EXPORT_SOLAR_STUDY	Solar Study	일조 연구
+ID_FILE_EXTERNAL_PARAMETERS	Shared Parameters	공유 매개변수
+ID_FILE_IMPORT	Import CAD	CAD 가져오기
+ID_FILE_NEW_CHOOSE_TEMPLATE	New; Project	새로 작성; 프로젝트
+ID_FILE_NEW_WITH_TEMPLATE1	New File Default Template 1	새 파일 기본 템플릿 1
+ID_FILE_NEW_WITH_TEMPLATE2	New File Default Template 2	새 파일 기본 템플릿 2
+ID_FILE_NEW_WITH_TEMPLATE3	New File Default Template 3	새 파일 기본 템플릿 3
+ID_FILE_NEW_WITH_TEMPLATE4	New File Default Template 4	새 파일 기본 템플릿 4
+ID_FILE_NEW_WITH_TEMPLATE5	New File Default Template 5	새 파일 기본 템플릿 5
+ID_FILE_OPEN_CLOUD_MODEL	Cloud Model	클라우드 모델
+ID_FILE_PRINT_TO_IMAGE	Image	이미지
+ID_FILE_SAVE_TO_CENTRAL	Synchronize with Central:Synchronize and Modify Settings	중앙 파일과 동기화:설정 동기화 및 수정
+ID_FILE_SAVE_TO_CENTRAL_SHORTCUT	Synchronize with Central:Synchronize Now	중앙 파일과 동기화:지금 동기화
+ID_FILTERS_SELECTION_SAVE	Save Selection	선택 저장
+ID_FINALIZE_SELECTED_ELEMENTS	Finalize Selected	선택 요소 완료
+ID_FIND_FIXTURES	Batch Copy	일괄 복사
+ID_FIND_IN_PROJECT_BROWSER	Find in Project Browser	프로젝트 탐색기에서 찾기
+ID_FIND_REPLACE	Find/ Replace	찾기/대치
+ID_FIND_VIEW_GENERATOR	Find Referring views	참조 뷰 찾기
+ID_FINISH_ASSEMBLY_EDIT	Finish	마감
+ID_FINISH_ATTACHED_GROUP_EDIT_MODE	Finish	마감
+ID_FINISH_CONNECTED_LEVELS_EDIT	Finish	마감
+ID_FINISH_DPART_EDIT	Finish Edit Mode	편집 모드 완료
+ID_FINISH_GROUP_EDIT_MODE	Finish	마감
+ID_FINISH_LEVEL_LANDINGS_EDIT	Finish	마감
+ID_FINISH_LIGHT_GROUP_EDIT	Finish	마감
+ID_FINISH_MULTI_PICK_DBAR	Finish; Create System; Recreate System; Create Floor; Create Roof; Create Toposolid	마감; 시스템 작성; 시스템 재작성; 바닥 작성; 지붕 작성; 지형 솔리드 작성
+ID_FINISH_PASTE	Finish	마감
+ID_FINISH_PASTE_EDIT_MODE	Finish	마감
+ID_FINISH_PICK_BOUNDARY	Finish Edit Mode	편집 모드 완료
+ID_FINISH_PICK_PATH	Finish Edit Mode	편집 모드 완료
+ID_FINISH_PROOF	Finish Edit Mode	편집 모드 완료
+ID_FINISH_SFILTER_EDIT_MODE	Finish Selection	선택 완료
+ID_FINISH_SKETCH	Finish Edit Mode	편집 모드 완료
+ID_FINISH_SKETCH_PATH	Finish Edit Mode	편집 모드 완료
+ID_FINISH_SKETCH_PROFILE	Finish Edit Mode	편집 모드 완료
+ID_FINISH_SWEEP	Finish Edit Mode	편집 모드 완료
+ID_FINISH_SWEPT_BLEND	Finish Edit Mode	편집 모드 완료
+ID_FINISH_VIEW_POSITION_EDIT_MODE	Finish	마감
+ID_FIRST_PERSON_NAV	Toggle Fly Mode On/Off	비행뷰 모드 켜기/끄기 전환
+ID_FLIP_ANALYTICAL_MEMBER	Flip X Axis; Align X Axis	X축 반전; X축 정렬
+ID_FLIP_REBAR_SET	Flip Rebar Set	보강 철근 세트 반전
+ID_FLIP_STAIRS_DIRECTION	Flip	반전
+ID_FLOOR_PICK_DISPAN_EDGE	Span Direction	스팬 방향
+ID_FLOOR_PICK_FACES	Floor:Floor by Face	바닥:면으로 바닥 만들기
+ID_FOLLOW_ROOM_REFERENCE	Move to Room Reference	룸 참조로 이동
+ID_GENERATIVE_DESIGN_CREATE_STUDY	Create Study	연구 작성
+ID_GENERATIVE_DESIGN_EXPLORE_OUTCOMES	Explore Outcomes	결과 탐색
+ID_GEO_ACQUIRE_COORDINATES	Coordinates:Acquire Coordinates	좌표:좌표 획득
+ID_GEO_MANAGE_LOCATIONS	Location	위치
+ID_GEO_PUBLISH_COORDINATES	Coordinates:Publish Coordinates	좌표:좌표 게시
+ID_GRAPHIC_DISPLAY_OPTIONS	Graphic Display Options	그래픽 화면표시 옵션
+ID_GRAY_INACTIVE_WORKSET_GRAPHICS	Gray Inactive Worksets	비활성 작업 세트를 회색으로 표시
+ID_GRID_ARC_CENTER_ENDS	Grid:Center-Ends Arc	그리드:중간-끝 호
+ID_GRID_ARC_THREE_PNT	Grid:Start-End-Radius Arc	그리드:시작-끝-반지름 호
+ID_GRID_LINE	Grid:Line	그리드:선
+ID_GRID_PICK_LINES	Grid:Pick Lines	그리드:선 선택
+ID_HELP_AUTODESK_BUILDING_SOLUTIONS	Autodesk Building Solutions	Autodesk Building Solutions
+ID_HELP_DESKTOP_ANALYTICS	Privacy Settings...	개인정보 처리방침 설정...
+ID_HELP_ESSENTIAL_VIDEOS	Essential Skills Videos	필수 기술 비디오
+ID_HELP_FINDER	Help F1	도움말 F1
+ID_HELP_NEWS	What's New?	새로운 기능
+ID_HELP_PRODUCTURL	Autodesk.com/revit	Autodesk.com/revit
+ID_HELP_SUPPORT_KNOWLEDGE_BASE	Support Knowledge Base	지원 기술 자료 문서
+ID_HELP_THIRDPARTYLEARNINGCONTENT	3rd Party Learning Content	타사 학습 컨텐츠
+ID_HELP_VIDEOS	Revit Community	Revit 커뮤니티
+ID_HIDE_ALL_TAG_LEADERS	Hide All Leaders	모든 지시선 숨기기
+ID_HIDE_COLUMNS	Hide Columns	열 숨기기
+ID_HIDE_ELEMENTS_EDITOR	Show Hidden Lines by Element	요소별 은선 표시
+ID_HOST_REMOVE_ELEVATION_SKETCH	Reset Profile; Reset Profile	프로파일 재설정; 프로파일 재설정
+ID_IDS_OF_SELECTION	IDs of Selection	선택 ID
+ID_IFC_IMPORT_OPTIONS	IFC Options	IFC 옵션
+ID_IFC_LINK	Link IFC	IFC 링크
+ID_IMAGE_FLAT_COLORS	Consistent Colors	일관된 색상
+ID_IMAGE_HIDDENLINE	Hidden Line	은선
+ID_IMAGE_REALISTIC	Realistic	사실적
+ID_IMAGE_SHADING	Shaded	음영 처리
+ID_IMAGE_SHADING_WITH_EDGES	Shaded with Edges	모서리로 음영처리됨
+ID_IMAGE_SHADOW_OFF	Shadows Off	그림자 끄기
+ID_IMAGE_SHADOW_ON	Shadows On	그림자 켜기
+ID_IMAGE_WIREFRAME	WireFrame	와이어프레임
+ID_IMPORT_FAB_MAJ	Import MEP Fabrication Job	MEP 제작 작업 가져오기
+ID_IMPORT_FAM_TYPES	Import Family Types; Import Types...	패밀리 유형 가져오기; 유형 가져오기...
+ID_IMPORT_IFC	IFC	IFC
+ID_INPLACE_COMPONENT	Component:Model In-Place	구성요소:내부편집 모델링
+ID_INPLACE_MASS	In-Place Mass	내부 매스
+ID_INSERT_2D_ELEMENTS_FROM_FILE	Insert from File:Insert 2D Elements from File	파일에서 삽입:파일에서 2D 요소 삽입
+ID_INSERT_ROW	Insert Data Row	데이터 행 삽입
+ID_INSERT_VIEWS_FROM_FILE	Insert from File:Insert Views from File	파일에서 삽입:파일에서 뷰 삽입
+ID_INTERFERENCE_CHECK	Interference Check:Run Interference Check	간섭 확인:간섭 확인 실행
+ID_INTERFERENCE_REPORT	Interference Check:Show Last Report	간섭 확인:마지막 보고서 표시
+ID_JOIN_ELEMENTS_EDITOR	Join; Join Geometry	결합; 형상 결합
+ID_JOIN_ROOF	Join/Unjoin Roof	지붕 결합/결합 해제
+ID_JUSTIFY_BOTTOM_CENTER	Alignment Bottom Center	정렬 하단 중심
+ID_JUSTIFY_BOTTOM_LEFT	Alignment Bottom Left	정렬 왼쪽 하단
+ID_JUSTIFY_BOTTOM_RIGHT	Alignment Bottom Right	정렬 오른쪽 하단
+ID_JUSTIFY_MIDDLE_CENTER	Alignment Middle Center	정렬 중간 중심
+ID_JUSTIFY_MIDDLE_LEFT	Alignment Middle Left	정렬 왼쪽 중간
+ID_JUSTIFY_MIDDLE_RIGHT	Alignment Middle Right	정렬 오른쪽 중간
+ID_JUSTIFY_TOP_CENTER	Alignment Top Center	정렬 상단 중심
+ID_JUSTIFY_TOP_LEFT	Alignment Top Left	정렬 왼쪽 상단
+ID_JUSTIFY_TOP_RIGHT	Alignment Top Right	정렬 오른쪽 상단
+ID_KEYBOARD_SHORTCUT_DIALOG	Keyboard Shortcuts	키보드 단축키
+ID_KEYNOTE_ELEMENT	Element Keynote	요소 키노트
+ID_KEYNOTE_MATERIAL	Material Keynote	재료 키노트
+ID_KEYNOTE_USER	User Keynote	사용자 키노트
+ID_LAUNCH_FORMIT	3D Sketch	3D 스케치
+ID_LAYERSEDITMODE_FINISH	Finish	마감
+ID_LAYERSEDITMODE_QUIT	Cancel	취소
+ID_LEADER_BOTTOM_LEFT	Leader at Bottom Left	왼쪽 하단의 지시선
+ID_LEADER_BOTTOM_RIGHT	Leader at Bottom Right	오른쪽 하단의 지시선
+ID_LEADER_MIDDLE_LEFT	Leader at Middle Left	왼쪽 중간의 지시선
+ID_LEADER_MIDDLE_RIGHT	Leader at Middle Right	오른쪽 중간의 지시선
+ID_LEADER_TOP_LEFT	Leader at Top Left	왼쪽 상단의 지시선
+ID_LEADER_TOP_RIGHT	Leader at Top Right	오른쪽 상단의 지시선
+ID_LIGHTSOURCE_DEFINITION	Light Source Definition	광원 정의
+ID_LINKED_DWG	Manage Links; Manage Links	링크 관리; 링크 관리
+ID_LINK_IMAGE	Link Image	이미지 링크
+ID_LINK_PDF	Link PDF	PDF 링크
+ID_LOAD_BC_REHOST	Pick New Host	새 호스트 선택
+ID_LOAD_GROUP	Load as Group	그룹으로 로드
+ID_LOAD_INTO_PROJECTS	Load into Project; Model Group:Load as Group into Open Projects	프로젝트에 로드; 모델 그룹:열린 프로젝트에 그룹으로 로드
+ID_LOAD_INTO_PROJECTS_CLOSE	Load into Project and Close	프로젝트에 로드 및 닫기
+ID_LOAD_INTO_PROJECTS_CLOSE_REBAR_SHAPE	Load into Project and Close	프로젝트에 로드 및 닫기
+ID_LOAD_INTO_PROJECTS_REBAR_SHAPE	Load into Project	프로젝트에 로드
+ID_LOCKUNLOCK3DVIEW_LOCKANDRESTORE	Restore Orientation and Lock 3D View	방향 복원 및 3D 뷰 잠금
+ID_LOCKUNLOCK3DVIEW_LOCKANDSAVE	Save Orientation and Lock 3D View	방향 저장 및 3D 뷰 잠금
+ID_LOCKUNLOCK3DVIEW_UNLOCK	Unlock 3D View	3D 뷰 잠금 해제
+ID_LOCK_ELEMENTS	Pin	핀
+ID_MAJOR_SEGMENT	Major Segment	주근 세그먼트
+ID_MAKE_ADAPTIVE	Make Adaptive	가변화
+ID_MAKE_EDITABLE_BY_BORROWING	Make Elements Editable	요소를 편집가능으로 지정
+ID_MAKE_EDITABLE_PREFER_CHECKOUT	Make Worksets Editable	작업 세트를 편집 가능으로 지정
+ID_MAKE_PLAN_VIEW	Create Plan View	평면 뷰 작성
+ID_MANAGE_CONNECTION_TO_A_REVIT_SERVER_ACCELERATOR	Manage Connection to a Revit Server Accelerator	Revit Server 가속기에 대한 연결 관리
+ID_MANAGE_VIEW_POSITIONS	Manage Positions	위치 관리
+ID_MARKUPS_LOAD	DWF Markup	DWF 마크업
+ID_MASKING_REGION	Masking Region; Masking Region	마스킹 영역; 마스킹 영역
+ID_MASSING_CREATE_FAF	Mass Floors	매스 바닥
+ID_MASSING_RELATED_HOSTS	Related Hosts	관련 호스트
+ID_MEASURE_LINE	Measure:Measure Between Two References	측정:두 참조 간 측정
+ID_MEASURE_PICK_LINES	Measure:Measure Along an Element	측정:요소를 따라 측정
+ID_MECHANICAL_EQUIPMENT_SET_ADD	Add to Set	세트에 추가
+ID_MECHANICAL_EQUIPMENT_SET_EDIT_SYSTEM	Edit System	시스템 편집
+ID_MECHANICAL_EQUIPMENT_SET_REMOVE	Remove from Set	세트에서 제거
+ID_MEP_ANALYTICAL_PIPE_CONNECTION	Analytical Connections	해석 연결
+ID_MEP_DIVIDE_ELECTRICAL_ANALYTICAL_LOAD	Divide Area Based Load	영역 부하 분할
+ID_MEP_DUCT_PRESSURE_LOSS_REPORT	Duct Pressure Loss Report	덕트 압력 손실 보고서
+ID_MEP_ELECTRICAL_ANALYSIS_SETTINGS	MEP Settings:Electrical Analytical Load Type Settings	MEP 설정:전기 해석 부하 유형 설정
+ID_MEP_ELECTRICAL_ANALYTICAL_LOAD_EDIT	Edit Area Based Load	영역 부하 편집
+ID_MEP_ELECTRICAL_ANALYTICAL_LOAD_SET	Add Load Set	부하 세트 추가
+ID_MEP_ELECTRICAL_ANALYTICAL_SHOW_CALC_REPORT	Show Calculation Report	계산 보고서 표시
+ID_MEP_FABRICATION_SETTINGS	MEP Settings:Fabrication Settings	MEP 설정:제작 설정
+ID_MEP_HYDRAULIC_SEPARATION	Add Separation	분리 추가
+ID_MEP_PIPE_PRESSURE_LOSS_REPORT	Pipe Pressure Loss Report	배관 압력 손실 보고서
+ID_MEP_PNID_MODELER	P&ID Modeler	P&ID 모델러
+ID_MEP_PNID_SETTINGS	MEP Settings:P&ID Settings	MEP 설정:P&ID 설정
+ID_MEP_SELECT_DUCT_PRESSURE_LOSS_REPORT	Duct Pressure Loss Report	덕트 압력 손실 보고서
+ID_MEP_SELECT_PIPE_PRESSURE_LOSS_REPORT	Pipe Pressure Loss Report	배관 압력 손실 보고서
+ID_MEP_SPACE_NAMING_UTILITY	Space Naming	공간 명명
+ID_MEP_SYSTEM_ZONE_BY_SKETCH	By Sketch	스케치별
+ID_MEP_SYSTEM_ZONE_BY_SPACES	By Space	공간별
+ID_MEP_SYSTEM_ZONE_EDIT	Edit Zone	구역 편집
+ID_MEP_TOGGLE_PNID_BROWSER	P&ID Modeler	P&ID 모델러
+ID_MERGED_PART_ADD	Add	추가
+ID_MERGED_PART_CANCEL_EDIT	Cancel Edit Mode	편집 모드 취소
+ID_MERGED_PART_EDIT	Edit Merged Part	병합된 부품 편집
+ID_MERGED_PART_FINISH_EDIT	Finish Edit Mode	편집 모드 완료
+ID_MERGED_PART_REMOVE	Remove	제거
+ID_MERGE_LEADER_ELBOWS	Merge Leaders	지시선 병합
+ID_MIRROR_PROJECT	Position:Mirror Project	위치:프로젝트 대칭
+ID_MODIFY_ANALYSIS_DISPLAY_STYLE	Edit Style	스타일 편집
+ID_MODIFY_CROP_AREA	Size Crop	크기 자르기
+ID_MODIFY_SLAB_SHAPE_SUBS	Modify Sub Elements	하위 요소 수정
+ID_MOVE_CROP_BOUNDARY	Move Crop Boundary	자르기 경계 이동
+ID_MOVE_GROUP_MEMBER_TO_PROJECT	Move to Project	프로젝트로 이동
+ID_MULTIPLE_PATHS	Multiple Paths	다중 경로
+ID_MULTIPLE_VALUES_INDICATOR_SETTINGS	Additional Settings:Multiple Values Indication	추가 설정:다중 값 표시
+ID_MULTI_REFERENCE_ANNOTATION_ALIGNED	Aligned Multi-Rebar Annotation	정렬된 MRA(다중 보강 철근 주석)
+ID_MULTI_REFERENCE_ANNOTATION_LINEAR	Linear Multi-Rebar Annotation	선형 MRA(다중 보강 철근 주석)
+ID_MULTI_REFERENCE_ANNOTATION_SELECT_DIMENSION	Select Dimension	치수 선택
+ID_MULTI_REFERENCE_ANNOTATION_SELECT_TAG	Select Tag	태그 선택
+ID_NAVBAR_3DCONTROLLER_2D	2D Mode (3D Mouse)	2D 모드(3D 마우스)
+ID_NAVBAR_3DCONTROLLER_FLY	Fly Mode (3D Mouse)	비행뷰 모드(3D 마우스)
+ID_NAVBAR_3DCONTROLLER_OBJECT	Object Mode (3D Mouse)	객체 모드(3D 마우스)
+ID_NAVBAR_3DCONTROLLER_WALK	Walk Mode (3D Mouse)	보행시선 모드(3D 마우스)
+ID_NAVIGATION_BAR	Navigation Bar	탐색 막대
+ID_NAVWHEEL_CLOSE	Close	닫기
+ID_NAVWHEEL_DECREASEWALKSPEED	Decrease Walk Speed	보행시선 속도 감소
+ID_NAVWHEEL_EXTERIOR_WHEEL	View Object Wheel	객체 보기 휠
+ID_NAVWHEEL_FITTOWINDOW	Fit to Window	창에 맞추기
+ID_NAVWHEEL_FULL_WHEEL	Full Navigation Wheel	전체 탐색 휠
+ID_NAVWHEEL_HELP	Help	도움말
+ID_NAVWHEEL_INCREASEWALKSPEED	Increase Walk Speed	보행시선 속도 증가
+ID_NAVWHEEL_INTERIOR_WHEEL	Tour Building Wheel	빌딩 둘러보기 휠
+ID_NAVWHEEL_LEVELCAMERA	Level Camera	카메라 수평 조절
+ID_NAVWHEEL_MINI_EIGHT_WHEEL	Mini Full Navigation Wheel	전체 탐색 휠(작은 크기)
+ID_NAVWHEEL_MINI_MINI_WHEEL	Mini View Object Wheel	객체 보기 휠(작은 크기)
+ID_NAVWHEEL_MINI_OTHER_WHEEL	Mini Tour Building Wheel	빌딩 둘러보기 휠(작은 크기)
+ID_NAVWHEEL_OPTIONS	Options	옵션
+ID_NAVWHEEL_RECENTERCROPBOUNDARY	Re-center Crop Boundary	자르기 경계 중심 재설정
+ID_NAVWHEEL_RESTOREORIGINALCENTER	Restore Original Center	원래 중심 복원
+ID_NAVWHEEL_SAVEVIEW	Save View	뷰 저장
+ID_NAVWHEEL_UNDOVIEWORIENTATIONCHANGES	Undo View Orientation Changes	뷰 방향 변경사항 실행취소
+ID_NEW_MATCHLINE	Matchline	매치 라인
+ID_NEW_PLAN_REGION	Plan Region; Plan Views:Plan Region	평면 영역; 평면도:평면 영역
+ID_NEW_REFERENCE_VIEWER	View Reference	뷰 참조
+ID_NEW_REVIT_DESIGN_MODEL	Conceptual Mass	개념 매스
+ID_NEW_VIEWLIST	Schedules:View List	일람표:뷰 리스트
+ID_NUMBERING_REINF_PARTITIONS	Reinforcement Numbers	철근 배근 번호
+ID_OBJECTS_AREA	Area	면적
+ID_OBJECTS_AREASCHEME_BOUNDARY	Area Boundary	영역 경계
+ID_OBJECTS_AREA_SEPARATION	Room Separator	룸 구분 기호
+ID_OBJECTS_AREA_TAG	Tag Area; Tag Area; Area Tag	면적 태그 지정; 면적 태그 지정; 면적 태그
+ID_OBJECTS_AXIS	Axis Line	축 선
+ID_OBJECTS_BEAM	Structural Framing: Beam	구조 프레임: 보
+ID_OBJECTS_BEAM_SYSTEM_TAG	Beam System Symbol	보 시스템 기호
+ID_OBJECTS_BLEND	Solid Blend	솔리드 혼합
+ID_OBJECTS_BLEND_CUT	Void Forms:Void Blend	보이드 양식:보이드 혼합
+ID_OBJECTS_BRACE	Structural Framing: Brace	구조 프레임: 가새
+ID_OBJECTS_CEILING	Ceiling; Automatic Ceiling	천장; 자동 천장
+ID_OBJECTS_CLINE	Reference Plane; Reference Plane	참조 평면; 참조 평면
+ID_OBJECTS_CLOUD	Revision Cloud	구름형 수정기호
+ID_OBJECTS_COLUMN	Column:Column: Architectural	기둥:기둥: 건축
+ID_OBJECTS_CONTINUOUS_FOOTING	Structural Foundation: Wall	구조 기초: 벽
+ID_OBJECTS_CONTROL	Control	컨트롤
+ID_OBJECTS_CORNICE	Wall:Wall: Sweep	벽:벽: 스윕
+ID_OBJECTS_CURVE	Model Line; Model Line; Boundary Line; Rebar Line	모델 선; 모델 선; 경계 선; 보강 철근 선
+ID_OBJECTS_CURVE_ARC_CENTER_ENDS	Line:Center-Ends Arc	선:중간-끝 호
+ID_OBJECTS_CURVE_ARC_FILLET	Line:Fillet Arc	선:모깎기 호
+ID_OBJECTS_CURVE_ARC_TAN	Line:Tangent End Arc	선:접선 끝 호
+ID_OBJECTS_CURVE_ARC_THREE_PNT	Line:Start-End-Radius Arc	선:시작-끝-반지름 호
+ID_OBJECTS_CURVE_CIRCLE	Line:Circle	선:원
+ID_OBJECTS_CURVE_ELLIPSE	Line:Ellipse	선:타원
+ID_OBJECTS_CURVE_ELLIPSE_PARTIAL	Line:Partial Ellipse	선:부분 타원
+ID_OBJECTS_CURVE_LINE	Line:Line	선:선
+ID_OBJECTS_CURVE_PICK_LINES	Line:Pick Lines	선:선 선택
+ID_OBJECTS_CURVE_POLY_CIRCUMSCRIBED	Line:Circumscribed Polygon	선:외접 다각형
+ID_OBJECTS_CURVE_POLY_INSCRIBED	Line:Inscribed Polygon	선:내접 다각형
+ID_OBJECTS_CURVE_RECT	Line:Rectangle	선:직사각형
+ID_OBJECTS_CURVE_SPLINE	Line:Spline	선:스플라인
+ID_OBJECTS_CW_GRID	Curtain Grid	커튼월 그리드
+ID_OBJECTS_DETAIL_CURVES	Detail Line	상세 선
+ID_OBJECTS_DIVIDE	Divide Parts	부품 분할
+ID_OBJECTS_DIVIDED_SURFACE	Divide Surface; Divide Surface	표면 분할; 표면 분할
+ID_OBJECTS_DOOR	Door	문
+ID_OBJECTS_EXTRUSION	Solid Extrusion	솔리드 돌출
+ID_OBJECTS_EXTRUSION_CUT	Void Forms:Void Extrusion	보이드 양식:보이드 돌출
+ID_OBJECTS_FAMDETAIL	Detail Component; Detail Component	상세 구성요소; 상세 구성요소
+ID_OBJECTS_FAMILYHOST	Family Category and Parameters	패밀리 카테고리 및 매개변수
+ID_OBJECTS_FAMSYM	Place a Component	구성요소 배치
+ID_OBJECTS_FAM_ANN_INST	Symbol	기호
+ID_OBJECTS_FILLED_REGION	Filled Region; Filled Region	채워진 영역; 채워진 영역
+ID_OBJECTS_FLOOR	Floor; Floor:Floor: Architectural	바닥; 바닥:바닥: 건축
+ID_OBJECTS_FOOTING_SLAB	Slab; Structural Foundation: Slab	슬래브; 구조 기초: 슬래브
+ID_OBJECTS_GRID	Grid	그리드
+ID_OBJECTS_GRID_CHAIN	Multi-Segment Grid	다중 세그먼트 그리드
+ID_OBJECTS_INSULATION	Insulation	단열재
+ID_OBJECTS_ISOLATED_FOOTING	Structural Foundation: Isolated	구조 기초: 분리됨
+ID_OBJECTS_JOIST_SYSTEM	Structural Beam System; Automatic Beam System	구조 보 시스템; 자동 보 시스템
+ID_OBJECTS_LEGEND_COMPONENT	Legend Component	범례 구성요소
+ID_OBJECTS_LEVEL	Level	레벨
+ID_OBJECTS_MASS	Place Mass	매스 배치
+ID_OBJECTS_MEP_SPACE	Space	Space
+ID_OBJECTS_MEP_SPACE_SEPARATION	Space Separator	공간 구분자
+ID_OBJECTS_MEP_SPACE_TAG	Space Tag	공간 태그
+ID_OBJECTS_MERGE	Merge Parts	부품 병합
+ID_OBJECTS_MODELTEXT	Model Text	입체 문자
+ID_OBJECTS_MULLION	Curtain Wall Mullion	커튼월 멀리언
+ID_OBJECTS_OPENING	Opening	개구부
+ID_OBJECTS_PARTS_RESET	Reset Shape	모양 재설정
+ID_OBJECTS_PATH_REIN_SPAN_SYM	Path Reinforcement Symbol	경로 철근 배근 기호
+ID_OBJECTS_PLACE_DETAIL_GROUP	Detail Group:Place Detail Group	상세 그룹:상세 그룹 배치
+ID_OBJECTS_PLACE_GROUP	Model Group:Place Model Group	모델 그룹:모델 그룹 배치
+ID_OBJECTS_PLACE_TITLEBLOCK	Title Block	제목 블록
+ID_OBJECTS_PROJECT_CURVE	Model Line	모델 선
+ID_OBJECTS_RAILING	Railing	난간
+ID_OBJECTS_RAILING_ON_HOST	Railing:Place on Stair/Ramp	난간:계단/경사로에 배치
+ID_OBJECTS_RAILING_ON_STRINGER	Stringer	계단옆판
+ID_OBJECTS_RAILING_ON_TREADS	Treads	디딤판
+ID_OBJECTS_RAMP	Ramp	경사로
+ID_OBJECTS_RASTER	Import Image	이미지 가져오기
+ID_OBJECTS_RASTER_PDF	Import PDF	PDF 가져오기
+ID_OBJECTS_REBAR_CURVE	Rebar Line	보강 철근 선
+ID_OBJECTS_REBAR_SYSTEM_SPAN_SYM	Area Reinforcement Symbol	면적 철근 배근 기호
+ID_OBJECTS_REFERENCE_CURVE	Reference Line; Reference Line	참조 선; 참조 선
+ID_OBJECTS_REPEATING_DETAIL	Repeating Detail Component	반복 상세 구성요소
+ID_OBJECTS_REVEAL	Wall:Wall: Reveal	벽:벽: 모서리 받침
+ID_OBJECTS_REVOLUTION	Solid Revolve	솔리드 회전
+ID_OBJECTS_REVOLUTION_CUT	Void Forms:Void Revolve	보이드 양식:보이드 회전
+ID_OBJECTS_ROOM	Room	공간
+ID_OBJECTS_ROOM_FILL	Color Fill Legend	색상 채우기 범례
+ID_OBJECTS_ROOM_TAG	Tag Room; Tag Room; Room Tag	룸 태그 지정; 룸 태그 지정; 룸 태그
+ID_OBJECTS_SLAB	Floor:Floor: Structural	바닥:바닥: 구조
+ID_OBJECTS_SPAN_DIR_SYM	Span Direction Symbol	스팬 방향 기호
+ID_OBJECTS_SPAN_DIR_SYM_AUTO_PLACE	Auto Place	자동 배치
+ID_OBJECTS_STAIRS	Stair	계단
+ID_OBJECTS_STAIRS_PATH	Stair Path	계단 경로
+ID_OBJECTS_STRUCTURAL_COLUMN	Column; Structural Column	기둥; 구조 기둥
+ID_OBJECTS_STRUCTURAL_WALL	Wall:Wall: Structural	벽:벽: 구조
+ID_OBJECTS_SWEEP	Solid Sweep	솔리드 스윕
+ID_OBJECTS_SWEEP_CUT	Void Forms:Void Sweep	보이드 양식:보이드 스윕
+ID_OBJECTS_SWEPTBLEND	Solid Swept Blend	솔리드 스윕 혼합
+ID_OBJECTS_SWEPTBLEND_CUT	Void Forms:Void Swept Blend	보이드 양식:보이드 스윕 혼합
+ID_OBJECTS_TAG_NOTE	Label	레이블
+ID_OBJECTS_TEXT_NOTE	Text	문자
+ID_OBJECTS_TRUSS	Structural Trusses	구조 트러스
+ID_OBJECTS_VIEW_DIR_SPEC_CURVE	Symbolic Line	기호 선
+ID_OBJECTS_VOLUME_DIVIDER_OBJECTS_TO_DIVIDE	Objects to Divide	분할할 객체
+ID_OBJECTS_VOLUME_DIVIDER_SKETCH	Sketch	스케치
+ID_OBJECTS_VOLUME_EDIT_DIVISION	Edit Division	분할 편집
+ID_OBJECTS_WALL	Wall; Wall:Wall: Architectural	벽; 벽:벽: 건축
+ID_OBJECTS_WINDOW	Window	창
+ID_OBJECT_BC	Boundary Conditions	경계 조건
+ID_OFFSET	Offset	간격띄우기
+ID_ONE_WAY_INDICATOR	One Way Indicator	단방향 표시기
+ID_OPEN_IN_TWINMOTION	Twinmotion:Open in Twinmotion	Twinmotion:Twinmotion에서 열기
+ID_OPERATING_SCHEDULES	MEP Settings:Building Operating Schedules	MEP 설정:건물 운영 일람표
+ID_OPTIONS	Options	옵션
+ID_ORIENT_EAST_DIRECTION	Orient to East Direction	동쪽 방향으로 조정
+ID_ORIENT_NORTHEAST_DIRECTION	Orient to Northeast Direction	북동쪽 방향으로 조정
+ID_ORIENT_NORTHWEST_DIRECTION	Orient to Northwest Direction	북서쪽 방향으로 조정
+ID_ORIENT_NORTH_DIRECTION	Orient to North Direction	북쪽 방향으로 조정
+ID_ORIENT_PLANE	Orient to A Plane	기준면으로 조정
+ID_ORIENT_SOUTHEAST_DIRECTION	Orient to Southeast Direction	남동쪽 방향으로 조정
+ID_ORIENT_SOUTHWEST_DIRECTION	Orient to Southwest Direction	남서쪽 방향으로 조정
+ID_ORIENT_SOUTH_DIRECTION	Orient to South Direction	남쪽 방향으로 조정
+ID_ORIENT_TOP_DIRECTION	Orient to Top Direction	위쪽 방향으로 조정
+ID_ORIENT_TO_BACK	Orient to Back	뒷면으로 조정
+ID_ORIENT_TO_BACK_LEFT	Orient to Back Left	뒷면 왼쪽으로 조정
+ID_ORIENT_TO_BACK_RIGHT	Orient to Back Right	뒷면 오른쪽으로 조정
+ID_ORIENT_TO_FRONT	Orient to Front	앞면으로 조정
+ID_ORIENT_TO_FRONT_LEFT	Orient to Front Left	앞면 왼쪽으로 조정
+ID_ORIENT_TO_FRONT_RIGHT	Orient to Front Right	앞면 오른쪽으로 조정
+ID_ORIENT_TO_LEFT	Orient to Left	왼쪽으로 조정
+ID_ORIENT_TO_OTHER_VIEW	Orient to Other View	기타 뷰로 조정
+ID_ORIENT_TO_RIGHT	Orient to Right	오른쪽으로 조정
+ID_ORIENT_TO_TOP	Orient to Top	상단으로 조정
+ID_ORIENT_WEST_DIRECTION	Orient to West Direction	서쪽 방향으로 조정
+ID_OVERRIDE_FAB_PART_BENDS	Elbows	엘보
+ID_OVERRIDE_FAB_PART_CROSSES	Crosses	크로스
+ID_OVERRIDE_FAB_PART_TEES	Tees	티
+ID_PANELSCHEDULE_CELL_EDIT_BORDER	Edit Borders	경계 편집
+ID_PANELSCHEDULE_CELL_EDIT_SHADING	Edit Shading	음영 편집
+ID_PANELSCHEDULE_CELL_INSERT_GRAPHIC	Insert Graphic	그래픽 삽입
+ID_PANELSCHEDULE_CELL_MERGE_UNMERGE	Merge/ Unmerge	병합/ 병합 해제
+ID_PANELSCHEDULE_CHANGE_A_TEMPLATE	Change Template	템플릿 변경
+ID_PANELSCHEDULE_CIRCUITS_REBALANCELOADS	Rebalance Loads	부하 균형 다시 조정
+ID_PANELSCHEDULE_COLUMN_DELETE	Delete Column	열 삭제
+ID_PANELSCHEDULE_COLUMN_INSERT_LEFT	Insert Column:Left of Selected	열 삽입:선택한 열 왼쪽
+ID_PANELSCHEDULE_COLUMN_INSERT_RIGHT	Insert Column:Right of Selected	열 삽입:선택한 열 오른쪽
+ID_PANELSCHEDULE_COLUMN_RESIZE	Resize Column	열 크기 조정
+ID_PANELSCHEDULE_PARAM_CALCULATE	Calculated Value	계산된 값
+ID_PANELSCHEDULE_PARAM_COMBINE	Combine Parameters	매개변수 결합
+ID_PANELSCHEDULE_PARAM_FORMATUNITS	Format Unit	단위 형식
+ID_PANELSCHEDULE_PARAM_REMOVE	Remove Parameter	매개변수 제거
+ID_PANELSCHEDULE_ROW_DELETE	Delete Row	행 삭제
+ID_PANELSCHEDULE_ROW_INSERT_ABOVE	Insert Row:Above Selected	행 삽입:선택한 행 위
+ID_PANELSCHEDULE_ROW_INSERT_BELOW	Insert Row:Below Selected	행 삽입:선택한 행 아래
+ID_PANELSCHEDULE_ROW_RESIZE	Resize Row	행 크기 조정
+ID_PANELSCHEDULE_TEXT_EDIT_FONT	Edit Font	글꼴 편집
+ID_PANELSCHEDULE_TEXT_EDIT_FONT_A	Edit Font	글꼴 편집
+ID_PANELSCHEDULE_TEXT_HORIZONTAL_ALIGN_CENTER	Horizontally Align:Center	수평으로 정렬:중심
+ID_PANELSCHEDULE_TEXT_HORIZONTAL_ALIGN_CENTER_A	Horizontally Align:Center	수평으로 정렬:중심
+ID_PANELSCHEDULE_TEXT_HORIZONTAL_ALIGN_LEFT	Horizontally Align:Left	수평으로 정렬:왼쪽
+ID_PANELSCHEDULE_TEXT_HORIZONTAL_ALIGN_LEFT_A	Horizontally Align:Left	수평으로 정렬:왼쪽
+ID_PANELSCHEDULE_TEXT_HORIZONTAL_ALIGN_RIGHT	Horizontally Align:Right	수평으로 정렬:오른쪽
+ID_PANELSCHEDULE_TEXT_HORIZONTAL_ALIGN_RIGHT_A	Horizontally Align:Right	수평으로 정렬:오른쪽
+ID_PANELSCHEDULE_TEXT_VERTICAL_ALIGN_BOTTOM	Vertically Align:Bottom	수직으로 정렬:맨 아래
+ID_PANELSCHEDULE_TEXT_VERTICAL_ALIGN_BOTTOM_A	Vertically Align:Bottom	수직으로 정렬:맨 아래
+ID_PANELSCHEDULE_TEXT_VERTICAL_ALIGN_MIDDLE	Vertically Align:Middle	수직으로 정렬:중간
+ID_PANELSCHEDULE_TEXT_VERTICAL_ALIGN_MIDDLE_A	Vertically Align:Middle	수직으로 정렬:중간
+ID_PANELSCHEDULE_TEXT_VERTICAL_ALIGN_TOP	Vertically Align:Top	수직으로 정렬:맨 위
+ID_PANELSCHEDULE_TEXT_VERTICAL_ALIGN_TOP_A	Vertically Align:Top	수직으로 정렬:맨 위
+ID_PAN_VIEW	Pan Active View	활성 뷰 초점이동
+ID_PARALLEL_CONDUIT	Parallel Conduits	평행 전선관
+ID_PARALLEL_CONDUITS_HORIZONTAL_NUMBER	Horizontal Number	수평 번호
+ID_PARALLEL_CONDUITS_HORIZONTAL_OFFSET	Horizontal Offset	수평 간격띄우기
+ID_PARALLEL_CONDUITS_RAINBOW_BEND_RADIUS	Concentric Bend Radius	중심 구부림 반지름
+ID_PARALLEL_CONDUITS_SAME_BEND_RADIUS	Same Bend Radius	동일한 구부림 반지름
+ID_PARALLEL_CONDUITS_VERTICAL_NUMBER	Vertical Number	수직 번호
+ID_PARALLEL_CONDUITS_VERTICAL_OFFSET	Vertical Offset	수직 간격띄우기
+ID_PARALLEL_INDICATOR	Background Processes	백그라운드 프로세스
+ID_PARALLEL_PIPES	Parallel Pipes	평행 배관
+ID_PARALLEL_PIPES_HORIZONTAL_NUMBER	Horizontal Number	수평 번호
+ID_PARALLEL_PIPES_HORIZONTAL_OFFSET	Horizontal Offset	수평 간격띄우기
+ID_PARALLEL_PIPES_VERTICAL_NUMBER	Vertical Number	수직 번호
+ID_PARALLEL_PIPES_VERTICAL_OFFSET	Vertical Offset	수직 간격띄우기
+ID_PARTITIONS_SHOW_HISTORY	Show History	사용내역 표시
+ID_PASTE_EDIT_MODE	Edit Pasted Elements	붙여넣은 요소 편집
+ID_PATH_LENGTH	Path Length	경로 길이
+ID_PATH_OFFSET	Path Offset	경로 간격띄우기
+ID_PATH_OF_TRAVEL	Path of Travel	이동 경로
+ID_PATH_OF_TRAVEL_ADD_WAYPOINT	Add Path of Travel Waypoint	Waypoint 이동 경로 추가
+ID_PATH_OF_TRAVEL_DELETE_WAYPOINT	Delete Path of Travel Waypoint	Waypoint 이동 경로 삭제
+ID_PATH_OF_TRAVEL_SHOW_OBSTACLES	Reveal Obstacles	장애물 표시
+ID_PATH_REINFORCEMENT_SYMBOL_AUTO_PLACE	Auto Place	자동 배치
+ID_PATH_REIN_SKETCH	Structural Path Reinforcement	구조 경로 철근 배근
+ID_PATH_REIN_SKETCH_HOST	Path Reinforcement	경로 철근 배근
+ID_PEOPLE_CONTENT	People Content	사람 컨텐츠
+ID_PHOTO_RENDERING_VIEW	Render	렌더
+ID_PHOTO_RENDER_GALLERY	Cloud Rendering:Render Gallery	Cloud Rendering:렌더 갤러리
+ID_PHOTO_RENDER_IN_CLOUD	Cloud Rendering:Render in Cloud	Cloud Rendering:Cloud에서 렌더링
+ID_PHYSICAL_TO_ANALYTICAL_RUN_DYNAMO	Analytical Automation:Run Physical to Analytical For Buildings	해석 자동화:실제모델 기반 해석모델 생성 실행
+ID_PICK_DIRSPAN_EDGE	Beam Direction	보 방향
+ID_PICK_DORMER_BOUNDARY	Pick Roof/ Wall Edges	지붕/벽 모서리 선택
+ID_PICK_EDGES	Pick 3D Edges	3D 모서리 선택
+ID_PICK_HOST	Pick New Work Plane; Pick New Host	새 작업 기준면 선택; 새 호스트 선택
+ID_PICK_HOST_IND_TAG	Pick New Host	새 호스트 선택
+ID_PICK_HOST_ROOM_TAG	Pick New Host	새 호스트 선택
+ID_PICK_LEVELS_ON_STAIRS_CREATION	Connect Levels	레벨 연결
+ID_PICK_PATH	Pick Path	경로 선택
+ID_PICK_SLAB_SHAPE_SUPPORTS	Pick Supports	지지 선택
+ID_PICK_WORKPLANE	Set:Pick a Plane; Edit Work Plane:Pick a Plane	설정:기준면 선택; 작업 기준면 편집:기준면 선택
+ID_PIPE_1LINE_PATH	Pipe Placeholder	배관 자리표시
+ID_PLACE_BENDING_DETAIL	Rebar Bending Detail	구부림철근 상세
+ID_PLACE_REF_POINT	Reference Point	참조점
+ID_PLAN_VIEW_TYPES	Plan View Types	평면 뷰 유형
+ID_PLAYLIST_DYNAMO	Dynamo Player	Dynamo 플레이어
+ID_POINTELEMENT_REHOST	Pick New Host	새 호스트 선택
+ID_POINT_CLOUD	Point Cloud	포인트 클라우드
+ID_PRJBROWSER_COPY	Duplicate View:Duplicate View	뷰 복제:뷰 복제
+ID_PROPAGATE_REBAR	Propagate Rebar	보강 철근 복제
+ID_PROPAGATE_REBAR_BY_FACE	Align By Face	면 기준 정렬
+ID_PROPAGATE_REBAR_BY_HOST	Align By Host	호스트 기준 정렬
+ID_PROPAGATE_REBAR_CANCEL	Cancel	취소
+ID_PROPAGATE_REBAR_FINISH	Finish	마감
+ID_PROPAGATE_REBAR_TOOLTIP	Show Help Tooltip	도움말 툴팁 표시
+ID_PROPERTYLINE_EDIT_TABLE	Edit Table	테이블 편집
+ID_PROPERTY_LINE_DATA	Property Line Data	대지 경계선 데이터
+ID_PURGE_UNUSED	Purge Unused	사용하지 않은 항목 소거
+ID_QUICK_MRA_PLACEMENT	Pick Position	위치 선택
+ID_QUIT_CONNECTED_LEVELS_EDIT	Cancel	취소
+ID_QUIT_INPLACE_FAMILY	Cancel Model	모델 취소
+ID_QUIT_INPLACE_MASS	Cancel Mass	매스 취소
+ID_QUIT_INPLACE_ZONE	Cancel	취소
+ID_QUIT_LEVEL_LANDINGS_EDIT	Cancel	취소
+ID_QUIT_PASTE	Cancel	취소
+ID_QUIT_PASTE_EDIT_MODE	Cancel	취소
+ID_QUIT_PICK_BOUNDARY	Cancel Edit Mode	편집 모드 취소
+ID_QUIT_PICK_PATH	Cancel Edit Mode	편집 모드 취소
+ID_QUIT_SKETCH_PATH	Cancel Edit Mode	편집 모드 취소
+ID_QUIT_SKETCH_PROFILE	Cancel Edit Mode	편집 모드 취소
+ID_QUIT_SWEEP	Cancel Edit Mode	편집 모드 취소
+ID_QUIT_SWEPT_BLEND	Cancel Edit Mode	편집 모드 취소
+ID_RADIO_HOR_ARROW	Single Horizontal	단일 수평
+ID_RADIO_HOR_ARROW2	Double Horizontal	이중 수평
+ID_RADIO_VER_ARROW	Single Vertical	단일 수직
+ID_RADIO_VER_ARROW2	Double Vertical	이중 수직
+ID_RAILING_EDIT_JOINS	Edit Joins	결합 편집
+ID_RAILING_EDIT_MODE_TOGGLE_PREVIEW	Preview	미리보기
+ID_RAILING_SET_HOST	Pick New Host; Pick New Host	새 호스트 선택; 새 호스트 선택
+ID_RAILPATH_EDITMODE_FINISH	Finish Edit Mode	편집 모드 완료
+ID_RAILPATH_EDITMODE_QUIT	Cancel Edit Mode	편집 모드 취소
+ID_RBS_ADD_CABLETRAY_CONNECTOR	Cable Tray Connector; Cable Tray Connector	케이블 트레이 커넥터; 케이블 트레이 커넥터
+ID_RBS_ADD_CONDUIT_CONNECTOR	Conduit Connector; Conduit Connector	전선관 커넥터; 전선관 커넥터
+ID_RBS_ADD_DUCT_CONNECTOR	Duct Connector; Duct Connector	덕트 커넥터; 덕트 커넥터
+ID_RBS_ADD_ELECTRICAL_CONNECTOR	Electrical Connector; Electrical Connector	전기 커넥터; 전기 커넥터
+ID_RBS_ADD_PIPE_CONNECTOR	Pipe Connector; Pipe Connector	배관 커넥터; 배관 커넥터
+ID_RBS_ANALYTICAL_AREA_BASED_LOAD_BOUNDARY	Area Based Load Boundary	영역 부하 경계
+ID_RBS_AREA_BASED_LOAD_ADD_AREA	Add Load Area; Back to Existing	영역 부하 추가; 기존 위치로 돌아가기
+ID_RBS_AREA_BASED_LOAD_REMOVE_AREA	Remove Load Area; Move to New	영역 부하 제거; 새 위치로 이동
+ID_RBS_BTNADDVERTICAL	Create Vertical	수직 요소 생성
+ID_RBS_BTNAUTOCONNECT	Automatically Connect	자동 연결
+ID_RBS_BTNINHERITELEVATION	Inherit Elevation	고도 상속
+ID_RBS_BTNINHERITSIZE	Inherit Size	크기 상속
+ID_RBS_BTN_CHANGE_SLOPE	Change Slope	경사 변경
+ID_RBS_BTN_MAINTAIN_SLOPE	Add Vertical	수직 추가
+ID_RBS_BUILDINGSPACE_TYPE_SETTINGS	MEP Settings:Building/Space Type Settings	MEP 설정:건물/공간 유형 설정
+ID_RBS_CABLETRAY_FITTING	Cable Tray Fitting	케이블 트레이 부속
+ID_RBS_CABLE_TRAY	Cable Tray	케이블 트레이
+ID_RBS_CANCEL_AREA_BASED_LOAD_DIVIDE_MODE	Cancel Dividing	분할 취소
+ID_RBS_CANCEL_AREA_BASED_LOAD_EDIT_MODE	Cancel Editing	편집 취소
+ID_RBS_CANCEL_CIRCUIT_PATH_EDIT_MODE	Cancel Editing Path	경로 편집 취소
+ID_RBS_CANCEL_JUSTIFY_SLOPE_EDITMODE	Cancel	취소
+ID_RBS_CANCEL_SURFACE_CONNECTOR_EDIT_MODE	Cancel Connection	연결 취소
+ID_RBS_CANCEL_SYSTEM_GROUP_EDIT_MODE	Cancel Editing System; Cancel Editing Circuit	시스템 편집 취소; 회로 편집 취소
+ID_RBS_CANCEL_ZONE_EDIT_MODE	Cancel Editing Zone	구역 편집 취소
+ID_RBS_CAP_OPEN_ENDS	Cap Open Ends	캡 개방 끝
+ID_RBS_CHECK_CIRCUITS	Check Circuits	회로 검사
+ID_RBS_CHECK_DUCT_SYSTEMS	Check Duct Systems	덕트 시스템 확인
+ID_RBS_CHECK_PIPE_SYSTEMS	Check Pipe Systems	배관 시스템 확인
+ID_RBS_CIRCUIT_GROUP_EDIT_ADD_TO_GROUP	Add to Circuit	회로에 추가
+ID_RBS_CIRCUIT_GROUP_EDIT_EDIT_PATH	Modify	수정
+ID_RBS_CIRCUIT_GROUP_EDIT_PANEL_SELECT	Select Panel	패널 선택
+ID_RBS_CIRCUIT_GROUP_EDIT_REMOVE_FROM_GROUP	Remove from Circuit	회로에서 제거
+ID_RBS_CONDUIT	Conduit	전선관
+ID_RBS_CONDUIT_FITTING	Conduit Fitting	전선관 부속
+ID_RBS_CONVERTTO_FABRICATIONPARTS	Design to Fabrication	제작 설계
+ID_RBS_CREATE_SYSTEM_GROUP	Switch	스위치
+ID_RBS_DRAG_SURFACE_CONNECTOR	Move Connector	커넥터 이동
+ID_RBS_ELECTRICAL_ANALYSIS_ADD_EQUIPMENT_LOAD	Equipment Load	장비 부하
+ID_RBS_ELECTRICAL_COMMUNICATION_DEVICE	Communication	통신
+ID_RBS_ELECTRICAL_DATA_DEVICE	Data	패널 >
+ID_RBS_ELECTRICAL_DEMAND_FACTOR	MEP Settings:Demand Factors	MEP 설정:수용률
+ID_RBS_ELECTRICAL_DEVICE	Electrical Fixture	전기 설비
+ID_RBS_ELECTRICAL_EQUIPMENT	Electrical Equipment	전기 시설물
+ID_RBS_ELECTRICAL_FIREALARM_DEVICE	Fire Alarm	화재 경보
+ID_RBS_ELECTRICAL_LIGHTING_DEVICE	Lighting	조명
+ID_RBS_ELECTRICAL_LOAD_CLASSIFICATION	MEP Settings:Load Classifications	MEP 설정:부하 분류
+ID_RBS_ELECTRICAL_NURSECALL_DEVICE	Nurse Call	간호사 호출
+ID_RBS_ELECTRICAL_SECURITY_DEVICE	Security	보안
+ID_RBS_ELECTRICAL_SETTINGS	MEP Settings:Electrical Settings	MEP 설정:전기 설정
+ID_RBS_ELECTRICAL_TELEPHONE_DEVICE	Telephone	전화
+ID_RBS_ELECTRICAL_WIRE	Arc Wire	호 와이어
+ID_RBS_ELECTRICAL_WIRE_CHAMFER	Chamfered Wire	모따기된 와이어
+ID_RBS_ELECTRICAL_WIRE_SPLINE	Spline Wire	스플라인 와이어
+ID_RBS_FABRICATION_DUCTWORK_STIFFENER	MEP Fabrication Ductwork Stiffener	MEP 덕트제작 보강재
+ID_RBS_FINISH_AREA_BASED_LOAD_DIVIDE_MODE	Finish Dividing	분할 완료
+ID_RBS_FINISH_AREA_BASED_LOAD_EDIT_MODE	Finish Editing	편집 완료
+ID_RBS_FINISH_CIRCUIT_PATH_EDIT_MODE	Finish Editing Path	경로 편집 마침
+ID_RBS_FINISH_JUSTIFY_SLOPE_EDITMODE	Finish	마감
+ID_RBS_FINISH_SURFACE_CONNECTOR_EDIT_MODE	Finish Connection	연결 완료
+ID_RBS_FINISH_SYSTEM_GROUP_EDIT_MODE	Finish Editing System; Finish Editing Circuit	시스템 편집 완료; 회로 편집 완료
+ID_RBS_FINISH_ZONE_EDIT_MODE	Finish Editing Zone	구역 편집 완료
+ID_RBS_HIDE_ABL_SEPARATION_LINE_OPEN_END	Area Based Load Boundary:Hide Boundary Open-Ends	영역 부하 경계:경계 개방 끝 숨기기
+ID_RBS_LAYOUTPATH	Generate Layout	배치 생성
+ID_RBS_LAYOUTPATH1LINE_PATH	Generate Placeholder	자리 표시자 생성
+ID_RBS_LAYOUTPATH_ADD	Add to System	시스템에 추가
+ID_RBS_LAYOUTPATH_BASE	Place Base	베이스 배치
+ID_RBS_LAYOUTPATH_BASE_MODIFY	Modify Base	베이스 수정
+ID_RBS_LAYOUTPATH_BASE_REMOVE	Remove Base	베이스 제거
+ID_RBS_LAYOUTPATH_CANCEL	Cancel Layout	배치 취소
+ID_RBS_LAYOUTPATH_EDIT	Edit Layout	배치 편집
+ID_RBS_LAYOUTPATH_FINISH	Finish Layout	배치 완료
+ID_RBS_LAYOUTPATH_REMOVE	Remove from System	시스템에서 제거
+ID_RBS_LAYOUTPATH_SOLUTIONS	Solutions	솔루션
+ID_RBS_LIGHTING_FIXTURE	Lighting Fixture	조명 설비
+ID_RBS_MECHANICAL_ACCESSORY	Duct Accessory	덕트 액세서리
+ID_RBS_MECHANICAL_COLOR_FILL	Duct Legend	덕트 범례
+ID_RBS_MECHANICAL_CONTROL_DEVICE	Mechanical Control Device	기계 제어 장치
+ID_RBS_MECHANICAL_CONVERTTOFLEX	Convert to Flex Duct	플렉시블 덕트로 변환
+ID_RBS_MECHANICAL_DIFFUSER	Air Terminal	공기 터미널
+ID_RBS_MECHANICAL_DIFFUSER_TO_DUCT	Air Terminal on Duct	덕트의 공기 터미널
+ID_RBS_MECHANICAL_DUCT	Duct	덕트
+ID_RBS_MECHANICAL_EQUIPMENT	Mechanical Equipment	기계 장비
+ID_RBS_MECHANICAL_FITTING	Duct Fitting	덕트 부속
+ID_RBS_MECHANICAL_FLEX	Flex Duct	플렉시블 덕트
+ID_RBS_MECHANICAL_SETTINGS	MEP Settings:Mechanical Settings	MEP 설정:기계 설정
+ID_RBS_PANELSCHEDULE_EDIT	Edit Panel Schedule	패널 일람표 편집
+ID_RBS_PANELSCHEDULE_FORMAT_TEMPLATE	Set Template Options	템플릿 옵션 설정
+ID_RBS_PANELSCHEDULE_FREEZE_COLANDROW	Freeze Rows and Columns	행 및 열 동결
+ID_RBS_PANELSCHEDULE_TEMPLATEVIEW_CANCEL	Cancel Template	템플릿 취소
+ID_RBS_PANELSCHEDULE_TEMPLATEVIEW_FINISH	Finish Template	템플릿 완료
+ID_RBS_PANEL_SCHEDULE_EDIT_A_TEMPLATE	Panel Schedule Templates:Edit a Template	패널 일람표 템플릿:템플릿 편집
+ID_RBS_PANEL_SCHEDULE_MANAGE_TEMPLATES	Panel Schedule Templates:Manage Templates	패널 일람표 템플릿:템플릿 관리
+ID_RBS_PICKALIGNMENT_LINE	Alignment Line	선형 선
+ID_RBS_PIPE_ACCESSORY	Pipe Accessory	배관 밸브류
+ID_RBS_PIPE_FITTING	Pipe Fitting	파이프 부속
+ID_RBS_PIPE_FLEX	Flex Pipe	플랙시블 파이프
+ID_RBS_PIPE_PIPE	Pipe	파이프
+ID_RBS_PIPING_COLOR_FILL	Pipe Legend	배관 범례
+ID_RBS_PLUMBING_EQUIPMENT	Plumbing Equipment	위생 장비
+ID_RBS_PLUMBING_FIXTURE	Plumbing Fixture	위생기구
+ID_RBS_ROUTEPATH_EDIT	Routing Solutions	라우팅 솔루션
+ID_RBS_ROUTEPATH_JUSTIFY	Justify	자리맞추기
+ID_RBS_ROUTEPATH_SLOPE	Slope	경사
+ID_RBS_SHOW_ABL_SEPARATION_LINE_OPEN_END	Area Based Load Boundary:Show Boundary Open-Ends	영역 부하 경계:경계 개방 끝 표시
+ID_RBS_SHOW_DOWNSTREAM_CONNECTED_PHASES	Downstream Connected Phases	다운스트림 연결 위상
+ID_RBS_SPRINKLER	Sprinkler	스프링클러
+ID_RBS_SWITCH_SYSTEM_EDIT_SWITCH_SELECT	Select Switch	스위치 선택
+ID_RBS_SYSTEM_GROUP_EDIT_ADD_TO_GROUP	Add to System	시스템에 추가
+ID_RBS_SYSTEM_GROUP_EDIT_BASE_OBJECT_SELECT	Select Equipment	장비 선택
+ID_RBS_SYSTEM_GROUP_EDIT_REMOVE_FROM_GROUP	Remove from System	시스템에서 제거
+ID_RBS_SYSTEM_INSPECTOR_CANCEL	Cancel	취소
+ID_RBS_SYSTEM_INSPECTOR_FINISH	Finish	마감
+ID_RBS_SYSTEM_INSPECTOR_INSPECT	System Inspector	시스템 조사기
+ID_RBS_SYSTEM_NAVIGATOR	System Browser	시스템 탐색기
+ID_RBS_TOGGLE_END_REFERENCE	Control Point; Slope Control Point	제어점; 경사 제어점
+ID_RBS_VIEW_PANEL_SCHEDULE	Panel Schedules	분전반 일람표
+ID_RBS_WIRE_CONVERSION_ARC	Arc Wire	호 와이어
+ID_RBS_WIRE_CONVERSION_CHAMFERED	Chamfered Wire	모따기된 와이어
+ID_RBS_ZONE_ADD_SPACE	Add Space	공간 추가
+ID_RBS_ZONE_REMOVE_SPACE	Remove Space	공간 제거
+ID_REAPPLY_TYPE	Reapply Type	유형 다시 적용
+ID_REBAR_ABBREVIATION	Reinforcement Settings	철근 배근 설정
+ID_REBAR_ADD_REMOVE_BARS	Show Removed Bars	제거된 철근 표시
+ID_REBAR_CANCEL_EDIT_BARS	Cancel	취소
+ID_REBAR_COUPLER	Structural Rebar Coupler; Insert Coupler	구조 보강 철근 커플러; 커플러 삽입
+ID_REBAR_COUPLER_ONE	One bar Coupler	하나의 막대 커플러
+ID_REBAR_COUPLER_TWO	Two Bars Coupler	두 개의 막대 커플러
+ID_REBAR_COVER_SETTINGS	Rebar Cover Settings	보강 철근 피복 설정
+ID_REBAR_EDIT_BARS	Edit Bars	철근 편집
+ID_REBAR_FINISH_EDIT_BARS	Finish	마감
+ID_REBAR_FREE_FORM_CANCEL	Cancel	취소
+ID_REBAR_FREE_FORM_END_FACES	End Surface	끝 표면
+ID_REBAR_FREE_FORM_FINISH	Finish	마감
+ID_REBAR_FREE_FORM_MORPHED	Free Form	프리폼
+ID_REBAR_FREE_FORM_REINF_FACES	Host Surface	호스트 표면
+ID_REBAR_FREE_FORM_START_FACES	Start Surface	시작 표면
+ID_REBAR_FREE_FORM_SURF_DISTRIB	Surface	표면
+ID_REBAR_FREE_FORM_TRANSVERSAL_DISTRIB	Aligned	정렬
+ID_REBAR_MODIFY_SET	Modify Bars	철근 수정
+ID_REBAR_PLACE	Structural Rebar	구조 보강 철근
+ID_REBAR_PLACE_EXPAND_TO_HOST	Expand Rebar to Host	보강 철근을 호스트로 확장
+ID_REBAR_PLACE_TWO_POINTS	Place Rebar by Two Points	두 점으로 보강 철근 배치
+ID_REBAR_PRESENTATION_ALL	Show all Rebars in Rebar Set	보강 철근 세트의 모든 보강 철근 표시
+ID_REBAR_PRESENTATION_FIRSTLAST	Show First and Last Rebar in Rebar Set	보강 철근 세트의 첫 번째 및 마지막 보강 철근 표시
+ID_REBAR_PRESENTATION_MIDDLE	Show Middle Rebar in Rebar Set	보강 철근 세트의 중간 보강 철근 표시
+ID_REBAR_PRESENTATION_SELECT	Select Rebars in Rebar Set to Show	보강 철근 세트에서 표시할 보강 철근 선택
+ID_REBAR_REMOVE_BARS	Remove Bar	철근 제거
+ID_REBAR_REMOVE_SPLICE	Remove Splice	이음 제거
+ID_REBAR_RESET_ALL_BARS	Reset All	모두 재설정
+ID_REBAR_RESET_BARS	Reset Position	위치 재설정
+ID_REBAR_SELECT_HIDE_ALL_BARS	Select None	선택 안 함
+ID_REBAR_SELECT_SHOW_ALL_BARS	Select All	모두 선택
+ID_REBAR_SHAPE_ALLOWABLE_BAR_TYPES	Allowable Bar Types	허용되는 철근 유형
+ID_REBAR_SKETCH	Sketch	스케치
+ID_REBAR_SPLICE	Splice Rebar	보강 철근 이음
+ID_REBAR_SPLICE_BY_POINT	Pick Line	선 선택
+ID_REBAR_SPLICE_BY_RULES	Splice By Length	길이별 이음
+ID_REBAR_SYSTEM_PICK_DIRSPAN_EDGE	Major Direction	주근 방향
+ID_REBAR_SYSTEM_SKETCH	Structural Area Reinforcement	구조 면적 철근 배근
+ID_REBAR_SYSTEM_SKETCH_HOST	Area Reinforcement	구역 철근 배근
+ID_RECENTER_REFERENCE_LINE	Room:Re-center Reference; Room Tag:Re-center Reference	룸:참조 중심 재설정;룸 태그:참조 중심 재설정
+ID_RECENTER_SELECTED_REFERENCE_LINE	Re-center Reference	참조 중심 재설정
+ID_RECONCILE_CURRENT	Coordination Review:Use Current Project	좌표 검토:현재 프로젝트 사용
+ID_RECONCILE_CURRENT_LINK	Coordination Review	좌표 검토
+ID_RECONCILE_LINK	Coordination Review:Select Link	좌표 검토:링크 선택
+ID_RELINQUISH_ALL_MINE	Relinquish All Mine	내 작업 세트 모두 취소
+ID_RELOCATE_SHARED_COORDINATES	Position:Relocate Project	위치:프로젝트 재배치
+ID_REMOVE_ALL_LEVEL_LANDINGS	Remove Landings	계단참 제거
+ID_REMOVE_AREA_REINFORCEMENT_SYSTEM	Remove Area Reinforcement System	면적 철근 배근 시스템 제거
+ID_REMOVE_CONNECTED_LEVELS_FROM_MULTISTORY_STAIRS	Disconnect Levels	레벨 연결 해제
+ID_REMOVE_ELEMENT_FROM_ASSEMBLY	Remove from Assembly	조합에서 제거
+ID_REMOVE_ELEMENT_FROM_DIVISION	Remove	제거
+ID_REMOVE_FABRIC_REINFORCEMENT_SYSTEM	Remove Fabric Area Reinforcement System	선조립 영역 철근 배근 시스템 제거
+ID_REMOVE_HYDRAULIC_SEPARATION	Remove Separation	분리 제거
+ID_REMOVE_LIGHT_FROM_GROUP	Remove from Group	그룹에서 제거
+ID_REMOVE_PATH_REINFORCEMENT_SYSTEM	Remove Path Reinforcement System	경로 철근 배근 시스템 제거
+ID_REMOVE_SKETCH_CROP_AREA	Reset Crop	자르기 재설정
+ID_REMOVE_SLAB_EDIT	Reset Shape	모양 재설정
+ID_REMOVE_WATCH	Stop Monitoring	감시 중지
+ID_REPAIR_CENTRAL_MODEL	Repair Central Model	중앙 모델 복구
+ID_REPEAT_COMPONENT	Repeat; Repeat Component	반복; 구성요소 반복
+ID_REPEAT_LASTCOMMAND	Repeat Last Command	마지막 명령 반복
+ID_REPORT_SHARED_COORDINATES	Coordinates:Report Shared Coordinates	좌표:공유 좌표 보고
+ID_REPOSITION_LINK_BASEPOINT_TO_HOST	Reposition to Project Base Point	프로젝트 기준점으로 재배치
+ID_REPOSITION_LINK_ORIGIN_TO_HOST	Reposition to Internal Origin	내부 원점으로 재배치
+ID_RESET_CONTINUOUS_RAIL	Reset Rail	난간 재설정
+ID_RESET_JOIST_SYSTEM	Reset Beam System	보 시스템 재설정
+ID_RESET_RAILING	Reset Railing	난간 재설정
+ID_RESET_SHARED_COORDINATES	Coordinates:Reset Shared Coordinates	좌표:공유 좌표 재설정
+ID_RESET_TARGET	Reset Target	대상 재설정
+ID_RESET_TRUSS	Reset Truss	트러스 재설정
+ID_RESTORE_ALL_EXCLUDED	Restore All Excluded	제외된 모든 항목 복원
+ID_RESTORE_IMAGE_SIZE	Restore Size	크기 복원
+ID_RESTORE_PART	Restore Parts	부품 복원
+ID_RESTORE_VIEW_PROPERTIES	Restore Temporary View Properties	임시 뷰 특성 복원
+ID_RETRIEVE_FILTERS	Load Selection	선택 로드
+ID_REVIEW_WARNINGS	Review Warnings	경고 검토
+ID_REVIT_FILE_CLOSE	Close	닫기
+ID_REVIT_FILE_OPEN	Open; Revit file	열기; Revit 파일
+ID_REVIT_FILE_PRINT	Print	인쇄
+ID_REVIT_FILE_PRINT_PREVIEW	Print Preview	인쇄 미리보기
+ID_REVIT_FILE_PRINT_SETUP	Print Setup	인쇄 설정
+ID_REVIT_FILE_SAVE	Save	저장
+ID_REVIT_FILE_SAVE_AS	Project	프로젝트
+ID_REVIT_FILE_SAVE_AS_CLOUD_MODEL	Cloud Model	클라우드 모델
+ID_REVIT_SAVE_AS_FAMILY	Family	패밀리
+ID_REVIT_SAVE_AS_TEMPLATE	Template	템플릿
+ID_RM_ANIMATION	Walkthrough	보행 시선
+ID_RM_ASSEMBLY_EDITOR	Edit Assembly	조합 편집
+ID_RM_CREATE_DECAL	Decal; Place Decal	그림; 그림 배치
+ID_ROOF_EXTRUSION	Roof:Roof by Extrusion	지붕:돌출로 지붕 만들기
+ID_ROOF_FOOTPRINT	Roof; Roof by Footprint	지붕; 외곽설정으로 지붕 만들기
+ID_ROOF_PICK_FACES	Roof:Roof by Face	지붕:면으로 지붕 만들기
+ID_ROOM_AREA_REPORT	Room/Area Report	룸/영역 보고서
+ID_ROOM_SCHEDULE_FILTER_HIDE	Hide	숨기기
+ID_ROOM_SCHEDULE_FILTER_ISOLATE	Isolate	분리
+ID_ROOM_SCHEDULE_FILTER_SHOW	Show	표시
+ID_ROTATE_PROJECT	Position:Rotate Project North	위치:도북 회전
+ID_ROTATE_SHARED_COORDINATES	Position:Rotate True North	위치:진북 회전
+ID_RUN	Run	실행
+ID_RUN_ARC_CENTER_ENDS	StairRun:Center-Ends Arc	계단진행:중간-끝 호
+ID_RUN_LINE	StairRun:Line	계단진행:선
+ID_RUN_SYSTEMS_ANALYSIS	Systems Analysis	시스템 해석
+ID_RVTDOC_LINK	Link Revit	Revit 링크
+ID_SAMPLES_OPEN	Sample Files	샘플 파일
+ID_SAVED_VIEW_POSITION	Saved Position	저장된 위치
+ID_SAVE_FAMILY_ANY	Family	패밀리
+ID_SAVE_GROUP	Group	그룹
+ID_SAVE_VIEWS_TO_FILE	View	뷰
+ID_SCHEDULE_CELL_EDIT_BORDER	Borders	경계
+ID_SCHEDULE_CELL_EDIT_SHADING	Shading	음영
+ID_SCHEDULE_CELL_INSERT_GRAPHIC	Insert Image	이미지 삽입
+ID_SCHEDULE_CELL_MERGE_UNMERGE	Merge	병합
+ID_SCHEDULE_CLEAR_CELL	Clear Cell	셀 지우기
+ID_SCHEDULE_COLUMN_DELETE	Delete	삭제
+ID_SCHEDULE_COLUMN_INSERT_RIGHT	Insert	삽입
+ID_SCHEDULE_COLUMN_RESIZE	Resize	크기 조정
+ID_SCHEDULE_EXPLAIN_ERROR	Explain	설명
+ID_SCHEDULE_HEADER_FREEZE	Freeze Header	헤더 고정
+ID_SCHEDULE_PARAM_CALCULATE	Calculated	계산됨
+ID_SCHEDULE_PARAM_COMBINE	Combine Parameters	매개변수 결합
+ID_SCHEDULE_PARAM_FORMATUNITS	Format Unit	단위 형식
+ID_SCHEDULE_RESET_OVERRIDE	Reset	재설정
+ID_SCHEDULE_ROW_INSERT_ABOVE	Insert:Above Selected	삽입:선택한 행 위
+ID_SCHEDULE_ROW_INSERT_BELOW	Insert:Below Selected	삽입:선택한 행 아래
+ID_SCHEDULE_ROW_RESIZE	Resize	크기 조정
+ID_SCHEDULE_SPLIT_BY_HEIGHT	Split & Place	분할 및 배치
+ID_SCHEDULE_TEXT_EDIT_FONT	Font	글꼴
+ID_SCHEDULE_TEXT_HORIZONTAL_ALIGN_CENTER	Align Horizontal:Center	수평 정렬:중심
+ID_SCHEDULE_TEXT_HORIZONTAL_ALIGN_LEFT	Align Horizontal:Left	수평 정렬:왼쪽
+ID_SCHEDULE_TEXT_HORIZONTAL_ALIGN_RIGHT	Align Horizontal:Right	수평 정렬:오른쪽
+ID_SCHEDULE_TEXT_VERTICAL_ALIGN_BOTTOM	Align Vertical:Bottom	수직 정렬:맨 아래
+ID_SCHEDULE_TEXT_VERTICAL_ALIGN_MIDDLE	Align Vertical:Middle	수직 정렬:중간
+ID_SCHEDULE_TEXT_VERTICAL_ALIGN_TOP	Align Vertical:Top	수직 정렬:맨 위
+ID_SCHEDULE_VIEW_ZOOM_IN	Schedule View Zoom In	일람표 뷰 확대
+ID_SCHEDULE_VIEW_ZOOM_OUT	Schedule View Zoom Out	일람표 뷰 축소
+ID_SCHEDULE_VIEW_ZOOM_RESTORE	Schedule View Zoom Restore	일람표 뷰 줌 복원
+ID_SELECT_ALL_PASTED	Select All	모두 선택
+ID_SELECT_BY_ID	Select by ID	ID별로 선택
+ID_SELECT_HOST	Select Host	호스트 선택
+ID_SELECT_IN_HOST_ALL_FABRIC	Select All Fabric in Host	호스트의 모든 선조립 선택
+ID_SELECT_IN_HOST_ALL_REBAR	Select All Rebar in Host	호스트의 모든 보강 철근 선택
+ID_SELECT_IN_HOST_ALL_REINFORCEMENT	Select All Reinforcement in Host	호스트의 모든 보강 철근 선택
+ID_SELECT_VISIBLE_LEADERS	Select Leaders to Show	표시할 지시선 선택
+ID_SEL_ALL_IN_PRJ	Select All Instances: In Entire Project	모든 인스턴스 선택: 전체 프로젝트에서
+ID_SEL_ALL_IN_PRJ_IN_OPTION	Select All Instances in Active Option: In Entire Project	활성 옵션에서 모든 인스턴스 선택: 전체 프로젝트에서
+ID_SEL_ALL_IN_VIEW	Select All Instances: Visible in View	모든 인스턴스 선택: 뷰에 나타남
+ID_SEL_ALL_IN_VIEW_IN_OPTION	Select All Instances in Active Option: Visible in View	활성 옵션에서 모든 인스턴스 선택: 뷰에 나타남
+ID_SEL_MULTI_CHECK	Select Multiple; Select Multiple	다중 선택; 다중 선택
+ID_SETTINGS_ALIGNMENT_STATION_LABEL	Alignment Station Label Types	선형 측점 레이블 유형
+ID_SETTINGS_ANALYSIS_DISPLAY_STYLES	Additional Settings:Analysis Display Styles	추가 설정:해석 화면표시 스타일
+ID_SETTINGS_ANNOTATIONS_LEADERS	Arrowheads	화살촉
+ID_SETTINGS_ASSEMBLY_CODE	Additional Settings:Assembly Code	추가 설정:조합 코드
+ID_SETTINGS_COLORFILLSCHEMES	Color Schemes	색상 구성표
+ID_SETTINGS_DECAL_TYPES	Decal:Decal Types; Decal Types	그림:그림 유형; 그림 유형
+ID_SETTINGS_DIMENSIONS	Temporary Dimensions	임시 치수
+ID_SETTINGS_DIMENSIONS_ANGULAR	Angular Dimension Types	각도 치수 유형
+ID_SETTINGS_DIMENSIONS_DIAMETER	Diameter Dimension Types	지름 치수 유형
+ID_SETTINGS_DIMENSIONS_LINEAR	Linear Dimension Types	선형 치수 유형
+ID_SETTINGS_DIMENSIONS_RADIAL	Radial Dimension Types	반지름 치수 유형
+ID_SETTINGS_EXPORT_SETUPS_DGN	Export Setups DGN	내보내기 설정 DGN
+ID_SETTINGS_EXPORT_SETUPS_DWGDXF	Export Setups DWG/DXF	내보내기 설정 DWG/DXF
+ID_SETTINGS_FILLPATTERNS	Additional Settings:Fill Patterns	추가 설정:채우기 패턴
+ID_SETTINGS_FILTERS	Filters	필터
+ID_SETTINGS_FORGE_PARAMETERS	Parameters Service	매개변수 서비스
+ID_SETTINGS_GLOBAL_PARAMETERS	Global Parameters	전역 매개변수
+ID_SETTINGS_HALFTONE	Additional Settings:Halftone / Underlay	추가 설정:중간색 / 언더레이
+ID_SETTINGS_KEYNOTING	Keynoting Settings	키노트 설정
+ID_SETTINGS_LINE_STYLES	Additional Settings:Line Styles	추가 설정:선 스타일
+ID_SETTINGS_MATERIALS	Materials	재료
+ID_SETTINGS_OBJECTSTYLES	Object Styles	객체 스타일
+ID_SETTINGS_PARTITIONS	Worksets	작업 세트
+ID_SETTINGS_PENS	Additional Settings:Line Weights	추가 설정:선 두께
+ID_SETTINGS_PEN_FONTS	Additional Settings:Line Patterns	추가 설정:선 패턴
+ID_SETTINGS_PHASES	Phases	상
+ID_SETTINGS_PROJECT_INFORMATION	Project Information	프로젝트 정보
+ID_SETTINGS_PROJECT_PARAMETERS	Project Parameters	프로젝트 매개변수
+ID_SETTINGS_RENDERING_APPEARANCE	Additional Settings:Material Assets	추가 설정:재료 렌더링 모양 맵소스
+ID_SETTINGS_REVISIONS	Sheet Issues/Revisions; Additional Settings:Sheet Issues/Revisions	시트 발행/수정기호; 추가 설정:시트 발행/수정기호
+ID_SETTINGS_SNAPPING	Snaps	스냅
+ID_SETTINGS_SNAPS_NOOVERRIDE	Turn Override Off	재지정 끄기
+ID_SETTINGS_SPOT_COORDINATE	Spot Coordinate Types	지정점 좌표 유형
+ID_SETTINGS_SPOT_ELEVATION	Spot Elevation Types	지정점 레벨 유형
+ID_SETTINGS_SPOT_SLOPE	Spot Slope Types	지정점 경사 유형
+ID_SETTINGS_SUNANDSHADOWSSETTINGS	Additional Settings:Sun Settings; Sun Settings	추가 설정:태양 설정; 태양 설정
+ID_SETTINGS_TAGS	Loaded Tags And Symbols	로드된 태그 및 기호
+ID_SETTINGS_UNITS	Project Units	프로젝트 단위
+ID_SETTINGS_VIEWTEMPLATES	View Templates:Manage View Templates	뷰 템플릿:뷰 템플릿 관리
+ID_SETTING_AREACALCULATIONS	Area and Volume Computations	면적 및 체적 계산
+ID_SET_FOCAL_LENGTH	Increase/Decrease Focal Length	초점 길이 늘리기/줄이기
+ID_SET_FRONT_TO_CURRENT_VIEW	Set Front to Current View	정면을 현재 뷰로 설정
+ID_SET_RAILINGS_TYPE	Railing	난간
+ID_SHAPE_STATUS	Shape Status	모양 상태
+ID_SHARED_VIEWS	Shared Views	공유 뷰
+ID_SHOWDISCONNECTS_BUTTON	Show Disconnects	연결 해제 표시
+ID_SHOW_ALL_TAG_LEADERS	Show All Leaders	모든 지시선 표시
+ID_SHOW_ARG_BAR	Accelerated Graphics Bar Visibility	가속 그래픽 막대 가시성
+ID_SHOW_COMPASS	Show Compass	나침반 표시
+ID_SHOW_MASS_NO_OVERRIDE	Show Mass by View Settings	뷰 설정별 매스 표시
+ID_SHOW_MASS_STANDARD	Show Mass Form and Floors	매스 양식 및 바닥 표시
+ID_SHOW_MASS_SURFACES	Show Mass Surface Types	매스 표면 유형 표시
+ID_SHOW_MASS_ZONES	Show Mass Zones and Shades	매스 구역 및 음영 표시
+ID_SHOW_ONE_LEADER	Show One Leader	지시선 하나 표시
+ID_SHOW_PROPERTIES_PALETTE	Properties	특성
+ID_SHOW_RELATED_DIMENSION	Show Related Dimensions	관련 치수 표시
+ID_SHOW_RELATED_WARNINGS	Show Related Warnings	관련 경고 표시
+ID_SHOW_VIEWCUBE	ViewCube	ViewCube
+ID_SITE_BOOLEAN_PERTURBATION_UI	Topography Cut Void Stability	지형의 절단/결합 안정성
+ID_SITE_COMPONENT	Site Component	대지 구성요소
+ID_SITE_GRADE	Graded Region	단계별 영역
+ID_SITE_LABEL_CONTOURS	Label Contours	등고선 레이블
+ID_SITE_PARKING_COMPONENT	Parking Component	주차장 구성요소
+ID_SITE_PROPERTYLINE	Property Line	대지 경계선
+ID_SITE_TOPO_SOLID	Toposolid	지형 솔리드
+ID_SITE_TOPO_SOLID_FROM_IMPORT	Toposolid:Create from Import	지형 솔리드:가져오기에서 작성
+ID_SITE_TOPO_SOLID_FROM_IMPORT_INSTANCE	Create from CAD	CAD에서 작성
+ID_SITE_TOPO_SOLID_FROM_SURFACE	Generate Toposolid	지형 솔리드 생성
+ID_SITE_TOPO_SOLID_IMPORT_POINTS	Create from CSV	CSV에서 작성
+ID_SKETCH_2D_PATH	Sketch Path	경로 스케치
+ID_SKETCH_ALIGN_EAVES	Align Eaves	처마 정렬
+ID_SKETCH_CEILING	Sketch Ceiling	천장 스케치
+ID_SKETCH_DEFINE_ROOF_SLOPE	Slope Arrow	경사 화살표
+ID_SKETCH_DEFINE_SLOPE	Slope Arrow	경사 화살표
+ID_SKETCH_DPART_EDIT	Edit Sketch	스케치 편집
+ID_SKETCH_GRID_VIS	Show Work Plane	작업 기준면 표시
+ID_SKETCH_JOIST_SYSTEM_FROM_AUTO	Sketch Beam System	보 시스템 스케치
+ID_SKETCH_PICK_WALLS	Line:Pick Existing Wall	선:기존 벽 선택
+ID_SKETCH_PLANE_TOOL	Set; Set Work Plane	설정; 작업 기준면 설정
+ID_SKETCH_PROFILE_1	Select Profile 1	프로파일 1 선택
+ID_SKETCH_PROFILE_2	Select Profile 2	프로파일 2 선택
+ID_SKETCH_SHAFTOPENING_SYMBOL	Symbolic Line	기호 선
+ID_SLOPE_PIPE_DOWN	Slope: Down	경사: 하향
+ID_SLOPE_PIPE_OFF	Slope: Off	경사: 끄기
+ID_SLOPE_PIPE_SHOW_TOOLTIP	Show Tooltip; Show Slope Tooltip	툴팁 표시; 경사 툴팁 표시
+ID_SLOPE_PIPE_UP	Slope: Up	경사: 상향
+ID_SNAP_MIDBETWEEN2POINTS	Mid between 2 points	두 점 사이의 중간
+ID_SNAP_OVERRIDE_CENTER	Centers	중심
+ID_SNAP_OVERRIDE_CLOSE	Close	닫기
+ID_SNAP_OVERRIDE_COORDINATION_MODELS	Snap to Coordination Models	협업 모델로 스냅
+ID_SNAP_OVERRIDE_END	Endpoints	끝점
+ID_SNAP_OVERRIDE_INTERIOR	Nearest	근사값
+ID_SNAP_OVERRIDE_INTERSECT	Intersections	교차로
+ID_SNAP_OVERRIDE_MID	Midpoints	중간점
+ID_SNAP_OVERRIDE_NO_SNAP	Snap Off; Snaps Off	스냅 끄기; 스냅 끄기
+ID_SNAP_OVERRIDE_PERP	Perpendicular	수직
+ID_SNAP_OVERRIDE_POINT	Points	점
+ID_SNAP_OVERRIDE_POINT_CLOUDS	Snap to Point Clouds	포인트 클라우드에 스냅
+ID_SNAP_OVERRIDE_QUADRANT	Quadrants	사분면
+ID_SNAP_OVERRIDE_REMOTE	Snap to Remote Objects	원격 객체로 스냅
+ID_SNAP_OVERRIDE_SKETCH_GRID	Work Plane Grid	작업 기준면 그리드
+ID_SNAP_OVERRIDE_TANGENT	Tangents	접선
+ID_SOLAR_STUDY_LIGHTING_TYPE	Lighting Study Type	조명 연구 유형
+ID_SOLAR_STUDY_MULTIDAY_TYPE	Multi-day Study Type	수일 기준 연구 유형
+ID_SOLAR_STUDY_NEXT_FRAME	Next Frame	다음 프레임
+ID_SOLAR_STUDY_NEXT_KEY_FRAME	Next Key Frame	다음 키 프레임
+ID_SOLAR_STUDY_PLAY	Play Preview	재생 미리보기
+ID_SOLAR_STUDY_PREVIOUS_FRAME	Previous Frame	이전 프레임
+ID_SOLAR_STUDY_PREVIOUS_KEY_FRAME	Previous Key Frame	이전 키 프레임
+ID_SOLAR_STUDY_SINGLEDAY_TYPE	Single Day Study Type	일일 기준 연구 유형
+ID_SOLAR_STUDY_STILL_TYPE	Still Image Study Type	스틸 이미지 연구 유형
+ID_SOLAR_STUDY_TOGGLE_SIMULATION	Play in Loop	반복 재생
+ID_SPATIAL_GRID	Spatial Grid	공간 그리드
+ID_SPECIFY_SHARED_COORDINATES	Coordinates:Specify Coordinates at Point	좌표:점에서 좌표 지정
+ID_SPLICE_MODIFY_SPLICE	Modify Splices	이음 수정
+ID_SPLICE_REBAR_CANCEL	Cancel	취소
+ID_SPLICE_REBAR_FINISH	Finish	마감
+ID_SPLIT	Split Element	요소 분할
+ID_SPLIT_FACE	Split Face	면 분할
+ID_SPLIT_FACE_IN_NEW_FAMILIES	Split Face	면 분할
+ID_SPLIT_WITH_GAP	Split with Gap	간격으로 분할
+ID_SPOT_COORDINATE	Spot Coordinate; Spot Coordinate	지정점 좌표; 지정점 좌표
+ID_SPOT_ELEVATION	Spot Elevation; Spot Elevation	지정점 레벨; 지정점 레벨
+ID_SPOT_SLOPE	Spot Slope; Spot Slope	지정점 경사; 지정점 경사
+ID_SSE_POINTS_VISIBILITY	Preview Points	점 미리보기
+ID_STAIRSEDITMODE_FINISH	Finish Edit Mode	편집 모드 완료
+ID_STAIRSEDITMODE_QUIT	Cancel Edit Mode	편집 모드 취소
+ID_STAIRS_CONVERT_TO_CUSTOM	Convert to sketch-based	스케치 기반으로 변환
+ID_STAIRS_EDIT_STAIRS	Edit Stairs	계단 편집
+ID_STAIRS_LANDING	Landing	계단참
+ID_STAIRS_RUN	Run	실행
+ID_STAIRS_SUPPORT	Support	지원
+ID_STAIRS_TRISER_NUMBER	Stair Tread/Riser Number	계단 디딤판/챌판 번호
+ID_STARTING_VIEW	Starting View	시작 뷰
+ID_STATUSBAR_DESIGNOPTIONS	Status Bar - Design Options	상태 막대 - 설계 옵션
+ID_STATUSBAR_WORKSETS	Status Bar - Worksets	상태 막대 - 작업 세트
+ID_STEEL_PARAM_CUT_BY	Cut By	절단 방법
+ID_STEEL_PARAM_CUT_COPE	Cope	코핑
+ID_STEEL_PARAM_CUT_MITER	Miter	마이터
+ID_STEEL_PARAM_CUT_SAW_CUT_FLANGE	Miter:Saw cut - Flange	연귀:톱 절단 - 플랜지
+ID_STEEL_PARAM_CUT_SAW_CUT_WEB	Miter:Saw cut - Web	연귀:톱 절단 - 웹
+ID_STEEL_PARAM_CUT_THROUGH	Cut Through	절단
+ID_STEEL_PLAYLIST_DYNAMO	Steel Connection Automation	철골 연결 자동화
+ID_STRUCTURAL_CONNECTION_DIRECT_CREATION	Structural Connection	구조 연결
+ID_STRUCTURAL_CONNECTION_SETTINGS	Structural Settings:Connection Settings	구조 설정:연결 설정
+ID_STRUCTURAL_SETTINGS	Structural Settings:Structural Settings	구조 설정:구조 설정
+ID_STRUCTURAL_SETTINGS_BOUND_COND	Boundary Conditions Settings	경계 조건 설정
+ID_STRUCTURAL_SETTINGS_LOADS_SCALING_DISPLAY	Loads Scaling Display	하중 축척 화면표시
+ID_STRUCTURAL_SETTINGS_LOAD_CASES	Load Cases Display	하중 케이스 표시
+ID_STRUCTURAL_SETTINGS_LOAD_COMB	Load Cases and Combinations	하중 케이스 및 조합
+ID_STRUCT_CONNECTION_CUSTOMIZE	Customize	사용자화
+ID_STRUCT_CONNECTION_CUSTOM_EDIT_MODE_ADD	Add to Connection	연결에 추가
+ID_STRUCT_CONNECTION_CUSTOM_EDIT_MODE_CANCEL	Cancel	취소
+ID_STRUCT_CONNECTION_CUSTOM_EDIT_MODE_FINISH	Finish	마감
+ID_STRUCT_CONNECTION_CUSTOM_EDIT_MODE_REMOVE	Remove from Connection	연결에서 제거
+ID_STRUCT_CONNECTION_EDIT_CUSTOM	Edit	편집
+ID_STRUCT_CONN_OFFSET_REF_BOTTOM_CENTER	Alignment Bottom Center	정렬 하단 중심
+ID_STRUCT_CONN_OFFSET_REF_BOTTOM_LEFT	Alignment Bottom Left	정렬 왼쪽 하단
+ID_STRUCT_CONN_OFFSET_REF_BOTTOM_RIGHT	Alignment Bottom Right	정렬 오른쪽 하단
+ID_STRUCT_CONN_OFFSET_REF_MIDDLE_CENTER	Alignment Middle Center	정렬 중간 중심
+ID_STRUCT_CONN_OFFSET_REF_MIDDLE_LEFT	Alignment Middle Left	정렬 왼쪽 중간
+ID_STRUCT_CONN_OFFSET_REF_MIDDLE_RIGHT	Alignment Middle Right	정렬 오른쪽 중간
+ID_STRUCT_CONN_OFFSET_REF_TOP_CENTER	Alignment Top Center	정렬 상단 중심
+ID_STRUCT_CONN_OFFSET_REF_TOP_LEFT	Alignment Top Left	정렬 왼쪽 상단
+ID_STRUCT_CONN_OFFSET_REF_TOP_RIGHT	Alignment Top Right	정렬 오른쪽 상단
+ID_STRUCT_JUST_DBAR_CARDINAL	Justification Points	맞춤 점
+ID_STRUCT_JUST_DBAR_OFFSET_Y	yOffset	y 간격띄우기
+ID_STRUCT_JUST_DBAR_OFFSET_Z	zOffset	z 간격띄우기
+ID_SURFACE_EDIT_SKETCH	Edit Boundary	경계 편집
+ID_SWEEP_PROFILE	Select Profile	프로파일 선택
+ID_SWITCH_ARG_VIEW	Accelerated Graphics - Tech Preview; Accelerated Graphics Mode	가속 그래픽 - 기술 미리보기; 가속화된 그래픽 모드
+ID_SWITCH_JOIN_ORDER_EDITOR	Join:Switch Join Order	결합:결합 순서 전환
+ID_SYSTEMZONE_CONVERTTO_SKETCH	Convert to Sketch-Based	스케치 기반으로 변환
+ID_TAG_MATERIAL	Material Tag	재료 태그
+ID_TAG_MULTI	Multi-Category Tag	다중 카테고리 태그
+ID_TAG_ON_PLACEMENT	Tag on Placement	태그 삽입
+ID_TEMPHIDE_HIDE	Hide Element	요소 숨기기
+ID_TEMPHIDE_HIDECAT	Hide Category	범주 숨기기
+ID_TEMPHIDE_ISOLATE	Isolate Element	요소 분리
+ID_TEMPHIDE_ISOLATECAT	Isolate Category	카테고리 분리
+ID_TEMPHIDE_MAKEPERM	Apply Hide/Isolate to View	뷰에 숨기기/분리 적용
+ID_TEMPHIDE_RESET	Reset Temporary Hide/Isolate	임시 숨기기/분리 재설정
+ID_TEMPORARILY_APPLY_TEMPLATE_PROPERTIES	Temporarily Apply Template Properties	템플릿 특성 임시 적용
+ID_TEXTEDITOR_CLOSE	Close Text Editor	문자 편집기 닫기
+ID_TEXTEDITOR_SHOWBORDER	Show border when editing	편집 시 경계 표시
+ID_TEXTEDITOR_SHOWOPAQUEBK	Show opaque background when editing	편집 시 불투명 배경화면 표시
+ID_TEXTNOTE_ADDLEADER	Add Left Side Straight Leader	왼쪽 직선 지시선 추가
+ID_TEXTNOTE_ADDLEADER_R	Add Right Side Straight Leader	오른쪽 직선 지시선 추가
+ID_TEXTNOTE_ADD_LEADER_ARC	Add Left Side Arc Leader	왼쪽 호 지시선 추가
+ID_TEXTNOTE_ADD_LEADER_ARC_R	Add Right Side Arc Leader	오른쪽 호 지시선 추가
+ID_TEXTNOTE_BOTTOM_ALIGN	Align Elements Bottom	요소 아래쪽 정렬
+ID_TEXTNOTE_CENTER_HOR_ALIGN	Align Elements Center	요소 중심 정렬
+ID_TEXTNOTE_CENTER_VERT_ALIGN	Align Elements Middle	요소 가운데 정렬
+ID_TEXTNOTE_HOR_DISTRIBUTE	Distribute Horizontally	수평 분산
+ID_TEXTNOTE_LEFT_ALIGN	Align Elements Left	요소 왼쪽 정렬
+ID_TEXTNOTE_RIGHT_ALIGN	Align Elements Right	요소 오른쪽 정렬
+ID_TEXTNOTE_RMVLEADER	Remove Last Leader	마지막 지시선 제거
+ID_TEXTNOTE_TOP_ALIGN	Align Elements Top	요소 상단 정렬
+ID_TEXTNOTE_VERT_DISTRIBUTE	Distribute Vertically	수직 분산
+ID_TEXT_ALL_CAPS	All Caps	모두 대문자로
+ID_TEXT_BOLD	Bold	굵게
+ID_TEXT_DECREASE_INDENT	Decrease Indent	들여쓰기 감소
+ID_TEXT_DECREMENT_LIST_START	Decrement List Value	감소 리스트 값
+ID_TEXT_INCREASE_INDENT	Increase Indent	들여쓰기 증가
+ID_TEXT_INCREMENT_LIST_START	Increment List Value	증분 리스트 값
+ID_TEXT_ITALIC	Italic	기울임꼴
+ID_TEXT_LEADER_ARC	Curved	곡선형
+ID_TEXT_LEADER_NONE	No Leader	지시선 없음
+ID_TEXT_LEADER_ONESEG	One Segment	하나의 세그먼트
+ID_TEXT_LEADER_TWOSEG	Two Segments	두 개의 세그먼트
+ID_TEXT_PARA_BULLET	List: Bullets	리스트: 글머리 기호
+ID_TEXT_PARA_LOWERCASE	List: Lowercase Letters	리스트: 소문자
+ID_TEXT_PARA_NONE	List: None	리스트: 없음
+ID_TEXT_PARA_NUMBER	List: Numbers	리스트: 숫자
+ID_TEXT_PARA_UPPERCASE	List: Uppercase Letters	리스트: 대문자
+ID_TEXT_SUBSCRIPT	Subscript	아래 첨자
+ID_TEXT_SUPERSCRIPT	Superscript	위 첨자
+ID_TEXT_UNDERLINE	Underline	밑줄
+ID_THIN_LINES	Thin Lines; Thin Lines	가는 선; 가는 선
+ID_TITLEBLOCK_NEW	Title Block	제목 블록
+ID_TOGGLE_ACTIVATE_CONTROLS	Activate Controls and Dimensions	컨트롤 및 치수 활성화
+ID_TOGGLE_ALLOW_DRAG_ON_SELECTION	Drag elements on selection	선택된 요소 끌기
+ID_TOGGLE_ALLOW_FACE_SELECTION	Select elements by face	면별 요소 선택
+ID_TOGGLE_ALLOW_LINK_SELECTION	Select links	링크 선택
+ID_TOGGLE_ALLOW_PINNED_SELECTION	Select pinned elements	핀 요소 선택
+ID_TOGGLE_ALLOW_UNDERLAY_SELECTION	Select underlay elements	언더레이 요소 선택
+ID_TOGGLE_FABPART_BROWSER	MEP Fabrication Parts; Fabrication Part	MEP 제작 부품; 제작 부품
+ID_TOGGLE_HOST_BY_LINK_BROWSER	Reconcile Hosting	호스트 조정
+ID_TOGGLE_PROPERTIES_PALETTE	Properties; Toggle Properties Palette	특성; 특성 전환 팔레트
+ID_TOGGLE_REBAR_ALIGNED_SET_ORIENTATION_KEYSHORTCUT	Toggle Bar Alignment	막대 정렬 전환
+ID_TOGGLE_REBAR_CONSTRAINT_CLEAR_SPACING_KEYSHORTCUT	Toggle Rebar Clear Distance	보강 철근 간격 전환
+ID_TOGGLE_REBAR_CONSTRAINT_CLOSE_LOOP_KEYSHORTCUT	Toggle Free Form Rebar Auto-close	프리폼 보강 철근 자동 닫기 전환
+ID_TOGGLE_REBAR_COVER_CHECK_UNCHECK_KEYSHORTCUT	Toggle Rebar Cover Constraint	보강 철근 피복 구속조건 전환
+ID_TOGGLE_REBAR_TOGGLE_BI_DIRECTIONAL_KEYSHORTCUT	Toggle Rebar Two-way Constraint	보강 철근 양방향 구속조건 전환
+ID_TOGGLE_REBAR_VISIBILITY	Toggle visibility	가시성 토글
+ID_TOGGLE_REVEAL_CONSTRAINTS	Toggle Reveal Constraints Mode	모서리 받침 구속조건 모드 전환
+ID_TOGGLE_SHOW_MAKE_ELEMENT_EDITABLE_CONTROLS	Show Worksharing Make Editable Controls	작업 공유 편집가능하게 만들기 컨트롤 표시
+ID_TOGGLE_SMOOTH_TOPOSOLID	Toposolid Smooth Shading	지형 솔리드 부드러운 음영처리
+ID_TOGGLE_SNAP_TO_SSE_POINTS_LINES	Snap to Editor Points and Lines	편집기 점 및 선으로 스냅
+ID_TOGGLE_STRUCTCONNECTIONS_SHOW_WARNINGS	Show warnings in views	뷰에 경고 표시
+ID_TOOLS_MACROS	Macro Manager	매크로 관리자
+ID_TOOLS_MACROSECURITY	Macro Security	매크로 보안
+ID_TOPOGRAPHY_LINK	Link Topography	지형 링크
+ID_TOPOSOLID_EXCAVATION	Excavate	굴착
+ID_TOPOSOLID_PICK_FACES	Toposolid by Face	면별 지형 솔리드
+ID_TOPOSOLID_SIMPLIFY	Simplify Toposolid	지형 솔리드 단순화
+ID_TOPOSOLID_SUBREGION	Sub-divide	구획화
+ID_TOPOSOLID_UNEXCAVATION	Excavate:Remove Excavation	굴착:굴착 제거
+ID_TOPOSURFACE_SETTINGS	Toposurface Settings	지형면 설정
+ID_TRANSFER_PROJECT_STANDARDS	Transfer Project Standards	프로젝트 표준 전송
+ID_TRIM_EXTEND_CORNER	Trim/Extend to Corner	코너로 자르기/연장
+ID_TRIM_EXTEND_MULTIPLE	Trim/Extend Multiple Elements	다중 요소 자르기/연장
+ID_TRIM_EXTEND_SINGLE	Trim/Extend Single Element	단일 요소 자르기/연장
+ID_TRUSS_BOTTOM_CHORD_CURVE	Bottom Chord; Bottom Chord	하현재; 하현재
+ID_TRUSS_BOTTOM_CHORD_REFERENCE	Bottom Chord	하현재
+ID_TRUSS_LINE	Truss:Line	트러스:선
+ID_TRUSS_PICK_LINES	Truss:Pick Lines	트러스:선 선택
+ID_TRUSS_TOP_CHORD_CURVE	Top Chord; Top Chord	상현재; 상현재
+ID_TRUSS_TOP_CHORD_REFERENCE	Top Chord	상현재
+ID_TRUSS_WEB_CURVE	Web	웹
+ID_TURN_ON_MULTI_PLANAR_REBAR	Multi-planar	다중 평면
+ID_TURN_ON_MULTI_PLANAR_SHAPE	Multi-planar	다중 평면
+ID_TWINMOTION_DIRECT_LINK_AUTOSYNC_DISABLE	Twinmotion:Auto Sync	Twinmotion:자동 동기화
+ID_TWINMOTION_DIRECT_LINK_CONNECTIONS	Twinmotion:Connections	Twinmotion:연결
+ID_TWINMOTION_DIRECT_LINK_SYNCHRONIZE	Twinmotion:Synchronize	Twinmotion:동기화
+ID_TWINMOTION_EXPORT_TO_DATASMITH_FILE	Twinmotion:Export to Datasmith file	Twinmotion:Datasmith 파일로 내보내기
+ID_TWINMOTION_MESSAGES	Twinmotion:Export Messages	Twinmotion:메시지 내보내기
+ID_TWINMOTION_SETTINGS	Twinmotion:Export Settings	Twinmotion:설정 내보내기
+ID_TWINMOTION_SUB_SETTINGS	Twinmotion:Substitution Settings	Twinmotion:대체 설정
+ID_UNCOPING	Cope:Remove Coping	코핑:코핑 제거
+ID_UNCUT_HOST	Cut:Uncut Geometry	절단:형상 비절단
+ID_UNEXTEND_WALLS	Detach:Detach Top/Base	분리:상단/베이스 분리
+ID_UNHIDE_ALL_COLUMNS	Unhide All Columns	전체 열 숨기기 해제
+ID_UNHIDE_ELEMENTS_EDITOR	Remove Hidden Lines by Element	요소별 은선 제거
+ID_UNJOIN_ELEMENTS_EDITOR	Join:Unjoin Geometry	결합:형상 결합 해제
+ID_UNLOCK_ELEMENTS	Unpin	잠금 해제
+ID_UPDATE_PATH_OF_TRAVEL	Update Paths of Travel	이동 경로 업데이트
+ID_VIEWCUBE_HELP	Help	도움말
+ID_VIEWCUBE_HOME	Go Home	홈으로 이동
+ID_VIEWCUBE_LOCK_SELECTION	Lock to Selection	선택으로 고정
+ID_VIEWCUBE_OPTIONS	Options	옵션
+ID_VIEWCUBE_RESET_FRONT	Reset Front	정면도 재설정
+ID_VIEWCUBE_SET_HOME	Set Current View as Home	현재 뷰를 홈으로 설정
+ID_VIEWCUBE_TOGGLE_BETWEEN_PERSP_AND_ORTHO	Toggle to Orthographic-3D View / Toggle to Perspective-3D View	직교 3D 뷰로 전환/투시 3D 뷰로 전환
+ID_VIEWPORT_ACTIVATE	Viewports:Activate View; Activate View	뷰포트:뷰 활성화; 뷰 활성화
+ID_VIEWPORT_ACTIVATE_BASE	Viewports:Deactivate View	뷰포트:뷰 비활성화
+ID_VIEWPORT_EDIT_VIEW_POSITION	Edit Position	위치 편집
+ID_VIEWPORT_SAVE_VIEW_POSITION	Save Position	위치 저장
+ID_VIEWPORT_VIEW	View	뷰
+ID_VIEWS_FOR_A360	Publish Settings	게시 설정
+ID_VIEWTAGSTYLES_CALLOUTTAGS	Callout Tags	콜아웃 태그
+ID_VIEWTAGSTYLES_ELEVATIONTAGS	Elevation Tags	입면 태그
+ID_VIEWTAGSTYLES_SECTIONTAGS	Section Tags	단면 태그
+ID_VIEW_ANCHOR	View Anchor	뷰 앵커
+ID_VIEW_APPLY_SELECTION_BOX	Selection Box	선택 상자
+ID_VIEW_CATEGORY_VISIBILITY	Visibility/ Graphics	가시성/그래픽
+ID_VIEW_CLOSE_INACTIVE	Close Inactive Views	비활성 뷰 닫기
+ID_VIEW_DEFAULT_3DVIEW	3D View; Default 3D View	3D 뷰; 기본 3D 뷰
+ID_VIEW_FRAME_REVEALHIDDEN	Toggle Reveal Hidden Elements Mode	숨겨진 요소 표시 모드 전환
+ID_VIEW_FRAME_TOGGLE_ANALYTICAL_MODEL_VISIBILITY	Show/Hide Analytical Model	해석 모델 표시/숨기기
+ID_VIEW_GO_FILTER	Hide in View:Hide by Filter; Override Graphics in View:Override by Filter	뷰에서 숨기기:필터별 숨기기; 뷰에서 그래픽 재지정:필터별 재지정
+ID_VIEW_HIDE_CATEGORY	Hide in View:Hide Category	뷰에서 숨기기:카테고리 숨기기
+ID_VIEW_HIDE_ELEMENTS	Hide in View:Hide Elements	뷰에서 숨기기:요소 숨기기
+ID_VIEW_NEW_3DVIEW	3D View:Camera; Default 3D View:Camera	3D 뷰:카메라; 기본 3D 뷰:카메라
+ID_VIEW_NEW_AREASCHEME	Plan Views:Area Plan; Area:Area Plan	평면도:영역 평면도; 영역:영역 평면도
+ID_VIEW_NEW_CALLOUT	Callout	콜아웃
+ID_VIEW_NEW_CALLOUT_SKETCH	Callout:Sketch	콜아웃:스케치
+ID_VIEW_NEW_DRAFTING	Drafting View	드래프팅 뷰
+ID_VIEW_NEW_DRAWING_LIST	Schedules:Sheet List	일람표:시트 리스트
+ID_VIEW_NEW_GRAPH_SCHED_COLUMN	Schedules:Graphical Column Schedule	일람표:그래픽 기둥 일람표
+ID_VIEW_NEW_KEYNOTE_LEGEND	Legends:Keynote Legend	범례:키노트 범례
+ID_VIEW_NEW_LEGEND	Legends:Legend	범례:범례
+ID_VIEW_NEW_MATERIAL_TAKEOFF	Schedules:Material Takeoff	일람표:재료 견적
+ID_VIEW_NEW_NOTE_BLOCK	Schedules:Note Block	일람표:참고 블록
+ID_VIEW_NEW_PLAN	Plan Views:Floor Plan; Floor Plan	평면뷰:평면; 평면
+ID_VIEW_NEW_RCP	Plan Views:Reflected Ceiling Plan	평면뷰:반사된 천장 평면도
+ID_VIEW_NEW_REVISION_SCHEDULE	Revision Schedule	수정기호 일람표
+ID_VIEW_NEW_SCHEDULE	Schedules:Schedule/Quantities; Schedule/ Quantities	일람표:일람표/수량; 일람표/ 수량
+ID_VIEW_NEW_SECTION	Section	횡단
+ID_VIEW_NEW_SHEET	Sheet; New Sheet	시트; 새 시트
+ID_VIEW_NEW_STRUCTURAL_PLAN	Plan Views:Structural Plan; Structural Plan	평면뷰:구조 평면; 구조 평면
+ID_VIEW_NEW_WALKTHROUGH	3D View:Walkthrough; Default 3D View:Walkthrough	3D 뷰:보행시선; 기본 3D 뷰:보행시선
+ID_VIEW_OVERRIDE_CATEGORY	Override Graphics in View:Override by Category	뷰에서 그래픽 재지정:카테고리별 재지정
+ID_VIEW_OVERRIDE_CATEGORY_HALFTONE	Graphic Override by Category in View: toggle halftone	뷰에서 카테고리별 그래픽 재지정: 중간색 전환
+ID_VIEW_OVERRIDE_ELEMENTS	Override Graphics in View:Override by Element	뷰에서 그래픽 재지정:요소별 재지정
+ID_VIEW_OVERRIDE_ELEMENTS_HALFTONE	Graphic Override by Element in View: toggle halftone	뷰에서 요소별 그래픽 재지정: 중간색 전환
+ID_VIEW_PLACE_VIEW	Place View	뷰 배치
+ID_VIEW_PROJECTEXPLORER	Project Browser	프로젝트 탐색기
+ID_VIEW_STATUS_BAR	Status Bar	상태 막대
+ID_VIEW_TAB	Tab Views	탭 뷰
+ID_VIEW_UNHIDE_BY_CATEGORY	Unhide Category	카테고리 숨김 해제
+ID_VIEW_UNHIDE_ELEMENTS	Unhide Element	요소 숨김 해제
+ID_VIEW_ZOOMANDPAN_NEXTVIEW	Next Pan/Zoom	다음 초점이동/줌
+ID_VIEW_ZOOMANDPAN_PREVIOUSVIEW	Previous Pan/Zoom	이전 초점이동/줌
+ID_VISUAL_PROGRAMMING_DYNAMO	Dynamo	Dynamo
+ID_VOLUME_OF_INTEREST	Scope Box	스코프 박스
+ID_WALKTHROUGH_EDIT	Edit Walkthrough	보행시선 편집
+ID_WALL_ARC_CENTER_ENDS	Architectural Wall: Center-Ends Arc	건축 벽: 중간-끝 호
+ID_WALL_ARC_FILLET	Architectural Wall:Fillet Arc	건축 벽:모깎기 호
+ID_WALL_ARC_TAN	Architectural Wall:Tangent End Arc	건축 벽:접선 끝 호
+ID_WALL_ARC_THREE_PNT	Architectural Wall:Start-End-Radius Arc	건축 벽:시작-끝-반지름 호
+ID_WALL_CIRCLE	Architectural Wall:Circle	건축 벽:원
+ID_WALL_FULL_ELLIPSE	Architectural Wall:Ellipse	건축 벽:타원
+ID_WALL_LINE	Architectural Wall:Line	건축 벽:선
+ID_WALL_PARTIAL_ELLIPSE	Architectural Wall:Partial Ellipse	건축 벽:부분 타원
+ID_WALL_PICK_FACES	Wall:Wall by Face	벽:면으로 벽 만들기
+ID_WALL_PICK_LINES	ArchWal:Pick Lines	건축 벽:선 선택
+ID_WALL_PLACE_BY_ROOM	Place By Room	룸별로 배치
+ID_WALL_PLACE_BY_SEGMENT	Place By Segment	세그먼트별로 배치
+ID_WALL_POLY_CIRCUMSCRIBED	Architectural Wall:Circumscribed Polygon	건축 벽:외접 다각형
+ID_WALL_POLY_INSCRIBED	Architectural Wall:Inscribed Polygon	건축 벽:내접 다각형
+ID_WALL_RECT	Architectural Wall:Rectangle	건축 벽:직사각형
+ID_WALL_SPLINE	Architectural Wall:Spline	건축 벽:스플라인
+ID_WALL_STRUCT_ARC_CENTER_ENDS	Structural Wall:Center-Ends Arc	구조 벽:중간-끝 호
+ID_WALL_STRUCT_ARC_FILLET	Structural Wall:Fillet Arc	구조 벽:모깎기 호
+ID_WALL_STRUCT_ARC_TAN	Structural Wall:Tangent End Arc	구조 벽:접선 끝 호
+ID_WALL_STRUCT_ARC_THREE_PNT	Structural Wall:Start-End-Radius Arc	구조 벽:시작-끝-반지름 호
+ID_WALL_STRUCT_CIRCLE	Structural Wall:Circle	구조 벽:원
+ID_WALL_STRUCT_FULL_ELLIPSE	Structural Wall:Ellipse	구조 벽:타원
+ID_WALL_STRUCT_LINE	Structural Wall:Line	구조 벽:선
+ID_WALL_STRUCT_PARTIAL_ELLIPSE	Structural Wall:Partial Ellipse	구조 벽:부분 타원
+ID_WALL_STRUCT_PICK_FACES	Structural Wall:Pick Faces	구조 벽:면 선택
+ID_WALL_STRUCT_PICK_LINES	Structural Wall:Pick Lines	구조 벽:선 선택
+ID_WALL_STRUCT_POLY_CIRCUMSCRIBED	Structural Wall:Circumscribed Polygon	구조 벽:외접 다각형
+ID_WALL_STRUCT_POLY_INSCRIBED	Structural Wall:Inscribed Polygon	구조 벽:내접 다각형
+ID_WALL_STRUCT_RECT	Structural Wall:Rectangle	구조 벽:직사각형
+ID_WALL_STRUCT_SPLINE	Structural Wall:Spline	구조 벽:스플라인
+ID_WINDOW_TILE_VERT	Tile Views	타일 뷰
+ID_WORKPLANE_VIEW	Workplane Viewer; Form Work Plane View	작업 기준면 뷰어; 작업 기준면 뷰 양식
+ID_WORKSETS_RELOAD_LATEST	Reload Latest	최근 작업 세트 다시 로드
+ID_WORKSET_EDITING_REQUESTS	Editing Requests	편집 요청 중
+ID_WORKSHARING_MONITOR	Worksharing Monitor	Worksharing Monitor
+ID_ZOOM_ALL_ALL	Zoom All to Fit	윈도우 줌
+ID_ZOOM_FIT	Zoom to Fit	윈도우 줌
+ID_ZOOM_IN	Zoom in Region	영역 확대 보기
+ID_ZOOM_OUT_X2	Zoom Out(2x)	축소 보기(1/2배)
+ID_ZOOM_SHEET	Zoom Sheet Size	시트 크기 줌

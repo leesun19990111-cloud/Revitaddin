@@ -11,7 +11,7 @@
          스타일이 Revit 리본/다른 창 텍스트까지 하얗게 물들이는 라이브 버그가 있었다(2026-07-27 확인).
          Window.Resources는 이 창(과 이 창이 띄우는 팝업/드롭다운)에만 적용되므로 안전하다. -->
     <Window.Resources>
-        <ResourceDictionary Source="/WallSplitter;component/Resources/Theme.xaml"/>
+        <ResourceDictionary Source="Resources/Theme.xaml"/>
     </Window.Resources>
     <Grid Margin="14">
         <Grid.RowDefinitions>
@@ -25,7 +25,10 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+        <StackPanel Grid.Row="0">
+        <TextBlock x:Name="DocumentScopeText" Visibility="Collapsed" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Foreground="{DynamicResource AccentBrush}" FontWeight="Bold"/>
+        <WrapPanel Margin="0,0,0,8">
             <TextBlock Text="대상:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
             <RadioButton x:Name="CategoryViewRadio" Content="뷰" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
             <RadioButton x:Name="CategorySheetRadio" Content="시트" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
@@ -35,6 +38,8 @@
             <RadioButton x:Name="CategoryScheduleRadio" Content="일람표" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
             <RadioButton x:Name="CategoryViewTemplateRadio" Content="뷰 템플릿" GroupName="Category" Margin="0,0,14,0" Checked="CategoryRadio_Checked"/>
             <RadioButton x:Name="CategoryMaterialRadio" Content="재료" GroupName="Category" Checked="CategoryRadio_Checked"/>
+            <RadioButton x:Name="CategoryProjectInformationRadio" Content="프로젝트 정보" GroupName="Category" Margin="14,0,0,0" Checked="CategoryRadio_Checked"/>
+        </WrapPanel>
         </StackPanel>
 
         <StackPanel x:Name="MaterialDuplicatePanel" Grid.Row="1" Margin="0,0,0,8" Visibility="Collapsed">
@@ -43,7 +48,8 @@
             <RadioButton x:Name="DuplicateSuffixRadio" Content="뒤에 숫자를 붙여 새 이름으로 저장" GroupName="DuplicateMaterial"/>
         </StackPanel>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+        <StackPanel Grid.Row="2" Margin="0,0,0,8">
+            <WrapPanel>
             <TextBlock Text="필터:" VerticalAlignment="Center" Margin="0,0,4,0"/>
             <TextBox x:Name="FilterBox" Width="220" VerticalContentAlignment="Center" TextChanged="FilterBox_TextChanged"/>
             <ComboBox x:Name="FilterModeCombo" Width="130" Margin="6,0,0,0" SelectedIndex="0" SelectionChanged="FilterModeCombo_SelectionChanged">
@@ -56,7 +62,12 @@
             </ComboBox>
             <Button x:Name="SelectAllButton" Content="전체 선택" Margin="14,0,0,0" Click="SelectAllButton_Click"/>
             <Button x:Name="SelectNoneButton" Content="전체 해제" Margin="6,0,0,0" Click="SelectNoneButton_Click"/>
-            <TextBlock Text="(목록에서 드래그하면 여러 항목을 한 번에 체크/해제할 수 있습니다)" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0,0,0"/>
+            </WrapPanel>
+            <TextBlock x:Name="FamilyHierarchyHint" Visibility="Collapsed" Margin="0,5,0,0"
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                       Text="패밀리 이름으로 검색 · ▸를 눌러 모든 하위 유형 보기 · 패밀리/유형은 개별 체크&#10;전체 선택: 펼쳐진 목록 전체(더 보기 포함) · 접어도 기존 선택 유지 · 전체 해제: 접힌 유형까지 해제"/>
+            <TextBlock Text="(드래그: 여러 항목 체크/해제 · 이름 더블클릭: 그 항목만 바로 수정 · 이름 위에 마우스를 올린 뒤 '특성': Revit 기본 창 열기)"
+                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,5,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,6">
@@ -122,7 +133,7 @@
                     <TextBlock Grid.Column="2" Text="변경 후 이름" FontWeight="Bold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                 </Grid>
 
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="ItemsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel x:Name="ItemsPanel" Margin="4"
                                 MouseMove="ItemsPanel_MouseMove"
                                 MouseLeftButtonUp="ItemsPanel_MouseLeftButtonUp"
@@ -133,11 +144,15 @@
 
         <StackPanel Grid.Row="6" Margin="0,6,0,0">
             <TextBlock x:Name="CountText" Foreground="{DynamicResource TextSecondaryBrush}"/>
-            <TextBlock x:Name="PendingChangesText" Foreground="{DynamicResource WarningTextBrush}" FontWeight="SemiBold" Margin="0,2,0,0"/>
+            <TextBlock x:Name="PendingChangesText" Foreground="{DynamicResource WarningTextBrush}" FontWeight="SemiBold" Margin="0,2,0,0" TextWrapping="Wrap"/>
+            <!-- 모드리스라 작업 결과를 대화상자로 막고 알릴 수 없다 - 상태 줄로 그 자리에서 알려준다. -->
+            <TextBlock x:Name="StatusText" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
         </StackPanel>
 
         <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Content="취소" Padding="18,5" Margin="0,0,8,0" Click="CancelButton_Click" IsCancel="True"/>
+            <!-- 모드리스 창이므로 "취소"가 아니라 "닫기"다 - 창을 닫아도 이미 최종 적용한 것은 남는다.
+                 IsCancel은 두지 않는다: Esc로 실수로 닫히면 쌓아 둔 작업 중 이름이 통째로 사라진다. -->
+            <Button Content="닫기" Padding="18,5" Margin="0,0,8,0" Click="CloseButton_Click"/>
             <Button Content="적용 (창 안에서만)" Padding="18,5" Margin="0,0,16,0" Click="ApplyButton_Click"/>
             <Button Content="최종 적용 (모델에 반영)" Padding="18,5" Click="FinalApplyButton_Click" FontWeight="Bold" Style="{StaticResource PrimaryButtonStyle}"/>
         </StackPanel>

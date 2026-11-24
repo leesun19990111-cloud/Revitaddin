@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SunnyTools_Install")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d205168d28d585f76efdfe48a853a748829e61cd")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+78dff2398409255ddd8bdadb8eb0802ca35fb808")]
 [assembly: System.Reflection.AssemblyProductAttribute("SunnyTools_Install")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SunnyTools_Install")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

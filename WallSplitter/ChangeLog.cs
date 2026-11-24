@@ -20,6 +20,9 @@ namespace WallSplitter
         MaterialAssign,     // 재료 지정: 유형 이름이 Key인 유형의 재료를 OldValue(이름)에서 NewValue(이름)로 변경
         MaterialDelete,     // 재료 지정: 이름이 Key인 재료를 삭제
         MaterialIdentityEdit, // 재료 지정: 이름이 Key인 재료의 Field(클래스/설명)를 NewValue로 변경
+        MaterialInstanceAssign, // 유형별 인스턴스 재료 지정 — 유형 슬롯으로 오인해 재생하지 않는다
+        ProjectInformation, // 프로젝트별 값: 기록만 남기고 다른 모델에 이름 기반 자동 재생하지 않는다
+        ScheduleParameter, // 일람표의 검증된 행/필드 수정: 자동 재생 제외
     }
 
     internal enum IdentityField
@@ -115,7 +118,10 @@ namespace WallSplitter
 
             ChangeLog log = Load();
             log.Entries.AddRange(list);
-            log.Save();
+            // 이 시점엔 모델 변경이 이미 커밋된 뒤다. %APPDATA% 쓰기 실패(권한/디스크)로 커맨드 전체를
+            // 실패로 보고하면, 실제로는 잘 반영된 작업이 실패한 것처럼 보인다. 기록만 조용히 포기한다.
+            try { log.Save(); }
+            catch { /* 변경 기록은 부가 기능이므로 저장 실패가 본 작업을 실패시키지 않는다. */ }
         }
     }
 }

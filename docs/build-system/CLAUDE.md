@@ -1,4 +1,18 @@
-# 멀티 버전 빌드 (Revit 2023–2027)
+# 멀티 버전 빌드 (Revit 2017, 2023–2027)
+
+## Revit 2017 호환 구성
+
+`Debug2017`/`Release2017`은 net48과 `REVIT2017`을 사용한다. `Revit_API_x64` 2017.0.0의 RevitAPI 및 RevitAPIUI(어셈블리 17.0.0.0)를 참조 전용으로 사용한다. 패키지의 나머지 Autodesk DLL과 두 참조 DLL은 Payload에 넣지 않는다. Windows에 .NET Framework 4.8 이상이 필요하다.
+
+2017에는 경고 조회 API 및 패턴 타공·복원에 필요한 2D 표시선/스케치 편집 API가 없다. 해당 명령의 프로젝트 항목, 리본 및 커스텀 버튼 카탈로그를 2017에서 제외한다. 편집한 프로파일이 있는 벽은 건너뛰고, 경사·형태 편집·호스트 개구부가 없는 평바닥은 기존 경계를 복사해 분리한다. 2017의 링크 포함 일반 요소 일람표는 2023과 동일한 제한을 적용한다.
+
+6개 연도 격리 Release 빌드, API 참조·WPF URI·배포 해시와 2017 설치 사본 경로를 확인했다. Revit 2017 실기 테스트는 대상 버전이 설치된 PC에서 필요하다.
+
+## 2026-11-12 — WPF 리소스의 어셈블리 버전 지정
+
+Revit 2026 journal.0416에서 룸 경계 ON/OFF와 경고Pick이 InitializeComponent에서 실패했다. 같은 세션에 설치 DLL과 테스트 중 Assembly.Load(byte[])로 넣은 DLL들이 모두 WallSplitter 1.0.0.0으로 올라왔으며, 설치본의 두 창을 직접 생성해 같은 오류를 재현했다. WPF의 버전 없는 pack URI가 다른 빌드의 BAML을 가리켰다.
+
+csproj의 Version을 설치 ZIP 버전과 함께 올린다. AssemblyVersion은 $(Version).$(RevitVersion)이며 WPF가 버전 포함 URI를 생성하도록 csproj에서 명시한다. 배포 검증에서 어셈블리 버전과 생성된 창 URI를 확인한다. 테스트는 별도 프로세스 또는 별도 Revit 세션에서 실행한다. 운영 Revit에는 설치 DLL과 동일한 어셈블리 ID의 시험 DLL을 로드하지 않는다.
 
 `WallSplitter.csproj`의 연도별 Configuration→TFM→`Nice3point.Revit.Api.RevitAPI` 패키지 버전 매핑을 건드리기 전에 이 문서를 읽을 것.
 

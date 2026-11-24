@@ -1,0 +1,15 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\bin\Debug\net8.0-windows\DeleteSmoke.exe
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\bin\Debug\net8.0-windows\DeleteSmoke.deps.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\bin\Debug\net8.0-windows\DeleteSmoke.runtimeconfig.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\bin\Debug\net8.0-windows\DeleteSmoke.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\bin\Debug\net8.0-windows\DeleteSmoke.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.AssemblyInfo.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.sourcelink.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\refint\DeleteSmoke.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\DeleteSmoke.genruntimeconfig.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v92\obj\Debug\net8.0-windows\ref\DeleteSmoke.dll

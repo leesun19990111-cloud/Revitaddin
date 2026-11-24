@@ -23,9 +23,14 @@ namespace WallSplitter
         // Equals로 다시 비교하지 말 것.
         private static string DocKey(Document doc) => string.IsNullOrEmpty(doc.PathName) ? doc.Title : doc.PathName;
 
-        private bool IsTargetDocument(Document doc) => TargetDocument != null && DocKey(doc) == DocKey(TargetDocument);
+        // 2026-09-03: 실시간 갱신(WarningPickWindow.RequestLiveRefresh)이 "지금 바뀐 문서가 이 창의
+        // 대상 문서인가"를 물어봐야 해서 internal로 열었다.
+        internal bool IsTargetDocument(Document doc) => TargetDocument != null && DocKey(doc) == DocKey(TargetDocument);
 
         internal List<ElementId>? PendingSelectIds { get; set; }
+
+        internal WarningPickDeleteRequest? PendingDelete { get; set; }
+        internal bool IsDeleting { get; private set; }
 
         // "선택 항목 단면상자로 보기" / "선택 항목만 표시" 요청 - 같은 ExternalEvent를 재사용한다
         // (QuickToggleExternalEventHandler가 여러 종류의 요청을 한 이벤트로 처리하는 것과 같은 패턴).
@@ -34,10 +39,42 @@ namespace WallSplitter
         internal bool PendingResetIsolate { get; set; }
 
         // true면 이번 Raise()는 "선택"이 아니라 경고 목록 새로고침 요청이다 - 같은 ExternalEvent를 재사용한다.
+        // PendingRefreshSilent는 그 요청이 사용자가 누른 "새로고침"이 아니라 문서 변경에 따른 자동 갱신
+        // (2026-09-03 실시간 갱신)이라는 표시다 - 자동 갱신은 활성 문서가 그 사이 바뀌어 있어도 조용히
+        // 넘어가야 한다. 안 그러면 사용자가 다른 프로젝트에서 작업할 때마다 "활성 문서가 아닙니다"
+        // 대화상자가 저절로 튀어나온다.
         internal bool PendingRefresh { get; set; }
+        internal bool PendingRefreshSilent { get; set; }
 
+        // ExternalEvent 콜백에서 예외가 나면 Revit은 사용자에게 아무 것도 보여주지 않는다 - "버튼을 눌러도
+        // 반응이 없다"는 증상으로만 남는다(커스텀 버튼에서 실제로 겪은 문제, docs/quick-toggle 참고).
+        // 그래서 여기서 직접 잡아 알려준다.
         public void Execute(UIApplication app)
         {
+            try
+            {
+                ExecuteCore(app);
+            }
+            catch (System.Exception ex)
+            {
+                TaskDialog.Show("경고Pick", "요청을 실행하지 못했습니다.\n\n" + ex.GetBaseException().Message);
+            }
+        }
+
+        private void ExecuteCore(UIApplication app)
+        {
+            // 삭제는 다른 대기 요청보다 먼저 처리한다. 확인창 취소/예외 이후에도 재실행되지 않게 먼저 비운다.
+            if (PendingDelete != null)
+            {
+                WarningPickDeleteRequest request = PendingDelete;
+                PendingDelete = null;
+                PendingSelectIds = null;
+                PendingSectionBoxIds = null;
+                PendingIsolateIds = null;
+                PendingResetIsolate = false;
+                ExecuteDelete(app, request);
+                return;
+            }
             if (PendingSelectIds != null)
             {
                 List<ElementId> ids = PendingSelectIds;
@@ -72,7 +109,9 @@ namespace WallSplitter
             if (PendingRefresh)
             {
                 PendingRefresh = false;
-                ExecuteRefresh(app);
+                bool silent = PendingRefreshSilent;
+                PendingRefreshSilent = false;
+                ExecuteRefresh(app, silent);
             }
         }
 
@@ -229,17 +268,79 @@ namespace WallSplitter
             }
         }
 
-        private void ExecuteRefresh(UIApplication app)
+        private void ExecuteRefresh(UIApplication app, bool silent)
         {
             UIDocument? uidoc = app.ActiveUIDocument;
             if (uidoc == null || !IsTargetDocument(uidoc.Document))
             {
-                WarningPickWindow.Instance?.ShowDocumentMismatch();
+                // 자동 갱신(문서 변경)이면 조용히 넘어간다 - 요청을 넣은 시점엔 대상 문서가 맞았어도
+                // ExternalEvent가 실제로 실행될 때까지 사용자가 다른 프로젝트로 전환했을 수 있는데,
+                // 그때마다 대화상자를 띄우면 다른 프로젝트에서 작업하는 내내 팝업이 튀어나온다.
+                if (!silent) WarningPickWindow.Instance?.ShowDocumentMismatch();
                 return;
             }
 
             List<WarningPickTypeGroup> typeGroups = WarningPickTypeGroup.BuildTypeGroups(uidoc.Document, uidoc.Document.GetWarnings());
             WarningPickWindow.Instance?.ApplyRefreshedTypeGroups(typeGroups);
+        }
+
+        private void ExecuteDelete(UIApplication app, WarningPickDeleteRequest request)
+        {
+            WarningPickWindow? window = WarningPickWindow.Instance;
+            if (window == null || !window.OwnsHandler(this)) return;
+            IsDeleting = true;
+            string result = "삭제가 중단되었습니다.";
+            try
+            {
+                UIDocument? uidoc = app.ActiveUIDocument;
+                // 수정 가능한 TargetDocument만 보지 않고 요청 당시 문서도 함께 검사한다.
+                if (uidoc == null || !request.Document.IsValidObject ||
+                    !IsTargetDocument(uidoc.Document) || DocKey(uidoc.Document) != DocKey(request.Document) ||
+                    uidoc.Document.ProjectInformation.UniqueId != request.Document.ProjectInformation.UniqueId)
+                {
+                    result = "요청 당시 문서가 활성 문서가 아니므로 삭제하지 않았습니다.";
+                    window.ShowDocumentMismatch();
+                    return;
+                }
+
+                result = WarningPickDeleteService.Delete(uidoc.Document, request.Ids, preview =>
+                {
+                    TaskDialog dialog = new TaskDialog("경고Pick — 요소 삭제 확인")
+                    {
+                        MainIcon = TaskDialogIcon.TaskDialogIconWarning,
+                        MainInstruction = "정말 삭제하시겠습니까?",
+                        MainContent = $"문서: {uidoc.Document.Title}\n범위: {request.Scope}\n\n" +
+                            $"대상 {preview.TargetCount}개 + 함께 삭제될 의존 요소 {preview.DependentCount}개\n" +
+                            $"총 {preview.TotalCount}개 요소가 실제 모델에서 삭제됩니다.\n\n" +
+                            "경고 문구만 지우는 기능이 아닙니다. 벽에 포함된 문·창, 치수 등 연결된 요소도 함께 삭제될 수 있습니다.\n" +
+                            "진행하려면 '예', 유지하려면 '아니요'를 누르세요. 삭제 후에는 Revit 실행 취소로 되돌릴 수 있습니다.",
+                        ExpandedContent = preview.Details,
+                        CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                        DefaultButton = TaskDialogResult.No,
+                        AllowCancellation = true,
+                    };
+                    return dialog.Show() == TaskDialogResult.Yes &&
+                        WarningPickWindow.Instance == window && window.OwnsHandler(this);
+                });
+            }
+            catch (System.Exception ex)
+            {
+                result = "삭제하지 못했습니다. 삭제 트랜잭션은 취소됩니다.";
+                TaskDialog.Show("경고Pick — 삭제 실패",
+                    result + "\n잠금·그룹·소유권 등 Revit의 삭제 제한을 확인해 주세요.\n\n" + ex.GetBaseException().Message);
+            }
+            finally
+            {
+                PendingRefresh = false;
+                PendingRefreshSilent = false;
+                try { ExecuteRefresh(app, true); }
+                finally
+                {
+                    IsDeleting = false;
+                    window.SetDeleteBusy(false);
+                    window.ShowDeleteResult(result);
+                }
+            }
         }
 
         public string GetName() => "WallSplitter 경고Pick";

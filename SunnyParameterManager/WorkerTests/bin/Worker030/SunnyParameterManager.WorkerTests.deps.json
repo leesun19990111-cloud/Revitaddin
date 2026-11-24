@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "SunnyParameterManager.WorkerTests/1.0.0": {
+        "dependencies": {
+          "SunnyParameterManager.Core": "1.0.0"
+        },
+        "runtime": {
+          "SunnyParameterManager.WorkerTests.dll": {}
+        }
+      },
+      "SunnyParameterManager.Core/1.0.0": {
+        "runtime": {
+          "SunnyParameterManager.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "SunnyParameterManager.WorkerTests/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "SunnyParameterManager.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

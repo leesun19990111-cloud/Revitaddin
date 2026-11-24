@@ -31,6 +31,8 @@ namespace WallSplitter
             public HashSet<ElementId>[] ElementsAtJoin = new HashSet<ElementId>[2];
             // 두께 0(멤브레인) 레이어를 제외한, 실제로 단일 벽이 만들어질 레이어들 (오프셋 계산까지 미리 끝낸 상태).
             public List<LayerDescriptor> LayerDescriptors = new List<LayerDescriptor>();
+            public int SelectedRawLayerIndex = -1;
+            public double RemainingCenterOffset;
             // NamingMode.DirectType일 때만 사용: LayerDescriptors와 같은 순서로, 사용자가 지정한 WallType Id.
             public List<ElementId> DirectTypeIds = new List<ElementId>();
         }
@@ -39,6 +41,7 @@ namespace WallSplitter
         // Template/DirectType 두 모드가 오프셋 계산 로직을 공유하도록 Tx1 루프보다 먼저 한 번만 계산해 둔다.
         private class LayerDescriptor
         {
+            public int RawIndex;
             public double LayerWidth;   // ft
             public double CenterOffset; // ft, 원본 중심선 기준 부호 있는 오프셋
             public ElementId MaterialId;
@@ -63,9 +66,20 @@ namespace WallSplitter
             ExternalCommandData commandData,
             ref string message,
             ElementSet elements)
+            => ExecuteCore(commandData, ref message, elements, false);
+
+        internal Result ExecuteOneLayer(ExternalCommandData commandData, ref string message, ElementSet elements)
+            => ExecuteCore(commandData, ref message, elements, true);
+
+        private Result ExecuteCore(
+            ExternalCommandData commandData,
+            ref string message,
+            ElementSet elements,
+            bool oneLayer)
         {
             UIDocument uiDoc = commandData.Application.ActiveUIDocument;
             Document doc = uiDoc.Document;
+            TransactionGroup partialGroup = null;
 
             try
             {
@@ -127,6 +141,13 @@ namespace WallSplitter
                         LevelId = wall.LevelId,
                     };
 
+#if REVIT2017
+                    if (!LegacySplitGeometry.IsUnsketchedWall(doc, wall))
+                    {
+                        skipReasons.Add($"{wall.Id}: Revit 2017에서는 편집한 벽 프로파일을 보존하며 분리할 수 없어 건너뜀");
+                        continue;
+                    }
+#else
                     // 프로파일 편집(Edit Profile)으로 기본 직사각형이 아닌 형태를 가진 벽이라면,
                     // 원본 벽을 삭제하기 전에 스케치 프로파일 곡선을 미리 읽어 캐시해 둔다.
                     if (wall.SketchId != ElementId.InvalidElementId)
@@ -135,6 +156,7 @@ namespace WallSplitter
                         prep.OriginalProfile = originalSketch?.Profile;
                         prep.HasEditedProfile = prep.OriginalProfile != null;
                     }
+#endif
 
                     // 원본 벽이 양 끝에서 어떤 요소와 결합되어 있었는지 미리 기록 (분리 후 같은 재료끼리 재결합하기 위함)
                     for (int end = 0; end < 2; end++)
@@ -166,6 +188,59 @@ namespace WallSplitter
                 // 이 결과(레이어별 재료/두께)를 그대로 보여준다.
                 foreach (WallPrepData prep in preps)
                     prep.LayerDescriptors = BuildLayerDescriptors(doc, prep, skipReasons);
+
+                if (oneLayer)
+                {
+                    var chosenByType = new Dictionary<ElementId, int>();
+                    var eligible = new List<WallPrepData>();
+                    foreach (WallPrepData prep in preps)
+                    {
+                        IList<CompoundStructureLayer> layers = prep.Structure.GetLayers();
+                        string reason = null;
+                        if (prep.Wall.WallType.Kind != WallKind.Basic || prep.Structure.IsVerticallyCompound)
+                            reason = "일반 기본벽의 단순한 수평 레이어 구조만 지원합니다";
+                        else if (prep.Wall.Pinned)
+                            reason = "고정된 벽은 원본 위치를 바꿀 수 없어 제외합니다";
+                        else if (prep.HasEditedProfile)
+                            reason = "편집된 프로파일을 새 레이어에 정확히 복제할 수 없어 제외합니다";
+                        else if (prep.Wall.FindInserts(true, true, true, true).Count > 0)
+                            reason = "문·창·개구부가 있어 새 레이어의 구멍을 자동 복제할 수 없습니다";
+                        else if (prep.Wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM)?.AsInteger() != (int)WallLocationLine.WallCenterline)
+                            reason = "벽 위치 기준이 중심선이 아니어서 잔여 레이어의 위치를 확정할 수 없습니다";
+                        else if (layers.Count < 2 || layers[0].Width < MinLayerWidth || layers[layers.Count - 1].Width < MinLayerWidth)
+                            reason = "양 끝에 두께가 있는 레이어가 2개 이상 필요합니다";
+
+                        if (reason != null)
+                        {
+                            skipReasons.Add($"{prep.WallId}: {reason}");
+                            continue;
+                        }
+
+                        ElementId sourceTypeId = prep.Wall.WallType.Id;
+                        if (!chosenByType.TryGetValue(sourceTypeId, out int selected))
+                        {
+                            string firstName = LayerMaterialName(doc, layers[0].MaterialId);
+                            string lastName = LayerMaterialName(doc, layers[layers.Count - 1].MaterialId);
+                            int? answer = EdgeLayerSelection.Choose("벽", prep.Wall.WallType.Name,
+                                firstName, layers[0].Width * 304.8, lastName, layers[layers.Count - 1].Width * 304.8, layers.Count);
+                            if (!answer.HasValue) return Result.Cancelled;
+                            selected = answer.Value;
+                            chosenByType.Add(sourceTypeId, selected);
+                        }
+
+                        LayerDescriptor chosen = prep.LayerDescriptors.Single(d => d.RawIndex == selected);
+                        prep.LayerDescriptors = new List<LayerDescriptor> { chosen };
+                        prep.SelectedRawLayerIndex = selected;
+                        prep.RemainingCenterOffset = selected == 0 ? -chosen.LayerWidth / 2.0 : chosen.LayerWidth / 2.0;
+                        eligible.Add(prep);
+                    }
+                    preps = eligible;
+                    if (preps.Count == 0)
+                    {
+                        TaskDialog.Show("한 레이어 분리", "분리 가능한 벽이 없습니다.\n" + string.Join("\n", skipReasons));
+                        return Result.Cancelled;
+                    }
+                }
 
                 // [유형 지정 단계] DirectType 모드면 Tx1을 열기 전에(모달 창은 열린 트랜잭션 안에서 띄우지 않는다,
                 // NamerCommand와 같은 원칙) 원본 벽마다 레이어별 유형을 확정해 둔다. 사용자가 취소하면 전체 취소.
@@ -213,7 +288,7 @@ namespace WallSplitter
                         string header = $"'{prep.Wall.WallType.Name}' 벽 분리 - 레이어 {items.Count}개에 적용할 유형을 검색하여 지정하세요.";
 
                         LayerTypeAssignmentWindow pickerWindow = new LayerTypeAssignmentWindow(header, items, availableTypes, warningMessage);
-                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.MainWindowHandle };
+                        new WindowInteropHelper(pickerWindow) { Owner = commandData.Application.GetMainWindowHandle() };
                         if (pickerWindow.ShowDialog() != true)
                             return Result.Cancelled; // 취소 시 벽체분리 전체 작업을 취소 (확인된 요구사항)
 
@@ -231,6 +306,13 @@ namespace WallSplitter
                 // (원본 벽 Id, 생성된 단일 벽의 WallType Id) -> 그 유형으로 만들어진 새 단일 벽들.
                 // 한 벽 안에 같은 재료+두께 레이어가 두 번 나오는 경우(대칭 구조)를 위해 List로 보관한다.
                 Dictionary<(ElementId, ElementId), List<Wall>> createdMap = new Dictionary<(ElementId, ElementId), List<Wall>>();
+                Dictionary<(ElementId, int), WallType> remainingTypes = new Dictionary<(ElementId, int), WallType>();
+
+                if (oneLayer)
+                {
+                    partialGroup = new TransactionGroup(doc, "벽 한 레이어 분리");
+                    partialGroup.Start();
+                }
 
                 // [1차 트랜잭션] 단일 벽 유형/벽체 생성 + 프로파일 스케치 준비 + 원본 복합 벽 삭제
                 using (Transaction tx = new Transaction(doc, "단일 벽 유형 생성 및 벽체 분리"))
@@ -251,6 +333,10 @@ namespace WallSplitter
                                 // [유형 단계 - 직접 지정] 위에서 이미 확정해 둔, 문서에 있는 기존 유형을 그대로 쓴다
                                 // (자동 생성 없음).
                                 targetWallType = doc.GetElement(prep.DirectTypeIds[layerIndex]) as WallType;
+                                // 유형을 고른 뒤 삭제/교체됐으면 여기서 null이 되어 원인 모를 NullReference로 끝난다.
+                                if (targetWallType == null)
+                                    throw new InvalidOperationException(
+                                        $"직접 지정한 벽 유형(레이어 {layerIndex + 1})을 문서에서 찾을 수 없습니다. 유형이 삭제되었을 수 있으니 다시 실행해 유형을 선택해 주세요.");
                                 newTypeName = targetWallType.Name;
                             }
                             else
@@ -286,6 +372,7 @@ namespace WallSplitter
                             WallUtils.DisallowWallJoinAtEnd(newWall, 0);
                             WallUtils.DisallowWallJoinAtEnd(newWall, 1);
 
+#if !REVIT2017
                             // 원본이 프로파일 편집된(비직사각형) 벽이었다면 여기서는 기본 프로파일 스케치만 만들어 두고,
                             // 실제 곡선 복사는 이 트랜잭션이 커밋된 뒤에 한다.
                             // (SketchEditScope는 열려 있는 트랜잭션 안에서는 시작할 수 없다는 API 제약 때문)
@@ -320,6 +407,7 @@ namespace WallSplitter
                                     profileWarnings.Add($"{newTypeName}: 이 벽 유형은 프로파일 편집을 지원하지 않습니다.");
                                 }
                             }
+#endif
 
                             if (!createdMap.TryGetValue((prep.WallId, targetWallType.Id), out List<Wall> sameTypeWalls))
                             {
@@ -328,15 +416,32 @@ namespace WallSplitter
                             }
                             sameTypeWalls.Add(newWall);
                         }
+
+                        if (oneLayer)
+                        {
+                            var sourceType = prep.Wall.WallType;
+                            var key = (sourceType.Id, prep.SelectedRawLayerIndex);
+                            if (!remainingTypes.TryGetValue(key, out WallType remainingType))
+                            {
+                                remainingType = CreateRemainingWallType(doc, sourceType, prep.SelectedRawLayerIndex);
+                                remainingTypes.Add(key, remainingType);
+                            }
+                            prep.Wall.WallType = remainingType;
+                            if (!(prep.Wall.Location is LocationCurve remainingLocation))
+                                throw new InvalidOperationException($"벽 {prep.WallId}: 잔여 벽의 위치선을 찾지 못했습니다.");
+                            remainingLocation.Curve = OffsetCurvePerpendicular(prep.BaseCurve, prep.RemainingCenterOffset, prep.Orientation);
+                        }
                     }
 
                     // 원본 복합 벽체는 결합 허용 전에 삭제해서, 새 벽이 곧 사라질 원본과 결합되는 일을 방지
-                    foreach (WallPrepData prep in preps)
-                        doc.Delete(prep.WallId);
+                    if (!oneLayer)
+                        foreach (WallPrepData prep in preps)
+                            doc.Delete(prep.WallId);
 
                     tx.Commit();
                 }
 
+#if !REVIT2017
                 // [2차: 프로파일 복사] SketchEditScope는 자체적으로 트랜잭션을 관리하므로 1차 커밋 후 수행
                 foreach (ProfileTask task in profileTasks)
                 {
@@ -344,6 +449,7 @@ namespace WallSplitter
                     if (warning != null)
                         profileWarnings.Add($"{task.WallTypeName}: {warning}");
                 }
+#endif
 
                 // [3차: 재결합] 선택된 원본 벽들끼리 결합되어 있던 끝에서, 같은 재료(WallType)로
                 // 분리된 새 벽들의 위치선을 실제 코너 교차점까지 트림한 뒤 결합을 허용한다.
@@ -364,6 +470,13 @@ namespace WallSplitter
                     }
                 }
 
+                if (oneLayer)
+                {
+                    partialGroup.Assimilate();
+                    partialGroup.Dispose();
+                    partialGroup = null;
+                }
+
                 // 정상 완료 시에는 팝업을 띄우지 않는다 (요청 사항).
                 // 다만 일부 항목이 처리되지 못한 경우는 완료 알림이 아니라 경고이므로 알려준다.
                 List<string> warnings = new List<string>(skipReasons);
@@ -378,11 +491,13 @@ namespace WallSplitter
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException)
             {
+                if (partialGroup != null) { try { partialGroup.RollBack(); } finally { partialGroup.Dispose(); } }
                 // 사용자가 선택 중 ESC로 취소한 경우 - 오류가 아니므로 조용히 종료
                 return Result.Cancelled;
             }
             catch (Exception ex)
             {
+                if (partialGroup != null) { try { partialGroup.RollBack(); } finally { partialGroup.Dispose(); } }
                 message = ex.Message;
                 return Result.Failed;
             }
@@ -402,8 +517,10 @@ namespace WallSplitter
             // 여기서부터 레이어 두께만큼씩 안쪽(-orientation 방향)으로 이동하며 각 레이어의 중심선을 구한다.
             double faceOffset = prep.TotalWidth / 2.0;
 
+            int rawIndex = 0;
             foreach (CompoundStructureLayer layer in prep.Structure.GetLayers())
             {
+                int currentIndex = rawIndex++;
                 double layerWidth = layer.Width;
                 double centerOffset = faceOffset - layerWidth / 2.0;
                 faceOffset -= layerWidth;
@@ -425,6 +542,7 @@ namespace WallSplitter
 
                 result.Add(new LayerDescriptor
                 {
+                    RawIndex = currentIndex,
                     LayerWidth = layerWidth,
                     CenterOffset = centerOffset,
                     MaterialId = materialId,
@@ -433,6 +551,28 @@ namespace WallSplitter
                 });
             }
 
+            return result;
+        }
+
+        private static string LayerMaterialName(Document doc, ElementId materialId) =>
+            materialId != ElementId.InvalidElementId && doc.GetElement(materialId) is Material material
+                ? material.Name : "지정되지않음";
+
+        private static WallType CreateRemainingWallType(Document doc, WallType sourceType, int removedIndex)
+        {
+            string side = removedIndex == 0 ? "외측" : "내측";
+            string baseName = sourceType.Name + "_" + side + "1층분리잔여";
+            string name = baseName;
+            int suffix = 2;
+            while (new FilteredElementCollector(doc).OfClass(typeof(WallType)).Cast<WallType>().Any(t => t.Name == name))
+                name = baseName + "(" + suffix++ + ")";
+            WallType result = sourceType.Duplicate(name) as WallType
+                ?? throw new InvalidOperationException($"벽 유형 '{sourceType.Name}'의 잔여 유형을 만들지 못했습니다.");
+            CompoundStructure remaining = result.GetCompoundStructure()
+                ?? throw new InvalidOperationException($"벽 유형 '{sourceType.Name}'의 잔여 구조를 읽지 못했습니다.");
+            if (!remaining.DeleteLayer(removedIndex))
+                throw new InvalidOperationException($"벽 유형 '{sourceType.Name}'의 {side} 레이어를 구조에서 제거하지 못했습니다.");
+            result.SetCompoundStructure(remaining);
             return result;
         }
 
@@ -462,10 +602,12 @@ namespace WallSplitter
 
                 if (existing == null)
                 {
-                    WallType created = sourceType.Duplicate(name) as WallType;
+                    WallType created = sourceType.Duplicate(name) as WallType
+                        ?? throw new InvalidOperationException($"단일 벽 유형 '{name}'을 복제하지 못했습니다.");
 
                     CompoundStructureLayer newLayer = new CompoundStructureLayer(layerWidth, function, materialId);
-                    CompoundStructure newStructure = created.GetCompoundStructure();
+                    CompoundStructure newStructure = created.GetCompoundStructure()
+                        ?? throw new InvalidOperationException($"'{sourceType.Name}' 벽 유형에는 편집할 수 있는 구조(레이어)가 없습니다.");
                     newStructure.SetLayers(new List<CompoundStructureLayer> { newLayer });
                     created.SetCompoundStructure(newStructure);
                     return created;
@@ -685,6 +827,7 @@ namespace WallSplitter
         // 주의: SketchEditScope는 열려 있는 트랜잭션 안에서 시작할 수 없고,
         // 스코프 안의 문서 수정은 반드시 내부 트랜잭션으로 감싸야 한다. (Revit API 제약)
         // 실패 시 새 벽은 기본 사각형 프로파일로 남고, 실패 사유 문자열을 반환한다(성공 시 null).
+#if !REVIT2017
         private static string TryCopyProfileSketch(Document doc, ProfileTask task)
         {
             SketchEditScope scope = new SketchEditScope(doc, "프로파일 복사");
@@ -696,7 +839,8 @@ namespace WallSplitter
                 {
                     tx.Start();
 
-                    Sketch sketch = doc.GetElement(task.SketchId) as Sketch;
+                    Sketch sketch = doc.GetElement(task.SketchId) as Sketch
+                        ?? throw new InvalidOperationException("새로 만든 벽의 프로파일 스케치를 찾을 수 없습니다.");
                     SketchPlane sketchPlane = sketch.SketchPlane;
 
                     // 기본 사각형 프로파일 곡선 제거
@@ -728,6 +872,7 @@ namespace WallSplitter
                 scope.Dispose();
             }
         }
+#endif
 
         // curve를 mapping으로 변환한다. 직선 벽(평행 이동)에서는 항상 성공한다.
         // 호 벽(비등방 반경 스케일)에서는 원본 곡선이 Arc/Ellipse 등일 경우 변환 결과가 Revit이 표현할 수 없는

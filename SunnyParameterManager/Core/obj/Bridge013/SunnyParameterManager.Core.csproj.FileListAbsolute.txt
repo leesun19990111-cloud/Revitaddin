@@ -1,0 +1,12 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v013\Bridge\SunnyParameterManager.Core.deps.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v013\Bridge\SunnyParameterManager.Core.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v013\Bridge\SunnyParameterManager.Core.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\SunnyParameterManager.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\SunnyParameterManager.Core.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\SunnyParameterManager.Core.AssemblyInfo.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\SunnyParameterManager.Core.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\SunnyParameterManager.Core.sourcelink.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\SunnyParameterManager.Core.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\refint\SunnyParameterManager.Core.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\SunnyParameterManager.Core.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Core\obj\Bridge013\ref\SunnyParameterManager.Core.dll

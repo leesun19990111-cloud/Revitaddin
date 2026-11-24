@@ -44,6 +44,22 @@ namespace WallSplitter
 
         public string SeverityLabel => Severity == FailureSeverity.Error ? "오류" : "경고";
 
+        // 새로고침을 해도 "같은 발생 건"임을 알아보기 위한 키 (2026-09-03, 실시간 갱신용으로 추가).
+        // FailureMessage 자체에는 세션을 넘어 안정적인 식별자가 없으므로 "설명 문구 + 얽힌 요소 ID 집합"을
+        // 쓴다 - 같은 요소들 사이의 같은 경고면 다시 조회해도 같은 값이 나온다. 목록 안에서의 순서(index)는
+        // 다른 발생 건이 사라지면 밀리므로 키로 쓸 수 없다. 요소 ID는 정렬해서 넣는다(GetFailingElements/
+        // GetAdditionalElements가 매번 같은 순서를 준다는 보장이 없다).
+        public string Key
+        {
+            get
+            {
+                var ids = new List<int>();
+                foreach (WarningPickElement e in Elements) ids.Add(e.ElementId.ToInt());
+                ids.Sort();
+                return Description + "|" + string.Join(",", ids);
+            }
+        }
+
         // 경고 하나(FailureMessage)에서 발생 건 노드를 만든다. 표시할 요소가 하나도 안 남으면(전부
         // 삭제됐거나 조회 실패) null - 이 발생 건 자체를 트리에서 숨긴다.
         internal static WarningPickGroup? TryBuild(Document doc, FailureMessage warning)
@@ -93,6 +109,20 @@ namespace WallSplitter
         }
 
         public string SeverityLabel => Severity == FailureSeverity.Error ? "오류" : "경고";
+
+        // 목록 전체가 "실제로 달라졌는지"를 한 문자열로 비교하기 위한 지문 (2026-09-03, 실시간 갱신용).
+        // 트랜잭션이 일어날 때마다 다시 조회하지만, 경고가 그대로면 화면을 다시 그리지 않아야 한다 -
+        // 매번 다시 그리면 체크 상태/펼침/스크롤이 계속 튀고, 이 프로젝트가 여러 번 겪은 "필요 없는데
+        // 다시 그려서 클릭이 씹힌다" 문제도 그대로 재현된다.
+        public static string SignatureOf(List<WarningPickTypeGroup> typeGroups)
+        {
+            var parts = new List<string>();
+            foreach (WarningPickTypeGroup type in typeGroups)
+                foreach (WarningPickGroup occurrence in type.Occurrences)
+                    parts.Add(occurrence.Key);
+            parts.Sort(StringComparer.Ordinal);
+            return string.Join("\n", parts);
+        }
 
         public static List<WarningPickTypeGroup> BuildTypeGroups(Document doc, IEnumerable<FailureMessage> warnings)
         {

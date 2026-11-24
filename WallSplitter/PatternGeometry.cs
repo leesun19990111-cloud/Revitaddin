@@ -119,11 +119,13 @@ namespace WallSplitter
                 double maxProjection = corners.Max(point => Dot(point, normal));
                 double first = (minProjection - originProjection) / offset;
                 double last = (maxProjection - originProjection) / offset;
-                int start = SafeFloor(Math.Min(first, last)) - 2;
-                int end = SafeCeiling(Math.Max(first, last)) + 2;
+                // 아주 작은 Offset 때문에 first/last가 int 범위를 넘으면 클램프된 두 값의 int 뺄셈이
+                // 오버플로해 아래 한도 검사를 그냥 통과한다(수십억 회 루프 = Revit 정지). long으로 비교한다.
+                long start = (long)SafeFloor(Math.Min(first, last)) - 2;
+                long end = (long)SafeCeiling(Math.Max(first, last)) + 2;
                 if (end - start + 1 > maximumLines)
                 {
-                    int center = SafeFloor((first + last) * 0.5);
+                    long center = SafeFloor((first + last) * 0.5);
                     start = center - maximumLines / 2;
                     end = center + maximumLines / 2;
                     result.WasLimited = true;
@@ -131,7 +133,7 @@ namespace WallSplitter
                 }
 
                 List<double> scaledSegments = source.Segments.Select(value => value * lengthScale).ToList();
-                for (int k = start; k <= end; k++)
+                for (long k = start; k <= end; k++)
                 {
                     PatternPoint anchor = origin + (direction * shift + normal * offset) * k;
                     if (!TryClipInfiniteLine(anchor, direction, bounds, out double t0, out double t1)) continue;

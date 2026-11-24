@@ -22,7 +22,10 @@ namespace WallSplitter
             double referenceAxis = source.Grids.Count > 0 ? DegreesToRadians(source.Grids[0].AngleDegrees) : 0.0;
             double globalRotation = DegreesToRadians(RequireFinite(settings.RotationDegrees, "전체 회전"));
 
-            var editByIndex = settings.GridEdits.ToDictionary(edit => edit.Index);
+            // 같은 Index가 두 번 들어오면 ToDictionary가 ArgumentException을 던져 미리보기 전체가 멈춘다.
+            // 편집 상태는 선군마다 하나만 의미가 있으므로 마지막 값을 쓴다.
+            var editByIndex = new Dictionary<int, PatternGridEditState>();
+            foreach (PatternGridEditState edit in settings.GridEdits) editByIndex[edit.Index] = edit;
             PatternDefinition result = source.Clone();
             result.SourceElementId = source.SourceElementId;
             result.Grids.Clear();

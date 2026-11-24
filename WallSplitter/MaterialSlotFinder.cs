@@ -4,9 +4,9 @@ using Autodesk.Revit.DB;
 
 namespace WallSplitter
 {
-    internal enum MaterialSlotKind { CompoundLayer, Parameter }
+    internal enum MaterialSlotKind { CompoundLayer, Parameter, InstanceParameter }
 
-    // 유형(ElementType) 하나가 가진 "재료 지정" 대상 슬롯 하나를 표현한다. 유형 하나가 여러 재료를 동시에
+    // 유형 또는 인스턴스 하나가 가진 "재료 지정" 대상 슬롯 하나를 표현한다. 유형 하나가 여러 재료를 동시에
     // 쓸 수 있으므로(레이어가 여러 개인 벽/바닥, 재료 파라미터가 여러 개인 문/창 등) FindAll은 슬롯 여러 개를
     // 반환할 수 있다 - CompoundLayer는 레이어 인덱스로, Parameter는 Parameter.Id로 서로 구분한다.
     // ParameterRef는 Find 시점에 찾은 Parameter 참조 자체를 들고 있는다(Apply에서 그대로 재사용하면
@@ -46,12 +46,13 @@ namespace WallSplitter
     // - 벽/바닥/지붕/천장처럼 CompoundStructure(레이어 구조)를 가진 유형(HostObjAttributes)은, 두께가 있는
     //   (비-멤브레인) 레이어 전부가 각각 하나의 슬롯이 된다 - 레이어가 하나뿐이면(WallSplitter/SplitFloorCommand가
     //   만드는 "단일 재질" 유형이 이 경우) 이전과 동일하게 슬롯 하나만 나온다.
-    // - 그 외 유형(문/창/가구/구조 부재 등)은 재료(Material) 스펙을 갖는 파라미터 전부가 각각 슬롯이 된다.
+    // - 그 외 유형과 인스턴스는 재료(Material) 스펙 파라미터마다 슬롯을 만든다.
+    //   InstanceParameter는 유형 파라미터와 ID가 같아도 서로 다른 대상임을 보장한다.
     internal static class MaterialSlotFinder
     {
         private const double MinLayerWidth = 1e-9;
 
-        public static List<MaterialSlot> FindAll(ElementType type)
+        public static List<MaterialSlot> FindAll(Element type)
         {
             var result = new List<MaterialSlot>();
 
@@ -82,11 +83,12 @@ namespace WallSplitter
                 if (def == null) continue;
 
                 bool isMaterialParam;
-                try { isMaterialParam = def.GetDataType() == SpecTypeId.Reference.Material; }
+                try { isMaterialParam = def.IsMaterial(); }
                 catch { isMaterialParam = false; }
                 if (!isMaterialParam) continue;
 
-                result.Add(new MaterialSlot(MaterialSlotKind.Parameter, -1, p.AsElementId(), def.Name, p.Id, p));
+                result.Add(new MaterialSlot(type is ElementType ? MaterialSlotKind.Parameter : MaterialSlotKind.InstanceParameter,
+                    -1, p.AsElementId(), def.Name, p.Id, p));
             }
             return result;
         }
@@ -97,7 +99,7 @@ namespace WallSplitter
 
         // targetIdentity와 같은 슬롯(Kind+LayerIndex 또는 Kind+ParameterId)을 지금 시점 기준으로 다시 찾는다 -
         // 창이 떠 있던 동안 얻은 슬롯을 그대로 믿지 않고, 커밋 직전 실제 문서 상태에서 다시 확인/반영하기 위함.
-        public static MaterialSlot? FindSlot(ElementType type, MaterialSlot targetIdentity)
+        public static MaterialSlot? FindSlot(Element type, MaterialSlot targetIdentity)
         {
             foreach (MaterialSlot slot in FindAll(type))
                 if (slot.SameIdentityAs(targetIdentity)) return slot;
@@ -119,7 +121,7 @@ namespace WallSplitter
         // 새 재료를 실제로 적용한다 (열려 있는 Transaction 안에서 호출) - targetIdentity로 지금 시점의 실제
         // 슬롯을 다시 찾아서 쓰므로, 창이 떠 있던 동안 얻은 값이 아니라 커밋 시점의 실제 문서 상태를 기준으로
         // 안전하게 반영된다.
-        public static bool Apply(ElementType type, MaterialSlot targetIdentity, ElementId newMaterialId, out MaterialSlot? previousSlot)
+        public static bool Apply(Element type, MaterialSlot targetIdentity, ElementId newMaterialId, out MaterialSlot? previousSlot)
         {
             MaterialSlot? slot = FindSlot(type, targetIdentity);
             previousSlot = slot;
@@ -131,19 +133,10 @@ namespace WallSplitter
                 CompoundStructure? structure = hostAttrs.GetCompoundStructure();
                 if (structure == null) return false;
 
-                // CompoundStructureLayer는 불변 객체라 재료만 바꾸는 세터가 없다 - 같은 두께/기능을 유지한 채
-                // 새 CompoundStructureLayer로 그 인덱스만 교체한 목록을 SetLayers에 통째로 다시 넘겨야 한다
-                // (SplitWallCommand/SplitFloorCommand가 새 유형을 만들 때 쓰는 것과 같은 패턴).
-                IList<CompoundStructureLayer> layers = structure.GetLayers();
-                var newLayers = new List<CompoundStructureLayer>(layers.Count);
-                for (int i = 0; i < layers.Count; i++)
-                {
-                    CompoundStructureLayer layer = layers[i];
-                    newLayers.Add(i == slot.Value.LayerIndex
-                        ? new CompoundStructureLayer(layer.Width, layer.Function, newMaterialId)
-                        : layer);
-                }
-                structure.SetLayers(newLayers);
+                // SetLayers는 구조 재료/가변 레이어 등을 초기화한다. 레이어를 재생성하지 않고
+                // 재료 ID만 바꿔 기능·우선순위·두께·코어 경계·감싸기·데크/수직 복합 정보를 보존한다.
+                // LayerId가 아니라 0부터 시작하는 배열 인덱스를 전달해야 한다.
+                structure.SetMaterialId(slot.Value.LayerIndex, newMaterialId);
                 hostAttrs.SetCompoundStructure(structure);
                 return true;
             }

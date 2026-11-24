@@ -55,44 +55,16 @@ namespace WallSplitter
         // 기억해두고(_lastStates), 실제로 상태가 바뀐 버튼만 갱신한다.
         private readonly Dictionary<string, QuickToggleButtonState> _lastStates = new();
 
-        // "뷰 저장" 버튼으로 찍어둔 스냅샷 - 뷰 ID별로 독립적으로 저장한다(2026-07-28, "각 뷰마다 따로
-        // 저장 가능하고, 뷰를 닫아도(x) 그 뷰의 저장은 유지되어야 한다"는 요청 - 예전엔 필드 하나뿐이라
-        // 다른 뷰를 저장하면 이전 뷰의 저장 내용을 덮어썼다). ElementId는 문서마다 독립적이라 같은 정수
-        // ID가 서로 다른 문서의 서로 다른 뷰를 가리킬 수 있으므로(여러 모델을 동시에 열어둔 세션), 바깥
-        // 키를 문서 경로(DocKey)로 한 번 더 나눠 문서 간 충돌을 막는다. 이번 Revit 세션(창 인스턴스)
-        // 한정 메모리 값이라 디스크에 저장하지 않는다 - 뷰를 닫는 것(탭 x)은 View 요소 자체를 지우지
-        // 않으므로 이 딕셔너리 항목은 그대로 남지만, 문서를 완전히 닫았다 다시 열면 사라지는 게
-        // 자연스럽다(그 문서에 대한 View 참조가 더 이상 유효하지 않으므로).
-        private readonly Dictionary<string, Dictionary<int, ViewStateSnapshot>> _savedViewStates = new();
-
-        // 저장 안 된 새 문서(PathName 없음)는 전부 같은 키로 뭉뚱그려진다 - 여러 개의 저장 안 된 새
-        // 문서를 동시에 열어두는 경우는 극히 드물고, 애초에 빠른 토글 설정 자체가 저장 안 된 문서에서는
-        // 동작하지 않는 기존 제약과 같은 성격의 가장자리 경우로 남겨둔다.
-        private static string DocKey(RevitDocument doc) => string.IsNullOrEmpty(doc.PathName) ? "__unsaved__" : doc.PathName;
-
-        private Dictionary<int, ViewStateSnapshot> SnapshotsFor(RevitDocument doc)
-        {
-            string key = DocKey(doc);
-            if (!_savedViewStates.TryGetValue(key, out Dictionary<int, ViewStateSnapshot>? map))
-            {
-                map = new Dictionary<int, ViewStateSnapshot>();
-                _savedViewStates[key] = map;
-            }
-            return map;
-        }
-
-        // Save/Revert 버튼 갱신을 RefreshState(Idling에서도 호출됨)에서 안전하게 하기 위한 마지막 상태
-        // 기억 - _lastStates와 같은 이유(값이 바뀌지 않았는데도 WPF 속성을 재대입하면 클릭 캡처가
-        // 끊기는 문제가 이 파일에서 이미 3차례 반복됐다, 위 클래스 주석 참고). 뷰가 바뀌거나 그 뷰의
-        // 저장 여부가 바뀐 경우에만 실제로 갱신한다.
-        private string? _lastSaveButtonDocKey;
-        private int? _lastSaveButtonViewId;
-        private bool? _lastSaveButtonHasSnapshot;
-
         // "색상 버튼" 클릭으로 열린 실시간 조절 패널 - 한 번에 하나만 열어둔다(다른 색상 버튼을 누르면
         // 이전 패널은 닫고 새로 연다). 2026-07-29 추가.
         private ColorToolPopupWindow? _openColorPopup;
         private string? _openColorPopupButtonId;
+
+        // "링크된 모델" 버튼 클릭으로 열린 링크 목록 패널 (2026-09-02 추가) - 색상 패널과 같은 규칙으로
+        // 한 번에 하나만 열어두고, 서로를 열 때 다른 쪽을 닫는다. 링크 표시 여부는 뷰마다 다르므로 뷰가
+        // 바뀌면 닫지 않고 새 뷰 기준으로 다시 그린다(RefreshState 참고).
+        private LinkedModelPopupWindow? _openLinkedModelPopup;
+        private string? _openLinkedModelPopupButtonId;
 
         public QuickToggleToolbar(UIApplication uiapp)
         {
@@ -100,13 +72,11 @@ namespace WallSplitter
             _uiapp = uiapp;
             Instance = this;
 
-            new WindowInteropHelper(this) { Owner = uiapp.MainWindowHandle };
+            new WindowInteropHelper(this) { Owner = uiapp.GetMainWindowHandle() };
 
-            // 아직 활성 뷰를 모르는 시점(생성 직후)의 초기 표시 - 첫 RefreshState 호출에서 실제 뷰
-            // 기준으로 바로 갱신된다.
-            SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary) };
-            RevertButton.IsEnabled = false;
-            RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.ToggleDisabled) };
+            // 우측 끝 고정 "설정"(톱니바퀴) 버튼 - 상태에 따라 모양이 바뀌지 않으므로 여기서 한 번만
+            // 그려두면 되고, RefreshState가 매 Idling 틱마다 손댈 일이 없다.
+            SettingsButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateGearIcon(Theme.TextSecondary) };
         }
 
         // 문서가 하나도 없을 때(전부 닫힘) 호출 - 떠 있는 툴바를 정리한다.
@@ -114,7 +84,7 @@ namespace WallSplitter
         {
             _cachedDoc = null;
             CurrentToolbarVisible = null;
-            _openColorPopup?.Close();
+            CloseToolPopups();
             Hide();
         }
 
@@ -122,6 +92,7 @@ namespace WallSplitter
         // (설정 창에서 저장 직후에도 호출 - 저장한 값이 바로 반영되도록)
         public void ForceReloadSettings(RevitDocument doc)
         {
+            CloseToolPopups();
             _cachedDoc = doc;
             _cachedSettings = QuickToggleSettings.Load(doc);
         }
@@ -162,10 +133,15 @@ namespace WallSplitter
             RevitView? view = doc.ActiveView;
             if (view == null)
             {
-                _openColorPopup?.Close();
+                CloseToolPopups();
                 Hide();
                 return;
             }
+
+            // 링크 표시 여부는 뷰마다 다르므로, 팝업을 열어둔 채 다른 뷰로 가면 그 뷰 기준으로 다시
+            // 그린다(뷰가 실제로 바뀐 경우에만 - 매 Idling 틱마다 다시 그리면 클릭이 씹힌다).
+            if (_openLinkedModelPopup != null && _openLinkedModelPopup.CurrentViewId != view.Id.ToInt())
+                _openLinkedModelPopup.Refresh(view);
 
             EnsureSettingsLoaded(doc);
 
@@ -183,8 +159,6 @@ namespace WallSplitter
                 UpdateButtonStates(view);
             }
 
-            RefreshSaveRevertButtons(view);
-
             CurrentToolbarVisible = _cachedSettings.ToolbarVisible;
 
             if (_cachedSettings.ToolbarVisible)
@@ -194,16 +168,31 @@ namespace WallSplitter
             }
             else
             {
-                _openColorPopup?.Close();
+                CloseToolPopups();
                 Hide();
             }
         }
+
+        private void CloseToolPopups()
+        {
+            _openColorPopup?.Close();
+            _openLinkedModelPopup?.Close();
+        }
+
+        // "링크된 모델" 팝업이 열려 있으면 지금 뷰 기준으로 목록을 다시 읽는다 - 링크를 켜고 끈 직후
+        // (QuickToggleExternalEventHandler.ExecuteLinkedModelApply)와 뷰가 바뀐 직후에만 호출한다.
+        // Idling 틱마다 부르면 안 된다 - 이 파일이 세 번 겪은 "매 틱 UI 재생성" 부류의 문제가 그대로
+        // 재현된다(팝업의 버튼이 매 틱 교체되어 클릭이 씹힌다).
+        public void RefreshLinkedModelPopup(RevitView view) => _openLinkedModelPopup?.Refresh(view);
 
         // 색상 버튼(2줄 높이의 작은 리본 버튼)을 몇 개 등록하든 한 줄로 계속 옆으로 늘어나지 않고, 이
         // 높이(2줄 분량)에 맞춰 위아래로 채우다 꽉 차면 다음 칸으로 넘어가는 묶음으로 모아둔다 - Revit
         // 리본의 "작은" 버튼들이 패널 안에서 2~3단으로 쌓이는 것과 같은 방식(2026-07-30 요청, "색상버튼이
         // 작게 한줄로 들어가 있어, 버튼들이 두줄로 나열되게 만들어줘").
-        private const double ColorToolGroupHeightDip = 64;
+        private const double SmallToolGroupHeightDip = QuickToggleButtonStyle.SmallToolGroupHeightDip;
+
+        // 2026-09-05부터 버튼마다 큰/작은을 고를 수 있다 - 판정은 QuickToggleButtonStyle이 한 곳에서 한다.
+        private static bool IsSmallToolButton(QuickToggleButtonConfig cfg) => QuickToggleButtonStyle.IsSmall(cfg);
 
         private void RebuildButtons(RevitView view)
         {
@@ -211,10 +200,16 @@ namespace WallSplitter
             _rows.Clear();
             _lastStates.Clear();
 
-            WrapPanel? colorToolGroup = null;
+            // 작은 버튼의 세로 위치는 목록 순서와 cfg.SecondRow가 정한다 - 예전처럼 WrapPanel이 알아서
+            // 채우지 않는다(2026-09-06 사용자 요청: "자동정렬하지 말고 그리드에 맞춰 넣을 수 있게").
+            List<bool> startsColumn = QuickToggleButtonStyle.ComputeColumnStarts(_cachedSettings.Buttons);
+            StackPanel? smallColumn = null;
+            bool previousWasSmall = false;
+            int index = -1;
 
             foreach (QuickToggleButtonConfig cfg in _cachedSettings.Buttons)
             {
+                index++;
                 QuickToggleButtonState state = QuickToggleService.DetermineState(view, cfg);
                 _lastStates[cfg.Id] = state;
                 (Brush background, Brush borderBrush, Brush foreground) = VisualsFor(state, cfg);
@@ -223,7 +218,7 @@ namespace WallSplitter
                 TextBlock label;
                 UIElement content;
 
-                if (cfg.Category == QuickToggleCategory.ColorTool)
+                if (IsSmallToolButton(cfg))
                 {
                     // 2026-07-29, "색상버튼은 다른 버튼과는 모양이 좀 달랐으면 좋겠어. on/off가 의미
                     // 없으니까, 작은 리본버튼으로 두줄로 들어가게 만들어줘" - Revit 리본의 "작은" 버튼
@@ -238,12 +233,18 @@ namespace WallSplitter
                         FontSize = 10,
                         TextWrapping = TextWrapping.Wrap,
                         TextAlignment = TextAlignment.Left,
-                        Width = 46,
+                        // 이름이 길어도 버튼이 세로로 늘어나면 안 된다(2단이 깨진다) - 두 줄까지만
+                        // 보이고 넘치면 말줄임으로 자른다. 전체 이름은 툴팁에서 볼 수 있다.
+                        LineHeight = QuickToggleButtonStyle.SmallToolLabelLineHeight,
+                        LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                        MaxHeight = QuickToggleButtonStyle.SmallToolLabelMaxHeight,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        Width = QuickToggleButtonStyle.SmallToolLabelWidth,
                         Foreground = foreground,
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(4, 0, 0, 0),
                     };
-                    StackPanel horizontal = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 2, 6, 2), VerticalAlignment = VerticalAlignment.Center };
+                    StackPanel horizontal = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
                     horizontal.Children.Add(smallIconBox);
                     horizontal.Children.Add(label);
                     content = horizontal;
@@ -283,24 +284,40 @@ namespace WallSplitter
                     ToolTip = ToolTipFor(cfg, state),
                     Tag = cfg,
                 };
+                // 작은 버튼은 높이를 묶음 높이의 정확히 절반으로 **고정**한다 - 라벨 길이에 따라 높이가
+                // 달라지면 두 개가 64에 못 들어가 2단이 깨진다(QuickToggleButtonStyle의 주석 참고).
+                if (IsSmallToolButton(cfg)) button.Height = QuickToggleButtonStyle.SmallToolButtonHeightDip;
                 button.Click += ToggleButton_Click;
 
-                if (cfg.Category == QuickToggleCategory.ColorTool)
+                if (IsSmallToolButton(cfg))
                 {
-                    if (colorToolGroup == null)
+                    if (startsColumn[index] || smallColumn == null)
                     {
-                        // 이 그룹 앞에 이미 다른 버튼이 있으면 구분선을 하나 넣어 "여기부터는 다른 종류의
-                        // 버튼"이라는 걸 시각적으로도 표시한다(RightControlsPanel 앞의 구분선과 같은 패턴).
-                        if (ButtonsPanel.Children.Count > 0)
+                        // 작은 버튼 구간이 시작되는 지점에만 구분선을 하나 넣는다(칸마다 넣으면 지저분하다) -
+                        // "여기부터는 다른 종류의 버튼"이라는 표시(RightControlsPanel 앞의 구분선과 같은 패턴).
+                        if (!previousWasSmall && ButtonsPanel.Children.Count > 0)
                             ButtonsPanel.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 2, 4, 2), Background = Theme.Border });
 
-                        colorToolGroup = new WrapPanel { Orientation = Orientation.Vertical, Height = ColorToolGroupHeightDip };
-                        ButtonsPanel.Children.Add(colorToolGroup);
+                        // 칸 하나 = 세로 StackPanel(높이 고정). WrapPanel이 아니므로 넘치는 버튼을 옆 칸으로
+                        // 흘려보내지 않는다 - 아래 줄을 비워 둔 채 윗줄만 쓰는 칸도 그대로 유지된다.
+                        smallColumn = new StackPanel
+                        {
+                            Orientation = Orientation.Vertical,
+                            Height = SmallToolGroupHeightDip,
+                            VerticalAlignment = VerticalAlignment.Top,
+                        };
+                        ButtonsPanel.Children.Add(smallColumn);
                     }
-                    colorToolGroup.Children.Add(button);
+                    smallColumn.Children.Add(button);
+                    previousWasSmall = true;
                 }
                 else
                 {
+                    // 큰 버튼이 끼어들면 작은 버튼 칸은 거기서 끊는다 - 2026-09-05부터 버튼마다 크기를
+                    // 고를 수 있어서 "작은-큰-작은" 순서도 가능한데, 칸을 계속 재사용하면 뒤쪽 작은
+                    // 버튼이 앞 칸으로 빨려 들어가 설정 창의 순서와 툴바의 순서가 어긋난다.
+                    smallColumn = null;
+                    previousWasSmall = false;
                     ButtonsPanel.Children.Add(button);
                 }
 
@@ -332,19 +349,42 @@ namespace WallSplitter
             }
         }
 
-        private static string ToolTipFor(QuickToggleButtonConfig cfg, QuickToggleButtonState state)
+        private string ToolTipFor(QuickToggleButtonConfig cfg, QuickToggleButtonState state)
         {
             // 색상 버튼은 켜짐/꺼짐이 없어 "클릭하면 켭니다" 같은 문구가 맞지 않는다 - 실제 동작(패널
             // 열기)에 맞는 문구를 따로 쓴다.
             if (cfg.Category == QuickToggleCategory.ColorTool)
                 return cfg.Name + " - 클릭하면 색상/투명도 조절 패널을 엽니다";
 
+            // 링크 버튼은 "대상이 지정되지 않았다"는 안내가 맞지 않는다 - 설정에서 고를 대상 자체가 없고
+            // 비활성이면 이유는 하나뿐이다("이 뷰에 그런 링크가 없다"). 2026-09-02 추가.
+            if (cfg.Category == QuickToggleCategory.LinkedCad)
+            {
+                return state switch
+                {
+                    QuickToggleButtonState.On => cfg.Name + " - 클릭하면 이 뷰의 링크된 도면을 끕니다",
+                    QuickToggleButtonState.Off => cfg.Name + " - 클릭하면 이 뷰의 링크된 도면을 다시 켭니다",
+                    _ => cfg.Name + " (이 뷰에 링크된 도면이 없습니다)",
+                };
+            }
+
+            // 링크된 모델은 링크마다 따로 끄고 켤 수 있어야 해서 클릭하면 목록 패널이 열린다(2026-09-02) -
+            // 색 자체는 "지금 보이는 링크가 있는가"를 알려주는 표시로 남는다.
+            if (cfg.Category == QuickToggleCategory.LinkedModel)
+            {
+                return state == QuickToggleButtonState.Disabled
+                    ? cfg.Name + " (이 뷰에 링크된 모델이 없습니다)"
+                    : cfg.Name + " - 클릭하면 이 뷰의 링크된 모델 목록을 열어 하나씩 끄고 켭니다";
+            }
+
             // 기능 버튼도 켜짐/꺼짐이 없다 - 지정된 명령을 실행한다는 실제 동작에 맞는 문구를 쓴다.
             if (cfg.Category == QuickToggleCategory.CommandLauncher)
             {
-                return string.IsNullOrEmpty(cfg.CommandLabel)
+                string commandLabel = SunnyToolsCommands.DisplayLabelFor(
+                    cfg.CommandKind, cfg.CommandId, _uiapp.Application.Language, cfg.CommandLabel);
+                return string.IsNullOrEmpty(commandLabel)
                     ? cfg.Name + " (아직 실행할 기능이 지정되지 않았습니다)"
-                    : cfg.Name + " - 클릭하면 '" + cfg.CommandLabel + "' 실행";
+                    : cfg.Name + " - 클릭하면 '" + commandLabel + "' 실행";
             }
 
             return state switch
@@ -365,9 +405,16 @@ namespace WallSplitter
         // 언어(readme의 "주 버튼만 유일하게 채워진 입체 오브젝트")와도 맞는다.
         private static (Brush Background, Brush BorderBrush, Brush Foreground) VisualsFor(QuickToggleButtonState state, QuickToggleButtonConfig cfg)
         {
-            if (state == QuickToggleButtonState.On)
+            // 2026-09-05, "on/off 버튼이 아닌 버튼들은 기본적으로 색상이 칠해져 있으면 좋겠어"라는 요청 -
+            // 실행형 버튼(색상/기능)은 켜짐/꺼짐이 없어 늘 Off로 판정되는 탓에 예전에는
+            // 영영 투명한 "선 그림"으로만 보였다. 이제 쓸 수 있는 상태(Disabled가 아님)면 항상 채운다.
+            bool fillAlways = QuickToggleButtonStyle.IsActionButton(cfg.Category)
+                              && state != QuickToggleButtonState.Disabled;
+
+            if (state == QuickToggleButtonState.On || fillAlways)
             {
-                Color color = CustomOnColor(cfg) ?? ((SolidColorBrush)Theme.ToggleOn).Color;
+                Color color = CustomOnColor(cfg)
+                              ?? ParseHex(QuickToggleButtonStyle.DefaultColorHexFor(cfg.Category));
                 SolidColorBrush fill = new SolidColorBrush(color);
                 fill.Freeze();
                 return (fill, fill, QuickToggleIcons.ContrastingForeground(color));
@@ -376,6 +423,9 @@ namespace WallSplitter
                 return (Brushes.Transparent, Theme.Border, Theme.TextSecondary);
             return (Brushes.Transparent, Theme.Border, Theme.ToggleDisabled);
         }
+
+        // QuickToggleButtonStyle이 돌려주는 기본 색상 문자열(코드에 박힌 상수)을 Color로 바꾼다.
+        private static Color ParseHex(string hex) => (Color)ColorConverter.ConvertFromString(hex);
 
         private static Color? CustomOnColor(QuickToggleButtonConfig cfg)
         {
@@ -386,7 +436,7 @@ namespace WallSplitter
             }
             catch
             {
-                return null; // 저장된 값이 손상된 경우 공용 색으로 안전하게 대체
+                return null; // 저장된 값이 손상된 경우 기본색으로 안전하게 대체
             }
         }
 
@@ -399,6 +449,14 @@ namespace WallSplitter
             if (cfg.Category == QuickToggleCategory.ColorTool)
             {
                 ShowColorToolPopup(cfg, button);
+                return;
+            }
+
+            // 링크된 모델도 on/off 토글이 아니라 링크 목록 패널을 여는 버튼이다(2026-09-02) - 실제
+            // 적용은 그 패널이 LinkedModelApplyRequest로 따로 보낸다.
+            if (cfg.Category == QuickToggleCategory.LinkedModel)
+            {
+                ShowLinkedModelPopup(cfg, button);
                 return;
             }
 
@@ -472,84 +530,65 @@ namespace WallSplitter
             popup.Show();
         }
 
-        // "뷰 저장" 버튼 - 순수 읽기라 트랜잭션 없이 바로 처리한다. 캡처 로직 자체는
-        // QuickToggleService.CaptureViewState로 옮겨(뷰템플릿/필터/작업세트/카테고리 표시/크롭·범위까지
-        // 전부 포함 - 2026-07-28 확장) 이 파일은 UI 갱신만 담당한다.
-        private void SaveViewButton_Click(object sender, RoutedEventArgs e)
+        // 2026-09-02 추가 - "링크된 모델" 버튼을 누르면 그 자리에 링크 목록 패널을 띄운다. 열고 닫는
+        // 규칙(같은 버튼 다시 누르면 닫기, 다른 도구 패널은 닫기, 화면 아래 여유가 없으면 위로 펼치기)은
+        // 색상 패널과 동일하게 맞췄다.
+        private void ShowLinkedModelPopup(QuickToggleButtonConfig cfg, Button button)
         {
-            UIDocument? uidoc = _uiapp.ActiveUIDocument;
-            RevitView? view = uidoc?.Document?.ActiveView;
-            if (view == null) return;
-
-            SnapshotsFor(view.Document)[view.Id.ToInt()] = QuickToggleService.CaptureViewState(view);
-            RefreshSaveRevertButtons(view, force: true);
-        }
-
-        // 2026-07-28, "뷰가 저장이 되고 있는지 전혀 알 수가 없다"는 피드백으로 추가 - 저장된 스냅샷이
-        // 있는 동안은 다른 빠른 토글 버튼의 On 상태와 같은 시각 언어(배경 전체를 강조색으로 채우고,
-        // 아이콘은 그 배경에 대비되는 색)로 "뷰 저장" 버튼 자체를 표시한다. 이 버튼은 RebuildButtons/
-        // UpdateButtonStates가 매 Idling 틱마다 갱신하는 등록형 버튼 목록(_rows)에 속하지 않고 XAML에
-        // 고정된 별도 버튼이라, 여기서 직접 호출할 때만 갱신하면 되고 그 사이에 다른 코드가 덮어쓸 일이
-        // 없다. 2026-07-28, 스냅샷이 뷰별 딕셔너리로 바뀌면서 뷰 전환마다(RefreshState에서도) 다시
-        // 계산해야 하므로 - Idling에서 초당 여러 번 불려도 값이 실제로 바뀐 경우에만 WPF 속성을
-        // 재대입한다(_lastSaveButtonViewId/_lastSaveButtonHasSnapshot - 이 파일에 이미 3차례 기록된
-        // "매 틱 재대입하면 클릭 캡처가 끊긴다" 버그 패턴을 또 만들지 않기 위한 방어).
-        private void RefreshSaveRevertButtons(RevitView view, bool force = false)
-        {
-            string docKey = DocKey(view.Document);
-            int viewId = view.Id.ToInt();
-            bool hasSnapshot = SnapshotsFor(view.Document).ContainsKey(viewId);
-
-            if (!force && _lastSaveButtonDocKey == docKey && _lastSaveButtonViewId == viewId && _lastSaveButtonHasSnapshot == hasSnapshot)
-                return;
-            _lastSaveButtonDocKey = docKey;
-            _lastSaveButtonViewId = viewId;
-            _lastSaveButtonHasSnapshot = hasSnapshot;
-
-            if (hasSnapshot)
+            _openColorPopup?.Close();
+            if (_openLinkedModelPopup != null)
             {
-                Color color = ((SolidColorBrush)Theme.ToggleOn).Color;
-                SolidColorBrush fill = new SolidColorBrush(color);
-                fill.Freeze();
-                SaveViewButton.Background = fill;
-                SaveViewButton.BorderBrush = fill;
-                SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(QuickToggleIcons.ContrastingForeground(color)) };
-                SaveViewButton.ToolTip =
-                    $"'{view.Name}' 뷰의 상태(모델/주석/해석모델/가져온 카테고리 표시, 필터, 작업세트, 뷰템플릿, " +
-                    "가시성/그래픽 재정의, 색상표, 상세수준, 비주얼스타일, 크롭 및 범위 등)가 저장되어 있습니다. 다시 누르면 갱신합니다.";
+                bool wasSameButton = _openLinkedModelPopupButtonId == cfg.Id;
+                _openLinkedModelPopup.Close();
+                if (wasSameButton) return;
+            }
 
-                RevertButton.IsEnabled = true;
-                RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.TextSecondary) };
-                RevertButton.ToolTip = $"'{view.Name}' 뷰의 저장된 상태로 되돌립니다.";
+            UIDocument? uidoc = _uiapp.ActiveUIDocument;
+            RevitDocument? doc = uidoc?.Document;
+            RevitView? view = doc?.ActiveView;
+            if (doc == null || view == null) return;
+
+            Point buttonTopLeft = button.PointToScreen(new Point(0, 0));
+            double buttonBottom = buttonTopLeft.Y + button.ActualHeight;
+            const double popupHeightEstimate = 220;
+            const double popupWidth = 300;
+            bool expandUpward = buttonBottom + popupHeightEstimate > SystemParameters.WorkArea.Bottom;
+            double left = Math.Max(SystemParameters.WorkArea.Left,
+                Math.Min(buttonTopLeft.X, SystemParameters.WorkArea.Right - popupWidth));
+
+            LinkedModelPopupWindow popup = new LinkedModelPopupWindow(view, cfg) { Owner = this, Left = left };
+            popup.Closed += (s, e) =>
+            {
+                if (ReferenceEquals(_openLinkedModelPopup, popup)) { _openLinkedModelPopup = null; _openLinkedModelPopupButtonId = null; }
+            };
+
+            if (expandUpward)
+            {
+                // 목록 길이에 따라 높이가 달라지므로(SizeToContent) 레이아웃이 끝난 뒤 한 번 보정한다.
+                popup.Top = buttonTopLeft.Y - popupHeightEstimate;
+                popup.Loaded += (s, e) => { popup.Top = buttonTopLeft.Y - popup.ActualHeight; };
             }
             else
             {
-                SaveViewButton.Background = Brushes.Transparent;
-                SaveViewButton.BorderBrush = Theme.Border;
-                SaveViewButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateBookmarkIcon(Theme.TextSecondary) };
-                SaveViewButton.ToolTip = $"'{view.Name}' 뷰의 현재 상태를 저장합니다.";
-
-                RevertButton.IsEnabled = false;
-                RevertButton.Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateUndoIcon(Theme.ToggleDisabled) };
-                RevertButton.ToolTip = "이 뷰에는 저장된 상태가 없습니다.";
+                popup.Top = buttonBottom;
             }
+
+            _openLinkedModelPopup = popup;
+            _openLinkedModelPopupButtonId = cfg.Id;
+            popup.Show();
         }
 
-        // "되돌리기" - Revit API 호출(뷰 전환, 뷰템플릿/필터/작업세트 반영)이 필요하므로 다른 버튼들과
-        // 같은 ExternalEvent 경로를 그대로 재사용한다(QuickToggleExternalEventHandler.ExecuteRevert 참고).
-        // 되돌리는 대상은 항상 "지금 활성 뷰"의 저장분이다 - 각 뷰가 독립적으로 저장되므로 다른 뷰의
-        // 스냅샷을 실수로 가져올 일이 없다.
-        private void RevertButton_Click(object sender, RoutedEventArgs e)
+        // 우측 끝 고정 "설정"(톱니바퀴) 버튼 - 커스텀 버튼 설정 창을 연다 (2026-09-03, 사용자 요청으로
+        // 이 자리의 "뷰 저장"/"되돌리기" 버튼 쌍을 대체했다). 이 창은 모드리스라 클릭 시점엔 유효한
+        // Revit API 컨텍스트가 없고, 설정 창 생성자가 FilteredElementCollector로 문서를 읽으므로
+        // 다른 버튼들과 똑같이 ExternalEvent로 넘긴다(QuickToggleExternalEventHandler.ExecuteOpenSettings).
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            UIDocument? uidoc = _uiapp.ActiveUIDocument;
-            RevitView? view = uidoc?.Document?.ActiveView;
-            if (view == null) return;
-            if (!SnapshotsFor(view.Document).TryGetValue(view.Id.ToInt(), out ViewStateSnapshot? snapshot)) return;
             if (App.QuickToggleHandler == null || App.QuickToggleEvent == null) return;
-
-            App.QuickToggleHandler.PendingRevertSnapshot = snapshot;
+            App.QuickToggleHandler.PendingOpenSettings = true;
             App.QuickToggleEvent.Raise();
         }
+
 
         // 버튼 목록이 바뀔 때만(RebuildButtons 직후) 호출 - 내용에 맞춰 창 너비를 계산한다.
         // 2026-07-27, 사용자 요청으로 최대 너비 제한(가로 스크롤로 처리)을 없앴다 - "등록된 버튼이 많으면
@@ -580,7 +619,7 @@ namespace WallSplitter
             // 오프셋으로 환산해 저장해서, 다음에 메인 창이 움직여도 사용자가 고른 상대 위치를 유지한다.
             if (_cachedDoc == null) return;
 
-            IntPtr mainHandle = _uiapp.MainWindowHandle;
+            IntPtr mainHandle = _uiapp.GetMainWindowHandle();
             if (mainHandle == IntPtr.Zero || !NativeMethods.GetWindowRect(mainHandle, out NativeMethods.RECT rect))
                 return;
 
@@ -619,7 +658,7 @@ namespace WallSplitter
 
         private void RepositionToMainWindow()
         {
-            IntPtr mainHandle = _uiapp.MainWindowHandle;
+            IntPtr mainHandle = _uiapp.GetMainWindowHandle();
             if (mainHandle == IntPtr.Zero) return;
             if (!NativeMethods.GetWindowRect(mainHandle, out NativeMethods.RECT rect)) return;
 

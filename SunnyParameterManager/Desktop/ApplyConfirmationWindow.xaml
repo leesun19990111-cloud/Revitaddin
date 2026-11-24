@@ -1,0 +1,41 @@
+<Window x:Class="SunnyParameterManager.Desktop.ApplyConfirmationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="실제 파일 변경 확인" Width="680" Height="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize"
+        Background="#F2F2F3" Foreground="#243A50" FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="MinWidth" Value="86"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Background" Value="#FAFAFA"/>
+            <Setter Property="BorderBrush" Value="#C9CED3"/>
+        </Style>
+    </Window.Resources>
+    <Border Padding="18" Background="#F2F2F3">
+        <Grid FocusManager.FocusedElement="{Binding ElementName=NoButton}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <StackPanel Margin="0,0,0,12">
+                <TextBlock x:Name="QuestionText" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Text="아래 변경을 실제 RVT에 저장하고, 작업공유 모델은 중앙에 동기화할까요?"/>
+                <TextBlock x:Name="ModelCountText" Margin="0,6,0,0" Foreground="#526474"
+                           AutomationProperties.Name="변경 대상 모델 수"/>
+            </StackPanel>
+            <Border Grid.Row="1" Background="White" BorderBrush="#CDD2D7" BorderThickness="1">
+                <ScrollViewer x:Name="DetailsScroll" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled" Padding="12" Focusable="True"
+                              AutomationProperties.Name="모델별 변경 목록 및 적용 안내">
+                    <TextBlock x:Name="DetailsText" TextWrapping="Wrap" LineHeight="20"/>
+                </ScrollViewer>
+            </Border>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                <Button x:Name="YesButton" Content="예" Click="Confirm" Margin="0,0,8,0"/>
+                <Button x:Name="NoButton" Content="아니오" IsDefault="True" IsCancel="True"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

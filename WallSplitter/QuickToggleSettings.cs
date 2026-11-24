@@ -16,10 +16,12 @@ namespace WallSplitter
         ViewTemplate,
         Filter,
         Workset,
-        // 2026-07-28, "여러 설정 조합(뷰템플릿+필터+작업세트)을 한 번에 켜고 끄는 버튼을 만들고 싶다"는
-        // 요청으로 추가. 위 세 카테고리와 필드 자체는 공유하지만(ViewTemplateId/FilterIds/WorksetIds를
-        // 동시에 채울 수 있음), 비어있는 필드는 "이 프리셋에 그 항목은 포함되지 않음"으로 해석되어
-        // 건드리지 않는다는 점이 단일 카테고리 버튼과 다르다(QuickToggleService 참고).
+        // 2026-09-02 삭제된 카테고리("프리셋 버튼"/"그래픽 화면표시 검색 버튼") - 열거 멤버 자체는
+        // 남겨둔다. System.Text.Json의 JsonStringEnumConverter는 모르는 문자열을 만나면 예외를 던지고,
+        // QuickToggleSettings.Load는 그 예외를 "설정 파일 손상"으로 보고 빈 설정으로 갈아치우므로,
+        // 멤버를 지우면 프리셋 버튼 하나 때문에 그 프로젝트에 등록된 다른 버튼까지 전부 사라진다.
+        // 멤버는 남겨 역직렬화만 통과시키고, 실제 버튼은 Load/가져오기 단계에서 걸러낸다
+        // (QuickToggleSettings.IsRemovedCategory). UI·서비스 쪽 구현은 전부 제거됐다.
         Preset,
         // 2026-07-29, "모델을 선택해서 색상과 투명도를 설정해줄 수 있는 버튼" 요청으로 추가. 다른
         // 카테고리들과 근본적으로 다르다 - on/off를 켜고 끄는 토글이 아니라, 클릭하면 색상 팔레트 +
@@ -28,11 +30,29 @@ namespace WallSplitter
         // 고르고(ColorButtonCategories), 실제 색상/투명도 값은 저장하지 않는다 - 매번 클릭했을 때 그
         // 카테고리의 현재 값을 읽어와 보여준다(QuickToggleService.ReadCurrentColorAndTransparency).
         ColorTool,
+        // 위 Preset과 같은 이유로 남겨둔 삭제된 카테고리 (2026-09-02).
+        GraphicsDisplaySearch,
         // 2026-08-03, "커스텀 버튼 설정에 다른 툴들의 버튼도 추가할 수 있으면 좋겠다 - 재료지정, 네이머,
         // 공동작업탭의 동기화 버튼 등을 찾아서 버튼으로 추가하고 싶다"는 요청으로 추가. ColorTool처럼
         // on/off 개념이 없고, 클릭하면 지정된 Revit 명령(Sunny Tools 자체 명령 또는 Revit 기본 명령)을
         // 즉시 한 번 실행할 뿐이다(QuickToggleService.RunCommand, RevitCommandId+PostCommand 사용).
         CommandLauncher,
+        // 2026-09-02, "모르는 사람이 쓰기엔 커스텀 버튼이 너무 어렵다 - 프리셋/그래픽 화면표시 검색은
+        // 없애고, 대신 활성 뷰에 링크된 도면(CAD)과 링크된 모델(RVT)을 딸깍 한 번으로 끄고 켜는 버튼을
+        // 넣어달라"는 요청으로 추가. 뷰템플릿/필터/작업세트처럼 on/off 토글이지만 설정에서 미리 고를
+        // 대상이 없다 - 대상은 "지금 활성 뷰의 문서에 실제로 걸려 있는 링크"라서 클릭할 때마다 새로
+        // 찾는다(QuickToggleService.LinkedCadCategoryIds/LinkedModelCategoryIds).
+        LinkedCad,
+        LinkedModel,
+        // 2026-09-04, "IFC/지형연결/DWF 마크업/포인트 클라우드/외부좌표모델 링크도 껐다 켤 수 있게"
+        // 요청에서 출발했으나, 종류별로 버튼을 쪼개지 말고 "링크된 요소 하나로 전부 묶는 게 더 직관적"
+        // 이라는 사용자 결정으로 확정된 단일 버튼. 지금 뷰에 걸려 있는 **모든 종류의 링크**(CAD 도면,
+        // Revit 모델, IFC, 지형/지형솔리드, DWF 마크업, 포인트 클라우드, 좌표 모델)를 한 번에 끄고 켠다.
+        // LinkedCad/LinkedModel과 마찬가지로 설정에서 고를 대상이 없다 - 대상은 클릭할 때마다 다시 찾는다.
+        LinkedAll,
+        // 2026-09-28 삭제. 예전 설정 전체가 역직렬화에 실패하지 않도록 열거 값만 유지한다.
+        // Load/가져오기에서 이 버튼만 제외한다(IsRemovedCategory).
+        LevelSectionBox,
     }
 
     // CommandLauncher 버튼이 가리키는 명령의 종류 - RevitCommandId를 조회하는 API가 서로 다르다
@@ -51,7 +71,7 @@ namespace WallSplitter
     {
         public static int ToInt(this ElementId id)
         {
-#if REVIT2023
+#if REVIT2017 || REVIT2023
             return id.IntegerValue;
 #else
             return (int)id.Value;
@@ -87,18 +107,24 @@ namespace WallSplitter
         public QuickToggleIconShape? IconShape { get; set; }
         public string? OnColorHex { get; set; }
 
-        // 2026-07-29, "V/G 편집창에 있는 것들을 그대로 옮겨서 프리셋에 담고 싶다"는 요청으로 추가 - 프리셋에
-        // 포함된 카테고리별 표시 여부 + 그래픽 재정의(선/패턴/투명도/하프톤/상세수준)를 담는다. 카테고리가
-        // 이 리스트에 있다는 것 자체가 "이 프리셋에 포함됨"을 뜻하고(리스트에 없으면 그 카테고리는 아예
-        // 건드리지 않음 - Preset의 다른 필드들과 같은 "비어있으면 안 건드림" 규칙), 켜질 때 설정을 적용하고
-        // 꺼질 때는 표시로 되돌리고 재정의를 지운다(QuickToggleService.ApplyCategoryOverrides 참고).
-        public List<CategoryOverrideConfig> CategoryOverrides { get; set; } = new List<CategoryOverrideConfig>();
+        // 2026-09-05, "각 버튼들의 크기를 큰버튼과 작은버튼으로 선택해서 변경할 수 있으면" 요청으로 추가.
+        // null이면 예전과 똑같은 기본값(색상 버튼만 작게) - 기존 설정 파일과 그대로 호환된다.
+        // 판정은 항상 QuickToggleButtonStyle.IsSmall(cfg)로 할 것(툴바/설정 창이 같은 규칙을 봐야 한다).
+        public bool? SmallButton { get; set; }
 
-        // 2026-07-29, "색상 버튼" 전용 필드 - 이 버튼이 색상/투명도를 적용할 모델 카테고리 목록. 항목당
-        // CategoryId/CategoryName/ParentCategoryName만 쓰고 CategoryOverrideConfig의 나머지 재정의
-        // 필드(선/패턴 등)는 이 용도에서 전혀 쓰지 않는다 - 카테고리 이름 기반 매칭 로직(내보내기/가져오기)을
-        // 그대로 재사용하기 위해 새 타입을 만드는 대신 기존 타입을 재사용했다.
-        public List<CategoryOverrideConfig> ColorButtonCategories { get; set; } = new List<CategoryOverrideConfig>();
+        // 2026-09-06, 사용자 요청 - "작은 것들끼리 좌로 정렬되어서 필터랑 링크랑 색상 버튼들이 다 뒤섞이게
+        // 되는데, 자동정렬하지 말고 그리드에 맞춰 넣을 수 있게 만들어줬으면 해."
+        // true면 이 작은 버튼은 **바로 앞 칸의 아래 줄**에 들어간다. false면 자기가 새 칸을 시작한다
+        // (윗줄). 즉 목록 순서가 가로 위치를, 이 값이 세로 위치를 정한다 - 예전처럼 WrapPanel이 알아서
+        // 채우지 않으므로, 아래 줄을 비워 둔 채 윗줄에만 버튼을 두는 것도 된다.
+        // 배치 판정은 반드시 QuickToggleButtonStyle.ComputeColumnStarts로 할 것(앞이 큰 버튼이거나 앞
+        // 칸이 이미 꽉 찼으면 이 값이 true여도 아래 줄에 들어갈 수 없다 - 그 조정을 거기서 한다).
+        public bool SecondRow { get; set; }
+
+        // 2026-07-29, "색상 버튼" 전용 필드 - 이 버튼이 색상/투명도를 적용할 모델 카테고리 목록.
+        // (2026-09-02 프리셋 삭제 전까지는 프리셋의 카테고리별 V/G 재정의를 담는 CategoryOverrides
+        // 필드도 같은 타입을 공유했다 - 그 필드가 사라지면서 타입도 색상 버튼 전용으로 줄였다.)
+        public List<ColorToolCategoryConfig> ColorButtonCategories { get; set; } = new List<ColorToolCategoryConfig>();
 
         // 2026-08-03, "기능 버튼"(CommandLauncher) 전용 - 클릭하면 실행할 명령 하나. CommandId는
         // CommandKind에 따라 다른 의미다: SunnyTool이면 IExternalCommand 구현 클래스의 전체 이름
@@ -114,12 +140,127 @@ namespace WallSplitter
         public string? CommandLabel { get; set; }
     }
 
-    // 프리셋의 카테고리(V/G) 탭 한 줄 - Revit V/G 대화상자에서 카테고리별로 재정의할 수 있는 항목을 그대로
-    // 옮겼다. 색상은 int(0xRRGGBB)로, 선/채우기 패턴은 이름으로 저장한다 - ElementId는 문서마다 달라
-    // 이식(내보내기/가져오기)이 안 되기 때문에 ViewTemplateId/Name과 같은 이유로 이름을 같이 둔다.
-    // 모든 항목이 nullable인 이유: "이 속성은 재정의하지 않음"(null)과 "재정의해서 특정 값으로 설정함"을
-    // 구분해야 하기 때문 - null이면 Toggle 시 그 속성을 아예 건드리지 않는다.
-    public class CategoryOverrideConfig
+    // 툴바와 설정 창이 **똑같이** 따라야 하는 버튼 겉모습 규칙. 두 곳에 각각 적으면 미리보기와 실제
+    // 툴바가 어긋나므로(2026-09-03에 실제로 지적받은 문제) 여기 한 곳에 모아 둔다.
+    internal static class QuickToggleButtonStyle
+    {
+        // on/off 개념이 없고 누르면 1회 실행되는 버튼들. DetermineState가 늘 Off(또는 Disabled)를
+        // 돌려주므로, 예전에는 툴바에서 영영 "꺼진 모습"(투명 배경)으로만 보였다.
+        public static bool IsActionButton(QuickToggleCategory category) =>
+            category == QuickToggleCategory.ColorTool ||
+            category == QuickToggleCategory.CommandLauncher;
+
+        // 2026-09-05, 사용자 요청 - "on/off 버튼이 아닌 버튼들은 기본적으로 색상이 칠해져 있으면 좋겠어.
+        // 버튼의 켜짐색상과는 다른 색상으로." 그래서 실행형 버튼은 **항상** 이 색으로 채워지고, 기본값도
+        // 토글 버튼의 기본 켜짐색(초록 #3D8F5C)과 다른 강조색(스틸블루)으로 둬서 한눈에 구분된다.
+        // 두 기본값 모두 Theme/Theme.xaml의 토큰과 맞춰서 유지할 것(ToggleOnBrush / AccentBrush).
+        public const string DefaultActionColorHex = "#5980A6";
+        public const string DefaultToggleOnColorHex = "#3D8F5C";
+
+        public static string DefaultColorHexFor(QuickToggleCategory category) =>
+            IsActionButton(category) ? DefaultActionColorHex : DefaultToggleOnColorHex;
+
+        // 2026-09-05, 사용자 요청 - "각 버튼들의 크기를 큰버튼과 작은버튼으로 선택해서 변경할 수 있으면".
+        // 예전엔 색상 버튼만 무조건 작은 버튼이었는데, 이제 버튼마다 고를 수 있다.
+        // cfg.SmallButton이 null이면 예전과 똑같은 기본값(색상 버튼만 작게)을 쓴다 - 기존 설정 파일 호환.
+        // 작은 버튼 묶음(세로 WrapPanel)의 높이와, 그 안에 들어가는 버튼 하나의 높이.
+        //
+        // CONFIRMED LIVE BUG (2026-09-06, 사용자 실측: "이름이 조금 긴 버튼은 2단이 안 되는 것 같아"):
+        // 예전에는 작은 버튼의 높이를 라벨이 정하게 뒀는데, 라벨은 폭 46dip 안에서 줄바꿈되므로 이름이
+        // 길수록 버튼이 세로로 길어졌다(실측: "방화구획" 23.3dip, "설비작업세트" 36.6dip). 그래서 이름이
+        // 조금만 길어도 두 개의 합이 묶음 높이 64를 넘겨 버렸고, WrapPanel은 넘치는 버튼을 **다음 칸**으로
+        // 보내므로 2단이 되지 않고 옆으로 나란히 섰다 - "색상 버튼만 2단이 된다"의 정체가 이것이다.
+        // 고정: 버튼 하나의 높이를 **묶음 높이의 정확히 절반으로 고정**한다. 그러면 이름 길이와 무관하게
+        // 항상 두 개가 한 칸에 들어간다. 라벨은 최대 두 줄까지만 보이고 넘치면 말줄임(…)으로 잘린다.
+        // 두 값의 비율(2:1)이 이 기능의 전부이므로 한쪽만 바꾸지 말 것.
+        public const double SmallToolGroupHeightDip = 64;
+        public const double SmallToolButtonHeightDip = SmallToolGroupHeightDip / 2;
+
+        // 작은 버튼 라벨의 줄 높이/최대 높이 - 줄 높이를 명시해야(기본 글꼴 줄간격에 맡기지 않아야)
+        // 두 줄이 위 높이 안에 확실히 들어간다. 미리보기 쪽은 선택 표시용 2px 테두리만큼 안쪽이 좁으므로
+        // 여유가 빠듯한데, 이 값들이면 툴바와 미리보기 양쪽에서 똑같이 두 줄이 보인다.
+        public const double SmallToolLabelLineHeight = 12;
+        public const double SmallToolLabelMaxHeight = 24;
+        public const double SmallToolLabelWidth = 46;
+
+        public static bool IsSmall(QuickToggleButtonConfig cfg) =>
+            cfg.SmallButton ?? (cfg.Category == QuickToggleCategory.ColorTool);
+
+        // ===== 작은 버튼의 2단 그리드 배치 (2026-09-06) =====
+        //
+        // 사용자 요청: "작은 것들끼리 좌로 정렬되어서 필터랑 링크랑 색상 버튼들이 다 뒤섞이게 되는데,
+        // **자동정렬하지 말고 그리드에 맞춰 넣을 수 있게** 만들어줬으면 해." 예전에는 연속된 작은 버튼을
+        // 세로 `WrapPanel`에 넣어 **알아서** 위→아래→다음 칸 순으로 채웠다. 그래서 어떤 버튼끼리 한 칸을
+        // 쓰게 될지를 사용자가 정할 수 없었고, 종류가 다른 버튼들이 한 칸에 섞여 들어갔다.
+        //
+        // 이제는 목록 순서가 **가로 위치**를, `cfg.SecondRow`가 **세로 위치**를 정한다. 자동 채움은 없다.
+        // 이 함수가 그 규칙의 단 하나뿐인 구현이다 - 툴바와 설정 창 미리보기가 이것을 함께 쓴다.
+        //
+        // 돌려주는 값: 버튼마다 "이 버튼이 새 칸을 시작하는가". false면 바로 앞 칸의 아래 줄에 들어간다.
+        //  - 큰 버튼은 언제나 칸을 끊는다(자기 자신이 한 칸을 통째로 쓴다).
+        //  - `SecondRow`가 true여도 **직전에 윗줄 하나만 있는 칸이 열려 있을 때만** 아래 줄로 간다.
+        //    (앞이 큰 버튼이거나 앞 칸이 이미 두 개면 새 칸을 시작한다 - 저장값이 어떻든 배치는 항상 성립한다.)
+        public static List<bool> ComputeColumnStarts(IReadOnlyList<QuickToggleButtonConfig> buttons)
+        {
+            List<bool> startsColumn = new List<bool>(buttons.Count);
+            int openColumnItems = 0;   // 지금 열려 있는 칸에 들어간 작은 버튼 개수(0이면 열린 칸 없음)
+
+            foreach (QuickToggleButtonConfig cfg in buttons)
+            {
+                if (!IsSmall(cfg))
+                {
+                    startsColumn.Add(true);
+                    openColumnItems = 0;
+                    continue;
+                }
+
+                if (cfg.SecondRow && openColumnItems == 1)
+                {
+                    startsColumn.Add(false);
+                    openColumnItems = 2;
+                }
+                else
+                {
+                    startsColumn.Add(true);
+                    openColumnItems = 1;
+                }
+            }
+
+            return startsColumn;
+        }
+
+        // 저장된 `SecondRow`를 실제 배치와 일치시킨다 - 배치가 불가능했던 값(예: 앞 칸이 이미 꽉 참)을
+        // 그대로 두면 다음에 앞쪽 버튼이 바뀌었을 때 갑자기 아래 줄로 빨려 들어가는 등 예측 불가가 된다.
+        // 목록을 건드린 뒤(추가/삭제/순서 변경/크기 변경)에는 항상 이걸 부를 것.
+        public static void NormalizeRows(List<QuickToggleButtonConfig> buttons)
+        {
+            List<bool> startsColumn = ComputeColumnStarts(buttons);
+            for (int i = 0; i < buttons.Count; i++)
+                buttons[i].SecondRow = !startsColumn[i];
+        }
+
+        // 예전 설정 파일(자동 채움 시절)을 지금 모델로 옮긴다 - 그때 화면에 보이던 모습(연속된 작은 버튼이
+        // 두 개씩 한 칸)을 그대로 재현하도록 짝수 번째마다 아래 줄로 표시한다. 이걸 안 하면 업그레이드하는
+        // 순간 쌓여 있던 작은 버튼들이 전부 각자 칸으로 흩어져 툴바가 갑자기 넓어진다.
+        public static void MigrateAutoPackedRows(List<QuickToggleButtonConfig> buttons)
+        {
+            int openColumnItems = 0;
+            foreach (QuickToggleButtonConfig cfg in buttons)
+            {
+                if (!IsSmall(cfg)) { openColumnItems = 0; cfg.SecondRow = false; continue; }
+                if (openColumnItems == 1) { cfg.SecondRow = true; openColumnItems = 2; }
+                else { cfg.SecondRow = false; openColumnItems = 1; }
+            }
+        }
+    }
+
+    // "색상 버튼"이 색상/투명도를 적용할 카테고리 한 줄. ElementId는 문서마다 달라 이식(내보내기/
+    // 가져오기)이 안 되므로 ViewTemplateId/Name과 같은 이유로 이름을 같이 저장한다.
+    // 2026-09-02 프리셋 삭제 전에는 이 타입(당시 이름 CategoryOverrideConfig)이 카테고리별 V/G 재정의
+    // (표시/하프톤/상세수준/투명도/선·패턴 색상 등 20여 개 필드)까지 담았지만, 그 필드들을 쓰던 곳이
+    // 프리셋과 그래픽 화면표시 검색뿐이라 함께 지웠다. 예전 설정 파일에 남아 있는 그 필드들은
+    // System.Text.Json이 모르는 속성으로 무시하므로 그대로 읽힌다.
+    public class ColorToolCategoryConfig
     {
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = "";
@@ -127,75 +268,42 @@ namespace WallSplitter
         // (예: 여러 카테고리가 공유하는 서브카테고리 이름) 가져오기 시 이름만으로는 매칭이 모호할 수
         // 있으므로 부모 이름까지 같이 저장해 매칭 정확도를 높인다.
         public string? ParentCategoryName { get; set; }
-
-        // true = 표시, false = 숨김, null = 이 프리셋에서 표시 여부는 건드리지 않음(재정의 값만 적용).
-        public bool? Visible { get; set; }
-        public bool? Halftone { get; set; }
-        // ViewDetailLevel enum 이름 문자열(Coarse/Medium/Fine), null = 재정의 안 함.
-        public string? DetailLevel { get; set; }
-        public int? Transparency { get; set; } // 0~100
-
-        public int? ProjectionLineWeight { get; set; }
-        public int? ProjectionLineColor { get; set; }
-        public string? ProjectionLinePatternName { get; set; }
-
-        public int? CutLineWeight { get; set; }
-        public int? CutLineColor { get; set; }
-        public string? CutLinePatternName { get; set; }
-
-        public bool? SurfaceForegroundVisible { get; set; }
-        public string? SurfaceForegroundPatternName { get; set; }
-        public int? SurfaceForegroundColor { get; set; }
-        public bool? SurfaceBackgroundVisible { get; set; }
-        public string? SurfaceBackgroundPatternName { get; set; }
-        public int? SurfaceBackgroundColor { get; set; }
-
-        public bool? CutForegroundVisible { get; set; }
-        public string? CutForegroundPatternName { get; set; }
-        public int? CutForegroundColor { get; set; }
-        public bool? CutBackgroundVisible { get; set; }
-        public string? CutBackgroundPatternName { get; set; }
-        public int? CutBackgroundColor { get; set; }
-
-        public CategoryOverrideConfig Clone() => new CategoryOverrideConfig
-        {
-            CategoryId = CategoryId,
-            CategoryName = CategoryName,
-            ParentCategoryName = ParentCategoryName,
-            Visible = Visible,
-            Halftone = Halftone,
-            DetailLevel = DetailLevel,
-            Transparency = Transparency,
-            ProjectionLineWeight = ProjectionLineWeight,
-            ProjectionLineColor = ProjectionLineColor,
-            ProjectionLinePatternName = ProjectionLinePatternName,
-            CutLineWeight = CutLineWeight,
-            CutLineColor = CutLineColor,
-            CutLinePatternName = CutLinePatternName,
-            SurfaceForegroundVisible = SurfaceForegroundVisible,
-            SurfaceForegroundPatternName = SurfaceForegroundPatternName,
-            SurfaceForegroundColor = SurfaceForegroundColor,
-            SurfaceBackgroundVisible = SurfaceBackgroundVisible,
-            SurfaceBackgroundPatternName = SurfaceBackgroundPatternName,
-            SurfaceBackgroundColor = SurfaceBackgroundColor,
-            CutForegroundVisible = CutForegroundVisible,
-            CutForegroundPatternName = CutForegroundPatternName,
-            CutForegroundColor = CutForegroundColor,
-            CutBackgroundVisible = CutBackgroundVisible,
-            CutBackgroundPatternName = CutBackgroundPatternName,
-            CutBackgroundColor = CutBackgroundColor,
-        };
     }
 
-    // 프로젝트 파일 경로별로 저장되는 설정 (이 PC 안에서만 유지 - Q&A로 확정).
+    // 이 PC에 하나만 있는 전역 설정 (2026-09-03부터 - 그 전에는 프로젝트 파일 경로별로 따로 저장했다).
+    //
+    // **왜 전역으로 바꿨나** (사용자 요청): "레빗 파일마다 저장되도록 했었는데, 그것보다는 사용자 로컬
+    // 컴퓨터에 저장되어서 어떤 프로젝트를 열어도 설정이 변하지 않도록 하는게 훨씬 편리할 것 같아."
+    // 툴바 위치(QuickToggleGlobalSettings)가 2026-07-28에 같은 이유로 이미 전역이 됐고, 이제 버튼 목록도
+    // 같은 폴더의 파일 하나에 담긴다.
+    //
+    // **그래서 대상은 반드시 이름으로 다시 찾아야 한다**: ViewTemplateId/FilterIds/WorksetIds에 담긴
+    // ElementId는 문서마다 완전히 다른 값이라, 전역 설정을 다른 프로젝트에서 그대로 쓰면 엉뚱한 요소를
+    // 가리키거나(더 나쁘게는 조용히 다른 요소를 켜고 끄거나) 아무것도 못 찾는다. 실제 해석은
+    // QuickToggleService.ResolveViewTemplateId/ResolveFilterIds/ResolveWorksetIds가 **이름**으로 하고,
+    // ID 필드는 이름이 비어 있는 옛 설정(2026-07-28에 이름 필드가 생기기 전에 만든 버튼)을 위한
+    // fallback으로만 남는다 - 그 경우는 원래 그 프로젝트에서만 동작한다.
     public class QuickToggleSettings
     {
         // 목록의 순서가 곧 툴바에 표시되는 버튼 순서.
         public List<QuickToggleButtonConfig> Buttons { get; set; } = new List<QuickToggleButtonConfig>();
         public bool ToolbarVisible { get; set; } = true;
 
-        // 디버깅/향후 마이그레이션 참고용으로 원본 경로도 같이 저장한다 (해시만으로는 사람이 못 알아봄).
+        // 2026-09-03, "색상버튼은 색상버튼끼리, 작업세트는 작업세트끼리 묶여서 함께 이동하고, 연결고리
+        // 버튼을 눌러 고리를 끊으면 개별로도 움직일 수 있게" 요청으로 추가. 여기에 들어 있는 종류만
+        // 고리가 끊긴 것이고, 나머지는 전부 묶여 있다(빈 목록 = 전부 묶임 = 기존 설정 파일과 호환).
+        // 묶여 있는 종류는 NormalizeGrouping()이 Buttons 안에서 한 덩어리로 모아 준다.
+        public List<QuickToggleCategory> UnlinkedCategories { get; set; } = new List<QuickToggleCategory>();
+
+        // 전역으로 바뀌기 전(2026-09-03 이전) 이 설정이 어느 프로젝트 것이었는지 - 마이그레이션 흔적으로만
+        // 남긴다. 지금은 아무 데서도 읽지 않는다.
         public string ProjectPath { get; set; } = "";
+
+        // 배치 모델의 판(version). 0 = 2026-09-06 이전 파일(작은 버튼을 WrapPanel이 자동으로 채우던 시절).
+        // 0이면 Load에서 그때 보이던 모습대로 SecondRow를 채워 넣고 1로 올린다 - "값이 하나도 없으면
+        // 옛 파일"처럼 추측하지 않고 명시적인 판 번호로 판단해야, 사용자가 일부러 전부 윗줄로 둔 설정을
+        // 마이그레이션이 다시 헤집지 않는다.
+        public int LayoutVersion { get; set; }
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -207,9 +315,12 @@ namespace WallSplitter
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "WallSplitter", "quick-toggle");
 
-        // 저장 안 된 새 문서는 PathName이 비어 있어 프로젝트별로 저장할 곳이 없다 - 이 경우 null을 반환하고
-        // 호출자는 툴바를 비활성 상태로 표시해야 한다 (최초 저장 후부터 정상 동작).
-        public static string? PathFor(Document doc)
+        // 전역 설정 파일 하나. 이름이 해시가 아니라 사람이 읽을 수 있는 이름인 것도 의도한 것이다
+        // (프로젝트별 시절에는 경로 해시가 파일명이었다).
+        internal static string PathFile => Path.Combine(RootDir, "buttons.json");
+
+        // 2026-09-03 이전에 쓰던 프로젝트별 설정 파일 경로 - 이제 마이그레이션에서만 읽는다.
+        private static string? LegacyPathFor(Document? doc)
         {
             string? projectPath = doc?.PathName;
             if (string.IsNullOrEmpty(projectPath)) return null;
@@ -227,43 +338,126 @@ namespace WallSplitter
             return sb.ToString();
         }
 
-        public static QuickToggleSettings Load(Document doc)
+        // doc은 이제 "전역 파일이 아직 없을 때 어느 프로젝트의 옛 설정을 이어받을지"에만 쓰인다
+        // (사용자 확정: "지금 열린 프로젝트 것을 이어받기"). 옛 프로젝트별 파일은 지우지 않고 그대로 둔다 -
+        // 되돌릴 일이 생겼을 때의 안전망이고, 어차피 다시 읽히지 않는다.
+        public static QuickToggleSettings Load(Document? doc)
         {
-            string? path = PathFor(doc);
-            if (path != null)
+            QuickToggleSettings? loaded = ReadFrom(PathFile);
+            if (loaded != null) return loaded;
+
+            string? legacy = LegacyPathFor(doc);
+            if (legacy != null)
             {
-                try
+                QuickToggleSettings? migrated = ReadFrom(legacy);
+                if (migrated != null)
                 {
-                    if (File.Exists(path))
+                    // 이어받은 즉시 전역 파일로 굳혀 둔다 - 그래야 다음에 다른 프로젝트를 열어도 같은
+                    // 설정이 나온다(이 시점에 저장하지 않으면 "마지막에 연 프로젝트 것"이 계속 따라온다).
+                    try { migrated.Save(); }
+                    catch
                     {
-                        string json = File.ReadAllText(path, Encoding.UTF8);
-                        QuickToggleSettings? loaded = JsonSerializer.Deserialize<QuickToggleSettings>(json, JsonOptions);
-                        if (loaded != null)
-                        {
-                            loaded.Buttons ??= new List<QuickToggleButtonConfig>();
-                            return loaded;
-                        }
+                        // 저장에 실패해도 이번 세션에는 이어받은 설정을 그대로 쓴다.
                     }
-                }
-                catch
-                {
-                    // 설정 파일이 손상된 경우 빈 설정으로 대체
+                    return migrated;
                 }
             }
-            return new QuickToggleSettings { ProjectPath = doc?.PathName ?? "" };
+
+            return new QuickToggleSettings();
         }
 
-        public void Save(Document doc)
+        private static QuickToggleSettings? ReadFrom(string path)
         {
-            string? path = PathFor(doc);
-            if (path == null)
-                throw new InvalidOperationException("저장되지 않은 문서에는 커스텀 버튼 설정을 저장할 수 없습니다. 먼저 프로젝트 파일을 저장하세요.");
+            try
+            {
+                if (!File.Exists(path)) return null;
+                string json = File.ReadAllText(path, Encoding.UTF8);
+                QuickToggleSettings? loaded = JsonSerializer.Deserialize<QuickToggleSettings>(json, JsonOptions);
+                if (loaded == null) return null;
 
-            ProjectPath = doc.PathName;
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            string json = JsonSerializer.Serialize(this, JsonOptions);
-            File.WriteAllText(path, json, Encoding.UTF8);
+                loaded.Buttons ??= new List<QuickToggleButtonConfig>();
+                loaded.UnlinkedCategories ??= new List<QuickToggleCategory>();
+                loaded.Buttons.RemoveAll(IsRemovedButton);
+                loaded.UnlinkedCategories.RemoveAll(IsRemovedCategory);
+                loaded.NormalizeGrouping();
+
+                // 자동 채움 시절(판 0)에 만든 설정은 그때 보이던 2단 모습 그대로 옮겨 온다 - 안 그러면
+                // 업그레이드하는 순간 쌓여 있던 작은 버튼들이 전부 각자 칸으로 흩어진다.
+                if (loaded.LayoutVersion < 1)
+                {
+                    QuickToggleButtonStyle.MigrateAutoPackedRows(loaded.Buttons);
+                    loaded.LayoutVersion = 1;
+                }
+                QuickToggleButtonStyle.NormalizeRows(loaded.Buttons);
+                return loaded;
+            }
+            catch
+            {
+                // 설정 파일이 손상된 경우 빈 설정으로 대체
+                return null;
+            }
         }
+
+        public void Save()
+        {
+            NormalizeGrouping();
+            // 저장하는 쪽은 언제나 새 배치 모델이다 - 판 번호를 올려 둬야 다음에 읽을 때 마이그레이션이
+            // 다시 돌아 사용자가 정해 둔 줄 배치를 자동 채움으로 덮어쓰지 않는다.
+            QuickToggleButtonStyle.NormalizeRows(Buttons);
+            LayoutVersion = 1;
+            Directory.CreateDirectory(RootDir);
+            string json = JsonSerializer.Serialize(this, JsonOptions);
+            File.WriteAllText(PathFile, json, Encoding.UTF8);
+        }
+
+        // ===== 종류별 묶음 (2026-09-03) =====
+
+        public bool IsLinked(QuickToggleCategory category) => !UnlinkedCategories.Contains(category);
+
+        public void SetLinked(QuickToggleCategory category, bool linked)
+        {
+            if (linked) UnlinkedCategories.RemoveAll(c => c == category);
+            else if (!UnlinkedCategories.Contains(category)) UnlinkedCategories.Add(category);
+            NormalizeGrouping();
+        }
+
+        // 묶여 있는 종류는 Buttons 안에서 반드시 연속된 한 덩어리여야 한다("함께 이동"이 성립하려면).
+        // 각 종류를 그 종류가 처음 나온 자리로 끌어모으고, 고리가 끊긴 종류는 있던 자리에 그대로 둔다 -
+        // 그래야 풀어놓은 버튼이 다른 종류 사이에 끼워둔 위치를 잃지 않는다.
+        public void NormalizeGrouping()
+        {
+            if (Buttons.Count < 2) return;
+
+            List<QuickToggleButtonConfig> result = new List<QuickToggleButtonConfig>(Buttons.Count);
+            HashSet<QuickToggleCategory> placed = new HashSet<QuickToggleCategory>();
+
+            foreach (QuickToggleButtonConfig cfg in Buttons)
+            {
+                if (!IsLinked(cfg.Category))
+                {
+                    result.Add(cfg);
+                    continue;
+                }
+                if (!placed.Add(cfg.Category)) continue; // 이미 이 종류 덩어리를 통째로 넣었다
+                foreach (QuickToggleButtonConfig sibling in Buttons)
+                    if (sibling.Category == cfg.Category) result.Add(sibling);
+            }
+
+            Buttons.Clear();
+            Buttons.AddRange(result);
+        }
+
+        // 삭제된 버튼 종류 - 예전 설정 파일/버튼모음에 남아 있어도 목록에 싣지 않는다.
+        // 열거 값은 역직렬화 호환을 위해 유지한다(QuickToggleCategory 주석 참고).
+        public static bool IsRemovedCategory(QuickToggleCategory category) =>
+            category == QuickToggleCategory.Preset || category == QuickToggleCategory.GraphicsDisplaySearch ||
+            category == QuickToggleCategory.LevelSectionBox;
+
+        internal static bool IsRemovedButton(QuickToggleButtonConfig button) =>
+            IsRemovedCategory(button.Category) ||
+            (button.Category == QuickToggleCategory.CommandLauncher &&
+             button.CommandKind == QuickToggleCommandKind.SunnyTool &&
+             button.CommandId is "WallSplitter.StructuralWallOpeningCommand" or "WallSplitter.WallPairOpeningCommand");
 
         // 같은 카테고리 내에서 "뷰템플릿버튼1", "뷰템플릿버튼2"처럼 다음 번호를 붙인 기본 이름을 만든다.
         public string NextDefaultName(QuickToggleCategory category)
@@ -273,9 +467,11 @@ namespace WallSplitter
                 QuickToggleCategory.ViewTemplate => "뷰템플릿버튼",
                 QuickToggleCategory.Filter => "필터버튼",
                 QuickToggleCategory.Workset => "작업세트버튼",
-                QuickToggleCategory.Preset => "프리셋버튼",
                 QuickToggleCategory.ColorTool => "색상버튼",
                 QuickToggleCategory.CommandLauncher => "기능버튼",
+                QuickToggleCategory.LinkedAll => "링크버튼",
+                QuickToggleCategory.LinkedCad => "링크도면버튼",
+                QuickToggleCategory.LinkedModel => "링크모델버튼",
                 _ => "버튼",
             };
             int count = 0;

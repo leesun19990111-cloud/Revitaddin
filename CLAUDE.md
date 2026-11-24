@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" ribbon tab), supporting **Revit 2023–2027** from a single codebase (multi-targeted, one build per year). The detailed engineering history (features, live bugs, root causes, "don't revert this" warnings) is split by feature area into `docs/<area>/CLAUDE.md` files — this root file only holds absolute rules and the routing table below.
+A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" ribbon tab), supporting **Revit 2017 and 2023–2027** from a single codebase (multi-targeted, one build per year). The detailed engineering history (features, live bugs, root causes, "don't revert this" warnings) is split by feature area into `docs/<area>/CLAUDE.md` files — this root file only holds absolute rules and the routing table below.
 
 ## 절대 규칙
 
@@ -13,9 +13,11 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 - **작업 전 필독**: 아래 "작업 영역별 문서" 표에서 건드리려는 파일/기능을 찾아, 그 문서를 먼저 읽고 나서 작업할 것. 각 문서에는 그 기능의 라이브 버그 이력, 근본 원인, "재테스트 없이 되돌리지 말 것" 경고가 들어있다 — 이 루트 파일에는 없다.
 - **배포는 반드시 설치 프로그램으로만** (`docs/installer/CLAUDE.md`): `SunnyToolsInstaller`를 퍼블리시해서 배포한다. Debug/Release DLL을 사용자의 실제 Revit Addins 폴더(`%APPDATA%\Autodesk\Revit\Addins\<year>\`)에 직접 복사하지 않는다.
 - **UI 문자열/코드 주석은 한국어**로 유지 — 기존 파일과 일관성.
-- **새 설치 프로그램 산출물 → 이전 버전 아카이브**: `SunnyToolsInstaller_out_vN`을 새로 만들면, 이전 버전 폴더를 `Old_Versions/`로 옮기고 최신 것만 루트에 남긴다.
+- **새 설치 프로그램 산출물 → 이전 버전 아카이브**: `SunnyToolsInstaller_out_vN`을 새로 만들면, 이전 버전 폴더를 `Old_Versions/`로 옮기고 최신 것만 루트에 남긴다. **루트 zip 이름에는 버전을 붙인다**(2026-09-23 사용자 지시) — 빌드 번호를 세 자리로 0 채운 뒤 점으로 끊은 형식으로, v90이면 `SunnyTools_Installer_v.0.9.0.zip`이다. 이전 버전 zip도 폴더와 같이 `Old_Versions/`로 옮긴다(자세한 규칙: `docs/installer/CLAUDE.md`).
 - **기능/동작 변경 시 `README.md`도 함께 갱신** — README는 사용자/GitHub용 짧은 요약, `docs/`는 상세 엔지니어링 로그. 상세 이력을 README에 옮기지 말 것.
+- **모드리스 창에서 `UIApplication`을 보관하지 말고, WPF 핸들러의 예외를 밖으로 내보내지 말 것** (2026-09-21 확인된 Revit 강제 종료). `ExternalCommandData.Application`(`UIApplication`)은 그 명령이 실행되는 동안에만 유효하다 — 창 필드에 저장해 두고 나중에(예: `Closed`에서) 쓰면 관리 예외가 나고, **모드리스 창에는 우리 핸들러와 Revit 네이티브 루프 사이에 관리 프레임이 없어** 그 예외가 곧바로 "복구 불가능한 오류"(`0xe0434352`)가 된다. Revit이 필요한 일은 `ExternalEvent`가 그때그때 넘겨주는 `UIApplication`으로 하고, 문서 이벤트 구독은 `App.OnStartup`의 `ControlledApplication`에서만 한다. Revit 크래시를 조사할 때는 추측하지 말고 `%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit <year>\Journals\journal.*.txt`를 먼저 볼 것(Windows 이벤트 로그에는 안 남는다). 자세한 사후 분석: `docs/namer/CLAUDE.md`.
 - WPF 코드비하인드에서 `Autodesk.Revit.DB`와 `System.Windows`를 같이 쓰면 `Visibility`/`Grid`/`Control`/`Color`/`Binding`/`Line`/`Point` 등의 이름이 겹친다 — 완전한 이름 또는 별칭(`using X = ...`)으로 항상 구분할 것 (사례: `docs/design-system/CLAUDE.md`).
+- **`IUpdater.Execute` 안에서 트랜잭션을 열지 말고, 예외를 밖으로 내보내지 말 것** (`ParamCombineUpdater`). 업데이터는 사용자의 트랜잭션 **안에서** 불리므로 이미 트랜잭션이 열려 있고, 거기서 예외가 새면 Revit이 업데이터를 꺼버린다. 무한 루프 방지는 "값이 같으면 아무것도 쓰지 않는다"(`ParamCombineEngine.Apply`)가 본질이며 재진입 플래그만 믿지 말 것. 자세한 내용: `docs/param-combine/CLAUDE.md`.
 - `SplitWallCommand`의 3단계 트랜잭션 구조(Tx1 → 프로파일 스코프 → Tx2)를 하나로 합치지 말 것 — `SketchEditScope`는 열린 트랜잭션 중엔 `Start()`할 수 없다 (자세한 이유: `docs/wall-floor-split/CLAUDE.md`).
 
 ## 작업 영역별 문서 (작업 전 필독)
@@ -23,14 +25,19 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 | 작업/기능 | 주요 파일 | 문서 |
 |---|---|---|
 | 벽체 분리 / 바닥 분리, 유형 이름 규칙 | `Class1.cs`, `SplitFloorCommand.cs`, `NamingSettings.cs`, `SettingsWindow.*` | `docs/wall-floor-split/CLAUDE.md` |
-| 리본/앱 시작 (탭·패널·아이콘·매니페스트) | `App.cs`, `WallSplitter.addin`, `Resources/icon*.png` | `docs/app-shell/CLAUDE.md` |
-| NAMER (이름 일괄 변경) | `NamerWindow.*`, `NamerCommand.cs` | `docs/namer/CLAUDE.md` |
+| 리본/앱 시작 (탭·패널·아이콘·매니페스트) | `App.cs`, `RibbonIcons.cs`, `WallSplitter.addin` | `docs/app-shell/CLAUDE.md` |
+| NAMER (이름 일괄 변경, 개별 이름 수정, 특성 창 — **모드리스 창**) | `NamerWindow.*`, `NamerCommand.cs`, `NamerExternalEventHandler.cs`, `NamerPropertiesWindow.*` | `docs/namer/CLAUDE.md` |
+| 일람표 에디터 (필드/행 범위의 매개변수 일괄 편집) | `ScheduleEditor*.cs`, `ProjectInformationService.cs` | `docs/schedule-editor/CLAUDE.md` |
+| 독립 매개변수 관리자 (외부 WPF 프로그램·별도 Revit 작업 프로세스) | `SunnyParameterManager/`, `SunnyToolsInstaller/ParameterManagerInstaller.cs` | `docs/parameter-manager/CLAUDE.md` |
 | 재료 지정/삭제/클래스·설명 변경 | `MaterialAssignWindow.*`, `MaterialAssignCommand.cs`, `MaterialSlotFinder.cs` | `docs/material-assign/CLAUDE.md` |
 | 모델간 변경 반영 | `ModelSyncWindow.*`, `ModelSyncCommand.cs`, `ChangeLog.cs`, `ChangeReplayEngine.cs` | `docs/model-sync/CLAUDE.md` |
 | 패턴 스튜디오 (Revit/PAT 채우기 패턴 편집) | `Pattern*.cs`, `PatternStudioWindow.*`, `PatFileService.cs` | `docs/pattern-studio/CLAUDE.md` |
 | 커스텀 버튼 (구 "빠른 토글" — 뷰템플릿/필터/작업세트, 뷰 저장·되돌리기) | `QuickToggle*.cs`, `QuickToggleToolbar.*`, `QuickToggleSettingsWindow.*` | `docs/quick-toggle/CLAUDE.md` |
 | 경고Pick (경고에 걸린 요소를 골라 뷰 이동+선택) | `WarningPick*.cs` | `docs/warning-pick/CLAUDE.md` |
-| 화면 디자인 (Industry 테마, 아이콘) | `Resources/Theme.xaml`, `Theme.cs` | `docs/design-system/CLAUDE.md` |
+| 룸 구분선 자동 생성 / 룸 경계 ON·OFF | `RoomSeparator*.cs`, `RoomBounding*.cs` | `docs/room-separator/CLAUDE.md` |
+| 매개변수 조합 (여러 매개변수를 합쳐 하나에 자동 기입 — **IUpdater**) | `ParamCombine*.cs` | `docs/param-combine/CLAUDE.md` |
+| 일괄 결합금지/허용 (벽·보 끝단 "결합 허용 안 함"을 일괄 적용) | `BatchJoin*.cs` | `docs/batch-join/CLAUDE.md` |
+| 화면 디자인 (Industry 테마, 리본 아이콘) | `Resources/Theme.xaml`, `Theme.cs`, `RibbonIcons.cs` | `docs/design-system/CLAUDE.md` |
 | 멀티 버전 빌드 (2023–2027 Configuration/TFM 매핑) | `WallSplitter.csproj` | `docs/build-system/CLAUDE.md` |
 | 설치 프로그램 (배포) | `SunnyToolsInstaller/` | `docs/installer/CLAUDE.md` |
 
@@ -43,7 +50,8 @@ A Revit external command add-in (C#/.NET) named **WallSplitter** ("Sunny Tools" 
 
 ## Commands
 
-- 애드인 한 연도만 빌드: `dotnet build WallSplitter/WallSplitter.csproj -c Release2026` (또는 `Debug2026`, 2023~2027 아무 연도나).
-- 설치 프로그램 빌드(5개 연도 자동 포함): `dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release`
-- 테스트 프로젝트/린터/CI 없음.
+- 애드인 한 연도만 빌드: `dotnet build WallSplitter/WallSplitter.csproj -c Release2026` (또는 `Debug2026`, 2017 및 2023~2027 중 하나).
+- 설치 프로그램 빌드(6개 연도 자동 포함): `dotnet publish SunnyToolsInstaller/SunnyToolsInstaller.csproj -c Release`
+- 독립 매개변수 관리자 빌드/테스트/배포: `node SunnyParameterManager/build-release.cjs` (기존 출력 덮어쓰기 금지), 패키지 재검증: 같은 명령에 `--verify`.
+- 독립 프로그램 테스트는 `SunnyParameterManager/Tests` 및 `LifecycleTests`. 기존 애드인 전체를 위한 통합 CI는 없음.
 - 참고: 해당 연도 애드인이 Revit에 로드된 상태면 빌드의 마지막 DLL 복사 단계만 실패한다 (컴파일 자체는 실패하지 않으며, 그 연도 Configuration에만 영향).

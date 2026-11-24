@@ -1,6 +1,36 @@
 # 리본/앱 시작 (App.cs)
 
+## Revit 2017
+
+모델선 패턴 캡처는 패턴 패널의 일반 버튼으로 노출한다. 2017 API에 없는 패턴 타공·복원과 경고Pick은 리본 및 커스텀 버튼 목록에 등록하지 않는다. 창의 소유 핸들은 2017에서 현재 Revit 프로세스의 메인 창을 사용하고, 다른 버전은 UIApplication.MainWindowHandle을 사용한다.
+
+## 2026-11-12 — 벽 개구부 버튼 두 개 삭제 (v117)
+
+벽체 분리 패널에서 벽 개구부와 벽 쌍 개구부의 버튼, 전용 아이콘, 커스텀 기능 버튼 등록을 제거했다.
+
+## 2026-11-12 — 벽 개구부 표시 이름 변경 (v115)
+
+기존 구조벽 개구부의 표시 이름을 리본과 SunnyToolsCommands에서 벽 개구부로 바꾼다. 저장된 버튼이 실행되도록 기존 버튼 ID와 명령 클래스 이름은 유지한다. 벽 쌍 개구부와 벽 개구부 모두 선택한 두 벽을 사용하고 각 버튼의 툴팁에 호스트 이동 여부를 명시한다.
+
+## 2026-11-12 — 벽 쌍 개구부
+
+벽체 분리 패널에 WallPairOpeningCommand 전용 버튼과 16/32px 아이콘을 추가하고 SunnyToolsCommands에도 등록한다. 기존 구조벽 개구부는 기존 버튼으로 실행한다.
+
+## 2026-11-12 — 구조벽 개구부
+
+벽체 분리 패널에 구조벽 개구부 버튼을 추가한다. 명령은 StructuralWallOpeningCommand이며 SunnyToolsCommands에도 등록한다. 16/32px 아이콘은 RibbonIcons.StructuralWallOpening에서 그린다.
+
+## 2026-10-30 — 한 층 분리 버튼
+
+벽체/바닥 분리 패널에 각각 별도 `한 층 분리` 버튼을 추가했다. 명령은 `SplitWallOneLayerCommand`/`SplitFloorOneLayerCommand`, 아이콘은 `RibbonIcons.ExtractWallLayer`/`ExtractFloorLayer`이며 `SunnyToolsCommands.All`에도 등록한다. 기존 전체 분리 버튼과 공유 설정 버튼은 유지한다.
+
+## 2026-10-13 v100
+
+NAMER 패널에 독립 `일람표 에디터` 버튼(`WallSplitter_ScheduleEditor` → `ScheduleEditorCommand`) 추가. 격자 한 열/여러 행을 강조한 `RibbonIcons.ScheduleEditor(16/32)` 코드 아이콘 사용. 다른 버튼/등록 순서의 기존 기능은 유지. 기능 제한/안전 정책은 `docs/schedule-editor/CLAUDE.md` 참고.
+
 `App.cs`(`App : IExternalApplication`) — Sunny Tools 리본 탭·패널·버튼 등록, 아이콘 리소스, WPF `Application` 준비. 다른 모든 기능이 공유하는 시작 인프라이므로, 리본 버튼 추가/아이콘 교체/`.addin` 매니페스트 관련 작업 전에 이 문서를 먼저 읽을 것.
+
+**2026-09-23 리본 아이콘 전면 재작업 — 아래 본문의 PNG 아이콘 서술은 전부 과거 기록이다.** 리본 아이콘은 이제 하나도 남김없이 `WallSplitter/RibbonIcons.cs`가 실행 시점에 그린다(`RibbonIcons.SplitWall/SplitFloor/Settings/Toggle/Namer/MaterialAssign/ModelSync/Refresh/QuickToggle/PatternStudio/ModelLineCapture/PatternPunch/WarningPick/RoomSeparator/RoomBounding/ParamCombine/BatchJoin`). `App.LoadIcon`·`App.ToggleIconResource`·`App.Create*Icon`은 전부 삭제됐고, `Resources/icon*.png` 18개와 그 `EmbeddedResource` 항목도 csproj에서 지웠다(`ICON.png`·`Theme.xaml`·`RevitCommandLabels.2027.tsv`만 남는다). 그러니 **새 리본 버튼에 아이콘을 붙일 때 PNG를 만들지 말고 `RibbonIcons`에 메서드를 하나 더 추가할 것** — 왜 이렇게 통일했는지는 `docs/design-system/CLAUDE.md`의 같은 날짜 항목에 있다. 상태에 따라 아이콘이 바뀌는 토글 버튼(`UpdateTypeAssignmentToggleLabel`/`UpdateQuickToggleVisibilityLabel`/`UpdateParamCombineToggleLabel`)은 `PushButton.Image = RibbonIcons.Toggle(16, on)`으로 바뀌었을 뿐 구조는 그대로다. `<UseWPF>true</UseWPF>`는 여전히 필요하다(`BitmapImage` 대신 `DrawingVisual`/`RenderTargetBitmap`을 쓸 뿐 둘 다 WPF다).
 
 2026-08-21 패턴 확장: `패턴` 패널의 큰 `패턴 스튜디오` 버튼 옆에 `RibbonPanel.AddStackedItems`로 `모델선 캡처`→`ModelLinePatternCaptureCommand`, `패턴 타공`→`PatternPunchCommand`, `타공 복원`→`PatternPunchRestoreCommand` 세 개의 독립 버튼을 둔다. 세 명령은 `SunnyToolsCommands.All`에도 등록해 커스텀 기능 버튼으로 실행할 수 있어야 한다.
 

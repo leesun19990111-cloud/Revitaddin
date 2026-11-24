@@ -16,10 +16,20 @@ namespace WallSplitter
             UIDocument uiDoc = commandData.Application.ActiveUIDocument;
             Document doc = uiDoc.Document;
 
+            if (UnifiedEditService.HasLinks(doc))
+                return UnifiedEditService.Execute(commandData.Application, true, () => ExecuteCurrent(commandData.Application));
+            return ExecuteCurrent(commandData.Application);
+        }
+
+        private static Result ExecuteCurrent(UIApplication app)
+        {
+            UIDocument uiDoc = app.ActiveUIDocument;
+            Document doc = uiDoc.Document;
+
             List<ElementId> preSelected = uiDoc.Selection.GetElementIds().ToList();
 
             MaterialAssignWindow window = new MaterialAssignWindow(doc, preSelected);
-            new WindowInteropHelper(window) { Owner = commandData.Application.MainWindowHandle };
+            new WindowInteropHelper(window) { Owner = app.GetMainWindowHandle() };
             bool? dialogResult = window.ShowDialog();
             if (dialogResult != true)
                 return Result.Cancelled;
@@ -30,8 +40,9 @@ namespace WallSplitter
             if (window.DeleteResult != null && window.DeleteResult.Count > 0)
                 return ExecuteDelete(doc, window.DeleteResult);
 
-            if (window.Result != null && window.Result.Count > 0)
-                return ExecuteAssign(doc, window.Result);
+            if ((window.Result?.Count ?? 0) > 0 || (window.InstanceResult?.Count ?? 0) > 0)
+                return ExecuteAssign(doc, window.Result ?? new List<(ElementId, MaterialSlot, ElementId)>(),
+                    window.InstanceResult ?? new List<MaterialInstanceAssignment>());
 
             if (window.IdentityResult != null && window.IdentityResult.Count > 0)
                 return ExecuteIdentityEdit(doc, window.IdentityResult);
@@ -116,7 +127,8 @@ namespace WallSplitter
         // 동일하게 유형 이름만 보인다.
         private static string SlotSuffix(MaterialSlot slot) => string.IsNullOrEmpty(slot.Label) ? "" : $" ({slot.Label})";
 
-        private static Result ExecuteAssign(Document doc, List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)> assignments)
+        internal static Result ExecuteAssign(Document doc, List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)> assignments,
+            List<MaterialInstanceAssignment> instanceAssignments, List<ChangeLogEntry>? deferredLogs = null)
         {
             var failed = new List<string>();
             var pendingLogEntries = new List<ChangeLogEntry>();
@@ -161,6 +173,25 @@ namespace WallSplitter
                     }
                 }
 
+                foreach (MaterialInstanceAssignment assignment in instanceAssignments)
+                {
+                    string name = doc.GetElement(assignment.TypeId)?.Name ?? assignment.TypeId.ToString();
+                    if (!assignment.TryApply(doc, out List<ElementId> oldIds, out string reason))
+                    {
+                        failed.Add($"{name}{SlotSuffix(assignment.Slot)} · 인스턴스 {assignment.InstanceIds.Count}개 ({reason})");
+                        continue;
+                    }
+                    var oldNames = oldIds.Select(id => doc.GetElement(id)?.Name ?? "지정되지않음").Distinct().ToList();
+                    pendingLogEntries.Add(new ChangeLogEntry
+                    {
+                        Timestamp = DateTime.Now, SourceDocumentTitle = doc.Title,
+                        Kind = ChangeKind.MaterialInstanceAssign, Key = name,
+                        SlotLabel = assignment.Slot.Label,
+                        OldValue = oldNames.Count == 1 ? oldNames[0] : "<다양함>",
+                        NewValue = doc.GetElement(assignment.NewMaterialId)?.Name,
+                    });
+                }
+
                 // NAMER의 이름 변경 트랜잭션에서 확인된 라이브 버그(커스텀 IFailuresPreprocessor를 붙이면
                 // 실패 메시지 없이도 조용히 롤백되는 현상)와 같은 부류의 위험을 새로 감수하지 않기 위해,
                 // 여기도 커스텀 전처리기 없이 Revit 기본 처리에 맡기고 TransactionStatus만 확인한다.
@@ -173,7 +204,8 @@ namespace WallSplitter
                 return Result.Failed;
             }
 
-            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
+            if (deferredLogs != null) deferredLogs.AddRange(pendingLogEntries);
+            else if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
 
             if (failed.Count > 0)
             {
@@ -182,10 +214,10 @@ namespace WallSplitter
                 TaskDialog.Show("재료 지정", $"{failed.Count}개 유형의 재료를 지정하지 못했습니다:\n" + detail);
             }
 
-            return Result.Succeeded;
+            return deferredLogs != null && failed.Count > 0 ? Result.Failed : Result.Succeeded;
         }
 
-        private static Result ExecuteDelete(Document doc, List<ElementId> materialIds)
+        private static Result ExecuteDelete(Document doc, List<ElementId> materialIds, List<ChangeLogEntry>? deferredLogs = null)
         {
             var failed = new List<string>();
             var pendingLogEntries = new List<ChangeLogEntry>();
@@ -234,7 +266,8 @@ namespace WallSplitter
                 return Result.Failed;
             }
 
-            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
+            if (deferredLogs != null) deferredLogs.AddRange(pendingLogEntries);
+            else if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
 
             if (failed.Count > 0)
             {
@@ -243,10 +276,11 @@ namespace WallSplitter
                 TaskDialog.Show("재료 삭제", $"{failed.Count}개 재료를 삭제하지 못했습니다:\n" + detail);
             }
 
-            return Result.Succeeded;
+            return deferredLogs != null && failed.Count > 0 ? Result.Failed : Result.Succeeded;
         }
 
-        private static Result ExecuteIdentityEdit(Document doc, List<(ElementId MaterialId, string? NewClass, string? NewDescription)> edits)
+        private static Result ExecuteIdentityEdit(Document doc, List<(ElementId MaterialId, string? NewClass, string? NewDescription)> edits,
+            List<ChangeLogEntry>? deferredLogs = null)
         {
             var failed = new List<string>();
             var pendingLogEntries = new List<ChangeLogEntry>();
@@ -321,7 +355,8 @@ namespace WallSplitter
                 return Result.Failed;
             }
 
-            if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
+            if (deferredLogs != null) deferredLogs.AddRange(pendingLogEntries);
+            else if (pendingLogEntries.Count > 0) ChangeLog.Append(pendingLogEntries);
 
             if (failed.Count > 0)
             {
@@ -330,7 +365,7 @@ namespace WallSplitter
                 TaskDialog.Show("클래스/설명 변경", $"{failed.Count}개 재료의 클래스/설명을 변경하지 못했습니다:\n" + detail);
             }
 
-            return Result.Succeeded;
+            return deferredLogs != null && failed.Count > 0 ? Result.Failed : Result.Succeeded;
         }
     }
 }

@@ -1,5 +1,19 @@
 # 커스텀 버튼 (구 "빠른 토글" — 뷰템플릿/필터/작업세트 원클릭 on/off + 뷰 저장/되돌리기)
 
+## 2026-11-12 — 벽 개구부 커스텀 버튼 제거 (v117)
+
+설정 로드 및 버튼 가져오기에서 두 삭제된 Sunny Tools 명령을 저장된 클래스 이름으로 식별해 제외한다. Revit 기본 명령과 다른 Sunny Tools 명령은 같은 검사에 의해 제외되지 않는다.
+
+## 2026-09-28 — 층별 단면상자 제거 (v91)
+
+- 사용자 요청: 커스텀 버튼에서 **층별 단면상자 기능 삭제**. 아래의 v70~v73 관련 설명은 과거 이력이며 현재 기능이 아니다.
+- 추가 카드·레벨 선택 UI·상태 판정·툴바 클릭·ExternalEvent 요청·레벨 매칭/캐시·3D 뷰 생성/범위 계산과 전용 설정 필드를 제거했다. 다른 기능의 단면상자(경고Pick 등)는 변경하지 않았다.
+- **`QuickToggleCategory.LevelSectionBox` 열거 값은 삭제하거나 순서를 바꾸지 말 것.** 문자열/숫자 JSON 호환을 위해 남기고 `IsRemovedCategory`에서 제외한다. 열거 멤버 자체를 지우면 기존 설정 전체의 역직렬화가 실패해 다른 버튼까지 사라질 수 있다.
+- 전역/옛 프로젝트 설정 로드 및 버튼모음 가져오기에서 해당 버튼만 빠진다. 삭제된 종류의 `UnlinkedCategories` 항목도 로드 시 정리한다. 다른 버튼의 이름·대상·색·크기·아이콘은 유지하고, 줄 배치는 기존 NormalizeRows 규칙을 따른다. 제거된 전용 JSON 필드는 기본 역직렬화 동작으로 무시한다.
+- `QuickToggleIconShape.SectionBand`는 다른 종류의 버튼에도 사용자가 지정할 수 있으므로 **범용 아이콘으로 유지**한다. 기존 모델에 만들어진 3D 뷰는 조회/삭제/수정하지 않는다.
+- 검증: `.codex-build/release-v91/SettingsSmoke.csproj`는 실제 QuickToggleSettings.cs를 링크하고 Revit 타입만 대역으로 치환한다. 혼합 설정·버튼모음·삭제된 버튼만 있는 설정·문자열/숫자 열거 값·타 버튼 값/순서/배치/아이콘 보존을 통과했다. 실제 사용자 설정 파일은 건드리지 않았다.
+- Revit 2023~2027 Release 빌드 오류 0개. 실제 Revit UI는 미검증: 설치 후 추가 목록에서 제거 여부와 기존 툴바의 다른 버튼 유지 여부를 확인할 것.
+
 **이름 변경 (2026-07-28)**: 사용자 요청으로 이 기능의 사용자 노출 명칭을 "빠른 토글"에서 "커스텀 버튼"으로
 바꿨다 — 리본 패널명(`App.QuickTogglePanelName`), 버튼 라벨/툴팁, 창 제목(`QuickToggleToolbar.xaml`/
 `QuickToggleSettingsWindow.xaml`의 `Title`), `TaskDialog` 제목, 트랜잭션 이름, `IExternalEventHandler.
@@ -9,6 +23,11 @@ GetName()` 등 실제 화면에 보이는 문자열만 바꿨다. 클래스/파�
 "커스텀 버튼(구 "빠른 토글")"으로 병기해 과거 문서와의 연결을 남겼다).
 
 `QuickToggleSettings.cs`/`QuickToggleService.cs`/`QuickToggleIcons.cs`/`QuickToggleExternalEventHandler.cs`/`QuickToggleToolbar.xaml(.cs)`/`QuickToggleSettingsWindow.xaml(.cs)`를 건드리기 전에 이 문서를 읽을 것. 이 프로젝트에서 유일하게 모드리스 창·`ExternalEvent`·Win32 P/Invoke를 쓰는 영역이라 다른 창들과 아키텍처가 다르다.
+
+**먼저 확인 (2026-09-02)**: "프리셋 버튼"과 "그래픽 화면표시 검색 버튼"은 **삭제됐다**. 아래 본문에 나오는 그
+두 기능 관련 서술(프리셋 탭 구조, 카테고리 V/G 재정의 편집창, 검색 패널 등)은 전부 **과거 이력**이며 지금
+코드에는 없다 — 문서 맨 아래 "프리셋·그래픽 화면표시 검색 버튼 삭제 + 링크 끄기/켜기 버튼 추가" 항목을 먼저
+읽을 것(특히 열거 멤버 `Preset`/`GraphicsDisplaySearch`를 지우면 안 되는 이유).
 
 2026-07-24 추가, 사용자 요청("현재 뷰의 뷰템플릿/필터/작업세트를 딸깍 한 번으로 on/off"). **Revit API는 신속접근 도구모음(QAT)에 버튼을 프로그램적으로 추가하는 기능을 지원하지 않는다** — 사용자에게 이 제약을 먼저 확인했고, 대신 Revit 메인 창 상단에 고정되는 자체 커스텀 플로팅 창(`QuickToggleToolbar`)으로 대체 구현했다. 이 기능은 이 프로젝트에서 처음으로 **모드리스(비모달)로 세션 내내 떠 있는 창**을 도입했고, 그로 인해 이 프로젝트 최초로 `ExternalEvent`/`IExternalEventHandler`, `UIControlledApplication.ViewActivated`/`Idling`/`ControlledApplication.DocumentClosing` 이벤트 구독, Win32 P/Invoke(`GetWindowRect`), 프로젝트 파일 경로별 설정 저장이 필요해졌다 — 기존 창은 전부 커맨드 `Execute` 안에서 여는 모달 `ShowDialog()`라 이런 게 하나도 필요 없었다.
 
@@ -87,9 +106,716 @@ GetName()` 등 실제 화면에 보이는 문자열만 바꿨다. 클래스/파�
   - **대상 검색 입력칸** (2026-07-30, "커스텀 버튼 설정창에 대상을 선택할때 검색할 수 있는 입력칸을 작게 하나 만들어줘"): 뷰템플릿/필터/작업세트 목록과 프리셋·색상 버튼의 카테고리 트리 전부에 좁은 검색 입력칸(`QuickToggleSettingsWindow.BuildSearchRow`, `Width=140`)이 붙었다. **목록만 다시 그리고 검색 입력칸 자체는 다시 만들지 않는다** — `TextChanged`마다 `BuildEditPanel` 전체를 다시 그리면 입력칸 자신도 새 인스턴스로 교체되어 한 글자 입력할 때마다 포커스가 끊긴다(이 창의 다른 곳, `QuickToggleToolbar`의 "매 틱 재대입하면 클릭이 씹힌다" 버그와 근본적으로 같은 함정이라 처음부터 피했다) — 그래서 검색 입력칸을 담은 바깥 패널은 그대로 두고, 결과 목록만 담는 별도의 `resultsPanel`을 따로 둬서 그 패널의 `Children`만 지웠다 다시 채운다(`RenderViewTemplateList`/`RenderFilterList`/`RenderWorksetList`/`RenderCategoryList`). 뷰템플릿/필터/작업세트는 이름에 검색어가 포함되는지(`MatchesSearch`, 대소문자 무시)로 단순 필터링하고, `<없음>` 라디오는 검색어와 무관하게 항상 보여준다(이름으로 찾을 대상이 아니라 "선택 해제" 기능이라서). 카테고리 트리(프리셋의 카테고리 탭, 색상 버튼의 카테고리 선택)는 검색어가 있으면 트리 구조(펼침/접힘)를 잠시 접어두고 깊이와 무관하게 이름이 일치하는 카테고리를 전부 평평하게 나열한다 — 몇 단계 아래 하위 카테고리를 찾으려고 매번 상위를 펼쳐야 하는 불편을 없애기 위함(검색어를 지우면 원래 트리로 돌아옴).
 - **기능 버튼 (다른 Sunny Tools/Revit 기본 기능을 버튼으로)** (2026-08-03, 사용자 요청 — "커스텀 버튼 설정에 다른 툴들의 버튼도 추가할 수 있는 기능이 있으면 좋겠어. 예를들어 Sunny Tools의 재료지정 버튼을 추가한다던지, 네이머를 추가한다던지, 공동작업탭에 동기화버튼을 추가하는 등 내가 원하는 기능을 찾아서 버튼으로 추가하고 싶어" — 이어서 "범위는 Sunny Tools + Revit 전체 명령(PostableCommand) 검색", "클릭 즉시 실행(확인창 없음)"으로 Q&A 확정): 새 카테고리 `QuickToggleCategory.CommandLauncher` — `ColorTool`과 마찬가지로 on/off 개념이 없고(`DetermineState`가 항상 `Off` 고정 반환, 이유도 ColorTool과 동일 - `Disabled`를 반환하면 툴바가 버튼을 `IsEnabled=false`로 그려 클릭 자체가 막힌다), 클릭하면 지정된 Revit 명령을 그 자리에서 한 번 실행할 뿐이다.
   - **명령 조회/실행** (`QuickToggleService.RunCommand`): Revit API가 "임의의 명령을 프로그램적으로 실행"할 수 있게 해주는 유일한 공식 경로가 `RevitCommandId` + `UIApplication.PostCommand`다 - `ExternalCommandData`를 직접 만들어 `IExternalCommand.Execute`를 호출하는 방법은 없다(그 객체는 Revit이 커맨드를 실제로 실행할 때만 생성해 넘겨준다). 새 `QuickToggleCommandKind` enum으로 조회 API가 갈린다: `SunnyTool`이면 `RevitCommandId.LookupCommandId(전체 클래스 이름)`(App.cs가 `PushButtonData`를 등록할 때 쓰는 것과 똑같은 문자열), `NativeRevit`이면 `RevitCommandId.LookupPostableCommandId(PostableCommand)` - **`LookupPostableCommand`(단수)가 아니라 `LookupPostableCommandId`** - 처음 이 이름으로 짰다가 5개 연도 전부에서 CS0117(그런 멤버가 없음)로 컴파일이 깨져서 RevitAPIUI.xml을 직접 검색해 실제 멤버 이름을 확인했다. 조회에 성공하고 `uiapp.CanPostCommand(id)`가 참일 때만 `PostCommand`를 호출한다 - `PostCommand`는 즉시 실행이 아니라 "다음 기회에 실행해달라"는 요청이라(Revit 자체 리본 버튼을 누르는 것과 같은 메커니즘), 이 메서드 반환 시점엔 아직 실제로 실행되지 않았을 수 있다. 트랜잭션을 열지 않는다 - 실행될 명령 자체(재료 지정 창을 연다, 동기화한다 등)가 필요하면 각자 알아서 연다.
-  - **명령 목록** (`SunnyToolsCommands.cs`, 신규 파일): Sunny Tools 자체 명령은 `App.cs`가 리본에 등록한 것과 같은 9개(벽체/바닥 분리, 벽체/바닥 분리 설정, 단일/복수 전환, NAMER, 재료 지정, 모델간 변경 반영, 커스텀 버튼 설정, 커스텀 버튼 표시/숨김)를 하드코딩한 짧은 목록이라 검색어 없이 항상 다 보여준다. Revit 기본 명령은 `PostableCommand` enum 전체(수백 개, 예: `SyncWithCentral`="공동작업탭의 중앙 모델과 동기화")를 대상으로 하는데, 이 enum 멤버 이름 하나하나에 한글 라벨을 붙이는 건 이번 요청 범위를 크게 넘어서고 Revit 자체도 매크로/커스터마이즈 UI에서 이 영문 이름을 그대로 노출하므로, 대문자 경계에 공백만 삽입하는 정규식(`FriendlyLabel`, "SyncWithCentral" → "Sync With Central")으로 검색 가능한 정도로만 다듬었다. 수백 개를 필터 없이 나열하면 설정 창이 느려지고 원하는 걸 찾기도 어려우므로 `SunnyToolsCommands.SearchNativeCommands`는 검색어가 비어있으면 빈 목록을 반환한다 - 애초에 "찾아서 추가하고 싶다"는 요청이었다(`QuickToggleSettingsWindow.RenderCommandList`가 검색어가 있을 때만 이 섹션을 그리고, 결과도 60개로 자른다).
+  - **명령 목록·한영 검색** (`SunnyToolsCommands.cs`, 2026-08-27 확장): Sunny Tools 자체 명령은 `App.cs`가 리본에 등록한 것과 같은 짧은 목록이라 검색어 없이 항상 다 보여준다. Revit 기본 명령은 `PostableCommand` enum 전체를 대상으로 하며, Autodesk 공식 Revit 2027 영문/한국어 키보드 단축키 명령표 1,840개를 `CommandId`로 합친 UTF-8 내장 리소스(`Resources/RevitCommandLabels.2027.tsv`)와 `RevitCommandId.Name`을 연결한다. 검색은 현재 화면 언어와 무관하게 영문 이름·한국어 이름·`PostableCommand` enum 이름·Revit 내부 CommandId 네 가지를 모두 검사하므로 한국어 Revit에서도 `Save`/`저장`이 모두 같은 명령을 찾는다. 결과 라벨은 `Document.Application.Language`가 `LanguageType.Korean`이면 한국어, 그 외에는 영문으로 표시한다. 설정에 저장된 `CommandLabel`은 예전 설정 및 리소스 매칭 실패의 fallback으로만 남기고, 설정 창의 "현재 선택"과 플로팅 툴바의 툴팁도 매번 현재 Revit 언어로 다시 해석한다. CommandId 매칭이나 리소스 로드가 실패한 명령은 기존 `FriendlyLabel` 영문으로 안전하게 되돌아간다. 수백 개를 필터 없이 나열하면 설정 창이 느려지고 원하는 걸 찾기도 어려우므로 검색어가 비어 있으면 Revit 기본 명령 목록은 여전히 비우고, 결과도 60개로 제한한다. **리소스를 갱신할 때는 영문/한국어 표의 CommandId 집합이 정확히 같은지와 중복이 없는지 먼저 검증해야 하며, 라벨 문자열의 탭·개행은 공백으로 정규화해야 한다.**
   - **설정 UI**: "+ 기능 버튼 추가"로 만들면 다른 라디오 목록(뷰템플릿 등)과 같은 패턴 — 검색창 + Sunny Tools 섹션(항상 표시) + Revit 기본 기능 섹션(검색어가 있을 때만) 을 같은 라디오 그룹(`"cmd_" + cfg.Id`)으로 묶어 하나만 고를 수 있다. 검색어를 바꾸면 결과 목록이 필터링되어 선택된 항목이 화면에서 사라질 수 있어(예: "NAMER"를 고른 뒤 "동기화"로 검색하면 라디오 자체가 안 보임), 검색창 위에 "현재 선택: {라벨}" 요약 줄을 항상 띄워 시각적으로 잃어버리지 않게 했다.
   - **내보내기/가져오기는 변경 없이 그대로 동작**: `CommandKind`/`CommandId`/`CommandLabel`은 `ElementId`와 달리 문서에 속한 값이 아니라 Revit/이 애드인 자체에 속한 식별자라(같은 클래스 이름, 같은 enum 멤버는 어느 문서에서나 똑같이 유효) `ViewTemplateId`/`FilterIds`처럼 별도 "이름" 필드를 두고 가져오기 시점에 다시 검색할 필요가 없다. `QuickToggleSettingsWindow.TransferButtons`(JSON/모델 이식 공용 로직)의 마지막 루프가 `ViewTemplateName`/`FilterNames`/`WorksetNames`/`CategoryOverrides`/`ColorButtonCategories`만 개별적으로 재해석하고 나머지 필드는 그대로 둔 채 `targetSettings.Buttons.Add(cfg)`하므로, `CommandLauncher` 버튼은 이 세 필드가 전부 비어있어 아무 것도 재해석되지 않고 원본 그대로 옮겨간다 - `TransferButtons`에 손댈 필요가 전혀 없었다(JSON 직렬화도 리플렉션 기반이라 새 필드가 자동으로 포함됨).
   - **여전히 라이브 테스트 필요**: `PostCommand`로 Sunny Tools 자체 명령(모달 창을 여는 것들)이 실제로 화면에 뜨는지, `SyncWithCentral`처럼 문서 상태에 따라 조건부로만 가능한 네이티브 명령이 `CanPostCommand`로 정확히 걸러지는지는 이 개발 환경에 실행 중인 Revit이 없어 확인하지 못했다 - Revit API 계약(5개 연도 전부 컴파일 확인, RevitAPIUI.xml에서 실제 멤버명 확인)에 근거한 구현이지 라이브 재현 후 고친 것은 아니다. 안 되면 이 지점(`QuickToggleService.RunCommand`)부터 확인할 것.
+- **그래픽 화면표시 검색 버튼** (2026-08-27, 사용자 요청 — "커스텀 버튼바에서 바로 그래픽화면표시에서의 모델 및 주석 카테고리를 검색해서 바로 가시성, 투영 표면의 선,패턴,투명도, 잘라내기 선,패턴 중간색, 상세수준을 조절"): `QuickToggleCategory.GraphicsDisplaySearch`를 추가했다. 설정 창에서는 별도 대상 카테고리를 저장하지 않고 버튼 이름/아이콘만 정한다. 툴바에서 누르면 `GraphicsDisplaySearchPopupWindow.xaml(.cs)`가 현재 뷰에서 `GetCategoryOverrides` 또는 `GetCategoryHidden`을 읽을 수 있는 모델·주석 최상위/하위 카테고리를 모아 경로(`상위 > 하위`)와 함께 검색 결과로 보여준다. Revit 표시 언어가 카테고리 이름 자체를 현지화하므로 검색 결과도 실행 중인 Revit 언어를 그대로 따른다.
+  - 결과 카테고리를 누르면 기존 `CategoryOverrideEditWindow`를 `immediateMode:true`로 재사용한다. 편집 객체는 카테고리 식별 정보 외에는 전부 null에서 시작하고, 즉시 편집 모드의 null은 "현재 재정의를 지움"이 아니라 **"이번 적용에서는 변경 안 함"**이다. 따라서 사용자는 가시성/투영선/표면 전경·배경 패턴/투명도/절단선·패턴/중간색(하프톤)/상세수준 중 바꿀 항목만 지정한다. `QuickToggleService.ApplyGraphicsDisplayOverride`는 `view.GetCategoryOverrides`로 기존 OGS를 먼저 읽고 `ApplyOverrideGraphicSettings`로 값이 있는 필드만 덧씌운 뒤 다시 저장하므로, 투명도만 바꿨을 때 기존 선·패턴 재정의가 지워지지 않는다. 가시성과 그래픽 항목을 함께 요청했다면 둘 다 성공해야 트랜잭션을 커밋하고, 한쪽이라도 실패하면 부분 적용을 남기지 않고 전체 롤백한다.
+  - 검색창은 모델리스이므로 실제 Revit 변경은 `GraphicsDisplayApplyRequest`/`PendingGraphicsDisplayApply`를 통해 기존 `ExternalEvent` 처리기로 넘긴다. 요청에는 팝업을 연 문서 경로를 포함해 다른 프로젝트로 전환한 뒤 같은 정수 CategoryId에 잘못 적용되는 것을 막는다. 뷰가 바뀌면 뷰 종류별 지원 카테고리 목록도 달라질 수 있으므로 툴바의 `RefreshState`가 검색 팝업을 자동으로 닫으며, 문서 변경/툴바 숨김/설정 재로드 때도 색상 팝업과 함께 닫는다. 검색 버튼은 ColorTool과 같은 작은 도구형 버튼으로 2단 그룹에 들어가고 `DetermineState`는 항상 `Off`를 반환한다. **라이브 Revit 동작은 아직 미검증** — 2023~2027 컴파일 후 실제 뷰 템플릿 제어 항목과 카테고리별 지원 차이는 Revit에서 확인해야 한다.
 - **알려진 제약**: Revit이 뷰를 별도 창으로 분리했을 때 툴바는 메인 창에만 붙고 분리된 창은 따라가지 않음; 저장 안 된 새 문서(경로 없음)는 프로젝트별 설정을 저장할 곳이 없어 툴바가 비활성 상태로 남음(최초 저장 후 정상 동작); 필터/뷰템플릿/작업세트/카테고리 대상이 삭제되면 그 항목만 조용히 무시됨; "뷰 저장" 스냅샷은 디스크에 저장되지 않으므로 Revit을 껐다 켜거나 문서를 닫았다 열면 사라짐(그 세션에서 다시 저장해야 함, 단 문서를 닫지 않고 뷰만 닫는 것은 유지됨); 저장 안 된 새 문서를 여러 개 동시에 열어두면 그 뷰 저장 스냅샷들이 전부 같은 `"__unsaved__"` 키로 뭉뚱그려짐(극히 드문 경우로 남겨둠); 그림자/태양경로/스케치라인 등 "그래픽 화면표시 옵션"의 세부 항목은 Revit API에 전용 접근자가 없어 `GraphicsIntegerParams` 캐치올로 최선 노력만 하며 실제 복원 여부는 **라이브 테스트 미검증**; 색상 버튼의 펼침 방향 판정은 주 모니터 기준이라 **멀티 모니터 환경 미검증**; 기능 버튼의 Revit 기본 명령 실행 가능 여부(`CanPostCommand`)와 실제 실행 결과는 **라이브 테스트 미검증**.
+- **Revit 콜백 예외 차단 (2026-09-01, 전체 점검에서 선제 보강 — 재현된 버그는 아님)**: `App.OnQuickToggleIdling`/
+  `OnQuickToggleViewActivated`/`OnQuickToggleDocumentClosing`은 `RefreshState()`를 예외 처리 없이 호출하고 있었다.
+  Revit 이벤트 콜백에서 예외가 밖으로 나가면 Revit이 오류 대화상자를 띄우거나 구독 자체를 끊는데, `Idling`은
+  초당 여러 번 발생하므로 한 번의 예외가 대화상자 폭주로 이어질 수 있다. 세 콜백을 `try/catch`로 감싸 조용히
+  삼키고 다음 틱에 다시 갱신하게 했다(상태 표시만 하는 코드라 사용자에게 알릴 것이 없다).
+  `QuickToggleExternalEventHandler.Execute`도 본문을 `ExecuteCore`로 옮기고 최상위에서 예외를 잡아 `TaskDialog`로
+  알린다 — 이 파일이 이미 기록해 둔 "ExternalEvent 콜백은 실패해도 Revit이 아무 것도 보여주지 않아 '버튼을
+  눌러도 반응 없음'으로만 남는다"는 문제를 예상 못 한 예외에도 똑같이 적용한 것이다.
+  `QuickToggleSettingsWindow.ResetPositionButton_Click`의 `QuickToggleGlobalSettings.Save()`도 감쌌다(WPF 이벤트
+  핸들러에서 예외가 새면 Revit 프로세스가 그대로 죽는다 — `SettingsWindow`의 저장 버튼과 같은 방침).
+- **기능 버튼 목록에 경고Pick 누락, 수정 (2026-09-01)**: `SunnyToolsCommands.All`에 `WarningPickCommand`가 빠져
+  있어(2026-08-25 경고Pick 추가 때 이 목록에 넣지 않았다) 커스텀 "기능 버튼"으로 경고Pick을 등록할 수 없었다.
+  리본에 등록하는 모든 `IExternalCommand`가 이 목록에도 있어야 한다 — 새 명령을 추가하면 `App.cs`와 이 목록
+  양쪽을 같이 갱신할 것.
 
+## 프리셋·그래픽 화면표시 검색 버튼 삭제 + 링크 끄기/켜기 버튼 추가 (2026-09-02)
+
+사용자 요청: *"커스텀 버튼 기능이 모르는 사람들이 쓰기에 너무 어려울 수도 있겠다 — 프리셋 버튼은 삭제하고
+대신 링크된 도면 껏다 키기 기능을 넣어줘. 활성화되어있는 뷰를 감지해서 해당 뷰에 링크되어 있는 도면이 있으면
+활성화가 되어서 클릭하면 끌 수 있는 버튼. 링크된 모델 껏다 키기도. 그래픽 화면표시 검색 버튼은 그냥 없애는 게
+낫겠다 — 만든 나도 쓰기가 너무 어렵다."* 즉 **기능 축소가 목적**이므로, 삭제한 두 기능을 "숨기기"만 한 게 아니라
+구현 코드·전용 창까지 전부 지웠다. 되살릴 일이 생기면 이 커밋 직전 이력에서 꺼내 쓸 것.
+
+**지운 것** — `QuickToggleCategory.Preset`/`GraphicsDisplaySearch`의 구현 전체:
+`QuickToggleService`의 `DeterminePresetState`/`TogglePreset`/`ApplyCategoryOverrides`/`BuildOverrideGraphicSettings`/
+`ApplyOverrideGraphicSettings`/`ApplyGraphicsDisplayOverride`/`HasGraphicOverrideValues`/`CanEditCategoryGraphics`/
+`AllLinePatternNames`/`AllFillPatternNames`/`ResolveLinePatternId`/`SolidLinePatternName`,
+`QuickToggleSettingsWindow`의 프리셋 탭 UI(`BuildPresetTabs`/`BuildPresetCategoryTab`/`BuildCategoryRow`/
+`SummarizeOverride`)와 추가 버튼 2개, `QuickToggleExternalEventHandler`의 `GraphicsDisplayApplyRequest`/
+`PendingGraphicsDisplayApply`/`ExecuteGraphicsDisplayApply`, 창 파일 `GraphicsDisplaySearchPopupWindow.xaml(.cs)`/
+`CategoryOverrideEditWindow.xaml(.cs)`/`ColorPickerPopupWindow.xaml(.cs)`(뒤의 둘은 프리셋·검색 패널에서만
+쓰던 편집창이라 함께 죽은 코드가 됐다). `QuickToggleButtonConfig.CategoryOverrides` 필드도 삭제하고,
+`CategoryOverrideConfig`(20여 개 V/G 재정의 필드 + `Clone()`)는 남은 유일한 사용처인 색상 버튼에 맞춰
+`ColorToolCategoryConfig`(카테고리 Id/이름/부모 이름 3개 필드)로 줄였다.
+
+- **열거 멤버 `Preset`/`GraphicsDisplaySearch`는 일부러 남겼다 (지우지 말 것)**: `QuickToggleSettings`는
+  `JsonStringEnumConverter`로 카테고리를 문자열로 저장하는데, 이 컨버터는 **모르는 문자열을 만나면 예외를
+  던진다**. 그리고 `QuickToggleSettings.Load`는 그 예외를 "설정 파일 손상"으로 보고 **빈 설정으로 통째로
+  대체**한다 — 즉 열거 멤버를 지우면 프리셋 버튼 하나가 남아 있는 프로젝트에서 등록해 둔 다른 버튼까지 전부
+  사라진다. 멤버는 남겨 역직렬화만 통과시키고, 실제 버튼은 `Load`에서 `IsRemovedCategory`로 걸러 버린다.
+  같은 이유로 JSON 가져오기(`ImportJsonButton_Click`)에서도 역직렬화 직후 같은 필터를 태운다(모델 간
+  가져오기는 `QuickToggleSettings.Load`를 거치므로 자동으로 걸러진다).
+
+**새로 넣은 것** — `QuickToggleCategory.LinkedCad`(링크된 도면) / `LinkedModel`(링크된 모델):
+뷰템플릿/필터/작업세트처럼 on/off 토글이지만 **설정 창에서 고를 대상이 없다**(대상은 "그때 활성 뷰에 걸려 있는
+링크"라서 클릭할 때마다 새로 찾는다). 켜짐 = 링크가 보이는 상태, 링크가 하나도 없으면 `Disabled`(회색).
+
+- **왜 `View.HideElements`가 아니라 카테고리 숨기기인가**: 링크 인스턴스를 `HideElements`로 숨기면 V/G
+  대화상자에는 아무 표시도 남지 않아("숨겨진 요소 표시"를 켜야만 보인다) 이 버튼으로 끈 것을 사용자가 다른
+  경로로 되돌리기 어렵다. 그래서 Revit V/G와 같은 방식(`View.SetCategoryHidden`)을 쓴다 — 링크된 CAD 도면은
+  도면 파일마다 "가져온 카테고리"가 하나씩 생기므로 그 카테고리들을, 링크된 Revit 모델은 개별 링크마다
+  카테고리가 생기지 않고 전부 `OST_RvtLinks` 하나에 묶이므로 그 카테고리를 끄고 켠다(그래서 링크된 모델은
+  개별 링크가 아니라 항상 전부 함께 켜지고 꺼진다 — API 제약이자 "딸깍 한 번" 요청과도 맞는 동작).
+  → **링크된 모델 쪽은 바로 다음 항목(같은 날)에서 개별 제어로 다시 바뀌었다. CAD 도면만 이 설명이 유효하다.**
+- **"링크"만 대상, "가져오기"는 제외**: `ImportInstance.IsLinked`가 false인 CAD(가져오기로 넣은 것)는 목록에서
+  뺀다. 뷰 전용 가져오기(`OwnerViewId`가 유효)는 그 뷰에서만 대상으로 삼고, 모델 공간에 놓인 링크는 어느
+  뷰에서든 대상이다 — 평면 뷰의 뷰 범위 밖이라 실제로는 안 보이는 경우까지 가려내지는 않는다(Revit V/G의
+  "가져온 카테고리" 탭도 뷰와 무관하게 문서의 링크를 전부 나열한다).
+- **문서 훑기는 반드시 캐시해서 쓸 것 (`QuickToggleService.ScanLinks`, 2초)**: `DetermineState`는 툴바의
+  `Idling` 갱신에서 **버튼마다 매 틱** 호출된다 — 여기서 `FilteredElementCollector`로 문서를 통째로 훑으면
+  이 파일이 세 번이나 반복해서 겪은 "Idling 콜백에서 매 틱 비싼 일을 한다" 부류의 문제가 다시 생긴다.
+  문서 경로별로 스캔 결과(CAD 링크의 카테고리 Id + 소유 뷰 Id, Revit 링크 유무)를 2초간 캐시한다 — 링크를
+  새로 걸어도 늦어도 2초 뒤엔 버튼이 활성화된다.
+- **아이콘 2종 추가(`Sheet`/`Cube`)와 `SetBrush` 변경**: 기존 도형만으로는 "도면"과 "모델"을 형태로 구분할 수
+  없어 도면 틀(사각 테두리+표제란)과 아이소메트릭 정육면체를 추가했다. 둘 다 **채우지 않고 선으로만** 그리는
+  첫 아이콘이라, `QuickToggleIcons.SetBrush`가 무조건 `Fill`을 대입하던 것을 "원래 칠해져 있던 쪽(`Fill` 또는
+  `Stroke`)만 갱신"하도록 바꿨다 — 그대로 뒀으면 상태가 바뀔 때마다 선 그림 아이콘이 통째로 칠해진 덩어리로
+  변한다.
+
+## 링크된 모델: 링크 하나씩 끄고 켜기 (2026-09-02, 같은 날 후속)
+
+사용자 요청: *"링크된 모델도 개별 링크로 끄고 켤 수 있게 해줘."* 조작 방식은 Q&A로 확정했다 — **버튼을
+클릭하면 링크 목록 팝업이 열리고 줄마다 켜고 끈다**(설정 창에서 대상 링크를 미리 고르는 방식은 선택되지
+않았다). **링크된 도면(CAD) 버튼은 지금처럼 전부 함께 끄는 단순 토글로 유지**하기로 명시적으로 확정했다 —
+두 버튼의 동작이 달라지는 건 의도된 것이니 "일관성" 명목으로 CAD 쪽을 팝업으로 바꾸지 말 것.
+
+- **개별 제어는 카테고리 숨기기로 불가능하다**: Revit은 링크된 모델을 링크마다 카테고리로 나누지 않고 전부
+  `OST_RvtLinks` 하나에 묶는다. 그래서 개별 링크는 **요소 단위 숨기기**(`View.HideElements`/`UnhideElements`,
+  `Element.IsHidden`/`CanBeHidden`)로 처리한다. 이건 V/G "Revit 링크" 탭의 링크별 표시 체크박스와 같은
+  저장소라, 이 팝업으로 끈 링크는 V/G에서도 꺼진 것으로 보이고 거기서 되돌릴 수도 있다(위 CAD 항목에 적어둔
+  "요소 숨기기는 V/G에 안 보인다"는 우려가 링크에는 해당하지 않는 이유).
+- **카테고리 숨김이 요소 숨김보다 우선한다 (`PrepareLinkCategoryForElementControl`)**: `OST_RvtLinks`
+  카테고리 자체가 꺼져 있으면 개별 링크를 아무리 켜도 화면에 안 나타난다. 그래서 **켜기 전에** 카테고리가
+  꺼져 있는지 보고, 꺼져 있으면 (1) 모든 링크를 요소 숨김으로 눌러 화면 상태(=하나도 안 보임)를 유지한 뒤
+  (2) 카테고리를 켜고 (3) 요청받은 링크만 개별로 켠다. **이 보정을 지우면 v63을 쓰던 뷰(그 버전은 카테고리
+  숨기기로 링크를 껐다)나 사용자가 V/G에서 "Revit 링크"를 끈 뷰에서 "켜기가 먹통"이 된다** — 반드시 유지할 것.
+- **중첩 링크는 목록에서 뺀다**: `RevitLinkType.IsNestedLink`가 참인 인스턴스는 부모 링크를 끄면 같이
+  사라지므로 목록에 넣지 않는다(V/G의 Revit 링크 탭도 중첩 링크를 부모 아래 하위 항목으로만 보여준다).
+  판정에 실패하면 목록에 남긴다 — 안 보이는 것보다 낫다.
+- **팝업 갱신 시점** (`LinkedModelPopupWindow.Refresh`): `ExternalEvent`는 비동기라 요청을 보낸 직후에
+  다시 읽으면 아직 반영 전 값을 보게 된다. 그래서 팝업을 새로 그리는 건 (1) 열 때, (2) **핸들러가 커밋을
+  끝낸 뒤** `QuickToggleToolbar.RefreshLinkedModelPopup`으로 불러줄 때, (3) 뷰가 실제로 바뀌었을 때
+  (`CurrentViewId` 비교)뿐이다. **`RefreshState`(Idling)에서 매 틱 부르면 안 된다** — 이 파일이 세 번
+  기록한 "매 틱 UI 재생성 → 클릭이 씹힌다" 문제가 팝업 안에서 그대로 재현된다.
+- 링크 인스턴스 `ElementId`는 문서마다 다른 값이라 `LinkedModelApplyRequest`에 문서 경로를 같이 실어
+  보내고 핸들러가 대조한다(그래픽 화면표시 검색 패널에서 쓰던 것과 같은 방어).
+- 툴바 버튼의 On/Off 색은 이제 "이 뷰에 보이는 링크가 하나라도 있는가"를 알려주는 표시일 뿐이다 — 클릭은
+  어느 상태에서든 팝업 열기다(링크가 아예 없을 때만 `Disabled`).
+
+## 설정 창 UX 전면 개편 (2026-09-03)
+
+사용자 요청: *"커스텀 버튼설정 창의 UI를 전면적으로 개편하고 싶어. 아주 사용자 친화적으로 UX를 설계하고
+그에맞춰 UI를 만들고 싶어"* + *"Claude Design의 도움을 받아서 Sunny Tool 만의 컬러 팔레트와 브랜드 톤을
+유지한 상태에서 디자인을 가져갔으면 좋겠어"*. 방향은 Q&A로 확정했다 — **(1) 상단 툴바 미리보기 띠 + 2단
+본문, (2) 카드형 버튼 종류 선택, (3) 접이식 "고급"** 셋 다 추천안이 선택됐다. **기능/데이터 모델은 하나도
+바꾸지 않았다** — `QuickToggleSettings`/`QuickToggleButtonConfig`/`QuickToggleService`/`QuickToggleToolbar`는
+손대지 않았고, 이 창의 XAML 레이아웃과 `QuickToggleSettingsWindow.xaml.cs`의 화면 구성 코드만 다시 짰다
+(내보내기/가져오기·저장/취소 핸들러는 그대로 유지).
+
+**고친 문제 (개편 이유)**:
+- `+ ○○ 버튼 추가` 7개가 설명 없이 세로로 나열돼 있어, 처음 쓰는 사람은 어떤 버튼인지 모르는 채로 눌러야
+  했다(2026-09-02의 "모르는 사람이 쓰기엔 너무 어렵다"와 같은 문제를 설정 창에서 반복하고 있었다).
+- 만든 버튼이 툴바에서 어떤 아이콘·색으로 보일지 저장하기 전엔 알 수 없었다.
+- 대상을 하나도 안 고른 버튼은 `DetermineState`가 `Disabled`를 돌려줘 툴바에서 눌리지 않는데, 설정 창이
+  그 사실을 전혀 알려주지 않았다("만들었는데 왜 안 눌리지?").
+- 상단 4줄 설명 벽 + 하단에 항상 펼쳐진 내보내기/가져오기 5개 버튼이 실제 작업 영역을 밀어내고 있었다.
+
+**새 구조** (`QuickToggleSettingsWindow.xaml` 상단 주석에도 요약해 둠):
+- **툴바 미리보기 띠**(`PreviewPanel`, `CreatePreviewButton`): `QuickToggleToolbar.RebuildButtons`와 **같은
+  배치·색 규칙**으로 그린다(색상 버튼만 작은 리본 버튼 가로 배치, 나머지는 큰 아이콘 위+라벨 아래). 설정
+  창에는 활성 뷰가 없어 진짜 on/off를 알 수 없으므로 — 켜고 끌 수 있는 버튼은 "켜졌을 때", on/off 개념이
+  없는 색상·기능 버튼은 툴바에서 늘 그렇듯 "꺼진" 모습, 대상 미지정 버튼은 회색으로 그린다. 미리보기
+  버튼을 클릭하면 그 버튼을 편집한다. **툴바 쪽 배치 수치를 바꾸면 이 메서드도 같이 맞출 것** — 어긋나면
+  미리보기가 거짓말을 한다.
+- **카드형 종류 선택 오버레이**(`AddOverlay`/`BuildAddChooser`/`ButtonKinds`): 별도 창이 아니라 같은 창 위에
+  겹치는 오버레이다(모달 창을 하나 더 만들지 않기 위함). 워크셰어링 안 된 문서에서는 작업세트 카드만
+  `IsEnabled=false` + 툴팁으로 이유를 알려준다(예전엔 `AddWorksetButton`을 비활성화했던 자리).
+  오버레이가 떠 있을 때 `Esc`는 창 전체가 아니라 오버레이만 닫는다(`Window_PreviewKeyDown`) — 안 그러면
+  "취소" 버튼의 `IsCancel`이 먼저 걸려 편집하던 창이 통째로 닫힌다.
+- **단계형 편집**: `EditHeaderHost`(고정)에 제목 줄 + ① 이름 + ② 모양 + ③ 대상 헤더와 **검색 입력칸까지**
+  넣고, `EditPanelHost`(스크롤)에는 대상 목록만 넣는다 — 2026-07-27의 "스크롤을 내리면 이름 변경 칸이
+  사라진다" 수정의 연장선으로, 이번엔 검색칸도 고정 영역으로 올렸다.
+- **② 모양은 기본 접힘**: 아이콘 12종 + 색 8종을 늘 펼쳐두면 그만큼 ③ 대상이 밀린다(2026-07-27의 "이 부분이
+  너무 커서 아래 대상 선택이 작아 보인다" 피드백을 여백 줄이기가 아니라 구조로 해결). 접힌 상태에서도 현재
+  아이콘·색은 요약으로 보인다. 대상 선택 자체가 없는 링크 버튼(`HasTargetPicker`가 false)은 접을 이유가
+  없으므로 항상 펼치고 토글 버튼을 감춘다.
+- **상태 표시**: `IsConfigured`/`TargetSummary`가 왼쪽 목록 둘째 줄("필터 · 3개 선택")과 편집 제목의
+  뱃지("사용 준비됨"/"대상 미지정")를 만든다. 미지정이면 목록 요약도 `Theme.WarningText`로 바뀐다.
+- **접이식 고급**(`AdvancedPanel`/`UpdateAdvancedSection`): JSON/모델 내보내기·가져오기 4개 + 툴바 위치
+  초기화를 평소엔 감춘다. `Expander`를 쓰지 않았다 — `Theme.xaml`에 `Expander` 스타일이 없고, 이 프로젝트는
+  시스템 기본 템플릿에 의존하지 않는다는 원칙이 있어(Baml2006 예외 이력) `Button` + `Visibility`로 직접 짰다.
+
+**반드시 지킬 것 — 부분 갱신 훅**: 예전 구현은 아이콘/색 스와치를 누르거나 카테고리 트리를 펼칠 때마다
+`BuildEditPanel(cfg)`로 편집 패널을 통째로 다시 그렸다. 그러면 **대상 목록의 검색어와 스크롤 위치가 함께
+초기화된다**(`QuickToggleToolbar`가 세 번이나 겪은 "필요 없는데 다시 그려서" 부류의 문제와 같다). 지금은
+`_refreshAppearanceSection`/`_refreshEditTitle`/`_refreshTargetSummary` 세 훅으로 실제로 달라지는 부분만
+다시 그리고(`OnAppearanceChanged`/`OnTargetChanged`), 카테고리 트리의 펼침/접힘도 `RenderCategoryList`가
+자기 자신을 `rerender` 콜백으로 넘겨 결과 패널만 다시 그린다. **이걸 `BuildEditPanel` 호출로 되돌리지 말 것.**
+
+**렌더링해서 확인한 것 (스크래치패드 `RenderTargetBitmap` 8종 시나리오)**: 이 저장소가 여러 번 기록한
+"추측만 하고 실측하지 않아 놓쳤다"는 교훈대로, 실제 `Theme.xaml`을 적용한 창을 8가지 상태(기본/모양 펼침/
+링크 버튼/기능 버튼/오버레이/고급 펼침/빈 상태/워크셰어링 아님)로 렌더링해 눈으로 확인했다. 이때 발견해
+고친 것 2건:
+- **블루프린트 모서리 마크가 내용 위에 겹쳐 그려졌다**: `AddBlueprintCornerMarks`가 음수 마진 없이 안쪽
+  `Grid`의 네 모서리에 붙어 "툴바 미리보기" 글자와 첫 버튼을 덮었다. 감싼 `Border`의 `Padding`을 인자로
+  받아 그만큼 되밀어 테두리 모서리에 얹도록 고쳤다.
+- **기본 켜짐 색 표시가 실제 툴바 색과 달랐다**: `OnColorHex`가 비어 있을 때 툴바(`VisualsFor`)는
+  `Theme.ToggleOn`(초록 `#3D8F5C`)으로 칠하는데, 설정 창은 팔레트 첫 항목(스틸블루)을 "선택된" 스와치로
+  표시하고 있었다(예전 코드부터 있던 불일치). `DefaultOnColorHex` 상수를 두고 팔레트 이름도 "초록(기본)"으로
+  맞췄다 — 이 상수는 `Theme.ToggleOn`/`Theme.xaml`의 `ToggleOnBrush`와 같이 유지할 것.
+
+**브랜드 톤**: 새 색은 하나도 만들지 않았다 — 전부 기존 Industry 토큰(`Theme.xaml`/`Theme.cs`)이고, 코드에서
+필요해진 `Accent`/`Divider`/`WindowBackground` 3개를 `Theme.cs`에 추가하며 `Theme.xaml`의 같은 이름 값과
+맞췄다. 모서리 반지름 0(예전 XAML의 `CornerRadius="6"`도 이번에 제거), 얇은 실선 테두리, 채워진 오브젝트는
+주 버튼("+ 버튼 추가"/"저장")과 단계 번호 뱃지뿐이라는 규칙을 그대로 따랐다. 2026-07-27 테마 이식 때
+"창마다 레이아웃을 건드려야 한다"는 이유로 옮기지 않았던 `.blueprint` 모서리 등록 마크는, 이번엔 창을 다시
+짜는 김에 **툴바 미리보기 카드 한 곳에만** 넣었다(남용하면 설계도면 은유가 오히려 옅어진다).
+
+## 설정 전역화 + 종류별 묶음/연결고리 + 미리보기 정확도 (2026-09-03, 같은 날 후속)
+
+세 가지 요청이 이어졌다. 앞의 두 개는 서로 얽혀 있다.
+
+### 1. 툴바 미리보기가 실제와 달랐다 (수정)
+
+사용자 지적: *"툴바 미리보기가 실제 미리보기라 좀 다른것 같아. 색상 버튼은 작은 버튼으로 여러개씩 그룹으로
+묶여서 다니는데 좀 다르게 보여지는 것 같네."* 맞는 지적이었다 — 첫 구현은 등록 버튼을 그냥 한 줄로
+나열했지만, 실제 툴바는 (a) 왼쪽에 28px 드래그 그립이 있고, (b) 색상 버튼을 `Orientation=Vertical`,
+`Height=64`인 `WrapPanel`에 모아 2단으로 쌓으며, (c) 그 그룹 앞에 1px 구분선을 넣고, (d) 오른쪽 끝에
+"뷰 저장"/"되돌리기"가 구분선과 함께 항상 붙어 있다. `RefreshPreviewStrip`/`CreateToolbarFrame`이 이
+구조를 통째로 흉내 내도록 고쳤고, 버튼 사이 바깥 `Margin`도 없앴다(실제 툴바는 클릭 사각지대를 없애려고
+버튼끼리 완전히 맞닿게 해 뒀다 — 선택 표시용 2px 테두리만 모든 버튼에 똑같이 두른다).
+**`QuickToggleToolbar.RebuildButtons`의 배치를 바꾸면 이 두 메서드도 같이 맞출 것** — 어긋나면 미리보기가
+거짓말을 한다. `IsSmallToolButton`/`SmallToolGroupHeightDip`은 툴바 쪽과 같은 값을 복제해 두었다.
+미리보기 카드의 배경은 `WindowBackground`로 뒀다 — 카드까지 `Surface`면 툴바 자신의 `Surface` 배경과
+테두리가 묻혀 보인다.
+
+### 2. 설정을 프로젝트별 → PC 전역으로
+
+사용자 요청: *"커스텀 버튼 설정을 레빗 파일마다 저장되도록 했었는데, 그것보다는 사용자 로컬 컴퓨터에
+저장되어서 어떤 프로젝트를 열어도 설정이 변하지 않도록 하는게 훨씬 편리할 것 같아."*
+
+- **저장 위치**: `%APPDATA%\WallSplitter\quick-toggle\<sha256(프로젝트경로)>.json` →
+  `%APPDATA%\WallSplitter\quick-toggle\buttons.json` 하나. 툴바 위치(`QuickToggleGlobalSettings`)가
+  2026-07-28에 같은 이유로 이미 전역이 됐고, 이제 버튼 목록·툴바 표시 여부까지 같은 폴더의 파일 하나다.
+- **마이그레이션 (사용자 확정: "지금 열린 프로젝트 것을 이어받기")**: `Load(doc)`은 전역 파일이 없으면
+  `doc`의 옛 프로젝트별 파일을 읽어 그대로 전역 파일로 굳힌다(`ReadFrom` → `Save()`). **옛 파일은 지우지
+  않는다** — 되돌릴 일이 생겼을 때의 안전망이고 어차피 다시 읽히지 않는다. `Load`가 `doc`을 계속 받는
+  이유는 오직 이것뿐이다.
+- **★ 그래서 대상은 반드시 이름으로 다시 찾아야 한다 (이 변경의 핵심)**: `ViewTemplateId`/`FilterIds`/
+  `WorksetIds`의 `ElementId`는 **문서마다 완전히 다른 값**이다. 전역 설정을 다른 프로젝트에서 저장된 ID
+  그대로 쓰면 아무것도 못 찾거나, 더 나쁘게는 **같은 정수 ID를 가진 전혀 다른 요소를 조용히 켜고 끈다**.
+  `QuickToggleService.ResolveViewTemplateId`/`ResolveFilterIds`/`ResolveWorksetIds`/
+  `ResolveColorCategoryIds`가 2026-07-28에 내보내기/가져오기용으로 만들어 둔 이름 필드
+  (`ViewTemplateName`/`FilterNames`/`WorksetNames`/`ColorToolCategoryConfig.CategoryName`)로 지금 문서에서
+  다시 찾는다. **ID 필드는 이름이 비어 있는 옛 설정(2026-07-28 이전에 만든 버튼)의 fallback으로만 남는다**
+  — 지우지 말 것, 그 경우는 원래 그 프로젝트에서만 동작한다.
+  - **반드시 캐시할 것**: `DetermineState`는 툴바의 `Idling` 갱신에서 **버튼마다 매 틱** 호출된다. 이름→ID
+    조회가 매번 `FilteredElementCollector`를 돌면 이 파일이 세 번이나 겪은 "Idling 콜백에서 매 틱 비싼
+    일을 한다" 문제가 그대로 재발한다. `TargetIndex`(뷰템플릿/필터/작업세트 이름→ID 사전)를 문서 키별로
+    2초 캐시한다 — `ScanLinks`와 같은 방식·같은 이유. 색상 카테고리는 `DetermineState`가 `ColorTool`에서
+    항상 `Off`를 즉시 반환하므로 Idling 경로에 없어 캐시하지 않는다.
+  - `DetermineState`와 `Toggle`은 **같은 해석 결과**를 봐야 한다 — 서로 다른 대상을 보면 "켜졌다고
+    표시되는데 눌러도 그게 안 꺼지는" 어긋남이 생긴다. 두 곳 모두 `Resolve*`를 통해서만 대상을 얻는다.
+  - 설정 창의 "저장"은 `QuickToggleService.InvalidateTargetIndex()`를 부른다 — 안 그러면 방금 고른 대상이
+    최대 2초간 예전 해석 결과로 남는다.
+  - 설정 창의 라디오/체크박스 선택 표시(`IsChecked`)도 전부 **이름**으로 맞춘다. ID로 맞추면 다른
+    프로젝트에서 만든 버튼을 열었을 때 아무것도 안 골라진 것처럼 보인다.
+- **새 상태 "이 프로젝트에 없음"**(`ButtonReadiness`): 전역 설정이 되면서 "대상을 골랐는가"와 "그 대상이
+  이 프로젝트에 있는가"가 서로 다른 질문이 됐다. 목록 요약과 편집 제목 뱃지가 세 상태(`Ready`/`NoTarget`/
+  `NotInProject`)를 구분해 보여준다 — 툴바가 그 버튼을 회색으로 그리는 이유를 설정 창이 설명해 준다.
+- **모델 간 이식 삭제 (사용자 확정: "둘 다 삭제")**: 설정이 전역이 되면 "모델에서 가져오기"는 같은 전역
+  파일을 읽게 되어 아무 일도 하지 않는다. `ExportToModelButton`/`ImportFromModelButton`과 그 구현
+  (`TransferButtons`/`ResolveNamedTargets`/`OpenOtherDocuments`), 전용 파일 `QuickToggleTransferService.cs`
+  (`AutoUseDestinationTypesHandler`/`SilentWarningsPreprocessor`/`CopyNamedElement`/`EnsureWorkset` 포함)와
+  `OpenDocumentPickerWindow.xaml(.cs)`를 전부 지웠다. 되살릴 일이 생기면 이 커밋 직전 이력에서 꺼낼 것.
+  JSON 내보내기/가져오기는 남되 **크게 단순해졌다** — 예전엔 가져온 버튼의 ID를 이 문서 기준으로 다시
+  풀어줘야 했지만, 이제 대상은 실행 시점에 이름으로 찾으므로 이름만 그대로 들고 오면 된다(새 `Guid`만 발급).
+- `QuickToggleVisibilityToggleCommand`의 `Save(doc)` → `Save()`. 툴바 표시 여부도 이제 PC 기준이다.
+
+### 3. 등록 목록을 종류별로 묶고, 연결고리로 풀기
+
+사용자 요청: *"등록된 버튼 부분에서도 색상버튼은 색상버튼끼리, 작업세트버튼은 작업세트끼리, 필터는
+필터들끼리 묶여서 함께 이동할 수도 있고, 연결고리버튼을 눌러 고리를 끊으면 개별로도 움직일수 있게끔."*
+Q&A로 **종류별 개별 고리** + **프로젝트가 아니라 설정에 저장** + **툴바 구분선은 지금대로**로 확정.
+
+- **데이터**: `QuickToggleSettings.UnlinkedCategories`(`List<QuickToggleCategory>`) — 여기 든 종류만 고리가
+  끊긴 것이고 나머지는 전부 묶여 있다. **빈 목록 = 전부 묶임**이라 기존 설정 파일과 그대로 호환된다.
+- **불변식 — 묶인 종류는 `Buttons` 안에서 항상 연속된 한 덩어리**: `NormalizeGrouping()`이 묶인 종류를
+  "그 종류가 처음 나온 자리"로 끌어모으고, 고리가 끊긴 종류는 있던 자리에 그대로 둔다. `Load`/`Save`/
+  버튼 추가/`SetLinked`에서 부른다. 이 불변식이 깨지면 "그룹 통째 이동"이 성립하지 않는다.
+- **UI**(`BuildRuns`/`BuildGroupHeader`/`BuildButtonRow`): 목록을 run(같은 종류가 연속인 구간) 단위로 그리고
+  run마다 머리글(종류명 + 개수 + 연결고리 + 그룹 ▲▼)을 붙인다. 고리가 끊긴 종류는 run이 여러 개 생길 수
+  있고 그때는 머리글도 여러 개다 — 지금 어디에 흩어져 있는지를 그대로 보여주는 편이 낫다고 판단했다.
+- **이동 규칙**: 묶인 종류의 개별 ▲▼는 **그 덩어리 안에서만** 움직인다(밖으로 나가면 묶음이 깨진다).
+  그룹 머리글의 ▲▼는 `MoveRun`이 이웃 run과 두 구간을 통째로 맞바꾼다(덩어리 안 순서는 유지).
+- **CONFIRMED 설계 결함, 구현 중 발견·수정 — 풀린 버튼이 묶인 덩어리를 못 넘어간다**: 처음엔 풀린 버튼도
+  그냥 한 칸씩 스왑하고 `NormalizeGrouping()`으로 정리하려 했는데, 그러면 **정리 과정이 그 이동을 정확히
+  되돌려 놓아** 묶인 덩어리 위로는 영원히 못 올라간다(예: `[F1, F2, C1]`에서 C1을 올리면 `[F1, C1, F2]`가
+  됐다가 정리 후 다시 `[F1, F2, C1]`). 고정: `MoveLooseButton`이 **묶인 덩어리를 통째로 건너뛰도록** 직접
+  삽입 위치를 계산한다 — 정리에 맡기지 않는다.
+- **아이콘**: `CreateChainGlyph` — 고리 두 개(`System.Windows.Shapes.Ellipse` 외곽선)가 묶였을 땐 겹치고,
+  끊기면 벌어지면서 가운데에 경고색 사선이 그어진다. 텍스트 글리프(⛓)를 안 쓰는 이 창의 관례를 따랐고,
+  `Autodesk.Revit.DB.Ellipse`와 충돌해 완전한 이름을 썼다(`Grid`/`Line`/`Panel`에 이은 네 번째 충돌 사례).
+
+## CONFIRMED LIVE BUG (2026-09-03), 수정 — 기능 버튼이 Sunny Tools 명령을 전혀 실행하지 못했다
+
+사용자 보고: *"커스텀 버튼에서 기능추가 버튼을 통해서 Sunny Tools에 있는 기능버튼을 추가하고 싶은데,
+추가하고 버튼을 누르니 자꾸 기능을 실행하지 못했다는 경고팝업만 나오면서 실행이 안되고 있어."*
+2026-08-03에 기능 버튼을 만들면서 "라이브 테스트 필요 — 안 되면 `QuickToggleService.RunCommand`부터
+확인할 것"이라고 예고해 둔 바로 그 지점이었다.
+
+**근본 원인**: `RunCommand`가 Sunny Tools 자체 명령을 `RevitCommandId.LookupCommandId(클래스 FullName)`으로
+조회했다. 그 방식은 `.addin` 매니페스트에 `<AddIn Type="Command">`로 등록된 외부 명령에만 통하는데,
+이 프로젝트의 매니페스트에는 `<AddIn Type="Application">` 항목 하나뿐이고 명령은 전부 `App.OnStartup`의
+`PushButtonData`로 **리본에만** 등록된다 — 그래서 Revit의 명령 레지스트리에는 "클래스 이름"이라는 키가
+아예 없고, `LookupCommandId`는 **언제나 null**을 돌려줬다. `id == null` → `RunCommand`가 false →
+`QuickToggleExternalEventHandler`가 실패 `TaskDialog`. 즉 이 기능은 **추가된 날부터 한 번도 동작한 적이
+없다**(Revit 기본 명령 쪽은 `LookupPostableCommandId`를 쓰므로 영향 없음).
+
+**Revit이 실제로 쓰는 id는 리본 경로다.** `LookupCommandId` API 문서가 "저널에 있는 문자열을 쓰라"고만
+하길래 이 PC의 Revit 저널(`%LOCALAPPDATA%\Autodesk\Revit\Autodesk Revit 2026\Journals`)을 직접 뒤져
+실측했다 — 6개 버튼(일반 버튼 4 + 스택 버튼 2)에서 형식이 정확히 일치했다:
+
+```
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Sunny Tools%NAMER%WallSplitter_Namer:WallSplitter.NamerCommand"
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Sunny Tools%커스텀 버튼%WallSplitter_QuickToggleSettings:WallSplitter.QuickToggleSettingsCommand"
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Sunny Tools%패턴%WallSplitter_PatternPunch:WallSplitter.PatternPunchCommand"
+```
+
+→ id = `CustomCtrl_%CustomCtrl_%<탭 이름>%<패널 이름>%<PushButtonData의 internal name>`
+(뒤의 `:클래스이름`은 저널 로그의 일부일 뿐 id가 아니다). `AddStackedItems`로 넣은 버튼도 같은 평면
+형식을 쓴다. `UIApplication.CanPostCommand` 문서의 *"Only members of PostableCommand **or external
+commands** can be posted"* 도 이 경로가 유효하다는 근거다.
+
+**고정**:
+- `SunnyToolsCommands.RibbonCommandIds`(클래스 FullName → Revit 명령 id) + `RegisterRibbonCommandId`/
+  `RibbonCommandIdFor`.
+- `App.RegisterRibbonCommandIds(application)`가 **리본을 다 만든 뒤** `GetRibbonPanels(TabName)` →
+  `panel.GetItems()`를 훑어 `PushButton.ClassName`/`RibbonItem.Name`/`RibbonPanel.Name`으로 id를 조립해
+  등록한다. **이 문자열을 코드에 손으로 적어두지 말 것** — 패널/버튼 이름을 바꾸는 순간 조용히 깨진다.
+  새 리본 버튼을 추가해도 여기서 자동으로 잡힌다.
+- `GetItems()`가 스택 안의 버튼까지 돌려주는지는 연도별로 실측하지 못했으므로, `AddStackedItems`를 쓰는
+  세 곳(`AddSettingsStack`/`AddQuickToggleStack`/패턴 패널)에서도 반환 항목으로 한 번 더 등록한다.
+  첫 등록만 유지되므로 중복 호출은 무해하다(같은 명령이 두 패널에 있는 `SettingsCommand`/
+  `ToggleTypeAssignmentPersistenceCommand`도 첫 버튼 것만 쓴다 — 어느 쪽을 눌러도 같은 명령이라 무방).
+- `RunCommand`가 `out string failureReason`을 돌려준다. 예전엔 성공/실패만 반환해서 사용자가 받는 안내가
+  늘 "지금 상황에서 사용할 수 없는 기능일 수 있습니다" 하나뿐이었고, 실제로는 id 조회가 아예 안 되던
+  버그인데도 그 사실이 전혀 드러나지 않았다 — 이제 "리본 버튼을 찾지 못했다 / Revit이 명령을 찾지
+  못했다(id: …) / 진행 중인 명령을 끝내라" 중 실제 원인을 그대로 보여준다.
+- 클래스 이름 조회는 마지막 fallback으로 한 번 더 시도한다(매니페스트에 명령이 등록된 환경이면 이득,
+  아니면 그대로 null).
+
+**여전히 라이브 검증 필요**: 저널 실측으로 id 형식은 확정했지만, `LookupCommandId`가 그 문자열로 실제
+`RevitCommandId`를 돌려주는지와 `PostCommand`가 모드리스 툴바 → `ExternalEvent` 경로에서 명령을 실제로
+띄우는지는 실행 중인 Revit에서 확인해야 한다. 안 되면 이제는 실패 팝업이 어느 단계에서 막혔는지 알려준다.
+
+## "뷰 저장"/"되돌리기" 삭제 → 톱니바퀴(설정) 버튼 (2026-09-03)
+
+사용자 요청: *"커스텀 버튼 툴바에 현재뷰 저장 버튼 및 되돌리기 버튼을 없애주고 그자리에 톱니바퀴버튼을
+추가해서 바로 커스텀 버튼 설정창을 갈 수 있도록 바꿔줬으면 좋겠어."*
+
+**지운 것 — 구현째로 삭제했다** (2026-09-02의 프리셋 삭제와 같은 방침: 이 두 버튼이 그 기능의 유일한
+진입점이라 버튼만 빼면 죽은 코드만 남는다. 되살릴 일이 생기면 이 커밋 직전 이력에서 꺼낼 것):
+- `QuickToggleToolbar`: `SaveViewButton`/`RevertButton`(XAML), `SaveViewButton_Click`/`RevertButton_Click`/
+  `RefreshSaveRevertButtons`, 스냅샷 저장소 `_savedViewStates`/`SnapshotsFor`/`DocKey`, 그리고 매 `Idling`
+  틱마다 값이 안 바뀌었는지 확인하던 `_lastSaveButtonDocKey`/`_lastSaveButtonViewId`/
+  `_lastSaveButtonHasSnapshot`(그 방어가 필요했던 버튼 자체가 사라졌다).
+- `QuickToggleExternalEventHandler`: `ViewStateSnapshot` 클래스 전체(20여 개 필드), `PendingRevertSnapshot`,
+  `ExecuteRevert`.
+- `QuickToggleService`: `CaptureViewState`/`RestoreViewState`와 그 전용 헬퍼들(카테고리 재정의/크롭·뷰범위/
+  3D 단면상자·투영모드·렌더링설정/`GraphicsIntegerParams` 캐치올 등 약 270줄).
+- `QuickToggleIcons`: `CreateBookmarkIcon`/`CreateUndoIcon`.
+
+**새로 넣은 것 — `SettingsButton`(톱니바퀴)**:
+- `QuickToggleIcons.CreateGearIcon`: 톱니 8개를 45°씩 회전 배치(사각형이 아니라 바깥으로 갈수록 넓어지는
+  사다리꼴 - 회전시켰을 때 서로 어긋나 보이지 않게)하고, 몸통 원과 가운데 구멍을 **하나의 `Path`에
+  `FillRule.EvenOdd`로** 그려 실제로 뚫는다. 작은 원을 배경색으로 덧그리면 안 된다 - 이 아이콘은 켜짐
+  색으로 채워진 버튼 위에도 올라갈 수 있어 배경색을 가정할 수 없다(`Eye` 아이콘과 같은 이유·같은 방식).
+  실제로 렌더링해 28px 버튼에서 톱니바퀴로 읽히는지 확인했다.
+- 클릭은 다른 툴바 버튼들과 똑같이 `ExternalEvent`를 거친다(`PendingOpenSettings` →
+  `ExecuteOpenSettings`). 툴바는 모드리스라 클릭 시점엔 유효한 API 컨텍스트가 없고, 설정 창 생성자가
+  `FilteredElementCollector`로 문서를 읽으므로 반드시 이 경로여야 한다. **`SunnyToolsCommands`의 리본
+  명령 id + `PostCommand`로 여는 방법도 있지만 쓰지 않았다** - 그쪽은 아직 라이브 검증 전이고, 여기서는
+  `QuickToggleSettingsCommand.Execute`가 하는 일(창 생성 + `WindowInteropHelper`로 오너 지정 +
+  `ShowDialog`)을 그대로 직접 하는 게 더 확실하다.
+- 이 버튼은 상태에 따라 모양이 변하지 않으므로 생성자에서 한 번만 그린다 - `RefreshState`가 매 `Idling`
+  틱마다 손댈 것이 없어졌다(예전 두 버튼은 그 때문에 `_lastSaveButton*` 방어가 필요했다).
+- 설정 창의 툴바 미리보기(`QuickToggleSettingsWindow.CreateToolbarFrame`)도 같이 톱니바퀴 하나로 바꿨다 -
+  미리보기가 실제 툴바와 어긋나면 안 된다(2026-09-03 지적사항).
+
+## "링크된 요소" 버튼 (모든 종류의 링크를 한 번에) + 버튼 종류 선택 오버레이 섹션 분리 (2026-09-04)
+
+사용자 요청은 *"IFC링크, 지형연결 링크, DWF마크업 링크, 포인트 클라우드 링크, 외부좌표모델링크들도 선택해서
+껏다킬 수 있는 버튼"* + *"버튼추가버튼을 눌렀을 때 요소가 너무 많아질 수 있으니 링크만 카테고리로 따로 빼서
+작게 표시"* 였는데, **종류별로 버튼을 쪼개는 대신 하나로 묶기로 사용자가 방향을 바꿨다**:
+*"그냥 링크를 다 나누지 않고, 링크된 요소로 전부 묶어서 현재 뷰에서 보이는 모든 링크를 전부 다 껏다 켤 수
+있도록 기능을 함축적으로 만드는게 더 직관적이고 쉬울 것 같네."* 조작 방식은 Q&A로 "단순 on/off 토글" 확정.
+
+**Revit API 조사 결과 (추측하지 말 것 - 실측으로 확인한 사실들)**:
+- **IFC 링크는 Revit 링크와 같은 것이다.** `RevitLinkType.CreateFromIFC`가 만들고, 인스턴스는 그냥
+  `RevitLinkInstance`이며 카테고리도 `OST_RvtLinks`를 공유한다. 즉 기존 "링크된 모델" 버튼은 **이미**
+  IFC 링크를 함께 다루고 있었다 - IFC 전용 버튼을 따로 만들려면 카테고리가 아니라 요소 단위로 갈라야 한다.
+- **DWF 마크업은 CAD 링크와 같은 "가져온 카테고리"로 들어온다.** 전용 `BuiltInCategory`가 없다
+  (`OST_*Markup*` 없음). 링크된 DWF는 `ImportInstance.IsLinked == true`라 기존 "링크된 도면" 버튼이
+  **이미** 함께 끄고 켜고 있었다.
+- 나머지는 전용 최상위 카테고리가 있다: `OST_TopographyLink`(지형 링크), `OST_ToposolidLink`(2024+의
+  지형솔리드 링크), `OST_PointClouds`, `OST_Coordination_Model`(외부 좌표 모델).
+- **전 연도 존재 확인**: 위 다섯 `BuiltInCategory` 멤버는 2023~2027 참조 어셈블리 **전부**에 있다
+  (`MetadataLoadContext`로 다섯 개 ref 어셈블리를 직접 열어 실측). 반대로
+  `Autodesk.Revit.DB.ExternalData.CoordinationModelLinkUtils`는 **2026부터만** 존재한다 -
+  `GetAllCoordinationModelInstanceIds`가 편해 보여도 쓰면 2023/2024/2025 빌드가 깨진다. 좌표 모델도
+  카테고리 조회(`OfCategory(OST_Coordination_Model)`)로 찾을 것.
+
+**구현**: 새 카테고리 `QuickToggleCategory.LinkedAll`("링크된 요소").
+- `QuickToggleService.AllLinkCategoryIds(view)` = 기존 `LinkedCadCategoryIds(view)`(CAD 도면 + DWF 마크업의
+  가져온 카테고리) + `ScanLinks(doc).OtherLinkCategoryIds`(위 다섯 카테고리 중 이 문서에 요소가 **실제로
+  있는** 것만). 판정/적용은 기존 `DetermineLinkState`/`ToggleLinkVisibility`를 그대로 재사용한다 -
+  결국 V/G 카테고리 끄고 켜기라 CAD 버튼과 완전히 같은 로직이다.
+- **요소가 없는 카테고리는 목록에 넣지 않는다**: 넣으면 끄고 켤 게 없는데도 버튼이 활성화되고, 눌러도
+  아무 변화가 없어 고장난 것처럼 보인다. 이 검사(`FilteredElementCollector.Any()` × 5)는 `ScanLinks`의
+  2초 캐시 안에서만 돌기 때문에 `Idling` 부담이 없다 - **이 검사를 캐시 밖으로 옮기지 말 것**(이 파일이
+  세 번 기록한 "Idling 콜백에서 매 틱 비싼 일" 문제가 그대로 재발한다).
+- **알려진 동작**: 카테고리 단위로만 끄고 켠다. "링크된 모델만" 버튼의 팝업으로 링크 하나를 요소 단위로
+  꺼 둔 경우, "링크된 요소"로 전체를 켜도 그 링크는 꺼진 채로 남는다(V/G와 같은 방식이라 예측 가능하고,
+  일부러 꺼 둔 개별 상태를 이 버튼이 몰래 되돌리지 않는 게 맞다고 판단). 설정 창 안내문에도 적어 두었다.
+- 기존 `LinkedCad`/`LinkedModel`은 그대로 뒀다 - 사용자가 2026-09-02에 명시적으로 요청한 "링크된 모델
+  개별 끄고 켜기" 팝업이 거기에 있고, 종류별로 따로 다루고 싶을 때의 수단으로 여전히 유효하다.
+- 아이콘: `QuickToggleIconShape.Link`(사슬 고리 두 개가 맞물린 모양, -35° 회전한 둥근 사각형 외곽선 2개)
+  추가. 선으로만 그리므로 `SetBrush`의 "원래 칠해져 있던 쪽만 갱신" 규칙에 그대로 맞는다.
+
+**버튼 종류 선택 오버레이를 두 섹션으로** (`QuickToggleSettingsWindow.BuildAddChooser`/`BuildKindCard`):
+`ButtonKinds` 하나였던 표를 `MainButtonKinds`(뷰템플릿/필터/작업세트/색상/기능 - 큰 카드)와
+`LinkButtonKinds`(링크 3종 - 한 줄짜리 낮은 카드)로 나누고, 그 사이에 구분선 + "링크" 섹션 머리글을 넣었다.
+링크 종류가 더 늘어도 오버레이가 세로로 길어지지 않고, "이건 같은 계열"이라는 것이 형태로도 드러난다.
+
+**"JSON" 표현 제거 (같은 날, 별도 요청)**: *"일반인들은 어려울수도 있으니 JSON이라는 표현을 버튼모음이라고
+바꿔주자."* 고급 설정의 버튼 라벨을 "버튼모음 내보내기"/"버튼모음 가져오기"로, 파일 대화상자 필터도
+"Sunny Tools 버튼모음 (*.json)"으로 바꿨다(확장자 자체는 그대로 `.json` - 기존에 내보낸 파일과 호환).
+
+## "층별 단면상자" 버튼 (2026-09-04)
+
+사용자 요청: *"설정창에 버튼추가를 누르면 층별단면상자 기능이 있고 ... 두개의 레벨을 선택해서 그 선택한
+레벨 사이의 3D 단면상자뷰를 만들어 볼 수 있는 기능."* Q&A로 확정한 동작 세 가지:
+1. **활성 뷰가 3D가 아니면 그 층 전용 3D 뷰를 새로 만들어 전환한다**(경고Pick의 단면상자가 "안내만 하고
+   뷰를 바꾸지 않는다"와 반대 선택 - 이쪽은 "만들어 본다"가 요청의 핵심이라 사용자가 그렇게 골랐다).
+   같은 이름의 뷰가 이미 있으면 **재사용**한다 - 누를 때마다 뷰가 쌓이지 않게 하려는 것.
+2. **on/off 토글이 아니다.** 색상/기능 버튼처럼 누를 때마다 1회 적용한다.
+3. **가로(평면) 범위는 모델 전체를 감싸도록 매번 다시 계산한다.**
+
+- **데이터**: `QuickToggleButtonConfig.LevelBottomName`/`LevelTopName` — **이름만 저장하고 ElementId는
+  저장하지 않는다.** 설정이 PC 전역이라 저장된 ElementId가 다른 프로젝트에서는 의미가 없고, 이 필드는
+  "예전에 ID만 저장하던 시절"의 호환 부담이 없는 새 필드이기 때문이다(레벨 이름은 한 문서 안에서 유일).
+  위/아래는 저장 순서를 믿지 않고 `ResolveLevelRange`가 **실제 높이를 비교해 정렬**한다 - 사용자가 반대로
+  골라도 동작해야 하고, 다른 프로젝트에서는 같은 이름의 레벨 높이 순서가 다를 수도 있다.
+- **상태 판정**: 두 레벨이 이 프로젝트에 다 있으면 `Off`(언제든 클릭 가능), 하나라도 없거나 아직 안 골랐으면
+  `Disabled`(회색). 레벨 이름→높이 조회는 `TargetIndex`(2초 캐시)에 같이 담는다 - `DetermineState`는
+  매 `Idling` 틱마다 버튼별로 불리므로 여기서 `FilteredElementCollector`를 돌리면 이 파일이 세 번 기록한
+  문제가 재발한다.
+- **`ApplyLevelSectionBox`만 이 파일의 "트랜잭션은 호출자가 연다" 계약을 따르지 않는다**: 뷰 생성·단면상자
+  설정은 트랜잭션 **안**에서 해야 하고 `uidoc.ActiveView` 전환은 트랜잭션이 **닫힌 뒤**에만 가능해서,
+  그 순서를 한 메서드 안에서 맞춰야 하기 때문이다. 이 구조를 다시 쪼개려다 순서를 어기면 전환이 실패한다.
+- **`box.Transform = Transform.Identity`를 반드시 설정할 것**: 뷰에 회전된 단면상자가 남아 있으면
+  `SetSectionBox`에 넘기는 `Min`/`Max`가 모델 좌표가 아니라 그 회전 상자의 로컬 좌표로 해석된다.
+- **가로 범위 계산(`ModelPlanExtent`)에서 뷰 기준 수집기를 쓰지 말 것**:
+  `FilteredElementCollector(doc, viewId)`는 그 뷰에 **이미 걸려 있는 단면상자에 잘린** 결과만 돌려주므로,
+  버튼을 누를 때마다 범위가 조금씩 쪼그라든다. 문서 전체에서 `WhereElementIsViewIndependent()`로 모델
+  요소만 훑고 `get_BoundingBox(null)`을 합친다. 클릭 시 1회만 도는 경로라 `Idling` 부담은 없지만, 아주 큰
+  모델에서는 잠깐 걸릴 수 있다(알려진 트레이드오프 - 사용자가 "모델 전체를 감싸게"를 골랐다).
+- **뷰 이름 충돌**: 뷰 이름은 3D 뷰끼리가 아니라 **모든 뷰를 통틀어** 유일해야 한다. `FindViewByName`은
+  `View3D`만 보므로 같은 이름의 평면 뷰가 있으면 걸러내지 못하고 `Name` 대입이 예외를 던진다 - 번호를
+  붙여 가며(최대 20회) 비켜 주고, 끝내 못 붙이면 Revit 기본 이름("3D 뷰 1" 등)으로 둔다(뷰와 단면상자
+  자체는 멀쩡하므로 실패로 처리하지 않는다).
+- **아이콘**: 새 `QuickToggleIconShape.SectionBand`(상자 윤곽 + 가운데 채운 띠). 처음엔 가로 막대 3개로
+  그렸다가 작업세트의 `Lines`(가로 3줄)와 구분이 안 돼서 바깥 윤곽을 두른 형태로 다시 그렸다 -
+  **렌더링해서 눈으로 확인한 뒤 고친 것**이다.
+- **설정 UI**(`BuildLevelRangePicker`): "아래 레벨"/"위 레벨" 라디오 목록 두 개를 세로로 쌓고, 각 목록은
+  **높이 내림차순**(위층이 위에)으로 보여준다. 검색칸은 두지 않았다 - 레벨은 보통 수십 개 이하고,
+  무엇보다 "아래에서 위로 늘어선 순서" 자체가 고르는 데 필요한 정보라 검색으로 걸러내면 층 감각이 사라진다.
+
+### CONFIRMED LIVE BUG (2026-09-04), 수정 — 단면상자가 모델보다 터무니없이 크게 잡혔다
+
+사용자 보고: *"1-2층을 선택했는데 모델이 점처럼 작아질 정도로 단면상자가 모델에 비해서 너무 거대하게
+잡혀서 찾을 수가 없어."* 원인은 `ModelPlanExtent`가 "뷰에 종속되지 않은 요소"를 **전부** 합친 것이었다 -
+건물 크기를 대표하지 않는 것들이 다 섞여 있었다:
+
+- **레벨/그리드/참조평면**: 데이텀 평면이라 건물보다 훨씬 넓게 뻗는다. V/G에서 "주석 카테고리"에 들어
+  있는 것들인데 `WhereElementIsViewIndependent()`는 이들을 걸러주지 않는다 — 가장 흔한 원인.
+- **프로젝트 기준점/측량점/내부 원점**: 공유 좌표를 쓰면 수 km 밖에 있을 수 있다.
+- **링크·가져온 CAD·포인트 클라우드·좌표 모델**: 공유 좌표로 멀리 배치되는 경우가 많다.
+- **지형/대지**: 건물보다 몇 배 넓은 게 정상이다.
+
+**고정 두 겹**:
+1. `PlanExtentExcludedCategories`로 위 카테고리들을 빼고, 추가로 `Category.CategoryType == Model`이
+   아닌 것(주석 등)은 전부 제외한다. **이 제외는 "박스 크기를 정하는 기준"에서만 빼는 것**이고, 그
+   요소들이 박스 안에 들어오면 화면에는 그대로 보인다(단면상자는 자르기만 할 뿐이므로).
+   (전 연도 존재 확인: 이 16개 `BuiltInCategory` 멤버는 2023~2027 참조 어셈블리 전부에 있다 —
+   `MetadataLoadContext`로 실측.)
+2. `RejectOutliersAndUnion`: 카테고리를 걸러도 엉뚱한 곳에 놓인 요소 하나가 남아 있을 수 있어,
+   중앙값에서 각 요소 중심까지의 거리를 재서 **75번째 백분위수의 6배(최소 100ft)**를 넘는 것만 버린다.
+   **이 메서드는 Revit 타입을 전혀 쓰지 않는 순수 계산으로 일부러 떼어 뒀다** — 라이브 Revit 없이
+   스크래치패드에서 빌드된 DLL을 리플렉션으로 불러 직접 검증할 수 있는 몇 안 되는 지점이라서다.
+   실제로 4가지 경우로 검증했다: (a) 건물 + 3km 밖 외톨이 1개 → 건물만 있을 때와 **완전히 같은 범위**,
+   (b) 건물만 → 그대로, (c) 약 120m 떨어진 두 동 → 둘 다 살아남음(정상 내용을 잘라내지 않음), (d) 요소 1개.
+   **임계값(6배/100ft)을 줄이면 (c)처럼 떨어진 동이 잘려 나간다** — 바꿀 때 이 4가지를 다시 돌려볼 것.
+
+**곁들여 추가**: 적용 후 `UIView.ZoomToFit()`으로 화면을 맞춘다. 예전 카메라 위치가 남아 있으면 범위를
+제대로 잡아도 "어디 있는지 못 찾겠다"가 되기 때문이다(이 버튼의 목적 자체가 "그 층을 바로 본다"이다).
+줌 실패는 부가 동작이라 성공/실패 판정에 넣지 않는다.
+
+### 다른 모델에서도 "같은 층"을 자동으로 찾기 (2026-09-05)
+
+사용자 요청: *"이게 내 로컬에 이 버튼설정이 저장되는건데, 다른 레빗모델을 열었을때마다 레벨을 다시
+지정해주어야하는데, 대충 1-2층으로 잡았을때 1-2층으로 보이는 레벨을 다른모델에서도 자동으로 감지해서
+잡아줄 수 있도록 수정할 수 있어?"* 설정이 PC 전역이라 버튼 하나가 여러 모델에서 쓰이는데, 모델마다
+레벨 이름 규칙이 달라("1F" vs "1층" vs "Level 1") **이름이 정확히 같을 때만 잡히던 기존 방식은 매번
+회색**이 됐다. Q&A로 "층 번호 → 안 되면 높이로" 확정.
+
+**`QuickToggleService.MatchLevel`의 3단 순서 — 위에서 하나라도 잡히면 아래는 보지 않는다**:
+1. **이름이 정확히 같은 레벨** (같은 템플릿에서 뽑은 모델끼리는 여기서 끝난다)
+2. **이름에서 읽어낸 층 번호가 같은 레벨** (`TryParseFloorNumber`)
+3. **버튼을 만들 때 고른 레벨의 높이와 가장 가까운 레벨** (`LevelBottomElevation`/`LevelTopElevation`)
+
+- **`LevelBottomElevation`/`LevelTopElevation` 추가**: 3단계에 필요한 단서로, 설정 창에서 레벨을 고를 때
+  같이 저장한다. Revit 내부 단위(피트)라 프로젝트 단위 설정과 무관하다. **이 값이 없는 예전 설정**
+  (v71 이전에 만든 버튼)은 3단계를 건너뛰고 1~2단계까지만 시도한다 - 지우지 말 것.
+- **`TryParseFloorNumber`는 일부러 느슨하지 않다**: "T.O. Slab 2"나 "기초 1"처럼 층 이름이 아닌데 숫자가
+  들어간 이름까지 잡으면 엉뚱한 층으로 **조용히** 매칭된다. 정해진 모양(`1F`/`1층`/`Level 1`/`L1`/`01F`/
+  `1FL`/`GF`, 지하는 `B1`/`B1F`/`지하1층`/`Basement 1`)에 맞을 때만 인정하고 나머지는 3단계로 넘긴다 -
+  높이 근접이 훨씬 안전하다. 공백·점·하이픈·언더스코어·슬래시는 표기 차이라 전부 지우고 비교한다.
+  **빌드된 DLL을 스크래치패드에서 리플렉션으로 불러 41개 케이스를 실제로 돌려 검증했다**(지상/지하/
+  영문/국문 표기 29개 + "읽으면 안 되는" 이름 12개). 패턴을 손대면 특히 **negative 케이스**를 다시 돌릴 것.
+- **`ResolveLevelRange`의 반환이 `LevelRangeMatch`로 바뀌었다**: 높이뿐 아니라 **이 모델에서 실제로 잡힌
+  레벨 이름**(`BottomName`/`TopName`)과 "이름이 정확히 맞았는지"(`Exact`)를 함께 돌려준다. 설정 창이
+  "이 프로젝트에서는 'L1 ~ L2'로 자동으로 맞춥니다"를 보여주는 근거이고, **뷰 이름도 이 이름으로 짓는다**
+  (저장된 이름으로 지으면 뷰 이름과 실제로 잘린 층이 어긋난다).
+- **둘이 같은 레벨로 수렴하면 실패로 본다**: 예컨대 "1F"와 "2F"가 이 모델에서 둘 다 같은 레벨 하나로
+  매칭되면 두께 0인 상자가 되므로 `null`을 돌려주고 호출자가 안내한다.
+- **설정 창의 `ReadinessOf`는 목록을 직접 뒤지지 않고 툴바와 같은 해석기를 쓴다** - 두 곳이 서로 다른
+  기준으로 판단하면 "설정 창은 준비됨인데 툴바는 회색"이 된다.
+- 설정 창의 라디오는 **저장된 이름**을 그대로 반영한다(자동으로 찾아낸 레벨을 대신 체크해 주지 않는다) -
+  체크하면 `Checked` 핸들러가 돌아 이 프로젝트의 이름으로 설정을 덮어써 버려서, 원래 모델로 돌아갔을 때
+  다시 어긋나기 때문이다. 대신 요약 줄이 "이 프로젝트에서는 ○○로 자동으로 맞춥니다"라고 알려 준다.
+
+### 실행형 버튼은 늘 칠하기 + 버튼마다 큰/작은 크기 (2026-09-05)
+
+사용자 요청: *"on/off 버튼이 아닌 버튼들은 기본적으로 색상이 칠해져 있으면 좋겠어. 버튼의 켜짐색상과는
+다른 색상으로. 그리고 각 버튼들의 크기를 큰버튼과 작은버튼으로 선택해서 변경할 수 있으면 좋을것 같다."*
+
+- **판정은 `QuickToggleButtonStyle`(QuickToggleSettings.cs) 한 곳에서만 한다.** 툴바(`VisualsFor`,
+  `RebuildButtons`)와 설정 창(`PreviewVisualsFor`, `CreatePreviewButton`, `RenderAppearance`)이 각자
+  카테고리를 나열해 판단하면 반드시 어긋난다 — 실제로 예전에 설정 창은 스틸블루를, 툴바는 초록을
+  "기본 켜짐색"으로 보여주던 불일치가 있었다(v65에서 렌더링으로 발견). 지금은 다음 세 가지가 전부
+  이 클래스에서 나온다:
+  - `IsActionButton(category)` — 켜짐/꺼짐이 없는 **실행형** 버튼: `ColorTool`, `CommandLauncher`,
+    `LevelSectionBox`. (링크 버튼들은 진짜 토글이라 여기 **들어가지 않는다**.)
+  - `DefaultColorHexFor(category)` — 실행형은 `#5980A6`(스틸블루), 토글은 `#3D8F5C`(초록).
+    "켜짐 색상과는 다른 색"이어야 한다는 요청이 이 두 기본값의 이유다 — 실행형 버튼이 초록으로 칠해지면
+    "켜져 있는 토글"로 오인된다.
+  - `IsSmall(cfg)` — `cfg.SmallButton ?? (cfg.Category == ColorTool)`. `bool?`이라 **예전에 만든
+    버튼(null)은 종전 그대로**(색상 버튼만 작게) 보이고, 사용자가 한 번이라도 고르면 그 값이 이긴다.
+    기본값을 `bool`로 바꾸면 기존 설정 파일의 색상 버튼이 전부 큰 버튼으로 바뀌므로 그러지 말 것.
+- **`VisualsFor`의 `fillAlways`**: 실행형 버튼은 `DetermineState`가 늘 `Off`를 돌려주는 탓에 예전에는
+  영영 투명한 "선 그림"으로만 보였다. 이제 `Disabled`가 아니면 항상 채운다. `Disabled`는 그대로
+  회색 선 그림 — "지금 누를 수 없다"는 신호를 색으로 덮으면 안 된다.
+- **작은 버튼 그룹은 큰 버튼이 끼어들면 끊는다**: `RebuildButtons`와 설정 창의 미리보기 둘 다
+  `smallToolGroup = null`로 리셋한다. 예전엔 작은 버튼이 `ColorTool`뿐이었고 `NormalizeGrouping`이
+  같은 종류를 붙여 놓아서 이 경우가 없었지만, 이제 "작은-큰-작은" 순서가 가능하다 — 리셋하지 않으면
+  뒤쪽 작은 버튼이 앞 그룹의 `WrapPanel`로 빨려 들어가 **설정 창의 순서와 툴바의 순서가 어긋난다**.
+- 설정 창 "② 모양"에 **버튼 크기**(큰 버튼 / 작은 버튼) 카드가 생겼고, 색상 팔레트는 이제 **모든
+  종류에서** 보인다(예전엔 색상/기능 버튼에서 "색이 나타나지 않습니다" 안내만 띄우고 감췄다).
+  라벨은 `ColorLabelFor`가 토글이면 "켜짐 색상", 실행형이면 "버튼 색상"으로 바꾼다.
+  팔레트 이름도 `스틸블루(실행 기본)` / `초록(켜짐 기본)`으로 바꿔 어느 쪽이 무엇의 기본인지 보이게 했다.
+- `DefaultOnColorHex` 상수는 지웠다 — 기본색이 카테고리에 따라 둘로 갈렸으므로
+  `QuickToggleButtonStyle.DefaultColorHexFor`만 남긴다. 다시 상수를 만들지 말 것(불일치의 원인).
+- 검증: 스크래치패드 WPF 하네스로 설정 창을 실제 렌더링해 6장을 확인했다 — 실행형(기능/색상) 버튼에서
+  "버튼 색상" 라벨 + 스틸블루 선택 + "늘 이 색으로 칠해집니다" 안내, 색상 버튼의 크기 카드가 "작은 버튼"
+  으로 미리 선택됨, 토글 버튼은 "켜짐 색상" 유지, 툴바 미리보기 띠에서 기능 버튼이 스틸블루로 칠해짐.
+
+### 순서 바꾸기를 미리보기 드래그로 일원화 + 영역 모서리 라운드 (2026-09-06)
+
+사용자 요청: *"툴바 미리보기에서 버튼들의 위치를 드래그로 이동시킬 수 있으면 좋겠어. 각 작은버튼 두개를
+옮겨서 위아래 2줄로 만들거나, 좌우로 이동시키면서 순서를 바꾸는 방식으로 말이야. 순서는 미리보기에서
+바꾸는 걸로 하고, 등록된 버튼에서 위아래로 움직이게 만드는 화살표는 제거했으면해. 그리고 커스텀버튼
+설정 창에 각각의 영역 모서리의 라운드 값을 조금씩 넣고 싶어."*
+
+- **순서를 바꾸는 수단은 이제 미리보기 드래그 하나뿐이다.** 목록의 개별 ▲▼와 그룹 머리글의 ▲▼를 모두
+  없앴고, 그에 딸린 `MoveButton`/`MoveLooseButton`/`MoveRun`/`CreateTriangle`도 같이 지웠다. 목록 행에는
+  삭제(✕)만 남는다. 목록 제목 아래에 "순서는 위 '툴바 미리보기'에서 버튼을 끌어서 바꿉니다" 안내를 넣었다.
+- **위아래 2줄은 따로 만드는 기능이 아니다** — 작은 버튼끼리 이웃하면 배치 규칙(세로 WrapPanel, 높이 64)이
+  자동으로 두 줄로 쌓는다. 그래서 "작은 버튼 두 개를 나란히 놓는 것"이 곧 2줄 만들기다.
+- **드래그 구현의 핵심 세 가지** (`QuickToggleSettingsWindow.xaml.cs`의 "미리보기 드래그" 절):
+  1. `_previewItems` — 그려진 버튼과 설정을 **목록 순서대로** 짝지어 둔 평평한 리스트. 작은 버튼이 중첩
+     `WrapPanel` 안에 있어도 이 리스트 위에서는 한 줄이라, 삽입 위치 계산이 시각 트리와 무관해진다.
+  2. `ComputeDropIndex` — 커서보다 "앞선" 버튼의 개수가 곧 삽입 위치다. 같은 칸에 세로로 쌓인 작은 버튼도
+     한 규칙으로 처리하려고 **X가 아니라 Y의 중간선**으로 앞뒤를 가른다(`cursor.X > r.Right ||
+     (cursor.X > r.Left && cursor.Y > r.Top + r.Height/2)`).
+  3. 삽입 표시선은 **겹쳐 놓은 `PreviewDropCanvas`에 그린다**. 레이아웃에 끼워 넣으면 드래그 중에 버튼들이
+     들썩이고, 특히 높이 64짜리 세로 WrapPanel에서는 표시선 하나 때문에 두 번째 버튼이 다음 칸으로 넘어가
+     미리보기가 거짓말을 한다.
+- **마우스 캡처는 버튼이 아니라 `PreviewDragHost`(감싼 Grid)가 가져간다.** 그래야 커서가 버튼 밖으로 나가도
+  계속 따라오고, 드롭 직후 `RefreshPreviewStrip`으로 미리보기를 통째로 다시 그려도 캡처가 끊기지 않는다.
+  덤으로 **드래그로 끝난 경우 `Button.Click`이 아예 발생하지 않아서**(누름/뗌 짝이 깨지므로) "옮기려고
+  끌었는데 편집 대상까지 바뀌는" 일이 없다 - 이걸 노리고 일부러 캡처를 늦게(최소 드래그 거리를 넘긴
+  뒤에) 가져간다. 누르자마자 캡처하면 그냥 클릭도 드래그로 먹혀 편집 선택이 안 된다.
+- **묶음(연결고리) 규칙은 예전 ▲▼의 뜻을 그대로 옮겼다** (`DropPreviewButton`):
+  - 묶인 종류를 **자기 덩어리 안**에 떨어뜨리면 그 안에서 순서만 바뀐다(색상 버튼 두 개의 위아래 바꾸기).
+  - 묶인 종류를 **덩어리 밖**에 떨어뜨리면 그 종류 전체가 통째로 옮겨간다(없앤 그룹 ▲▼의 대체).
+  - 고리가 끊긴 버튼은 혼자 움직이되 `SnapOutsideLinkedRuns`가 묶인 덩어리 한가운데 삽입을 가까운 경계로
+    밀어낸다 - "묶인 종류는 항상 연속된 한 덩어리"라는 전제를 드래그가 깨뜨리지 못하게 하는 방어선이다.
+  - 마지막에 `NormalizeGrouping()`을 한 번 더 부르는 것은 안전망이다(위 규칙대로면 이미 만족한다).
+- **표시선 색을 강조색으로 쓰면 안 된다**: 처음엔 `Theme.Accent`(스틸블루)로 그렸는데, 실행형 버튼의 기본색이
+  같은 스틸블루라 그 위에서 선이 통째로 묻혔다(하네스로 렌더해서 발견). 지금은 **어두운 심(`Theme.TextPrimary`)
+  + 흰 테두리 1px**이라 밝은 카드 바탕에서도 채워진 버튼 위에서도 보인다. 되돌리지 말 것.
+- **검증**: 스크래치패드 하네스에서 실제 창을 띄워 레이아웃시킨 뒤 `ComputeDropIndex`/`DropPreviewButton`을
+  리플렉션으로 직접 돌렸다 - 좌표→삽입위치 10건 + 맨 뒤 1건 + 묶음 규칙 5건(그룹 안 순서 바꾸기, 그룹 통째
+  이동 2건, 고리 끊은 단독 이동, 묶인 덩어리 한가운데 삽입의 경계 밀어내기) 전부 통과(ALL OK). 표시선은
+  드래그 중 상태를 만들어 렌더한 뒤 확대해 세로선/가로선 두 경우를 눈으로 확인했다.
+- **영역 모서리 라운드(디자인 시스템 예외)**: 이 창의 영역 테두리에만 `CornerRadius="3"`(오버레이는 4)을
+  줬다. Industry 디자인 시스템의 "모서리 반지름 0" 규칙에서 **의도적으로** 벗어난 것이니 0으로 되돌리지
+  말 것(`docs/design-system/CLAUDE.md`에도 같은 내용을 적어 뒀다). 버튼·입력창은 그대로 0이고
+  `Theme.xaml`은 건드리지 않았다 - 다른 창으로 번지면 안 되기 때문이다.
+
+#### CONFIRMED LIVE BUG (2026-09-06, v74 직후): 드래그가 시작하자마자 스스로 죽었다
+
+사용자 실측: *"미리보기에서 버튼을 꾹 누르고 드래그 했을때 움직였으면 좋겠는데 전혀 움직이지 않아."*
+
+원인은 **`LostMouseCapture`가 버블링 이벤트**라는 것이다. `Button`은 눌리는 순간 `ButtonBase`의 기본
+동작으로 **스스로 마우스를 캡처**한다. 드래그를 시작하며 `PreviewDragHost.CaptureMouse()`를 부르면 그
+Button이 캡처를 잃고 `LostMouseCapture`를 올려보내는데, 그게 호스트까지 버블링돼
+`PreviewDragHost_LostMouseCapture`(무조건 `CancelDrag()`)를 때렸다. 캡처 이전은 `Mouse.Capture` 안에서
+**동기적으로** 일어나므로, 첫 MouseMove 한 번 안에서 "드래그 시작 → 즉시 취소"가 연달아 났고 겉으로는
+버튼이 꿈쩍도 하지 않았다.
+
+- **고정**: `if (!ReferenceEquals(e.OriginalSource, PreviewDragHost)) return;` — **호스트 자신이** 캡처를
+  잃은 경우에만 취소한다. 이 한 줄을 지우면 드래그가 통째로 죽으니 "쓸데없는 방어처럼 보인다"고 걷어내지 말 것.
+- 같은 이유로 뗌(Up)은 `AddHandler(MouseLeftButtonUpEvent, ..., handledEventsToo: true)`로 받는다 -
+  Button은 자기가 캡처를 쥔 상태에서 `MouseLeftButtonUp`을 Handled로 표시해 Click을 만들기 때문에,
+  캡처 가져오기가 실패하는 상황이 생기면 평범한 `+=` 핸들러로는 드롭이 통째로 사라진다.
+- **왜 하네스 검증을 통과했었나**: v74의 테스트는 계산(`ComputeDropIndex`/`DropPreviewButton`)만 돌렸고
+  **이벤트 배선은 한 번도 타지 않았다**. 지금은 하네스가 이 버그를 그대로 재현하는 회귀 테스트를 갖고
+  있다 - 캡처를 실제로 옮기지 않고 **Button에서 `Mouse.LostMouseCaptureEvent`를 직접 RaiseEvent**해서
+  버블링 경로를 태우고, 드래그 상태가 살아남는지 본다(고정을 되돌리면 이 테스트가 실제로 실패하는 것까지
+  확인했다). 마우스 입력을 흉내 내지 않고도 라우팅 버그를 잡을 수 있는 방법이라 앞으로도 이 패턴을 쓸 것.
+
+#### 가로 스크롤 (같은 날 실측: "스크롤 잡는 게 너무 어렵고 일반적인 스크롤이 아니야")
+
+- **근본 원인은 `Theme.xaml`의 ScrollBar Style이 세로 전용이었다는 것** - 자세한 내용은
+  `docs/design-system/CLAUDE.md` 참고(가로 스크롤바가 폭 10px 조각이 되고 방향까지 반대였다).
+  이 창만의 문제가 아니라 애드인 전체의 가로 스크롤바가 같은 증상이었다.
+- 여기(설정 창)에는 두 가지를 더했다: (1) `PreviewScroll_PreviewMouseWheel` — 가로 전용 ScrollViewer는
+  휠에 반응하지 않으므로(세로로 스크롤할 게 없으면 그냥 흘려보낸다) 휠을 가로 스크롤로 돌려준다,
+  (2) `AutoScrollWhileDragging` — 드래그 중 커서가 좌우 끝 28px 안에 들어오면 26px씩 밀어준다.
+  버튼이 많아 화면 밖에 있는 자리로도 끌어다 놓을 수 있어야 하기 때문이다. 자동 스크롤 직후에는
+  `UpdateLayout()`을 불러야 뒤이은 좌표 계산이 옛 오프셋을 보지 않는다.
+
+#### CONFIRMED LIVE BUG (2026-09-06, v75 이후 재보고): 진짜 원인은 "Button이 MouseMove를 Handled로 만든다"
+
+사용자 재보고: *"지금 아무리 적용해도 드래그로 툴바미리보기에서 순서가 움직이지 않아."* v75의
+LostMouseCapture 수정은 **맞는 수정이었지만 원인의 전부가 아니었다**. 진짜로 막고 있던 것은 이것이다:
+
+> **눌린 `Button`이 마우스를 캡처하고 있는 동안, 그 Button은 `MouseMove`를 `Handled = true`로 표시한다.**
+> 평범한 `PreviewDragHost.MouseMove += ...` 등록은 **Handled로 표시된 이벤트를 받지 못하므로**,
+> 드래그 판정 코드가 단 한 번도 실행되지 않았다.
+
+- **고정**: `PreviewDragHost.AddHandler(MouseMoveEvent, ..., handledEventsToo: true)`. `MouseLeftButtonUp`은
+  이미 같은 이유로 그렇게 등록돼 있었다(Button이 Click을 만들며 Handled로 표시). **`+=`로 되돌리면
+  드래그가 통째로 죽는다.**
+- **어떻게 찾았나 (이 방법을 앞으로도 쓸 것)**: 하네스에 `SetCursorPos` + `mouse_event`로 **진짜 마우스
+  입력**을 넣는 모드(`dotnet run -- input`)를 만들었다. 거기서 호스트에 핸들러를 두 벌 달아
+  (`handledEventsToo: true` 한 벌, 평범한 `+=` 한 벌) 개수를 비교했더니:
+  ```
+  이동 2 : moves(전체)=14  moves(Handled아님)=8
+  이동 12: moves(전체)=24  moves(Handled아님)=8   ← 드래그 내내 하나도 안 늘어난다
+  MouseMove를 Handled로 만든 쪽: Button
+  ```
+  즉 드래그 중 호스트에 도착한 MouseMove 중 **Handled가 아닌 것이 단 하나도 없었다**. 이 한 줄이 원인을
+  확정했다. 고친 뒤 같은 테스트가 `_dragActive=True`, `captured=PreviewDragHost`, `_dropIndex` 8→0,
+  그리고 실제로 순서가 바뀌는 것(`INPUT DRAG: OK`)까지 보여 준다.
+- **왜 계산 테스트로는 못 잡았나**: v74·v75의 하네스 검증은 `ComputeDropIndex`/`DropPreviewButton`만
+  리플렉션으로 불렀고 이벤트를 태우지 않았다. 게다가 **하네스의 생성자 사본(`preview_ctor.txt`)이
+  production과 다른 방식(`+=`)으로 핸들러를 달고 있어서**, 설령 이벤트를 태웠어도 같은 조건이 아니었다.
+  지금은 사본이 production과 **똑같이** `AddHandler(..., true)`로 달도록 맞춰 뒀다 — **이 둘이 어긋나면
+  하네스는 통과하는데 실물은 죽는 상태가 다시 생긴다.**
+- 실제 입력 테스트 두 가지가 모두 통과한다: (1) 맨 뒤 버튼을 맨 앞으로 끌기, (2) **작은 버튼 위아래
+  2단에서 아래 칸을 위 칸 위쪽에 떨어뜨려 순서 바꾸기**(사용자가 요청한 "작은 아이콘 2단" 조작).
+
+#### CONFIRMED LIVE BUG (2026-09-06): 이름이 긴 버튼은 2단으로 쌓이지 않았다
+
+사용자 실측: *"지금 색상버튼만 2단으로 정렬이 되는데, 다른 버튼들도 작은버튼으로 만들었을때 하단으로
+드래그해서 2단으로 만들 수 있었으면 좋겠어"* → 이어서 스스로 원인을 짚어 주셨다: *"이름이 조금 긴
+버튼은 2단이 안 되는 것 같아."* 정확한 진단이었다.
+
+- **원인**: 작은 버튼의 높이를 라벨이 정하게 뒀는데, 라벨은 폭 46dip 안에서 줄바꿈되므로 **이름이 길수록
+  버튼이 세로로 길어졌다**. 하네스로 실측한 값: `"방화구획"` 23.3dip(한 줄), `"설비작업세트"` 36.6dip(두 줄).
+  두 개의 합이 묶음 높이 64를 넘으면 `WrapPanel`은 넘치는 버튼을 **다음 칸**으로 보내므로, 2단이 되지
+  않고 옆으로 나란히 섰다. 기본으로 작은 버튼이던 색상 버튼들만 이름이 짧아 우연히 2단이 됐던 것이고,
+  "색상 버튼만 2단이 된다"는 관찰의 정체가 이것이다.
+- **고정**: 작은 버튼 한 칸의 높이를 **묶음 높이의 정확히 절반(32dip)으로 고정**한다
+  (`QuickToggleButtonStyle.SmallToolButtonHeightDip`). 이름 길이와 무관하게 항상 두 개가 한 칸에 들어간다.
+  라벨은 줄 높이를 명시하고(`LineHeight=12`, `LineStackingStrategy=BlockLineHeight`) **최대 두 줄**까지만
+  보이며 넘치면 말줄임(`TextTrimming=CharacterEllipsis`)으로 자른다 - 전체 이름은 툴팁에 있다.
+  **묶음 높이와 버튼 높이의 2:1 비율이 이 기능의 전부이므로 한쪽만 바꾸지 말 것.**
+- 두 값과 라벨 수치는 전부 `QuickToggleButtonStyle`에 모아 뒀다 - 툴바(`RebuildButtons`)와 설정 창
+  미리보기(`CreatePreviewButton`)가 각자 숫자를 들고 있으면 반드시 어긋난다(예전에 각 파일에 따로
+  `SmallToolGroupHeightDip = 64`가 있었다).
+- 미리보기에서는 선택 표시용 2px 테두리를 **포함해서** 32가 되도록 바깥 `Border`에 높이를 준다(툴바에는
+  그 테두리가 없다). 그래서 미리보기의 안쪽 버튼은 28인데, 라벨 수치를 그 28에서도 두 줄이 들어가도록
+  잡아 뒀다 - 미리보기와 실제 툴바가 같은 줄 수로 보인다.
+- 검증: 하네스에서 이름이 긴 버튼 두 개(`"방화구획 전체보기"`, `"설비작업세트"`)를 작은 버튼으로 만들고
+  좌표를 실측했다. 고치기 전 23.3/36.6dip으로 제각각이던 높이가 고친 뒤 **둘 다 32.0dip, 같은 x,
+  y=5와 y=37** — 한 칸에 위아래로 쌓였다. 렌더 이미지로 라벨이 두 줄로 잘 보이는 것도 확인했다.
+
+### 작은 버튼의 2단 배치를 자동 채움에서 "그리드"로 (2026-09-06)
+
+사용자 요청: *"작은 것들끼리 좌로 정렬되어서 예를 들어 필터랑 링크랑 색상 버튼들이 다 뒤섞이게 되는데,
+자동정렬하지 말고 그리드에 맞춰 넣을 수 있게 만들어줬으면 해."*
+
+- **무엇이 문제였나**: 연속된 작은 버튼을 세로 `WrapPanel`(높이 64)에 넣어 **알아서** 위→아래→다음 칸
+  순으로 채웠다. 그래서 어떤 버튼끼리 한 칸을 쓰게 될지를 사용자가 정할 수 없었고, 종류가 다른 버튼들이
+  한 칸에 섞여 들어갔다("필터랑 링크랑 색상이 뒤섞인다").
+- **새 모델**: 목록 순서가 **가로 위치**를, `cfg.SecondRow`가 **세로 위치**를 정한다. 자동 채움은 없다.
+  - `QuickToggleButtonStyle.ComputeColumnStarts(buttons)` — 이 규칙의 **단 하나뿐인 구현**. 버튼마다
+    "새 칸을 시작하는가"를 돌려준다. 큰 버튼은 언제나 칸을 끊고, `SecondRow`가 true여도 **직전에 윗줄
+    하나만 있는 칸이 열려 있을 때만** 아래 줄로 간다(앞이 큰 버튼이거나 앞 칸이 이미 두 개면 새 칸).
+  - `NormalizeRows(buttons)` — 저장값을 실제 배치와 일치시킨다. 목록을 건드린 뒤에는 항상 부를 것
+    (`RefreshPreviewStrip` 첫머리, `DropPreviewButton` 끝, `Save()`에서 부른다). 불가능한 값을 그대로
+    두면 앞쪽 버튼이 바뀔 때 갑자기 아래 줄로 빨려 들어가는 예측 불가가 생긴다.
+  - 그리는 쪽은 `WrapPanel`이 아니라 **칸마다 세로 `StackPanel`(높이 64)**을 만든다 - WrapPanel은 넘치는
+    것을 옆으로 흘려보내므로 "아래 줄을 비워 둔 칸"을 표현할 수 없다. 툴바와 미리보기 둘 다 같은 구조다.
+- **드롭이 줄까지 정한다**: `ComputeDropSecondRow` — 커서 바로 앞 항목이 "칸의 윗줄"인 작은 버튼이고
+  커서가 그 버튼의 아래쪽 절반보다 아래면 그 칸의 **아래 줄**을 노린 것으로 본다. 그 외에는 전부 새 칸의
+  윗줄이다. 표시선도 그때는 그 버튼의 **아래 모서리**에 가로선으로 그린다(그 자리가 비어 있을 수 있으므로
+  기존의 "두 버튼 사이" 표시선과는 다른 경로다).
+- **업그레이드 경로가 중요하다**: `LayoutVersion`(설정 파일)이 0이면 `MigrateAutoPackedRows`가 예전
+  자동 채움 모습대로 `SecondRow`를 채우고 1로 올린다. 이걸 빼면 업그레이드하는 순간 쌓여 있던 작은
+  버튼들이 전부 각자 칸으로 흩어져 툴바가 갑자기 넓어진다. **"값이 하나도 없으면 옛 파일"처럼 추측하지
+  말 것** - 사용자가 일부러 전부 윗줄로 둔 설정을 마이그레이션이 다시 헤집는다. 그래서 명시적인 판 번호를
+  쓰고, `Save()`는 언제나 1로 기록한다.
+- 검증: 계산 테스트 33건(자동 짝짓기 없음 / `SecondRow`로 아래 줄 / 앞이 큰 버튼이면 정리됨 / 한 칸에
+  세 개 불가 / 마이그레이션 4건 포함) + **진짜 마우스 입력 3종**(좌우 이동, 같은 칸 위아래 순서 바꾸기,
+  **각자 칸에 있던 버튼을 다른 칸의 아래 줄로 끌어다 놓기**) 전부 통과.
+
+### "③ 대상" 설명을 접어 목록 공간을 되찾기 (2026-09-17)
+
+사용자 실측: *"단면상자 기능에 '3.잘라 볼 레벨 두 개' 밑에 설명이 너무 많아서 아래에 레벨을 선택하는
+영역이 너무 작아 굉장히 불편하다. 다른 기능에도 저런 부분 있으면 불편하지 않도록 개선해 달라."*
+
+- 고정: **`CreateNote`가 긴 설명을 "한 줄 요약 + 자세히"로 접는다.** 이 함수 하나가 층 범위·색상 카테고리·
+  기능 검색 세 곳의 설명을 모두 만들고 있어서, **여기만 고치면 모든 기능에 한꺼번에 적용된다** - 기능마다
+  따로 손대지 않은 이유다(사용자가 "다른 기능에도"라고 한 요청을 그대로 만족한다).
+- 첫 문장(또는 첫 줄)만 요약으로 쓰고 나머지를 접는다(`SplitNote`). 나머지가 10자도 안 되면 접을 가치가
+  없으므로 예전처럼 그냥 보여준다 - 토글만 늘어놓아 오히려 지저분해지는 것을 막는다.
+- 펼침 상태(`_notesExpanded`)는 창이 열려 있는 동안 **공유한다**. 설명을 보고 싶은 사람은 한 번만 펼치면
+  다른 버튼을 골라도 계속 펼쳐져 있고, 평소에는 목록이 넓게 보인다. 토글을 누르면 `SelectButton`으로
+  편집 영역을 다시 그려 지금 떠 있는 설명이 함께 열리고 닫힌다.

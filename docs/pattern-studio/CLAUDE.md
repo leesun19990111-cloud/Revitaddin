@@ -98,6 +98,39 @@ Revit 패턴 생성 직전에 `FillPattern.ExpandDots()`를 호출해 0 길이 �
 
 ## 멀티 버전 검증 이력
 
+- 2026-09-01: (전체 점검 요청 - "특히 패턴". 정적 검토로 발견, 라이브 실행 없이 수정) 패턴 영역에서 5건을 고쳤다.
+  1. **패턴 타공을 통째로 무력화할 수 있던 결함**: `PatternDisplayedLineCollector.RawLineContext.OnElementBegin2D`가
+     호스트 문서 판정을 `node.Document.Equals(_hostDocument)`(참조 비교)로 하고 있었다. `Document`는 Revit API 래퍼
+     객체라 같은 열린 문서라도 조회 시점마다 다른 인스턴스가 나올 수 있고 `Equals`도 값 비교로 재정의되어 있지
+     않다 — 경고Pick에서 **CONFIRMED LIVE BUG**로 확인된 것과 정확히 같은 원인이다(`docs/warning-pick/CLAUDE.md`).
+     이 판정이 false가 되면 `Add`가 모든 내보내기 선을 버려서 수집 결과가 0개가 되고, 패턴 타공은 항상
+     "현재 뷰에서 표시 패턴 선을 찾지 못했습니다"로 끝난다. 이제 `DocumentKey`(경로, 저장 안 된 문서는 제목) 값
+     비교로 바꾸고, 어차피 `OnLinkBegin`이 링크를 `Skip`하므로 `LinkInstanceId`(링크 여부)를 1차 기준으로 삼되
+     문서 키를 읽지 못하면 링크 여부만으로 판정해 전부 버리지 않는다. **여기를 다시 참조 비교로 되돌리지 말 것.**
+  2. `ModelLinePatternCaptureCommand.RationalDirection`에서 거의 수직인 캡처 선(투영된 `delta.X`가 아주 작지만
+     1e-12보다는 큰 경우) 때문에 `normalizedSlope * p`가 int 범위를 넘고, `(int)Math.Round(...)`가 `int.MinValue`가
+     되면 바로 다음 줄의 `Math.Abs(q)`가 `OverflowException`을 던져 캡처가 통째로 실패했다. 기울기가
+     `MaximumSlopeNumerator`(=384)를 넘으면 유리수 근사 없이 세로 선군 `(0, ±1)`로 처리하고, 루프 안에서도 캐스팅
+     전에 `rawQ` 범위를 먼저 검사한다.
+  3. `PatternStudioWindow.BuildGridGeometry`와 `PatternLineGenerator.Generate`의 반복 인덱스 한도 검사가 int
+     뺄셈이라, `Offset`이 0이거나 극단적으로 작아 `first`/`last`가 int 양끝으로 클램프되면 `end - start`가
+     오버플로해 음수가 되고 한도 검사를 그냥 통과했다 — 수십억 회 루프로 Revit이 멈출 수 있는 경로다. 두 곳 모두
+     `long` 산술로 비교하고, 미리보기 쪽에는 `Offset ≈ 0` 선군을 빈 도형으로 건너뛰는 가드를 추가했다.
+  4. `PatternStudioWindow.SetSelectedGridControls`가 `_suppressUi`를 무조건 false로 되돌려, 이미 억제 중이던
+     `LoadSource`/`ResetAllButton_Click` 블록의 억제를 중간에 풀었다(현재 호출 순서에서는 증상이 없었지만 그
+     뒤에 코드를 한 줄만 추가해도 편집 이벤트가 잘못 발생한다). 이전 값을 저장·복원하도록 바꿨다.
+  5. `PatternPunchExecutor.ExecuteWithNewWallSketch`가 `ExecuteSketchDifference`에 `probe`를 항상 `false`로
+     넘기고 있어서, 스케치 평면이 면과 평행하지 않아 `ExecuteNativeOpenings`로 넘어가는 경우 사전 검증 중에도
+     실제 적용 경로로 동작하고 안전 복원 기록이 두 번 붙었다. 실제 `probe`를 전달하고, `PunchExecutionResult`에
+     `RecordAppended`를 추가해 상위 경로가 같은 기록을 다시 붙이지 않게 했다(그룹 Assimilate/RollBack 판단은
+     계속 `ExecuteWithNewWallSketch`가 맡는다).
+  그 밖에 `PatternTransformService`의 `GridEdits.ToDictionary` 중복 인덱스 예외, `PatternPunchRecordStore.Read`의
+  스키마 필드 조회 실패, PAT 파일에서 `*이름` 헤더보다 앞에 선언된 `;%TYPE=`을 통째로 버리던 문제,
+  모델선 캡처가 원본 덮어쓰기 때도 "새 패턴을 만들었습니다"라고 알리던 문구를 함께 고쳤다.
+  Revit 2023~2027 Release 빌드 오류 0개(경고는 각각 36/56/58/38/40개로 수정 전보다 5개씩 감소)를 확인했고,
+  5개 연도 `WallSplitter.dll` 전부에서 `DocumentKey`/`RecordAppended`/`MaximumSlopeNumerator` 심볼을 확인했다.
+  **라이브 검증은 아직 없다** — v62를 설치하고 Revit을 재시작한 뒤, 특히 1번(패턴 타공이 실제로 표시 선을
+  수집하는지)을 가장 먼저 확인할 것.
 - 2026-08-25: (커밋 전 코드 리뷰로 발견, 라이브 실행 없이 수정) 패턴 타공 성공 뒤 `PatternPunchRecordStore.TryAppend`가 실제 타공을 assimilate/commit한 트랜잭션(그룹)과 별개인 새 트랜잭션으로 안전 복원 기록을 저장하던 문제를 수정했다. 사용자가 타공 직후 Revit 되돌리기를 한 번만 눌러도 (가장 최근 트랜잭션인) 기록만 사라지고 타공 형상은 그대로 남아 `타공 복원`이 무력화되는 결함이었다. `PatternPunchExecutor`의 각 실행 경로(`ExecuteWithNewWallSketch`, `ExecuteSketchDifference`, `ExecuteNativeOpenings`)와 `CurtainPanelPunchService`/`SystemCurtainPanelPunchService`가 `TransactionGroup.Assimilate()`/`Transaction.Commit()` 직전, 같은 범위 안에서 `PatternPunchRecordStore.AppendEntity`를 직접 호출하도록 바꿔 하나의 되돌리기 단위로 묶었다. 함께, 로드 가능한(사용자 제작) 커튼패널의 probe가 아무 형상도 만들지 않고 바로 성공을 반환하던 문제도 고쳐 `CurtainPanelPunchService.ProbeExtrusionGeometry`가 실제 패밀리 편집기에서 같은 void extrusion 생성을 시도한 뒤 저장 없이 되돌리도록 했다. Revit 2023~2027 Release 빌드 오류 0개를 확인했다. 이 커밋 이전 상태와 마찬가지로 아직 Revit 내 실제 실행(라이브) 검증은 하지 않았다.
 - 2026-08-21: 패턴 타공의 반복 유사영역 자동 확장을 제거하고 각 선택 면에서 사용자가 클릭한 정확한 폐영역만 target별로 타공하도록 변경했다. 면 경계로 잘린 최종 영역에 최소 크기를 적용하고 선택하지 않은 면은 실행하지 않는다. 모델선 캡처는 `ModelCurve`뿐 아니라 저널에서 실제 사용된 `DetailCurve`도 수집하며, 첫 모서리→첫 변 끝→둘째 변 끝 ㄱ자 세 점을 직교 사각형으로 보정해 화면 투영으로 clip한다. 단순 평면·단일 프리즘 시스템 커튼패널은 현재 버전의 커튼월 패널 템플릿으로 고정형 대체 패밀리를 만들고 원본 두께·재료·남는 단면과 교체 후 형상을 probe에서 검증하는 제한 지원을 추가했다. Revit 2023~2027 격리 Release 빌드 오류 0개, 2026 외부 WPF 타공 창 초기화 스모크 통과, 모든 런타임 의존성·API 참조·Payload/ZIP 파일 집합과 SHA-256 일치를 확인했다.
 - 2026-08-21: 로드 가능한 커튼패널의 선택 Face는 패밀리 심벌 좌표인데 2D CustomExporter 표시선은 프로젝트 좌표인 좌표계 불일치로 패턴선이 0개가 되던 문제를 수정했다. stable reference와 누적 GeometryInstance Transform으로 면을 프로젝트 위치로 복원하고, 패턴 OFF/ON 내보내기의 공선 구간 차집합으로 패널 형상선과 재료 패턴선을 분리했다. 공유 심벌 ID 팬아웃, 선분-면 경계 clip, 다중 면 모호성 거부, 링크 문서 제외, 수집 단계 진단 개수를 함께 보강했다. Revit 2023~2027 Release API 교차 빌드 오류 0개를 확인했다.

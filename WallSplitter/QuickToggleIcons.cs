@@ -22,6 +22,16 @@ namespace WallSplitter
         Flower,
         Heart,
         Bolt,
+        // 2026-09-02, 링크된 도면/링크된 모델 버튼(QuickToggleCategory.LinkedCad/LinkedModel)의 기본
+        // 아이콘으로 추가 - 기존 도형만으로는 "도면"과 "모델"을 형태로 구분할 수가 없었다.
+        Sheet,
+        Cube,
+        // 2026-09-04, "링크된 요소" 버튼(QuickToggleCategory.LinkedAll)의 기본 아이콘으로 추가 -
+        // 특정 링크 종류가 아니라 "링크" 자체를 뜻하는 모양이 필요했다.
+        Link,
+        // 삭제된 층별 단면상자 버튼에서 쓰던 모양. 다른 버튼에 지정한 아이콘과 저장값은 유지한다.
+        // 뷰템플릿의 Layers와 헷갈리지 않도록 "쌓인 층 중 한 켜만 채워진" 형태로 따로 그린다.
+        SectionBand,
     }
 
     // QuickToggleToolbar(실제 툴바 렌더링)와 QuickToggleSettingsWindow(설정 창의 아이콘 선택 미리보기)가
@@ -36,9 +46,11 @@ namespace WallSplitter
             QuickToggleCategory.ViewTemplate => QuickToggleIconShape.Layers,
             QuickToggleCategory.Filter => QuickToggleIconShape.Funnel,
             QuickToggleCategory.Workset => QuickToggleIconShape.Lines,
-            QuickToggleCategory.Preset => QuickToggleIconShape.Star,
             QuickToggleCategory.ColorTool => QuickToggleIconShape.Dot,
             QuickToggleCategory.CommandLauncher => QuickToggleIconShape.Bolt,
+            QuickToggleCategory.LinkedCad => QuickToggleIconShape.Sheet,
+            QuickToggleCategory.LinkedModel => QuickToggleIconShape.Cube,
+            QuickToggleCategory.LinkedAll => QuickToggleIconShape.Link,
             _ => QuickToggleIconShape.Dot,
         };
 
@@ -54,6 +66,10 @@ namespace WallSplitter
             QuickToggleIconShape.Flower => "꽃",
             QuickToggleIconShape.Heart => "하트",
             QuickToggleIconShape.Bolt => "번개",
+            QuickToggleIconShape.Sheet => "도면",
+            QuickToggleIconShape.Cube => "상자",
+            QuickToggleIconShape.Link => "링크",
+            QuickToggleIconShape.SectionBand => "층 단면",
             _ => "",
         };
 
@@ -203,6 +219,88 @@ namespace WallSplitter
                     });
                     break;
 
+                case QuickToggleIconShape.Sheet:
+                {
+                    // 도면 한 장 - 바깥 테두리 + 오른쪽 아래 표제란. 채우지 않고 선으로만 그린다
+                    // (채우면 안쪽 표제란 선이 같은 색에 묻혀 안 보인다).
+                    Rectangle frame = new Rectangle { Width = 14, Height = 16, Stroke = brush, StrokeThickness = 1.8 };
+                    Canvas.SetLeft(frame, 3);
+                    Canvas.SetTop(frame, 0);
+                    canvas.Children.Add(frame);
+                    canvas.Children.Add(new Line { X1 = 3, Y1 = 11, X2 = 17, Y2 = 11, Stroke = brush, StrokeThickness = 1.6 });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 11, X2 = 10, Y2 = 16, Stroke = brush, StrokeThickness = 1.6 });
+                    break;
+                }
+
+                case QuickToggleIconShape.Cube:
+                {
+                    // 아이소메트릭 정육면체(6각형 윤곽 + 가운데에서 세 방향으로 뻗는 모서리) - 링크된
+                    // "모델"을 은유. 도면 아이콘과 마찬가지로 선으로만 그린다.
+                    canvas.Children.Add(new Polygon
+                    {
+                        Points = new PointCollection
+                        {
+                            new Point(10, 0.6), new Point(18.4, 4.8), new Point(18.4, 11.2),
+                            new Point(10, 15.4), new Point(1.6, 11.2), new Point(1.6, 4.8),
+                        },
+                        Stroke = brush,
+                        StrokeThickness = 1.8,
+                        StrokeLineJoin = PenLineJoin.Round,
+                    });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 1.6, Y2 = 4.8, Stroke = brush, StrokeThickness = 1.6 });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 18.4, Y2 = 4.8, Stroke = brush, StrokeThickness = 1.6 });
+                    canvas.Children.Add(new Line { X1 = 10, Y1 = 8, X2 = 10, Y2 = 15.4, Stroke = brush, StrokeThickness = 1.6 });
+                    break;
+                }
+
+                case QuickToggleIconShape.Link:
+                {
+                    // 사슬 고리 두 개가 맞물린 모양 - 특정 링크 종류가 아니라 "링크" 자체를 은유한다
+                    // ("링크된 요소" 버튼의 기본 아이콘, 2026-09-04). 도면/상자 아이콘과 마찬가지로
+                    // 선으로만 그린다 - SetBrush가 원래 칠해져 있던 쪽(Fill/Stroke)만 갱신하므로
+                    // 상태가 바뀌어도 선 그림 그대로 유지된다.
+                    // 기울어진 고리 두 개를 겹쳐 그리기 위해 각 고리를 중심 기준으로 -35° 회전시킨다.
+                    foreach (double centerX in new[] { 7.2, 12.8 })
+                    {
+                        Rectangle ring = new Rectangle
+                        {
+                            Width = 9.5,
+                            Height = 6.4,
+                            RadiusX = 3.2,
+                            RadiusY = 3.2,
+                            Stroke = brush,
+                            StrokeThickness = 1.8,
+                            RenderTransformOrigin = new Point(0.5, 0.5),
+                            RenderTransform = new RotateTransform(-35),
+                        };
+                        canvas.Children.Add(ring);
+                        Canvas.SetLeft(ring, centerX - 9.5 / 2);
+                        Canvas.SetTop(ring, 8 - 6.4 / 2);
+                    }
+                    break;
+                }
+
+                case QuickToggleIconShape.SectionBand:
+                {
+                    // 건물 전체를 뜻하는 상자 윤곽 + 그 안에서 지금 잘라 보는 한 켜만 채운 띠
+                    // ("층별 단면상자" 버튼의 기본 아이콘, 2026-09-04). 처음엔 가로 막대 3개로 그렸는데
+                    // 작업세트의 Lines(가로 3줄)와 구분이 안 돼서, 바깥 윤곽을 두른 형태로 다시 그렸다
+                    // - 렌더링해서 눈으로 확인 후 고친 것이다.
+                    Rectangle outline = new Rectangle
+                    {
+                        Width = 18, Height = 15, Stroke = brush, StrokeThickness = 1.6,
+                    };
+                    canvas.Children.Add(outline);
+                    Canvas.SetLeft(outline, 1);
+                    Canvas.SetTop(outline, 0.5);
+
+                    Rectangle band = new Rectangle { Width = 18, Height = 5.5, Fill = brush };
+                    canvas.Children.Add(band);
+                    Canvas.SetLeft(band, 1);
+                    Canvas.SetTop(band, 5.5);
+                    break;
+                }
+
                 default:
                     goto case QuickToggleIconShape.Dot;
             }
@@ -210,46 +308,50 @@ namespace WallSplitter
             return canvas;
         }
 
-        // "뷰 저장"/"되돌리기" 고정 버튼(2026-07-27 추가)이 쓰는 아이콘 - 사용자가 고르는 QuickToggleIconShape
-        // 목록에는 넣지 않는다(이 두 버튼은 등록형 버튼이 아니라 항상 고정으로 붙는 전용 기능이라서).
-        public static Canvas CreateBookmarkIcon(Brush brush)
+        // 툴바 우측 끝에 항상 고정으로 붙는 "설정"(톱니바퀴) 버튼이 쓰는 아이콘 - 사용자가 고르는
+        // QuickToggleIconShape 목록에는 넣지 않는다(등록형 버튼이 아니라 전용 고정 버튼이라서).
+        // 2026-09-03, 이 자리에 있던 "뷰 저장"(책갈피)/"되돌리기"(호+화살촉) 아이콘을 대체했다.
+        //
+        // 톱니 8개를 중심에서 45°씩 돌려 배치하고 가운데를 뚫는다. 이가 사각형이면 회전시켰을 때 서로
+        // 어긋나 보이므로, 바깥으로 갈수록 살짝 넓어지는 사다리꼴로 그렸다. 가운데 구멍은
+        // EvenOdd 채우기 규칙으로 뚫는다(Eye 아이콘과 같은 방식) - 두 원을 겹쳐 그리면 배경색을
+        // 가정하게 되는데, 이 아이콘은 켜짐 색으로 채워진 버튼 위에도 올라가므로 그러면 안 된다.
+        public static Canvas CreateGearIcon(Brush brush)
         {
-            // 책갈피 리본 모양 - 위는 사각형, 아래는 V자로 파인 삼각 노치.
             Canvas canvas = new Canvas { Width = 20, Height = 16, HorizontalAlignment = HorizontalAlignment.Center };
-            canvas.Children.Add(new Polygon
+
+            const double cx = 10;
+            const double cy = 8;
+            const double toothInner = 4.6;   // 톱니 뿌리(몸통 원 안쪽으로 살짝 파묻히게)
+            const double toothOuter = 7.6;   // 톱니 끝
+            const double halfInner = 1.5;    // 뿌리 쪽 반폭
+            const double halfOuter = 1.9;    // 끝 쪽 반폭 (바깥이 더 넓은 사다리꼴)
+
+            for (int i = 0; i < 8; i++)
             {
-                Points = new PointCollection
+                double angle = Math.PI / 4 * i;
+                double cos = Math.Cos(angle);
+                double sin = Math.Sin(angle);
+                // 반지름 방향(cos,sin)과 그에 수직인 방향(-sin,cos)으로 네 꼭짓점을 만든다.
+                Point P(double radius, double half) =>
+                    new Point(cx + cos * radius - sin * half, cy + sin * radius + cos * half);
+
+                canvas.Children.Add(new Polygon
                 {
-                    new Point(4, 0), new Point(16, 0), new Point(16, 16), new Point(10, 11), new Point(4, 16),
-                },
-                Fill = brush,
-            });
-            return canvas;
-        }
+                    Points = new PointCollection
+                    {
+                        P(toothInner, -halfInner), P(toothOuter, -halfOuter),
+                        P(toothOuter, halfOuter), P(toothInner, halfInner),
+                    },
+                    Fill = brush,
+                });
+            }
 
-        public static Canvas CreateUndoIcon(Brush brush)
-        {
-            // 반시계 방향으로 크게 도는 호 + 왼쪽 위를 향하는 화살촉 - 표준적인 "되돌리기" 아이콘 모양.
-            Canvas canvas = new Canvas { Width = 20, Height = 16, HorizontalAlignment = HorizontalAlignment.Center };
-
-            PathFigure arcFigure = new PathFigure { StartPoint = new Point(17, 11), IsClosed = false };
-            arcFigure.Segments.Add(new ArcSegment(new Point(6, 3), new Size(6.5, 6.5), 0, true, SweepDirection.Clockwise, true));
-            PathGeometry arcGeometry = new PathGeometry();
-            arcGeometry.Figures.Add(arcFigure);
-            canvas.Children.Add(new Path
-            {
-                Data = arcGeometry,
-                Stroke = brush,
-                StrokeThickness = 2.2,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-            });
-
-            canvas.Children.Add(new Polygon
-            {
-                Points = new PointCollection { new Point(2, 0), new Point(10, 2), new Point(3, 8) },
-                Fill = brush,
-            });
+            // 몸통 원 + 가운데 구멍을 하나의 Path로 그려 EvenOdd로 실제로 뚫는다.
+            GeometryGroup body = new GeometryGroup { FillRule = FillRule.EvenOdd };
+            body.Children.Add(new EllipseGeometry(new Point(cx, cy), 5.6, 5.6));
+            body.Children.Add(new EllipseGeometry(new Point(cx, cy), 2.3, 2.3));
+            canvas.Children.Add(new Path { Data = body, Fill = brush });
 
             return canvas;
         }
@@ -268,18 +370,16 @@ namespace WallSplitter
 
         // UpdateButtonStates가 상태만 바뀌었을 때 아이콘 색을 다시 칠하기 위한 헬퍼 - Create가 만드는
         // 도형 종류(Rectangle/Polygon/Line/Ellipse/Path)에 맞춰 Fill 또는 Stroke를 갱신한다.
+        // 2026-09-02: 도면/상자 아이콘처럼 채우지 않고 선으로만 그리는 도형이 생겨서, 원래 칠해져 있던
+        // 쪽(Fill 또는 Stroke)만 갱신하도록 바꿨다 - 무조건 Fill을 대입하면 선 그림 아이콘이 통째로
+        // 칠해진 덩어리가 되어 버린다.
         public static void SetBrush(Canvas canvas, Brush brush)
         {
             foreach (UIElement child in canvas.Children)
             {
-                switch (child)
-                {
-                    case Rectangle rect: rect.Fill = brush; break;
-                    case Polygon poly: poly.Fill = brush; break;
-                    case Line line: line.Stroke = brush; break;
-                    case Ellipse ellipse: ellipse.Fill = brush; break;
-                    case Path path: path.Fill = brush; break;
-                }
+                if (child is not Shape shape) continue;
+                if (shape.Fill != null) shape.Fill = brush;
+                if (shape.Stroke != null) shape.Stroke = brush;
             }
         }
     }

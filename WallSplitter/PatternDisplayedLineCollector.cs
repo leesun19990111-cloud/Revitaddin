@@ -450,13 +450,25 @@ namespace WallSplitter
 
         private sealed class RawLineContext : IExportContext2D
         {
-            private readonly Document _hostDocument;
+            private readonly string _hostDocumentKey;
             private readonly Stack<ElementScope> _elementStack = new Stack<ElementScope>();
             internal List<RawDisplayedSegment> Segments { get; } = new List<RawDisplayedSegment>();
 
             internal RawLineContext(Document hostDocument)
             {
-                _hostDocument = hostDocument;
+                _hostDocumentKey = DocumentKey(hostDocument);
+            }
+
+            // Document를 Equals/ReferenceEquals로 비교하지 말 것. Revit API는 같은 열린 문서에 대해
+            // 호출 시점마다 다른 래퍼 인스턴스를 돌려줄 수 있고 Document는 Equals를 값 비교로
+            // 재정의하지 않는다(경고Pick의 CONFIRMED LIVE BUG와 같은 원인 - docs/warning-pick).
+            // 여기서 잘못 false가 나오면 내보낸 선을 전부 버려서 패턴 타공이 항상
+            // "표시 패턴 선을 찾지 못했습니다"로 실패한다. 경로(저장 안 된 문서는 제목)로 비교한다.
+            private static string DocumentKey(Document? document)
+            {
+                if (document == null) return "";
+                try { return string.IsNullOrEmpty(document.PathName) ? document.Title ?? "" : document.PathName; }
+                catch { return ""; }
             }
 
             public bool Start() => true;
@@ -465,8 +477,13 @@ namespace WallSplitter
 
             public RenderNodeAction OnElementBegin2D(ElementNode node)
             {
-                bool isHostElement = node.Document != null && node.Document.Equals(_hostDocument) &&
-                                     node.LinkInstanceId == ElementId.InvalidElementId;
+                // 링크가 아닌 노드는 곧 호스트 문서의 요소다. 문서 키는 보조 확인으로만 쓰고,
+                // 키를 읽지 못한 경우(빈 문자열)에는 링크 여부만으로 판정해 전부 버리지 않는다.
+                bool isLinked = node.LinkInstanceId != ElementId.InvalidElementId;
+                string nodeKey = DocumentKey(node.Document);
+                bool sameDocument = nodeKey.Length == 0 || _hostDocumentKey.Length == 0 ||
+                                    string.Equals(nodeKey, _hostDocumentKey, StringComparison.OrdinalIgnoreCase);
+                bool isHostElement = !isLinked && sameDocument;
                 _elementStack.Push(new ElementScope(node.ElementId, isHostElement));
                 return RenderNodeAction.Proceed;
             }

@@ -1,0 +1,15 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\bin\Debug\net8.0\SettingsSmoke.exe
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\bin\Debug\net8.0\SettingsSmoke.deps.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\bin\Debug\net8.0\SettingsSmoke.runtimeconfig.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\bin\Debug\net8.0\SettingsSmoke.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\bin\Debug\net8.0\SettingsSmoke.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.AssemblyInfo.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.sourcelink.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\refint\SettingsSmoke.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\SettingsSmoke.genruntimeconfig.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\.codex-build\release-v91\obj\Debug\net8.0\ref\SettingsSmoke.dll

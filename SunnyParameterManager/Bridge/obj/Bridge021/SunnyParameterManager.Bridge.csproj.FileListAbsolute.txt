@@ -1,0 +1,14 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v021\Bridge\SunnyParameterManager.Bridge.deps.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v021\Bridge\SunnyParameterManager.Bridge.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v021\Bridge\SunnyParameterManager.Bridge.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.csproj.AssemblyReference.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.AssemblyInfo.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.sourcelink.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyPar.7BFB0AF2.Up2Date
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\refint\SunnyParameterManager.Bridge.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\SunnyParameterManager.Bridge.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Bridge\obj\Bridge021\ref\SunnyParameterManager.Bridge.dll

@@ -9,23 +9,30 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.DB;
-// Autodesk.Revit.UI에도 TextBox가 있어(리본용) System.Windows.Controls.TextBox와 충돌한다 - 이 파일은
-// TaskDialog 하나만 필요하므로 네임스페이스 전체를 끌어오지 않고 그 타입만 별칭으로 가져온다.
-using TaskDialog = Autodesk.Revit.UI.TaskDialog;
-using TaskDialogCommonButtons = Autodesk.Revit.UI.TaskDialogCommonButtons;
-using TaskDialogResult = Autodesk.Revit.UI.TaskDialogResult;
 // Autodesk.Revit.DB에 데이텀 그리드선을 나타내는 Grid 클래스가 있어 System.Windows.Controls.Grid와
 // 충돌한다(둘 다 이 파일에서 필요) - WPF 쪽만 별칭으로 구분한다.
 using WpfGrid = System.Windows.Controls.Grid;
 
 namespace WallSplitter
 {
-    // 리본 "빠른 토글 설정" 버튼으로 여는 모달 창 - 커맨드 Execute 안에서 ShowDialog()로 열리므로
+    // 리본 "커스텀 버튼 설정" 버튼으로 여는 모달 창 - 커맨드 Execute 안에서 ShowDialog()로 열리므로
     // (SettingsCommand/NamerCommand와 동일 구조) 이미 유효한 API 컨텍스트라 ExternalEvent가 필요 없다.
+    //
+    // 2026-09-03 UX 전면 개편. 화면 구성 의도와 이전 구조의 문제점은 QuickToggleSettingsWindow.xaml
+    // 상단 주석에 정리해 두었다. 코드 쪽에서 특히 지킬 것:
+    //  - 아이콘/색을 고를 때 편집 패널 전체를 다시 그리지 말 것. 예전 구현은 스와치를 누를 때마다
+    //    BuildEditPanel(cfg)로 통째로 다시 그려서 대상 목록의 검색어와 스크롤 위치가 함께 초기화됐다
+    //    (카테고리 트리 펼침/접힘도 같은 문제). 지금은 _refreshAppearanceSection/_refreshEditTitle/
+    //    _refreshTargetSummary 세 훅으로 실제로 달라지는 부분만 다시 그린다 - 이 파일과 짝인
+    //    QuickToggleToolbar가 "필요 없는데 다시 그려서" 세 번이나 클릭이 씹혔던 것과 같은 부류의 함정이다.
+    //  - 색은 전부 Theme/Theme.xaml 토큰에서만 가져올 것(Industry 디자인 시스템: 스틸블루 단일 강조색,
+    //    모서리 반지름 0, 채워진 오브젝트는 주 버튼과 강조 뱃지뿐) - docs/design-system/CLAUDE.md 참고.
     public partial class QuickToggleSettingsWindow : Window
     {
         private readonly Document _doc;
+        private readonly LanguageType _revitLanguage;
         private readonly QuickToggleSettings _settings;
         private QuickToggleButtonConfig? _selected;
 
@@ -34,14 +41,68 @@ namespace WallSplitter
         private readonly List<Workset> _worksets;
         private readonly bool _isWorkshared;
 
-        // 프리셋 편집의 카테고리(V/G) 탭 - 각 최상위 카테고리를 펼쳤는지 여부(카테고리 Id 기준). 이 창을
+        // 색상 버튼의 카테고리 트리 - 각 최상위 카테고리를 펼쳤는지 여부(카테고리 Id 기준). 이 창을
         // 새로 열면 초기화되는 세션 한정 UI 상태라 QuickToggleButtonConfig에는 저장하지 않는다.
         private readonly HashSet<int> _expandedCategoryIds = new HashSet<int>();
+
+        // ===== 툴바 미리보기의 드래그 순서 바꾸기 (2026-09-06) =====
+        // 미리보기에 그려진 버튼과 그 버튼이 나타내는 설정을 순서대로 짝지어 둔다 - 드롭 위치를 계산할 때
+        // 시각 트리를 뒤지는 대신 이 목록의 화면 좌표만 보면 되고, 작은 버튼이 중첩 WrapPanel 안에 있어도
+        // 평평한 한 줄로 다룰 수 있다(목록 순서 = _settings.Buttons 순서).
+        private readonly List<(QuickToggleButtonConfig Cfg, FrameworkElement Element)> _previewItems = new();
+        private QuickToggleButtonConfig? _dragCfg;      // 마우스를 누른 버튼(아직 드래그는 아닐 수 있다)
+        private FrameworkElement? _dragElement;
+        private System.Windows.Point _dragOrigin;
+        private bool _dragActive;                       // 최소 드래그 거리를 넘겨 실제로 끌기 시작했는가
+        private int _dropIndex = -1;
+        private bool _dropSecondRow;                    // 놓을 자리가 "칸의 아래 줄"인가 (2026-09-06 그리드)
+
+        // "② 모양"(아이콘/켜짐 색)은 기본으로 접어 두고 세로 공간을 "③ 대상"에 몰아준다 - 2026-07-27의
+        // "이름/아이콘/색상 부분이 너무 커서 아래 대상 선택 부분이 작아 보인다"는 피드백을 구조 자체로
+        // 해결한 것. "고급"(내보내기/가져오기/툴바 위치)도 같은 이유로 접어 둔다. 둘 다 세션 한정 상태.
+        private bool _appearanceExpanded;
+        private bool _advancedExpanded;
+
+        // 편집 패널의 부분 갱신 훅 (위 클래스 주석 참고). BuildEditPanel이 매번 새로 채우고,
+        // ShowEmptyEditPanel은 전부 null로 비운다.
+        private Action? _refreshAppearanceSection;
+        private Action? _refreshEditTitle;
+        private Action? _refreshTargetSummary;
+
+        // "어떤 버튼을 만들까요?" 카드 목록. 설명 문구는 "이 버튼을 누르면 무슨 일이 일어나는가"를
+        // 한 문장으로만 적는다 - 종류를 고르는 순간 필요한 정보는 그것뿐이고, 세부 사항은 고른 뒤
+        // 편집 화면의 ③ 대상 안내에서 다시 설명한다.
+        private static readonly (QuickToggleCategory Category, string Title, string Description)[] MainButtonKinds =
+        {
+            (QuickToggleCategory.ViewTemplate, "뷰템플릿",
+                "지정해 둔 뷰템플릿을 지금 보는 뷰에 씌우고, 다시 누르면 벗깁니다."),
+            (QuickToggleCategory.Filter, "필터",
+                "지정해 둔 필터들의 표시를 한 번에 켜고 끕니다."),
+            (QuickToggleCategory.Workset, "작업세트",
+                "지정해 둔 작업세트들의 표시를 한 번에 켜고 끕니다."),
+            (QuickToggleCategory.ColorTool, "색상",
+                "고른 모델 카테고리의 색과 투명도를 패널에서 즉시 조절합니다."),
+            (QuickToggleCategory.CommandLauncher, "기능",
+                "재료 지정·NAMER·동기화 같은 기능을 클릭 한 번으로 실행합니다."),
+        };
+
+        // 링크 계열은 개수가 늘어나면서 위 목록에 섞여 있으면 카드가 너무 많아 보인다는 지적(2026-09-04)으로
+        // 따로 뺐다 - "링크" 섹션에 한 줄짜리 작은 카드로 모아 그린다(BuildAddChooser).
+        private static readonly (QuickToggleCategory Category, string Title, string Description)[] LinkButtonKinds =
+        {
+            (QuickToggleCategory.LinkedAll, "링크된 요소 (전체)",
+                "이 뷰의 모든 링크 - CAD·Revit·IFC·지형·DWF 마크업·포인트 클라우드·좌표 모델"),
+            (QuickToggleCategory.LinkedCad, "링크된 도면만",
+                "링크된 CAD 도면(과 DWF 마크업)만 한 번에 끄고 켭니다"),
+            (QuickToggleCategory.LinkedModel, "링크된 모델만",
+                "링크된 Revit·IFC 모델 목록을 열어 하나씩 끄고 켭니다"),
+        };
 
         public QuickToggleSettingsWindow(Document doc)
         {
             InitializeComponent();
             _doc = doc;
+            _revitLanguage = doc.Application.Language;
             _settings = QuickToggleSettings.Load(doc);
 
             _viewTemplates = new FilteredElementCollector(doc)
@@ -60,15 +121,743 @@ namespace WallSplitter
                 ? new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).OrderBy(w => w.Name).ToList()
                 : new List<Workset>();
 
-            if (!_isWorkshared)
-            {
-                AddWorksetButton.IsEnabled = false;
-                AddWorksetButton.ToolTip = "이 문서는 작업공유(워크셰어링)가 설정되어 있지 않아 작업세트 버튼을 추가할 수 없습니다.";
-            }
+            // 드래그 순서 바꾸기는 개별 버튼이 아니라 이 호스트에서 받는다 - 드래그 도중 커서가 버튼
+            // 밖으로 나가도 계속 따라가야 하고(마우스 캡처 대상), 삽입 위치 계산의 좌표 기준도 여기다.
+            // CONFIRMED LIVE BUG (2026-09-06, v75 실측 재보고: "아무리 적용해도 순서가 움직이지 않아"):
+            // 이 둘은 반드시 **handledEventsToo: true**로 등록해야 한다. 평범한 `+=`(handledEventsToo가
+            // false)는 이미 Handled로 표시된 이벤트를 받지 못하는데, **눌린 Button이 마우스를 캡처한
+            // 동안에는 그 Button이 MouseMove를 Handled로 만든다**(진짜 마우스 입력으로 추적해 확인:
+            // 드래그 중 호스트에 도달한 MouseMove 중 Handled가 아닌 것은 단 하나도 없었다). 그래서
+            // 드래그 판정 자체가 한 번도 실행되지 않았고, v75의 LostMouseCapture 수정만으로는 여전히
+            // 꿈쩍도 하지 않았다. MouseLeftButtonUp도 같은 이유(Button이 Click을 만들며 Handled로 표시).
+            // **`+=`로 되돌리지 말 것 — 그 순간 드래그 기능 전체가 죽는다.**
+            PreviewDragHost.AddHandler(MouseMoveEvent, new MouseEventHandler(PreviewDragHost_MouseMove), true);
+            PreviewDragHost.AddHandler(MouseLeftButtonUpEvent, new MouseButtonEventHandler(PreviewDragHost_MouseLeftButtonUp), true);
+            PreviewDragHost.LostMouseCapture += PreviewDragHost_LostMouseCapture;
+            // 툴바가 길어지면 미리보기가 가로로 스크롤된다 - 휠로 좌우 스크롤이 되게 한다(가로 전용
+            // ScrollViewer는 기본적으로 휠에 반응하지 않아 "스크롤바를 잡는 수밖에" 없었다).
+            PreviewScroll.PreviewMouseWheel += PreviewScroll_PreviewMouseWheel;
 
+            AddBlueprintCornerMarks(PreviewCard, new Thickness(12, 10, 12, 10));
+            BuildAddChooser();
+            UpdateAdvancedSection();
             RefreshButtonList();
+            RefreshPreviewStrip();
+
             if (_settings.Buttons.Count > 0) SelectButton(_settings.Buttons[0]);
             else ShowEmptyEditPanel();
+        }
+
+        // ===== 공통: 버튼 한 개의 상태 판정과 시각 =====
+
+        // 버튼 한 개가 지금 어떤 상태인지 - 설정 창이 이걸 알려주지 않으면 "만들었는데 왜 안 눌리지?"가
+        // 되기 쉽다(툴바는 그냥 회색으로 그릴 뿐이다).
+        private enum ButtonReadiness
+        {
+            Ready,        // 대상이 지정돼 있고, 지금 열려 있는 프로젝트에서 실제로 찾힌다
+            NoTarget,     // 대상을 아직 하나도 안 골랐다
+            NotInProject, // 대상은 지정돼 있는데 이 프로젝트에 그 이름이 없다 (전역 설정이라 생기는 새 상태)
+        }
+
+        // 설정이 PC 전역이 된 2026-09-03부터는 "대상을 골랐는가"와 "그 대상이 이 프로젝트에 있는가"가
+        // 서로 다른 질문이 됐다 - 다른 프로젝트에서 만든 버튼은 대상 이름은 멀쩡히 들고 있지만 지금 문서엔
+        // 그 이름이 없을 수 있다. 툴바가 그런 버튼을 회색으로 그리는 이유를 여기서 그대로 설명한다.
+        private ButtonReadiness ReadinessOf(QuickToggleButtonConfig cfg)
+        {
+            switch (cfg.Category)
+            {
+                case QuickToggleCategory.ViewTemplate:
+                    if (cfg.ViewTemplateId == null && string.IsNullOrEmpty(cfg.ViewTemplateName)) return ButtonReadiness.NoTarget;
+                    return _viewTemplates.Any(v => v.Name == cfg.ViewTemplateName) || string.IsNullOrEmpty(cfg.ViewTemplateName)
+                        ? ButtonReadiness.Ready
+                        : ButtonReadiness.NotInProject;
+
+                case QuickToggleCategory.Filter:
+                    if (cfg.FilterNames.Count == 0 && cfg.FilterIds.Count == 0) return ButtonReadiness.NoTarget;
+                    if (cfg.FilterNames.Count == 0) return ButtonReadiness.Ready; // 이름 없는 옛 설정 - 판정하지 않는다
+                    return cfg.FilterNames.Any(n => _filters.Any(f => f.Name == n))
+                        ? ButtonReadiness.Ready
+                        : ButtonReadiness.NotInProject;
+
+                case QuickToggleCategory.Workset:
+                    if (cfg.WorksetNames.Count == 0 && cfg.WorksetIds.Count == 0) return ButtonReadiness.NoTarget;
+                    if (!_isWorkshared) return ButtonReadiness.NotInProject;
+                    if (cfg.WorksetNames.Count == 0) return ButtonReadiness.Ready;
+                    return cfg.WorksetNames.Any(n => _worksets.Any(w => w.Name == n))
+                        ? ButtonReadiness.Ready
+                        : ButtonReadiness.NotInProject;
+
+                case QuickToggleCategory.ColorTool:
+                    return cfg.ColorButtonCategories.Count == 0 ? ButtonReadiness.NoTarget : ButtonReadiness.Ready;
+
+                case QuickToggleCategory.CommandLauncher:
+                    return string.IsNullOrEmpty(cfg.CommandId) ? ButtonReadiness.NoTarget : ButtonReadiness.Ready;
+
+                default:
+                    // 링크 버튼은 설정에서 고를 대상이 자체가 없다 - 대상은 "그때 활성 뷰에 걸려 있는 링크"다.
+                    return ButtonReadiness.Ready;
+            }
+        }
+
+        private bool IsConfigured(QuickToggleButtonConfig cfg) => ReadinessOf(cfg) == ButtonReadiness.Ready;
+
+        // 왼쪽 목록의 두 번째 줄에 쓰는 한 줄 요약 - 지금 무엇이 걸려 있는지를 목록에서 바로 보여준다.
+        private string TargetSummary(QuickToggleButtonConfig cfg)
+        {
+            if (ReadinessOf(cfg) == ButtonReadiness.NotInProject) return "이 프로젝트에 없음";
+
+            return cfg.Category switch
+            {
+                QuickToggleCategory.ViewTemplate => string.IsNullOrEmpty(cfg.ViewTemplateName)
+                    ? (cfg.ViewTemplateId == null ? "대상 미지정" : "뷰템플릿 1개")
+                    : cfg.ViewTemplateName!,
+                QuickToggleCategory.Filter => cfg.FilterNames.Count > 0
+                    ? cfg.FilterNames.Count + "개 선택"
+                    : (cfg.FilterIds.Count == 0 ? "대상 미지정" : cfg.FilterIds.Count + "개 선택"),
+                QuickToggleCategory.Workset => cfg.WorksetNames.Count > 0
+                    ? cfg.WorksetNames.Count + "개 선택"
+                    : (cfg.WorksetIds.Count == 0 ? "대상 미지정" : cfg.WorksetIds.Count + "개 선택"),
+                QuickToggleCategory.ColorTool => cfg.ColorButtonCategories.Count == 0
+                    ? "대상 미지정"
+                    : "카테고리 " + cfg.ColorButtonCategories.Count + "개",
+                QuickToggleCategory.CommandLauncher => string.IsNullOrEmpty(cfg.CommandId)
+                    ? "기능 미지정"
+                    : SunnyToolsCommands.DisplayLabelFor(cfg.CommandKind, cfg.CommandId, _revitLanguage, cfg.CommandLabel),
+                _ => "활성 뷰의 링크",
+            };
+        }
+
+        // 2026-09-05부터 모든 버튼이 색을 쓴다 - 켜짐/꺼짐이 있는 버튼은 "켜졌을 때"의 색으로,
+        // on/off가 없는 실행형 버튼(색상/기능)은 평소에도 그 색으로 칠해진다
+        // (QuickToggleButtonStyle.IsActionButton / QuickToggleToolbar.VisualsFor와 같은 규칙).
+        // 라벨만 "켜짐 색상"/"버튼 색상"으로 달라진다.
+        private static string ColorLabelFor(QuickToggleCategory category) =>
+            QuickToggleButtonStyle.IsActionButton(category) ? "버튼 색상" : "켜짐 색상";
+
+        // 설정 창에는 활성 뷰가 없어 진짜 on/off를 알 수 없다 - 켜고 끌 수 있는 버튼은 "켜졌을 때"의
+        // 모습으로(사용자가 고른 색을 확인하는 게 미리보기의 목적), 실행형 버튼은 툴바에서 늘 그렇듯
+        // 칠해진 모습으로, 대상을 안 고른 버튼은 회색(Disabled)으로 그린다.
+        // 색 조합 자체는 QuickToggleToolbar.VisualsFor와 같은 규칙이다.
+        private (Brush Background, Brush BorderBrush, Brush Foreground) PreviewVisualsFor(QuickToggleButtonConfig cfg)
+        {
+            if (!IsConfigured(cfg))
+                return (Brushes.Transparent, Theme.Border, Theme.ToggleDisabled);
+
+            SolidColorBrush fill = OnColorBrush(cfg);
+            return (fill, fill, QuickToggleIcons.ContrastingForeground(fill.Color));
+        }
+
+        private static SolidColorBrush OnColorBrush(QuickToggleButtonConfig cfg)
+        {
+            string hex = string.IsNullOrEmpty(cfg.OnColorHex)
+                ? QuickToggleButtonStyle.DefaultColorHexFor(cfg.Category)
+                : cfg.OnColorHex!;
+            try
+            {
+                SolidColorBrush brush = new SolidColorBrush(
+                    (System.Windows.Media.Color)ColorConverter.ConvertFromString(hex));
+                brush.Freeze();
+                return brush;
+            }
+            catch
+            {
+                // 저장된 값이 손상된 경우 공용 색으로 안전하게 대체 (툴바의 CustomOnColor와 같은 방침).
+                return Theme.ToggleOn;
+            }
+        }
+
+        private static Canvas IconOf(QuickToggleButtonConfig cfg, Brush brush) =>
+            QuickToggleIcons.Create(cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category), brush);
+
+        // ===== 상단: 툴바 미리보기 =====
+
+        // 툴바에서 "작은 도구형 버튼"으로 그려지는지 - 판정은 QuickToggleButtonStyle이 한 곳에서 한다
+        // (툴바와 미리보기가 어긋나면 안 되므로).
+        private static bool IsSmallToolButton(QuickToggleButtonConfig cfg) => QuickToggleButtonStyle.IsSmall(cfg);
+
+        // 작은 버튼 묶음의 높이 - 툴바와 어긋나면 안 되므로 QuickToggleButtonStyle에서 가져온다.
+        private const double SmallToolGroupHeightDip = QuickToggleButtonStyle.SmallToolGroupHeightDip;
+
+        // 실제 툴바 창(QuickToggleToolbar.xaml)의 구조를 통째로 흉내 낸다:
+        //   [드래그 그립 28px] [ButtonsPanel] [구분선 + 뷰 저장 + 되돌리기]
+        // 전부 Surface 배경 + 하이라인 테두리의 Border 하나에 담겨 있다.
+        //
+        // **왜 이렇게까지 하나**: 처음엔 등록 버튼만 한 줄로 나열했는데, 실제 툴바는 색상 버튼을 세로
+        // WrapPanel(2단)로 묶고 그 앞에 구분선까지 넣기 때문에 "미리보기가 실제와 다르다"는 지적을 받았다.
+        // 미리보기가 실제와 다르면 있으나 마나이므로, 배치 규칙을 그대로 옮겨 그린다 -
+        // **QuickToggleToolbar.RebuildButtons/ResizeToContent 쪽 배치를 바꾸면 이 메서드도 같이 맞출 것.**
+        private void RefreshPreviewStrip()
+        {
+            PreviewPanel.Children.Clear();
+            _previewItems.Clear();
+            // 목록이 바뀐 뒤(추가·삭제·크기 변경·순서 변경) 저장된 줄 배치가 실제 배치와 어긋날 수 있다 -
+            // 다시 그리기 직전에 한 곳에서 맞춘다(idempotent라 매번 불러도 안전하다).
+            QuickToggleButtonStyle.NormalizeRows(_settings.Buttons);
+            ClearDropIndicator();
+
+            StackPanel buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4) };
+
+            if (_settings.Buttons.Count == 0)
+            {
+                buttons.Children.Add(new TextBlock
+                {
+                    Text = "아직 버튼이 없습니다. 왼쪽 아래 '+ 버튼 추가'로 시작하세요.",
+                    Foreground = Theme.TextSecondary,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 14, 4, 14),
+                });
+            }
+            else
+            {
+                // 배치 규칙은 실제 툴바(RebuildButtons)와 **똑같아야 한다** - 두 곳이 어긋나면 미리보기가
+                // 거짓말을 한다. 그래서 칸 나누기 판정은 공용 ComputeColumnStarts 하나만 쓴다.
+                List<bool> startsColumn = QuickToggleButtonStyle.ComputeColumnStarts(_settings.Buttons);
+                StackPanel? smallColumn = null;
+                bool previousWasSmall = false;
+                for (int i = 0; i < _settings.Buttons.Count; i++)
+                {
+                    QuickToggleButtonConfig cfg = _settings.Buttons[i];
+                    UIElement item = CreatePreviewButton(cfg);
+                    if (!IsSmallToolButton(cfg))
+                    {
+                        smallColumn = null;
+                        previousWasSmall = false;
+                        buttons.Children.Add(item);
+                        continue;
+                    }
+
+                    if (startsColumn[i] || smallColumn == null)
+                    {
+                        if (!previousWasSmall && buttons.Children.Count > 0)
+                            buttons.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 2, 4, 2), Background = Theme.Border });
+                        smallColumn = new StackPanel
+                        {
+                            Orientation = Orientation.Vertical,
+                            Height = SmallToolGroupHeightDip,
+                            VerticalAlignment = VerticalAlignment.Top,
+                        };
+                        buttons.Children.Add(smallColumn);
+                    }
+                    smallColumn.Children.Add(item);
+                    previousWasSmall = true;
+                }
+            }
+
+            PreviewPanel.Children.Add(CreateToolbarFrame(buttons));
+        }
+
+        // 툴바 창 전체(테두리 + 그립 + 버튼 영역 + 우측 고정 버튼)를 감싸 그린다.
+        private UIElement CreateToolbarFrame(UIElement buttons)
+        {
+            WpfGrid grid = new WpfGrid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // 드래그 그립(점 3개, 28px) - 실제 툴바에서 창을 옮기는 손잡이.
+            StackPanel dots = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            for (int i = 0; i < 3; i++)
+                dots.Children.Add(new Border { Width = 4, Height = 4, Background = Theme.TextSecondary, Margin = new Thickness(0, 2.5, 0, 2.5) });
+            Border grip = new Border
+            {
+                Width = 28,
+                Child = dots,
+                ToolTip = "실제 툴바에서는 여기를 잡고 드래그해 위치를 옮깁니다.",
+            };
+            WpfGrid.SetColumn(grip, 0);
+            grid.Children.Add(grip);
+
+            WpfGrid.SetColumn(buttons, 1);
+            grid.Children.Add(buttons);
+
+            // 우측에 항상 고정으로 붙는 "설정"(톱니바퀴) 버튼 - 등록 버튼 목록과 무관하게 늘 있으므로
+            // 미리보기에도 포함해야 실제 폭·모양이 맞는다(2026-09-03, 이 자리의 "뷰 저장"/"되돌리기"를 대체).
+            StackPanel right = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 4, 4) };
+            right.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 2, 4, 2), Background = Theme.Border });
+            right.Children.Add(new Button
+            {
+                Width = 28,
+                Height = 28,
+                Padding = new Thickness(4),
+                IsHitTestVisible = false,
+                ToolTip = "커스텀 버튼 설정 창을 엽니다 (툴바에 항상 붙어 있는 고정 버튼).",
+                Content = new Viewbox { Width = 20, Height = 16, Child = QuickToggleIcons.CreateGearIcon(Theme.TextSecondary) },
+            });
+            WpfGrid.SetColumn(right, 2);
+            grid.Children.Add(right);
+
+            return new Border
+            {
+                Background = Theme.Surface,
+                BorderBrush = Theme.Border,
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Child = grid,
+            };
+        }
+
+        // 실제 QuickToggleToolbar.RebuildButtons와 같은 배치 규칙으로 그린다 - 색상 버튼만 "작은 리본
+        // 버튼"(작은 아이콘이 왼쪽, 두 줄까지 줄바꿈되는 라벨이 오른쪽) 가로 배치이고 나머지는 "큰 아이콘
+        // 위 + 라벨 아래" 세로 배치다. 두 파일의 수치가 어긋나면 미리보기가 거짓말을 하게 되므로,
+        // 툴바 쪽 배치를 바꿀 때 이 메서드도 같이 맞출 것.
+        private UIElement CreatePreviewButton(QuickToggleButtonConfig cfg)
+        {
+            (Brush background, Brush borderBrush, Brush foreground) = PreviewVisualsFor(cfg);
+            Canvas icon = IconOf(cfg, foreground);
+            UIElement content;
+
+            if (IsSmallToolButton(cfg))
+            {
+                StackPanel horizontal = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(6, 0, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                horizontal.Children.Add(new Viewbox { Width = 16, Height = 13, Child = icon, VerticalAlignment = VerticalAlignment.Center });
+                horizontal.Children.Add(new TextBlock
+                {
+                    Text = cfg.Name,
+                    FontSize = 10,
+                    TextWrapping = TextWrapping.Wrap,
+                    // 툴바와 같은 규칙: 이름이 길어도 두 줄까지만 보이고 버튼 높이는 고정이다
+                    // (그러지 않으면 2단으로 쌓이지 않는다 - QuickToggleButtonStyle의 주석 참고).
+                    LineHeight = QuickToggleButtonStyle.SmallToolLabelLineHeight,
+                    LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                    MaxHeight = QuickToggleButtonStyle.SmallToolLabelMaxHeight,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Width = QuickToggleButtonStyle.SmallToolLabelWidth,
+                    Foreground = foreground,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 0, 0),
+                });
+                content = horizontal;
+            }
+            else
+            {
+                StackPanel vertical = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(8, 2, 8, 2) };
+                vertical.Children.Add(new Viewbox { Width = 28, Height = 22, Child = icon });
+                vertical.Children.Add(new TextBlock
+                {
+                    Text = cfg.Name,
+                    FontSize = 10,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Foreground = foreground,
+                    Margin = new Thickness(0, 2, 0, 0),
+                });
+                content = vertical;
+            }
+
+            Button button = new Button
+            {
+                Content = content,
+                Background = background,
+                BorderBrush = borderBrush,
+                Padding = new Thickness(0),
+                Cursor = Cursors.Hand,
+                ToolTip = CategoryLabel(cfg.Category) + " 버튼 · " + TargetSummary(cfg)
+                          + "\n클릭하면 이 버튼을 편집하고, 끌어서 순서를 바꿉니다.",
+            };
+            // 드래그로 끝난 경우에는 Click 자체가 발생하지 않는다 - 드래그를 시작할 때 마우스 캡처를
+            // PreviewDragHost로 가져가므로 Button이 누름/뗌 짝을 완성하지 못하기 때문이다. 덕분에
+            // "옮기려고 끌었는데 편집 대상까지 바뀌는" 일이 없다.
+            button.Click += (s, e) => SelectButton(cfg);
+
+            // 지금 편집 중인 버튼을 강조색 테두리로 표시한다 - 미리보기와 오른쪽 편집 영역이 같은 버튼을
+            // 가리키고 있다는 걸 눈으로 잇기 위함(테두리만 두르므로 버튼 자신의 색은 가리지 않는다).
+            // 실제 툴바는 버튼끼리 완전히 맞닿아 있으므로(클릭 사각지대를 없애려고 일부러 그렇게 했다)
+            // 바깥 Margin은 주지 않는다 - 선택 표시용 2px 테두리만 모든 버튼에 똑같이 둘러 간격을 맞춘다.
+            Border wrapper = new Border
+            {
+                BorderThickness = new Thickness(2),
+                BorderBrush = ReferenceEquals(cfg, _selected) ? Theme.Accent : Brushes.Transparent,
+                Child = button,
+            };
+            // 미리보기에서도 작은 버튼 한 칸의 높이는 묶음 높이의 절반으로 고정한다 - 여기서 높이를
+            // 자유롭게 두면 이름이 긴 버튼에서 미리보기만 2단이 깨져 "실제와 다른 미리보기"가 된다.
+            // 높이는 선택 표시용 2px 테두리를 **포함한** 값이다(툴바에는 그 테두리가 없다).
+            if (IsSmallToolButton(cfg)) wrapper.Height = QuickToggleButtonStyle.SmallToolButtonHeightDip;
+
+            // 누를 때는 "후보"로만 기억해 둔다 - 여기서 바로 캡처해 버리면 그냥 클릭(편집 대상 선택)까지
+            // 드래그로 먹혀서 Click이 안 난다. 최소 드래그 거리를 넘겼을 때만 PreviewDragHost_MouseMove가
+            // 실제 드래그를 시작한다.
+            wrapper.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                _dragCfg = cfg;
+                _dragElement = wrapper;
+                _dragOrigin = e.GetPosition(PreviewDragHost);
+            };
+
+            _previewItems.Add((cfg, wrapper));
+            return wrapper;
+        }
+
+        // ===== 미리보기 드래그로 순서 바꾸기 (2026-09-06) =====
+        //
+        // 사용자 요청: "툴바 미리보기에서 버튼들의 위치를 드래그로 이동시킬 수 있으면 좋겠어. 각 작은버튼
+        // 두개를 옮겨서 위아래 2줄로 만들거나, 좌우로 이동시키면서 순서를 바꾸는 방식으로" + "등록된
+        // 버튼에서 위아래로 움직이게 만드는 화살표는 제거". 그래서 순서 변경 수단은 이제 여기 하나뿐이다.
+        //
+        // 위아래 2줄은 따로 만드는 게 아니라 배치 규칙에서 저절로 나온다 - 작은 버튼끼리 이웃하면
+        // RefreshPreviewStrip이 세로 WrapPanel(높이 64) 하나로 묶어 두 개가 위아래로 쌓인다. 즉 "작은
+        // 버튼 두 개를 나란히 끌어다 놓으면" 2줄이 된다.
+        private void PreviewDragHost_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (_dragCfg == null) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { CancelDrag(); return; }
+
+            System.Windows.Point now = e.GetPosition(PreviewDragHost);
+            if (!_dragActive)
+            {
+                if (Math.Abs(now.X - _dragOrigin.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                    Math.Abs(now.Y - _dragOrigin.Y) < SystemParameters.MinimumVerticalDragDistance)
+                    return;
+
+                _dragActive = true;
+                PreviewDragHost.CaptureMouse();
+                PreviewDragHost.Cursor = Cursors.SizeAll;
+                if (_dragElement != null) _dragElement.Opacity = 0.4;
+            }
+
+            AutoScrollWhileDragging(e.GetPosition(PreviewScroll));
+
+            // 자동 스크롤로 내용이 움직였을 수 있으니 커서 위치를 다시 읽는다 - 스크롤된 뒤의 좌표로
+            // 계산해야 표시선이 커서를 따라온다(PreviewDragHost는 스크롤되는 내용 쪽이라 같이 움직인다).
+            System.Windows.Point cursor = e.GetPosition(PreviewDragHost);
+            _dropIndex = ComputeDropIndex(cursor);
+            _dropSecondRow = ComputeDropSecondRow(cursor, _dropIndex);
+            ShowDropIndicator(_dropIndex, _dropSecondRow);
+        }
+
+        // 작은 버튼을 **어느 줄에** 놓을지. 커서 바로 앞 항목이 "칸의 윗줄"인 작은 버튼이고 커서가 그
+        // 버튼보다 아래에 있으면, 사용자는 그 칸의 아래 줄을 노린 것이다(2026-09-06 그리드 배치).
+        // 그 외에는 전부 새 칸의 윗줄이다 - 자동으로 짝지어 주지 않는다.
+        private bool ComputeDropSecondRow(System.Windows.Point cursor, int index)
+        {
+            if (_dragCfg == null || !QuickToggleButtonStyle.IsSmall(_dragCfg)) return false;
+            if (index <= 0 || index > _previewItems.Count) return false;
+
+            (QuickToggleButtonConfig prevCfg, FrameworkElement prevElement) = _previewItems[index - 1];
+            if (!QuickToggleButtonStyle.IsSmall(prevCfg)) return false;
+            if (ReferenceEquals(prevCfg, _dragCfg)) return false;   // 자기 자신 아래로는 갈 수 없다
+
+            // 앞 항목이 이미 어떤 칸의 "아래 줄"이면 그 칸은 꽉 찬 것이다 - 그 아래에는 못 들어간다.
+            if (!StartsColumnOf(index - 1)) return false;
+
+            Rect prevRect = PreviewRect(prevElement);
+            return !prevRect.IsEmpty && cursor.Y > prevRect.Top + prevRect.Height / 2;
+        }
+
+        // 지금 그려진 배치에서 i번째 버튼이 칸을 시작하는지(= 윗줄인지).
+        private bool StartsColumnOf(int i)
+        {
+            List<bool> startsColumn = QuickToggleButtonStyle.ComputeColumnStarts(_settings.Buttons);
+            return i >= 0 && i < startsColumn.Count && startsColumn[i];
+        }
+
+        // 버튼이 많아 툴바가 길어지면 화면 밖의 자리로도 끌어다 놓을 수 있어야 한다 - 커서가 미리보기의
+        // 좌우 끝에 가면 그쪽으로 조금씩 밀어준다.
+        private const double DragScrollEdgeDip = 28;
+        private const double DragScrollStepDip = 26;
+
+        private void AutoScrollWhileDragging(System.Windows.Point cursorInViewport)
+        {
+            if (PreviewScroll.ScrollableWidth <= 0) return;
+
+            double offset = PreviewScroll.HorizontalOffset;
+            if (cursorInViewport.X < DragScrollEdgeDip)
+                PreviewScroll.ScrollToHorizontalOffset(Math.Max(0, offset - DragScrollStepDip));
+            else if (cursorInViewport.X > PreviewScroll.ViewportWidth - DragScrollEdgeDip)
+                PreviewScroll.ScrollToHorizontalOffset(Math.Min(PreviewScroll.ScrollableWidth, offset + DragScrollStepDip));
+            else
+                return;
+
+            // ScrollToHorizontalOffset은 다음 레이아웃 패스에 반영된다 - 바로 이어지는 좌표 계산이 옛
+            // 오프셋을 보지 않도록 여기서 한 번 밀어준다.
+            PreviewScroll.UpdateLayout();
+        }
+
+        // 가로로만 스크롤되는 ScrollViewer는 휠에 반응하지 않는다(세로로 스크롤할 게 없으면 그냥 흘려보낸다)
+        // - 휠을 가로 스크롤로 돌려준다. 2026-09-06 실측 피드백("스크롤 잡는 게 너무 어렵다")의 절반은
+        // 이걸로 해결된다(나머지 절반은 Theme.xaml의 가로 스크롤바 자체 수정).
+        private void PreviewScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (PreviewScroll.ScrollableWidth <= 0) return;
+            PreviewScroll.ScrollToHorizontalOffset(PreviewScroll.HorizontalOffset - e.Delta);
+            e.Handled = true;
+        }
+
+        private void PreviewDragHost_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_dragActive) { ResetDragState(); return; }
+
+            QuickToggleButtonConfig? cfg = _dragCfg;
+            int target = _dropIndex;
+            bool secondRow = _dropSecondRow;
+            CancelDrag();
+            if (cfg != null && target >= 0) DropPreviewButton(cfg, target, secondRow);
+        }
+
+        // 캡처가 다른 곳으로 넘어가면(예: 창이 비활성화) 드래그를 조용히 취소한다 - 표시선과 흐려진
+        // 버튼이 그대로 남지 않도록.
+        //
+        // CONFIRMED LIVE BUG (2026-09-06, v74 실측: "꾹 누르고 드래그했을때 전혀 움직이지 않아"):
+        // 여기서 무조건 CancelDrag()를 불렀더니 드래그가 시작하는 순간 스스로 죽었다. **LostMouseCapture는
+        // 버블링 이벤트**다 - Button은 눌리는 순간 자기가 마우스를 캡처하는데(ButtonBase의 기본 동작),
+        // 드래그를 시작하며 PreviewDragHost가 캡처를 가져오면 그 Button이 캡처를 잃고 LostMouseCapture를
+        // 올려보낸다. 그게 이 핸들러까지 버블링돼 방금 시작한 드래그를 취소해 버렸다(캡처 이전이
+        // Mouse.Capture 안에서 동기적으로 일어나므로, 첫 MouseMove 안에서 시작과 취소가 연달아 났다).
+        // 고정: **호스트 자신이** 캡처를 잃은 경우에만 취소한다.
+        // 교훈: 이 기능의 하네스 검증은 계산(ComputeDropIndex/DropPreviewButton)만 했고 이벤트 배선은
+        // 보지 않아서 놓쳤다 - 지금은 이 버그를 그대로 재현하는 회귀 테스트가 하네스에 들어 있다.
+        private void PreviewDragHost_LostMouseCapture(object sender, MouseEventArgs e)
+        {
+            if (!ReferenceEquals(e.OriginalSource, PreviewDragHost)) return;
+            CancelDrag();
+        }
+
+        private void CancelDrag()
+        {
+            if (_dragActive)
+            {
+                if (PreviewDragHost.IsMouseCaptured) PreviewDragHost.ReleaseMouseCapture();
+                PreviewDragHost.Cursor = null;
+            }
+            if (_dragElement != null) _dragElement.Opacity = 1.0;
+            ClearDropIndicator();
+            ResetDragState();
+        }
+
+        private void ResetDragState()
+        {
+            _dragCfg = null;
+            _dragElement = null;
+            _dragActive = false;
+            _dropIndex = -1;
+            _dropSecondRow = false;
+        }
+
+        // 미리보기에 그려진 버튼의 화면 사각형(PreviewDragHost 좌표계). 아직 레이아웃이 잡히지 않았거나
+        // 트리에서 떨어진 요소면 TransformToAncestor가 예외를 던지므로 빈 사각형으로 넘긴다 - 순서를
+        // 바꾸려다 창이 죽는 것보다 그 버튼 하나를 계산에서 빼는 편이 낫다(호출부가 0 크기를 걸러낸다).
+        private Rect PreviewRect(FrameworkElement element)
+        {
+            try
+            {
+                System.Windows.Point topLeft = element.TransformToAncestor(PreviewDragHost).Transform(new System.Windows.Point(0, 0));
+                return new Rect(topLeft, new Size(element.ActualWidth, element.ActualHeight));
+            }
+            catch (InvalidOperationException)
+            {
+                return Rect.Empty;
+            }
+        }
+
+        // 커서 위치 → "몇 번째 앞에 끼워 넣을 것인가". 버튼들은 읽는 순서(왼→오, 한 칸 안에서는 위→아래)로
+        // 놓여 있으므로, 커서보다 "앞선" 버튼의 개수가 곧 삽입 위치다. 세로로 쌓인 작은 버튼도 같은 규칙으로
+        // 다뤄지도록, 같은 칸 안에서는 X가 아니라 Y의 중간선을 기준으로 앞뒤를 가른다.
+        private int ComputeDropIndex(System.Windows.Point cursor)
+        {
+            int index = 0;
+            foreach ((QuickToggleButtonConfig _, FrameworkElement element) in _previewItems)
+            {
+                Rect r = PreviewRect(element);
+                if (r.Width <= 0 || r.Height <= 0) continue;
+                bool after = cursor.X > r.Right
+                             || (cursor.X > r.Left && cursor.Y > r.Top + r.Height / 2);
+                if (after) index++;
+            }
+            return index;
+        }
+
+        private void ShowDropIndicator(int index, bool secondRow)
+        {
+            PreviewDropCanvas.Children.Clear();
+            if (_previewItems.Count == 0) return;
+
+            // 아래 줄을 노린 경우에는 "이 버튼 밑에 들어간다"는 뜻이므로, 그 버튼의 아래 모서리에
+            // 가로선을 긋는다(그 자리는 지금 비어 있을 수도 있다).
+            if (secondRow && index > 0 && index <= _previewItems.Count)
+            {
+                Rect above = PreviewRect(_previewItems[index - 1].Element);
+                if (!above.IsEmpty)
+                {
+                    Border underline = new Border
+                    {
+                        Background = Theme.TextPrimary,
+                        BorderBrush = Brushes.White,
+                        BorderThickness = new Thickness(1),
+                        Width = above.Width,
+                        Height = 5,
+                    };
+                    Canvas.SetLeft(underline, above.Left);
+                    Canvas.SetTop(underline, above.Bottom - 2.5);
+                    PreviewDropCanvas.Children.Add(underline);
+                    return;
+                }
+            }
+
+            // 표시선은 강조색(스틸블루)이 아니라 **어두운 선 + 흰 테두리**다 - 강조색으로 그렸더니 같은
+            // 스틸블루로 칠해진 버튼(실행형 버튼의 기본색) 위에서는 선이 통째로 묻혀 보이지 않았다
+            // (하네스로 렌더해서 확인). 이 조합은 밝은 카드 바탕에서도, 채워진 버튼 위에서도 다 보인다.
+            const double thickness = 5;   // 흰 테두리 1px + 어두운 심 3px + 흰 테두리 1px
+            Border line = new Border
+            {
+                Background = Theme.TextPrimary,
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(1),
+            };
+
+            if (index >= _previewItems.Count)
+            {
+                // 맨 뒤 - 마지막 버튼의 오른쪽에 세로선.
+                Rect last = PreviewRect(_previewItems[_previewItems.Count - 1].Element);
+                if (last.IsEmpty) return;
+                line.Width = thickness;
+                line.Height = last.Height;
+                Canvas.SetLeft(line, last.Right - thickness / 2);
+                Canvas.SetTop(line, last.Top);
+            }
+            else
+            {
+                Rect target = PreviewRect(_previewItems[index].Element);
+                if (target.IsEmpty) return;
+                bool stackedUnderPrevious = index > 0 && IsStackedUnder(PreviewRect(_previewItems[index - 1].Element), target);
+                if (stackedUnderPrevious)
+                {
+                    // 같은 칸에서 위아래로 쌓인 작은 버튼 사이 - 가로선.
+                    line.Width = target.Width;
+                    line.Height = thickness;
+                    Canvas.SetLeft(line, target.Left);
+                    Canvas.SetTop(line, target.Top - thickness / 2);
+                }
+                else
+                {
+                    line.Width = thickness;
+                    line.Height = target.Height;
+                    Canvas.SetLeft(line, target.Left - thickness / 2);
+                    Canvas.SetTop(line, target.Top);
+                }
+            }
+
+            PreviewDropCanvas.Children.Add(line);
+        }
+
+        // 같은 칸(세로 WrapPanel의 한 열)에서 바로 아래에 쌓였는가.
+        private static bool IsStackedUnder(Rect upper, Rect lower) =>
+            Math.Abs(upper.Left - lower.Left) < 1.0 && lower.Top > upper.Top + 1.0;
+
+        private void ClearDropIndicator() => PreviewDropCanvas.Children.Clear();
+
+        // 드롭 확정. 묶음(연결고리) 규칙은 예전 ▲▼와 같은 뜻을 유지한다:
+        //  - 묶여 있는 종류를 **자기 덩어리 안에** 떨어뜨리면 그 안에서 순서만 바뀐다(작은 버튼 두 개의
+        //    위아래를 바꾸는 것이 바로 이 경우다).
+        //  - 묶여 있는 종류를 **덩어리 밖에** 떨어뜨리면 그 종류 전체가 통째로 그 자리로 옮겨간다
+        //    (예전 그룹 머리글의 ▲▼가 하던 일 - 화살표를 없앴으므로 이 경로가 그 대체다).
+        //  - 고리가 끊긴 버튼은 혼자 움직이되, 다른 묶인 덩어리 한가운데로는 들어가지 않는다
+        //    (들어가면 "묶인 종류는 항상 연속된 한 덩어리"라는 전제가 깨진다).
+        private void DropPreviewButton(QuickToggleButtonConfig cfg, int dropIndex, bool secondRow)
+        {
+            List<QuickToggleButtonConfig> list = _settings.Buttons;
+            int from = list.IndexOf(cfg);
+            if (from < 0) return;
+
+            // 어느 줄에 놓였는지를 먼저 기록한다 - 아래에서 순서를 바꾼 뒤 NormalizeRows가 실제 배치와
+            // 맞춰 주므로, 놓을 수 없는 자리였다면(앞 칸이 꽉 찼다든지) 저절로 윗줄로 정리된다.
+            cfg.SecondRow = secondRow;
+
+            (int runStart, int runCount) = RunAt(from);
+            bool linked = _settings.IsLinked(cfg.Category);
+
+            if (linked && (dropIndex < runStart || dropIndex > runStart + runCount))
+            {
+                List<QuickToggleButtonConfig> run = list.GetRange(runStart, runCount);
+                list.RemoveRange(runStart, runCount);
+                int target = dropIndex > runStart ? dropIndex - runCount : dropIndex;
+                target = SnapOutsideLinkedRuns(Math.Max(0, Math.Min(list.Count, target)));
+                list.InsertRange(target, run);
+            }
+            else
+            {
+                list.RemoveAt(from);
+                int target = dropIndex > from ? dropIndex - 1 : dropIndex;
+                target = Math.Max(0, Math.Min(list.Count, target));
+                target = linked
+                    ? Math.Max(runStart, Math.Min(runStart + runCount - 1, target))
+                    : SnapOutsideLinkedRuns(target);
+                list.Insert(target, cfg);
+            }
+
+            // 안전망 - 위 규칙대로면 이미 조건을 만족하지만, 묶인 종류가 흩어지는 일만은 없어야 한다.
+            _settings.NormalizeGrouping();
+            // 순서가 바뀌면 "아래 줄"이 성립하지 않게 된 버튼이 생길 수 있다(앞이 큰 버튼이 되었거나
+            // 앞 칸이 꽉 찼거나) - 저장값을 실제 배치와 맞춰 둔다.
+            QuickToggleButtonStyle.NormalizeRows(_settings.Buttons);
+            RefreshButtonList();
+            RefreshPreviewStrip();
+        }
+
+        // index가 들어 있는 "같은 종류가 연속으로 이어지는 구간"의 시작과 개수.
+        private (int Start, int Count) RunAt(int index)
+        {
+            List<QuickToggleButtonConfig> list = _settings.Buttons;
+            QuickToggleCategory category = list[index].Category;
+            int start = index;
+            while (start > 0 && list[start - 1].Category == category) start--;
+            int end = index;
+            while (end + 1 < list.Count && list[end + 1].Category == category) end++;
+            return (start, end - start + 1);
+        }
+
+        // 삽입 위치가 묶여 있는 덩어리 한가운데면 가까운 쪽 경계로 밀어낸다.
+        private int SnapOutsideLinkedRuns(int index)
+        {
+            List<QuickToggleButtonConfig> list = _settings.Buttons;
+            if (index <= 0 || index >= list.Count) return index;
+            if (list[index - 1].Category != list[index].Category) return index;
+            if (!_settings.IsLinked(list[index].Category)) return index;
+
+            (int start, int count) = RunAt(index);
+            int end = start + count;
+            return (index - start) <= (end - index) ? start : end;
+        }
+
+        // Industry 디자인 시스템의 .blueprint 모서리 등록 마크("+"). 2026-07-27 테마 이식 때는 "창마다
+        // 레이아웃을 건드려야 한다"는 이유로 옮기지 않았던 장식인데, 이번엔 이 창을 다시 짜는 김에 가장
+        // 대표적인 카드(툴바 미리보기) 한 곳에만 넣어 브랜드 톤을 살렸다 - 남용하면 설계도면 은유가
+        // 오히려 옅어지므로 다른 카드에는 넣지 않는다.
+        //
+        // padding에는 이 Grid를 감싼 Border의 Padding을 그대로 넘긴다 - 그만큼 음수 마진으로 되밀어야
+        // 마크가 카드 안쪽 내용 위에 겹치지 않고 테두리의 네 모서리에 정확히 얹힌다(첫 구현은 음수 마진이
+        // 없어서 "툴바 미리보기" 글자와 첫 버튼 위에 마크가 겹쳐 그려졌다 - 렌더링해서 확인 후 수정).
+        private static void AddBlueprintCornerMarks(WpfGrid host, Thickness padding)
+        {
+            const double size = 7;
+            const double half = size / 2;
+
+            (HorizontalAlignment H, VerticalAlignment V, Thickness M)[] corners =
+            {
+                (HorizontalAlignment.Left, VerticalAlignment.Top, new Thickness(-(padding.Left + half), -(padding.Top + half), 0, 0)),
+                (HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -(padding.Top + half), -(padding.Right + half), 0)),
+                (HorizontalAlignment.Left, VerticalAlignment.Bottom, new Thickness(-(padding.Left + half), 0, 0, -(padding.Bottom + half))),
+                (HorizontalAlignment.Right, VerticalAlignment.Bottom, new Thickness(0, 0, -(padding.Right + half), -(padding.Bottom + half))),
+            };
+
+            foreach ((HorizontalAlignment h, VerticalAlignment v, Thickness m) in corners)
+            {
+                Canvas mark = new Canvas
+                {
+                    Width = size,
+                    Height = size,
+                    HorizontalAlignment = h,
+                    VerticalAlignment = v,
+                    Margin = m,
+                    IsHitTestVisible = false,
+                };
+                mark.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 3.5, X2 = 7, Y2 = 3.5, Stroke = Theme.Border, StrokeThickness = 1 });
+                mark.Children.Add(new System.Windows.Shapes.Line { X1 = 3.5, Y1 = 0, X2 = 3.5, Y2 = 7, Stroke = Theme.Border, StrokeThickness = 1 });
+                host.Children.Add(mark);
+            }
         }
 
         // ===== 왼쪽: 등록된 버튼 목록 =====
@@ -77,73 +866,204 @@ namespace WallSplitter
         {
             ButtonListPanel.Children.Clear();
 
-            for (int i = 0; i < _settings.Buttons.Count; i++)
+            if (_settings.Buttons.Count == 0)
             {
-                int index = i;
-                QuickToggleButtonConfig cfg = _settings.Buttons[i];
+                ButtonListPanel.Children.Add(new TextBlock
+                {
+                    Text = "아직 버튼이 없습니다.\n아래 '+ 버튼 추가'를 누르세요.",
+                    Foreground = Theme.TextSecondary,
+                    Margin = new Thickness(8),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+                return;
+            }
+
+            // 2026-09-03, "색상버튼은 색상버튼끼리, 작업세트버튼은 작업세트끼리 묶여서 함께 이동할 수도
+            // 있고, 연결고리버튼을 눌러 고리를 끊으면 개별로도 움직일 수 있게" 요청으로 목록을 종류별
+            // 덩어리(run) 단위로 그린다. run = 같은 종류가 연속으로 이어지는 구간이다. 묶여 있는 종류는
+            // QuickToggleSettings.NormalizeGrouping()이 반드시 하나의 run으로 모아 두므로 "그룹 전체
+            // 이동"이 성립하고, 고리를 끊은 종류는 여기저기 흩어질 수 있어 run이 여러 개 생길 수 있다
+            // (그때는 각 run이 자기 머리글을 갖는다 - 지금 어디에 놓여 있는지를 그대로 보여주는 게 낫다).
+            List<(int Start, int Count, QuickToggleCategory Category)> runs = BuildRuns();
+
+            for (int r = 0; r < runs.Count; r++)
+            {
+                (int runStart, int runCount, QuickToggleCategory runCategory) = runs[r];
+                ButtonListPanel.Children.Add(BuildGroupHeader(runs, r));
+
+                for (int i = runStart; i < runStart + runCount; i++)
+                    ButtonListPanel.Children.Add(BuildButtonRow(i));
+            }
+        }
+
+        private List<(int Start, int Count, QuickToggleCategory Category)> BuildRuns()
+        {
+            List<(int Start, int Count, QuickToggleCategory Category)> runs = new List<(int, int, QuickToggleCategory)>();
+            int i = 0;
+            while (i < _settings.Buttons.Count)
+            {
+                QuickToggleCategory category = _settings.Buttons[i].Category;
+                int start = i;
+                while (i < _settings.Buttons.Count && _settings.Buttons[i].Category == category) i++;
+                runs.Add((start, i - start, category));
+            }
+            return runs;
+        }
+
+        // 종류 덩어리의 머리글 - 종류 이름 + 개수 + 연결고리 토글 (+ 고리가 끊겼으면 "풀림" 표시).
+        private UIElement BuildGroupHeader(List<(int Start, int Count, QuickToggleCategory Category)> runs, int runIndex)
+        {
+            (int start, int count, QuickToggleCategory category) = runs[runIndex];
+            bool linked = _settings.IsLinked(category);
+
+            Border header = new Border
+            {
+                Background = Theme.WindowBackground,
+                BorderBrush = Theme.Border,
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(6, 4, 6, 4),
+            };
+
+            WpfGrid grid = new WpfGrid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.Child = grid;
+
+            TextBlock title = new TextBlock
+            {
+                Text = CategoryLabel(category) + " (" + count + ")",
+                FontWeight = FontWeights.Bold,
+                FontSize = 11,
+                Foreground = linked ? Theme.TextPrimary : Theme.TextSecondary,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            WpfGrid.SetColumn(title, 0);
+            grid.Children.Add(title);
+
+            Button chain = new Button
+            {
+                Content = CreateChainGlyph(linked),
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(2),
+                Background = Theme.Surface,
+                Margin = new Thickness(4, 0, 6, 0),
+                ToolTip = linked
+                    ? "이 종류의 버튼들이 묶여 있어 함께 움직입니다. 누르면 고리를 끊어 하나씩 옮길 수 있습니다."
+                    : "고리가 끊겨 있어 버튼을 하나씩 옮길 수 있습니다. 누르면 다시 묶어 한 덩어리로 모읍니다.",
+            };
+            chain.Click += (s, e) =>
+            {
+                _settings.SetLinked(category, !linked);
+                RefreshButtonList();
+                RefreshPreviewStrip();
+            };
+            WpfGrid.SetColumn(chain, 1);
+            grid.Children.Add(chain);
+
+            // 2026-09-06, "등록된 버튼에서 위아래로 움직이게 만드는 화살표는 제거" 요청으로 그룹 통째
+            // 이동 ▲▼를 없앴다 - 묶인 종류를 통째로 옮기는 일은 이제 미리보기에서 그 종류의 버튼 하나를
+            // 덩어리 밖으로 끌어다 놓으면 된다(DropPreviewButton 참고). 이 칸에는 고리가 끊겼다는 표시만
+            // 남는다.
+            if (!linked)
+            {
+                TextBlock loose = new TextBlock
+                {
+                    Text = "풀림",
+                    FontSize = 11,
+                    Foreground = Theme.WarningText,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 4, 0),
+                };
+                WpfGrid.SetColumn(loose, 2);
+                grid.Children.Add(loose);
+            }
+
+            return header;
+        }
+
+        // 목록 한 줄 - 고르기와 삭제만 한다. 순서 바꾸기는 위 툴바 미리보기의 드래그가 전담한다
+        // (2026-09-06에 ▲▼를 없앴다).
+        private UIElement BuildButtonRow(int index)
+        {
+            {
+                QuickToggleButtonConfig cfg = _settings.Buttons[index];
                 bool isSelected = ReferenceEquals(cfg, _selected);
+                bool configured = IsConfigured(cfg);
 
                 Border row = new Border
                 {
                     Background = isSelected ? Theme.SelectionHighlight : Brushes.Transparent,
                     BorderBrush = Theme.Border,
                     BorderThickness = new Thickness(0, 0, 0, 1),
-                    Padding = new Thickness(4, 6, 4, 6),
+                    Padding = new Thickness(14, 6, 6, 6),
+                    Cursor = Cursors.Hand,
                 };
+                // 행 전체가 선택 영역이다 - 예전엔 이름 텍스트 부분만 클릭 대상이라 옆 여백을 눌러도
+                // 아무 일이 없었다. 위/아래/삭제 Button은 자기 자신이 MouseLeftButtonDown을 처리하므로
+                // 여기까지 이벤트가 올라오지 않는다.
+                row.MouseLeftButtonDown += (s, e) => SelectButton(cfg);
 
                 WpfGrid grid = new WpfGrid();
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.Child = grid;
 
-                // CONFIRMED LIVE BUG (2026-07-27), 수정 (1차): 위/아래 버튼이 "투명하게 보여 뭐가 위/아래인지
-                // 안 보인다"는 실측 피드백 - 다크 테마 때는 BaseButtonStyle의 기본 배경이 채워진 색이라
-                // 버튼 자체가 뚜렷했지만, Industry 라이트 테마로 바뀌며 기본 버튼 배경이 투명(테두리만
-                // 있는 "선 그림")이 되어(readme의 .btn-secondary 규칙), 작은 22px 아이콘 버튼에서는 그
-                // 미묘한 하이라인 테두리만으론 존재감이 약했다. 배경을 명시적으로 Surface로 채우고
-                // (기본 스타일의 투명 배경에 기대지 않음), 삼각형도 더 크고 굵게 키웠었다.
-                // CONFIRMED LIVE BUG (2026-07-27), 수정 (2차, 진짜 원인): 1차 수정 이후에도 "안 보이고
-                // 이상하다"는 재보고 - Width/Height만 24로 키우고 Padding은 그대로 둔 게 문제였다.
-                // BaseButtonStyle의 기본 Padding("10,5")이 그대로 적용되면 24x24 버튼의 실제 콘텐츠
-                // 영역은 24-10*2=4 x 24-5*2=14로 쪼그라들어, 12x10짜리 삼각형/12x12 X가 대부분 잘려나가
-                // 보였다. 고정: Padding을 작게 명시해서 아이콘이 실제로 버튼 안에 다 들어오게 했다.
-                Button upButton = new Button { Content = CreateTriangle(pointingUp: true), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(0, 0, 2, 0), IsEnabled = index > 0 };
-                upButton.Click += (s, e) => { MoveButton(index, index - 1); };
-                WpfGrid.SetColumn(upButton, 0);
-                grid.Children.Add(upButton);
-
-                Button downButton = new Button { Content = CreateTriangle(pointingUp: false), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index < _settings.Buttons.Count - 1 };
-                downButton.Click += (s, e) => { MoveButton(index, index + 1); };
-                WpfGrid.SetColumn(downButton, 1);
-                grid.Children.Add(downButton);
-
-                Border nameArea = new Border { Background = Brushes.Transparent, Cursor = Cursors.Hand };
-                StackPanel nameStack = new StackPanel();
-                nameStack.Children.Add(new TextBlock { Text = CategoryLabel(cfg.Category), FontSize = 10, Foreground = Theme.TextSecondary });
-                nameStack.Children.Add(new TextBlock { Text = cfg.Name, FontWeight = isSelected ? FontWeights.Bold : FontWeights.Normal, TextTrimming = TextTrimming.CharacterEllipsis });
-                nameArea.Child = nameStack;
-                nameArea.MouseLeftButtonDown += (s, e) => SelectButton(cfg);
-                WpfGrid.SetColumn(nameArea, 2);
-                grid.Children.Add(nameArea);
-
-                Button deleteButton = new Button { Content = CreateXMark(), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, Margin = new Thickness(8, 0, 0, 0) };
-                deleteButton.Click += (s, e) => { DeleteButton(index); };
-                WpfGrid.SetColumn(deleteButton, 3);
-                grid.Children.Add(deleteButton);
-
-                ButtonListPanel.Children.Add(row);
-            }
-
-            if (_settings.Buttons.Count == 0)
-                ButtonListPanel.Children.Add(new TextBlock
+                // 툴바에서 실제로 어떤 아이콘/색으로 보일지를 목록에서도 바로 알 수 있게 작은 칩으로 그린다.
+                (Brush chipBackground, Brush chipBorder, Brush chipForeground) = PreviewVisualsFor(cfg);
+                Border iconChip = new Border
                 {
-                    Text = "아래에서 버튼을 추가하세요.",
-                    Foreground = Theme.TextSecondary,
-                    Margin = new Thickness(6),
-                    TextWrapping = TextWrapping.Wrap,
+                    Width = 28,
+                    Height = 28,
+                    Background = chipBackground,
+                    BorderBrush = chipBorder,
+                    BorderThickness = new Thickness(1),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new Viewbox { Width = 16, Height = 13, Child = IconOf(cfg, chipForeground) },
+                };
+                WpfGrid.SetColumn(iconChip, 0);
+                grid.Children.Add(iconChip);
+
+                StackPanel info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                info.Children.Add(new TextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(cfg.Name) ? "(이름 없음)" : cfg.Name,
+                    FontWeight = isSelected ? FontWeights.Bold : FontWeights.Normal,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
                 });
+                // 종류는 바로 위 그룹 머리글에 이미 적혀 있으므로 여기서는 대상 요약만 보여준다.
+                info.Children.Add(new TextBlock
+                {
+                    Text = TargetSummary(cfg),
+                    FontSize = 11,
+                    Foreground = configured ? Theme.TextSecondary : Theme.WarningText,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                });
+                WpfGrid.SetColumn(info, 1);
+                grid.Children.Add(info);
+
+                StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+
+                // CONFIRMED LIVE BUG (2026-07-27), 수정 (1차): 이 자리의 작은 아이콘 버튼들이 "투명하게
+                // 보여 뭔지 안 보인다"는 실측 피드백 - Industry 라이트 테마에서 기본 버튼 배경이
+                // 투명("선 그림")이라 존재감이 약했다. 배경을 명시적으로 Surface로 채운다.
+                // CONFIRMED LIVE BUG (2026-07-27), 수정 (2차, 진짜 원인): Width/Height만 24로 키우고
+                // Padding은 그대로 뒀던 게 문제였다 - BaseButtonStyle의 기본 Padding("10,5")이 그대로
+                // 적용되면 24x24 버튼의 콘텐츠 영역이 4x14로 쪼그라들어 도형이 대부분 잘렸다.
+                // Padding을 작게 명시해야 한다(지금 남은 삭제 버튼도 마찬가지).
+                Button deleteButton = new Button { Content = CreateXMark(), Width = 24, Height = 24, Padding = new Thickness(2), Background = Theme.Surface, ToolTip = "이 버튼 삭제" };
+                deleteButton.Click += (s, e) => { DeleteButton(index); };
+                actions.Children.Add(deleteButton);
+
+                WpfGrid.SetColumn(actions, 2);
+                grid.Children.Add(actions);
+
+                return row;
+            }
         }
 
         private static string CategoryLabel(QuickToggleCategory category) => category switch
@@ -151,16 +1071,50 @@ namespace WallSplitter
             QuickToggleCategory.ViewTemplate => "뷰템플릿",
             QuickToggleCategory.Filter => "필터",
             QuickToggleCategory.Workset => "작업세트",
-            QuickToggleCategory.Preset => "프리셋",
             QuickToggleCategory.ColorTool => "색상",
             QuickToggleCategory.CommandLauncher => "기능",
+            QuickToggleCategory.LinkedAll => "링크된 요소",
+            QuickToggleCategory.LinkedCad => "링크된 도면",
+            QuickToggleCategory.LinkedModel => "링크된 모델",
             _ => "",
         };
 
-        private void MoveButton(int index, int newIndex)
+
+        // 연결고리 아이콘 - 고리 두 개가 걸려 있으면(묶임) 서로 겹치고, 끊기면 사이가 벌어진다.
+        // 텍스트 글리프(⛓) 대신 도형으로 직접 그리는 이 창의 관례를 따른다(폰트에 따라 안 보일 수 있음).
+        // Autodesk.Revit.DB에도 Ellipse가 있어 완전한 이름으로 구분한다(이 파일의 Grid/Line과 같은 종류의 충돌).
+        private static UIElement CreateChainGlyph(bool linked)
         {
-            (_settings.Buttons[index], _settings.Buttons[newIndex]) = (_settings.Buttons[newIndex], _settings.Buttons[index]);
-            RefreshButtonList();
+            Canvas canvas = new Canvas { Width = 18, Height = 12 };
+            Brush stroke = linked ? Theme.TextPrimary : Theme.WarningText;
+            double gap = linked ? 0 : 2.5;
+
+            System.Windows.Shapes.Ellipse left = new System.Windows.Shapes.Ellipse
+            {
+                Width = 10, Height = 8, Stroke = stroke, StrokeThickness = 1.6, Fill = Brushes.Transparent,
+            };
+            Canvas.SetLeft(left, 0 - gap);
+            Canvas.SetTop(left, 2);
+            canvas.Children.Add(left);
+
+            System.Windows.Shapes.Ellipse right = new System.Windows.Shapes.Ellipse
+            {
+                Width = 10, Height = 8, Stroke = stroke, StrokeThickness = 1.6, Fill = Brushes.Transparent,
+            };
+            Canvas.SetLeft(right, 7 + gap);
+            Canvas.SetTop(right, 2);
+            canvas.Children.Add(right);
+
+            if (!linked)
+            {
+                // 끊긴 상태는 벌어진 틈만으로는 잘 안 읽혀서, 가운데에 짧은 사선을 하나 그어 확실히 구분한다.
+                canvas.Children.Add(new System.Windows.Shapes.Line
+                {
+                    X1 = 11, Y1 = 0, X2 = 7, Y2 = 12, Stroke = Theme.WarningText, StrokeThickness = 1.6,
+                });
+            }
+
+            return canvas;
         }
 
         private void DeleteButton(int index)
@@ -172,16 +1126,145 @@ namespace WallSplitter
                 _selected = _settings.Buttons.Count > 0 ? _settings.Buttons[0] : null;
 
             RefreshButtonList();
+            RefreshPreviewStrip();
             if (_selected != null) BuildEditPanel(_selected);
             else ShowEmptyEditPanel();
         }
 
-        private void AddViewTemplateButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.ViewTemplate);
-        private void AddFilterButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Filter);
-        private void AddWorksetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Workset);
-        private void AddPresetButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.Preset);
-        private void AddColorToolButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.ColorTool);
-        private void AddCommandLauncherButton_Click(object sender, RoutedEventArgs e) => AddButtonOfCategory(QuickToggleCategory.CommandLauncher);
+        // ===== "어떤 버튼을 만들까요?" 오버레이 =====
+
+        // 2026-09-04, "링크만 좀 카테고리로 따로 빼서 요소들을 작게 표시해주면 도움이 될 것 같아"는 요청으로
+        // 한 덩어리였던 카드 목록을 "기본"(큰 카드)과 "링크"(한 줄짜리 작은 카드) 두 섹션으로 나눴다.
+        private void BuildAddChooser()
+        {
+            AddChooserPanel.Children.Clear();
+
+            WrapPanel mainCards = new WrapPanel();
+            foreach ((QuickToggleCategory category, string title, string description) in MainButtonKinds)
+                mainCards.Children.Add(BuildKindCard(category, title, description, compact: false));
+            AddChooserPanel.Children.Add(mainCards);
+
+            AddChooserPanel.Children.Add(CreateDivider());
+            AddChooserPanel.Children.Add(CreateStepHeaderlessLabel(
+                "링크", "여러 종류가 있어 따로 모았습니다. 대부분은 맨 위 '링크된 요소 (전체)' 하나면 충분합니다."));
+
+            StackPanel linkCards = new StackPanel();
+            foreach ((QuickToggleCategory category, string title, string description) in LinkButtonKinds)
+                linkCards.Children.Add(BuildKindCard(category, title, description, compact: true));
+            AddChooserPanel.Children.Add(linkCards);
+        }
+
+        // 섹션 머리글 - 단계 번호 뱃지가 어울리지 않는 자리(오버레이 안)라 굵은 라벨 + 부연 한 줄로만 쓴다.
+        private static UIElement CreateStepHeaderlessLabel(string title, string hint)
+        {
+            StackPanel row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            row.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock
+            {
+                Text = hint,
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            return row;
+        }
+
+        // compact=false: 아이콘+제목 위, 설명 아래의 큰 카드(기본 5종).
+        // compact=true : 아이콘·제목·설명이 한 줄에 들어가는 낮은 카드(링크 3종) - 종류가 늘어도 오버레이가
+        //                길어지지 않고, "이건 같은 계열"이라는 것도 형태로 드러난다.
+        private UIElement BuildKindCard(QuickToggleCategory category, string title, string description, bool compact)
+        {
+            QuickToggleCategory captured = category;
+            bool enabled = category != QuickToggleCategory.Workset || _isWorkshared;
+
+            Viewbox icon = new Viewbox
+            {
+                Width = compact ? 17 : 20,
+                Height = compact ? 14 : 16,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = QuickToggleIcons.Create(QuickToggleIcons.DefaultFor(category), Theme.Accent),
+            };
+            TextBlock titleText = new TextBlock
+            {
+                Text = title,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            TextBlock descriptionText = new TextBlock
+            {
+                Text = description,
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                TextWrapping = compact ? TextWrapping.NoWrap : TextWrapping.Wrap,
+                TextTrimming = compact ? TextTrimming.CharacterEllipsis : TextTrimming.None,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = compact ? new Thickness(10, 0, 0, 0) : new Thickness(0),
+            };
+
+            UIElement content;
+            if (compact)
+            {
+                WpfGrid row = new WpfGrid();
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                WpfGrid.SetColumn(icon, 0);
+                WpfGrid.SetColumn(titleText, 1);
+                WpfGrid.SetColumn(descriptionText, 2);
+                row.Children.Add(icon);
+                row.Children.Add(titleText);
+                row.Children.Add(descriptionText);
+                content = row;
+            }
+            else
+            {
+                StackPanel head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+                head.Children.Add(icon);
+                head.Children.Add(titleText);
+
+                StackPanel stack = new StackPanel();
+                stack.Children.Add(head);
+                stack.Children.Add(descriptionText);
+                content = stack;
+            }
+
+            Button card = new Button
+            {
+                Content = content,
+                Width = compact ? 716 : 232,
+                Height = compact ? 38 : 112,
+                Margin = compact ? new Thickness(0, 0, 0, 6) : new Thickness(0, 0, 10, 10),
+                Padding = compact ? new Thickness(12, 4, 12, 4) : new Thickness(12, 10, 12, 10),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = compact ? VerticalAlignment.Center : VerticalAlignment.Top,
+                Cursor = Cursors.Hand,
+                IsEnabled = enabled,
+                ToolTip = enabled ? null : "이 문서는 작업공유(워크셰어링)가 설정되어 있지 않아 작업세트 버튼을 추가할 수 없습니다.",
+            };
+            card.Click += (s, e) => { HideAddOverlay(); AddButtonOfCategory(captured); };
+            return card;
+        }
+
+        private void AddButton_Click(object sender, RoutedEventArgs e) => ShowAddOverlay();
+
+        private void CloseAddOverlayButton_Click(object sender, RoutedEventArgs e) => HideAddOverlay();
+
+        private void ShowAddOverlay() => AddOverlay.Visibility = System.Windows.Visibility.Visible;
+
+        private void HideAddOverlay() => AddOverlay.Visibility = System.Windows.Visibility.Collapsed;
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // 오버레이가 떠 있을 때 Esc는 창 전체가 아니라 오버레이만 닫는다 - 그냥 두면 "취소"
+            // 버튼의 IsCancel이 먼저 걸려 편집하던 창이 통째로 닫혀버린다.
+            if (e.Key == Key.Escape && AddOverlay.Visibility == System.Windows.Visibility.Visible)
+            {
+                HideAddOverlay();
+                e.Handled = true;
+            }
+        }
 
         private void AddButtonOfCategory(QuickToggleCategory category)
         {
@@ -191,6 +1274,8 @@ namespace WallSplitter
                 Name = _settings.NextDefaultName(category),
             };
             _settings.Buttons.Add(cfg);
+            // 묶여 있는 종류라면 목록 끝이 아니라 그 종류 덩어리의 끝으로 들어가야 한다.
+            _settings.NormalizeGrouping();
             SelectButton(cfg);
         }
 
@@ -200,189 +1285,927 @@ namespace WallSplitter
         {
             _selected = cfg;
             RefreshButtonList();
+            RefreshPreviewStrip();
             BuildEditPanel(cfg);
         }
 
         private void ShowEmptyEditPanel()
         {
+            _refreshAppearanceSection = null;
+            _refreshEditTitle = null;
+            _refreshTargetSummary = null;
             EditHeaderHost.Children.Clear();
             EditPanelHost.Children.Clear();
-            EditPanelHost.Children.Add(new TextBlock
+
+            StackPanel empty = new StackPanel { Margin = new Thickness(0, 60, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+            empty.Children.Add(new TextBlock
             {
-                Text = "왼쪽 아래에서 버튼을 추가하거나, 목록에서 버튼을 선택하세요.",
-                Foreground = Theme.TextSecondary,
-                TextWrapping = TextWrapping.Wrap,
+                Text = "아직 만든 버튼이 없습니다",
+                FontSize = 15,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
             });
+            empty.Children.Add(new TextBlock
+            {
+                Text = "커스텀 버튼바에 넣을 버튼을 만들어 보세요.\n뷰템플릿·필터·작업세트를 한 번에 켜고 끄거나, 링크를 끄고 켜거나, 자주 쓰는 기능을 바로 실행할 수 있습니다.",
+                Foreground = Theme.TextSecondary,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 380,
+                Margin = new Thickness(0, 6, 0, 14),
+            });
+            Button add = new Button
+            {
+                Content = "+ 버튼 추가",
+                Padding = new Thickness(18, 7, 18, 7),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Style = (Style)FindResource("PrimaryButtonStyle"),
+            };
+            add.Click += (s, e) => ShowAddOverlay();
+            empty.Children.Add(add);
+
+            EditPanelHost.Children.Add(empty);
         }
 
-        // 이름 입력칸/카테고리 안내는 EditHeaderHost(고정, 스크롤 안 됨)에 넣고, 실제 대상 목록만
-        // EditPanelHost(스크롤됨)에 넣는다 - 목록이 길어져도 이름 칸이 항상 보이게 하기 위함
-        // (2026-07-27 실측 피드백: "스크롤을 내리면 이름 변경 부분이 같이 사라진다").
+        // 제목/이름/모양/대상 헤더는 EditHeaderHost(고정, 스크롤 안 됨)에, 실제 대상 목록만
+        // EditPanelHost(스크롤됨)에 넣는다 - 목록이 길어져도 이름 칸과 검색창이 항상 보이게 하기 위함
+        // (2026-07-27 실측 피드백: "스크롤을 내리면 이름 변경 부분이 같이 사라진다"). 2026-09-03 개편에서
+        // 검색 입력칸도 스크롤 영역에서 고정 영역으로 올렸다 - 목록을 내리는 동안에도 검색어를 고칠 수 있다.
         private void BuildEditPanel(QuickToggleButtonConfig cfg)
         {
             EditHeaderHost.Children.Clear();
             EditPanelHost.Children.Clear();
+            _refreshAppearanceSection = null;
+            _refreshTargetSummary = null;
 
-            // 2026-07-27, 사용자 요청으로 위쪽(이름/아이콘/색상) 영역의 위아래 여백을 최소로 줄였다 -
-            // "이 부분이 너무 커서 아래 대상 선택 부분이 작아 보인다"는 피드백.
-            StackPanel nameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
-            nameRow.Children.Add(new TextBlock { Text = "이름: ", VerticalAlignment = VerticalAlignment.Center });
-            TextBox nameBox = new TextBox { Width = 240, Text = cfg.Name, VerticalContentAlignment = VerticalAlignment.Center };
-            nameBox.TextChanged += (s, e) => { cfg.Name = nameBox.Text; RefreshButtonList(); };
-            nameRow.Children.Add(nameBox);
-            EditHeaderHost.Children.Add(nameRow);
+            EditHeaderHost.Children.Add(BuildEditTitleRow(cfg));
+            EditHeaderHost.Children.Add(CreateDivider());
 
-            BuildIconAndColorPicker(cfg);
-
-            if (cfg.Category == QuickToggleCategory.Preset)
+            // --- ① 이름 ---
+            EditHeaderHost.Children.Add(CreateStepHeader(1, "이름", "커스텀 버튼바에 표시될 이름입니다."));
+            TextBox nameBox = new TextBox
             {
-                // 2026-07-29, "스크롤로 하나씩 찾는 대신 카테고리 탭 형식으로 클릭해서 들어가게 해달라"는
-                // 요청으로, 기존에 세 섹션을 한 화면에 이어붙이던 방식을 Revit V/G 대화상자와 같은 탭
-                // 구조로 바꿨다(Theme.xaml에 이미 TabControl/TabItem 스타일이 있어 그대로 재사용). 프리셋은
-                // 단일 카테고리 버튼과 달리 여러 대상을 동시에 담을 수 있고, 비워둔/포함 안 시킨 항목은
-                // 이 프리셋에서 아예 제외된다(QuickToggleService.TogglePreset/DeterminePresetState 참고).
-                BuildPresetTabs(cfg);
-                return;
-            }
-
-            if (cfg.Category == QuickToggleCategory.ColorTool)
+                Text = cfg.Name,
+                MinWidth = 240,
+                MaxWidth = 320,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(26, 0, 0, 12),
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            nameBox.TextChanged += (s, e) =>
             {
-                // 2026-07-29, "모델을 선택해서 색상과 투명도를 설정해줄 수 있는 버튼" 요청으로 추가 - 여기서는
-                // "어떤 모델 카테고리에 적용할지"만 고른다(체크박스만, 재정의 값 편집 없음). 실제 색상/투명도는
-                // 툴바에서 이 버튼을 클릭했을 때 뜨는 팝업(ColorToolPopupWindow)에서 실시간으로 고른다.
-                EditPanelHost.Children.Add(new TextBlock
-                {
-                    Text = "이 색상 버튼이 적용할 모델 카테고리를 선택하세요 (여러 개 선택 가능). 실제 색상/투명도 값은 " +
-                           "저장하지 않고, 커스텀 버튼 툴바에서 이 버튼을 클릭했을 때 뜨는 패널에서 그때그때 고릅니다.",
-                    Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
-                });
-                List<Category> colorToolTopCategories = QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Model);
-                StackPanel colorToolResults = new StackPanel();
-                EditPanelHost.Children.Add(BuildSearchRow(out TextBox colorToolSearchBox));
-                EditPanelHost.Children.Add(colorToolResults);
-                colorToolSearchBox.TextChanged += (s, e) => RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, colorToolSearchBox.Text, isColorTool: true);
-                RenderCategoryList(cfg, colorToolResults, colorToolTopCategories, "", isColorTool: true);
-                return;
-            }
+                cfg.Name = nameBox.Text;
+                _refreshEditTitle?.Invoke();
+                RefreshButtonList();
+                RefreshPreviewStrip();
+            };
+            EditHeaderHost.Children.Add(nameBox);
 
-            if (cfg.Category == QuickToggleCategory.CommandLauncher)
-            {
-                // 2026-08-03, "커스텀 버튼 설정에 다른 툴들의 버튼도 추가하고 싶다 - 재료지정/네이머/동기화
-                // 등을 찾아서 버튼으로 추가" 요청으로 추가. 색상 버튼과 마찬가지로 대상 목록 헤더를
-                // EditHeaderHost가 아니라 EditPanelHost 안에 직접 둔다(단일/여러 개 선택 안내 문구 형식이
-                // 이 카테고리엔 안 맞아서).
-                BuildCommandPicker(cfg, EditPanelHost);
-                return;
-            }
+            // --- ② 모양 ---
+            EditHeaderHost.Children.Add(BuildAppearanceSection(cfg));
 
-            EditHeaderHost.Children.Add(new TextBlock
-            {
-                Text = CategoryLabel(cfg.Category) + " 대상 선택" + (cfg.Category == QuickToggleCategory.ViewTemplate ? " (하나만 선택 가능)" : " (여러 개 선택 가능 - 모두 함께 켜고 꺼집니다)"),
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 3),
-            });
+            // --- ③ 대상 ---
+            EditHeaderHost.Children.Add(CreateDivider());
+            EditHeaderHost.Children.Add(CreateStepHeader(3, StepThreeTitle(cfg.Category), StepThreeHint(cfg.Category)));
 
             switch (cfg.Category)
             {
+                case QuickToggleCategory.LinkedAll:
+                case QuickToggleCategory.LinkedCad:
+                case QuickToggleCategory.LinkedModel:
+                    BuildLinkedInfo(cfg, EditPanelHost);
+                    break;
+                case QuickToggleCategory.ColorTool:
+                    BuildColorToolPicker(cfg, EditHeaderHost, EditPanelHost);
+                    break;
+                case QuickToggleCategory.CommandLauncher:
+                    BuildCommandPicker(cfg, EditHeaderHost, EditPanelHost);
+                    break;
                 case QuickToggleCategory.ViewTemplate:
-                    BuildViewTemplatePicker(cfg, EditPanelHost);
+                    BuildViewTemplatePicker(cfg, EditHeaderHost, EditPanelHost);
                     break;
                 case QuickToggleCategory.Filter:
-                    BuildFilterPicker(cfg, EditPanelHost);
+                    BuildFilterPicker(cfg, EditHeaderHost, EditPanelHost);
                     break;
                 case QuickToggleCategory.Workset:
-                    BuildWorksetPicker(cfg, EditPanelHost);
+                    BuildWorksetPicker(cfg, EditHeaderHost, EditPanelHost);
                     break;
             }
         }
 
-        // ===== 프리셋 편집 - 탭 구조 (2026-07-29) =====
-
-        private void BuildPresetTabs(QuickToggleButtonConfig cfg)
+        private static string StepThreeTitle(QuickToggleCategory category) => category switch
         {
-            TabControl tabs = new TabControl();
+            QuickToggleCategory.ViewTemplate => "대상 뷰템플릿",
+            QuickToggleCategory.Filter => "대상 필터",
+            QuickToggleCategory.Workset => "대상 작업세트",
+            QuickToggleCategory.ColorTool => "대상 모델 카테고리",
+            QuickToggleCategory.CommandLauncher => "실행할 기능",
+            _ => "대상",
+        };
 
-            StackPanel vtPanel = new StackPanel { Margin = new Thickness(8) };
-            vtPanel.Children.Add(new TextBlock
+        private static string StepThreeHint(QuickToggleCategory category) => category switch
+        {
+            QuickToggleCategory.ViewTemplate => "하나만 고를 수 있습니다",
+            QuickToggleCategory.Filter => "여러 개 선택 - 모두 함께 켜지고 꺼집니다",
+            QuickToggleCategory.Workset => "여러 개 선택 - 모두 함께 켜지고 꺼집니다",
+            QuickToggleCategory.ColorTool => "여러 개 선택 가능",
+            QuickToggleCategory.CommandLauncher => "하나만 고를 수 있습니다",
+            _ => "미리 고를 대상이 없습니다",
+        };
+
+        // 편집 중인 버튼이 무엇인지(이름/종류)와 지금 쓸 수 있는 상태인지를 한 줄로 보여준다.
+        private UIElement BuildEditTitleRow(QuickToggleButtonConfig cfg)
+        {
+            WpfGrid titleRow = new WpfGrid { Margin = new Thickness(0, 0, 0, 4) };
+            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            Border chipHost = new Border { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+            WpfGrid.SetColumn(chipHost, 0);
+            titleRow.Children.Add(chipHost);
+
+            TextBlock titleName = new TextBlock { FontSize = 15, FontWeight = FontWeights.Bold, TextTrimming = TextTrimming.CharacterEllipsis };
+            TextBlock titleKind = new TextBlock { FontSize = 11, Foreground = Theme.TextSecondary };
+            StackPanel titleText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            titleText.Children.Add(titleName);
+            titleText.Children.Add(titleKind);
+            WpfGrid.SetColumn(titleText, 1);
+            titleRow.Children.Add(titleText);
+
+            TextBlock statusText = new TextBlock { FontSize = 11 };
+            Border statusBadge = new Border
             {
-                Text = "하나만 선택 가능 - <없음>을 선택하면 이 프리셋은 뷰템플릿을 건드리지 않습니다.",
-                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
-            });
-            BuildViewTemplatePicker(cfg, vtPanel);
-            tabs.Items.Add(new TabItem { Header = "뷰템플릿", Content = vtPanel });
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(7, 2, 7, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = statusText,
+            };
+            WpfGrid.SetColumn(statusBadge, 2);
+            titleRow.Children.Add(statusBadge);
 
-            StackPanel filterPanel = new StackPanel { Margin = new Thickness(8) };
-            filterPanel.Children.Add(new TextBlock
+            _refreshEditTitle = () =>
             {
-                Text = "여러 개 선택 가능 - 비워두면 이 프리셋은 필터를 건드리지 않습니다.",
-                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
-            });
-            BuildFilterPicker(cfg, filterPanel);
-            tabs.Items.Add(new TabItem { Header = "필터", Content = filterPanel });
+                (Brush background, Brush borderBrush, Brush foreground) = PreviewVisualsFor(cfg);
+                chipHost.Child = new Border
+                {
+                    Width = 32,
+                    Height = 32,
+                    Background = background,
+                    BorderBrush = borderBrush,
+                    BorderThickness = new Thickness(1),
+                    Child = new Viewbox { Width = 18, Height = 15, Child = IconOf(cfg, foreground) },
+                };
+                titleName.Text = string.IsNullOrWhiteSpace(cfg.Name) ? "(이름 없음)" : cfg.Name;
+                titleKind.Text = CategoryLabel(cfg.Category) + " 버튼";
 
-            StackPanel worksetPanel = new StackPanel { Margin = new Thickness(8) };
-            worksetPanel.Children.Add(new TextBlock
-            {
-                Text = "여러 개 선택 가능 - 비워두면 이 프리셋은 작업세트를 건드리지 않습니다.",
-                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
-            });
-            BuildWorksetPicker(cfg, worksetPanel);
-            tabs.Items.Add(new TabItem { Header = "작업세트", Content = worksetPanel });
+                ButtonReadiness readiness = ReadinessOf(cfg);
+                bool ok = readiness == ButtonReadiness.Ready;
+                statusText.Text = readiness switch
+                {
+                    ButtonReadiness.Ready => "사용 준비됨",
+                    ButtonReadiness.NotInProject => "이 프로젝트에 없음",
+                    _ => "대상 미지정",
+                };
+                statusText.Foreground = ok ? Theme.ToggleOn : Theme.WarningText;
+                statusBadge.BorderBrush = ok ? Theme.ToggleOn : Theme.WarningText;
+                statusBadge.ToolTip = readiness switch
+                {
+                    ButtonReadiness.Ready => null,
+                    // 설정이 PC 전역이라 다른 프로젝트에서 만든 버튼이 그대로 따라온다 - 그 프로젝트에만
+                    // 있던 이름이면 여기서는 찾을 수 없고, 툴바에서도 회색으로 표시된다.
+                    ButtonReadiness.NotInProject =>
+                        "지정해 둔 대상 이름을 지금 열려 있는 프로젝트에서 찾지 못했습니다. " +
+                        "이 프로젝트에서는 회색으로 표시되고, 같은 이름이 있는 프로젝트에서는 그대로 동작합니다.",
+                    _ => "대상을 고르지 않으면 커스텀 버튼바에서 회색으로 표시되고 눌리지 않습니다.",
+                };
+            };
+            _refreshEditTitle();
 
-            tabs.Items.Add(new TabItem { Header = "모델 카테고리", Content = BuildPresetCategoryTab(cfg, "모델 카테고리", QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Model)) });
-            tabs.Items.Add(new TabItem { Header = "주석 카테고리", Content = BuildPresetCategoryTab(cfg, "주석 카테고리", QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Annotation)) });
-            tabs.Items.Add(new TabItem { Header = "해석 모델 카테고리", Content = BuildPresetCategoryTab(cfg, "해석 모델 카테고리", QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.AnalyticalModel)) });
-            tabs.Items.Add(new TabItem { Header = "가져온 카테고리", Content = BuildPresetCategoryTab(cfg, "가져온 카테고리", QuickToggleService.ImportedCategories(_doc)) });
-
-            if (_lastPresetTabIndex >= 0 && _lastPresetTabIndex < tabs.Items.Count) tabs.SelectedIndex = _lastPresetTabIndex;
-            tabs.SelectionChanged += (s, e) => { if (tabs.SelectedIndex >= 0) _lastPresetTabIndex = tabs.SelectedIndex; };
-
-            EditPanelHost.Children.Add(tabs);
+            return titleRow;
         }
 
-        // 마지막으로 보던 프리셋 탭 - 편집(체크박스/재정의 창) 후 BuildEditPanel이 통째로 다시 그려지므로,
-        // 이 값이 없으면 매번 첫 탭("뷰템플릿")으로 튕겨서 "카테고리 탭에서 체크했더니 다른 탭으로 이동한다"는
-        // 혼란을 준다. 이 창을 새로 열면 초기화되는 세션 한정 UI 상태.
-        private int _lastPresetTabIndex = 0;
+        // ===== ② 모양 (아이콘 / 켜짐 색상) =====
 
-        private UIElement BuildPresetCategoryTab(QuickToggleButtonConfig cfg, string groupLabel, List<Category> topCategories)
+        // 아이콘 12종 + 색 8종을 늘 펼쳐두면 그만큼 "③ 대상"이 밀린다(2026-07-27 피드백) - 기본은 접어서
+        // 현재 값만 요약으로 보여주고, "변경"을 눌렀을 때만 펼친다. 대상 선택 자체가 없는 링크 버튼은
+        // 접을 이유가 없으므로 항상 펼친 상태로 두고 토글 버튼도 감춘다.
+        private UIElement BuildAppearanceSection(QuickToggleButtonConfig cfg)
         {
-            StackPanel panel = new StackPanel { Margin = new Thickness(8) };
-            panel.Children.Add(new TextBlock
+            bool collapsible = HasTargetPicker(cfg.Category);
+
+            WpfGrid header = new WpfGrid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            UIElement stepHeader = CreateStepHeader(2, "모양", null);
+            WpfGrid.SetColumn(stepHeader, 0);
+            header.Children.Add(stepHeader);
+
+            StackPanel summary = new StackPanel
             {
-                Text = $"{groupLabel} - 포함시키면 프리셋이 켜질 때 표시/숨김과 아래에서 편집한 그래픽 재정의를 적용하고, " +
-                       "꺼지면 표시 상태로 되돌리며 재정의를 지웁니다.",
-                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(10, 0, 0, 6),
+            };
+            WpfGrid.SetColumn(summary, 1);
+            header.Children.Add(summary);
+
+            Border toggleGlyphHost = new Border { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
+            TextBlock toggleText = new TextBlock { Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.TextSecondary, FontSize = 11 };
+            StackPanel toggleContent = new StackPanel { Orientation = Orientation.Horizontal };
+            toggleContent.Children.Add(toggleGlyphHost);
+            toggleContent.Children.Add(toggleText);
+            Button toggleButton = new Button
+            {
+                Content = toggleContent,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(4, 2, 0, 2),
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 6),
+                Visibility = collapsible ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed,
+            };
+            WpfGrid.SetColumn(toggleButton, 2);
+            header.Children.Add(toggleButton);
+
+            StackPanel body = new StackPanel { Margin = new Thickness(26, 0, 0, 8) };
+
+            _refreshAppearanceSection = () =>
+                RenderAppearance(cfg, collapsible, summary, body, toggleGlyphHost, toggleText);
+            toggleButton.Click += (s, e) =>
+            {
+                _appearanceExpanded = !_appearanceExpanded;
+                _refreshAppearanceSection?.Invoke();
+            };
+            _refreshAppearanceSection();
+
+            StackPanel section = new StackPanel();
+            section.Children.Add(header);
+            section.Children.Add(body);
+            return section;
+        }
+
+        private void RenderAppearance(QuickToggleButtonConfig cfg, bool collapsible,
+            System.Windows.Controls.Panel summary, System.Windows.Controls.Panel body,
+            Border toggleGlyphHost, TextBlock toggleText)
+        {
+            bool expanded = !collapsible || _appearanceExpanded;
+            string colorLabel = ColorLabelFor(cfg.Category);
+            QuickToggleIconShape currentShape = cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category);
+            string currentColor = string.IsNullOrEmpty(cfg.OnColorHex)
+                ? QuickToggleButtonStyle.DefaultColorHexFor(cfg.Category)
+                : cfg.OnColorHex!;
+            bool isSmall = QuickToggleButtonStyle.IsSmall(cfg);
+
+            toggleGlyphHost.Child = CreateExpandGlyph(expanded);
+            toggleText.Text = expanded ? "접기" : "변경";
+
+            // --- 접힘 상태에서도 지금 무엇이 골라져 있는지는 항상 보인다 ---
+            summary.Children.Clear();
+            (Brush background, Brush borderBrush, Brush foreground) = PreviewVisualsFor(cfg);
+            summary.Children.Add(new Border
+            {
+                Width = 22,
+                Height = 22,
+                Background = background,
+                BorderBrush = borderBrush,
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new Viewbox { Width = 13, Height = 11, Child = IconOf(cfg, foreground) },
+            });
+            summary.Children.Add(new TextBlock
+            {
+                Text = QuickToggleIcons.LabelFor(currentShape),
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0),
+            });
+            summary.Children.Add(new Border
+            {
+                Width = 16,
+                Height = 16,
+                Background = OnColorBrush(cfg),
+                BorderBrush = Theme.Border,
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0),
+            });
+            summary.Children.Add(new TextBlock
+            {
+                Text = ColorNameOf(currentColor),
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0),
+            });
+            summary.Children.Add(new TextBlock
+            {
+                Text = isSmall ? "· 작은 버튼" : "· 큰 버튼",
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
             });
 
-            if (topCategories.Count == 0)
+            body.Children.Clear();
+            body.Visibility = expanded ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            if (!expanded) return;
+
+            body.Children.Add(new TextBlock { Text = "아이콘", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 2, 0, 4) });
+            WrapPanel iconRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+            foreach (QuickToggleIconShape shape in Enum.GetValues(typeof(QuickToggleIconShape)))
             {
-                panel.Children.Add(new TextBlock { Text = "이 그룹에 카테고리가 없습니다.", Foreground = Theme.TextSecondary });
-                return panel;
+                QuickToggleIconShape captured = shape;
+                bool isSelected = shape == currentShape;
+                Border swatch = new Border
+                {
+                    Width = 28,
+                    Height = 28,
+                    Margin = new Thickness(0, 0, 5, 5),
+                    BorderThickness = new Thickness(isSelected ? 2 : 1),
+                    BorderBrush = isSelected ? Theme.Accent : Theme.Border,
+                    Background = Theme.Surface,
+                    Cursor = Cursors.Hand,
+                    ToolTip = QuickToggleIcons.LabelFor(shape),
+                    Child = new Viewbox { Width = 17, Height = 14, Child = QuickToggleIcons.Create(shape, Theme.TextPrimary) },
+                };
+                swatch.MouseLeftButtonDown += (s, e) => { cfg.IconShape = captured; OnAppearanceChanged(); };
+                iconRow.Children.Add(swatch);
+            }
+            body.Children.Add(iconRow);
+
+            // 2026-09-05 추가: 버튼 크기 - "큰 버튼"은 아이콘과 이름이 함께 놓인 넓은 버튼,
+            // "작은 버튼"은 아이콘만 있는 정사각형이라 여러 개가 두 줄로 묶여 자리를 덜 차지한다.
+            // (기본값은 색상 버튼만 작은 버튼 - QuickToggleButtonStyle.IsSmall 참고)
+            body.Children.Add(new TextBlock { Text = "버튼 크기", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            StackPanel sizeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            sizeRow.Children.Add(CreateSizeChoice(cfg, "큰 버튼", "아이콘 + 이름", false, !isSmall));
+            sizeRow.Children.Add(CreateSizeChoice(cfg, "작은 버튼", "아이콘만, 두 줄로 묶임", true, isSmall));
+            body.Children.Add(sizeRow);
+
+            body.Children.Add(new TextBlock { Text = colorLabel, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            if (QuickToggleButtonStyle.IsActionButton(cfg.Category))
+            {
+                body.Children.Add(new TextBlock
+                {
+                    Text = "이 버튼은 켜짐/꺼짐이 없어 늘 이 색으로 칠해집니다.",
+                    Foreground = Theme.TextSecondary,
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 5),
+                });
+            }
+            WrapPanel colorRow = new WrapPanel();
+            foreach ((string hex, string name) in ColorPalette)
+            {
+                string capturedHex = hex;
+                bool isSelected = string.Equals(hex, currentColor, StringComparison.OrdinalIgnoreCase);
+                Border swatch = new Border
+                {
+                    Width = 24,
+                    Height = 24,
+                    Margin = new Thickness(0, 0, 5, 0),
+                    BorderThickness = new Thickness(isSelected ? 3 : 1),
+                    BorderBrush = isSelected ? Theme.TextPrimary : Theme.Border,
+                    Background = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(hex)),
+                    Cursor = Cursors.Hand,
+                    ToolTip = name,
+                };
+                swatch.MouseLeftButtonDown += (s, e) => { cfg.OnColorHex = capturedHex; OnAppearanceChanged(); };
+                colorRow.Children.Add(swatch);
+            }
+            body.Children.Add(colorRow);
+        }
+
+        // "큰 버튼 / 작은 버튼" 중 하나를 고르는 카드 - 아이콘 팔레트와 같은 선택 표현(굵은 테두리 +
+        // 강조색)을 써서 한 섹션 안에서 선택 규칙이 일관되게 보이도록 한다.
+        private Border CreateSizeChoice(QuickToggleButtonConfig cfg, string title, string hint, bool small, bool isSelected)
+        {
+            StackPanel content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontWeight = isSelected ? FontWeights.Bold : FontWeights.Normal,
+                Foreground = Theme.TextPrimary,
+                FontSize = 12,
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = hint,
+                Foreground = Theme.TextSecondary,
+                FontSize = 10,
+                Margin = new Thickness(0, 1, 0, 0),
+            });
+
+            Border card = new Border
+            {
+                Padding = new Thickness(9, 5, 9, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+                BorderThickness = new Thickness(isSelected ? 2 : 1),
+                BorderBrush = isSelected ? Theme.Accent : Theme.Border,
+                Background = Theme.Surface,
+                Cursor = Cursors.Hand,
+                Child = content,
+            };
+            card.MouseLeftButtonDown += (s, e) => { cfg.SmallButton = small; OnAppearanceChanged(); };
+            return card;
+        }
+
+        // 아이콘/색을 바꿨을 때 실제로 달라지는 것만 다시 그린다 - 예전처럼 BuildEditPanel로 전체를
+        // 다시 그리면 아래 대상 목록의 검색어와 스크롤 위치까지 함께 초기화된다.
+        private void OnAppearanceChanged()
+        {
+            _refreshAppearanceSection?.Invoke();
+            _refreshEditTitle?.Invoke();
+            RefreshButtonList();
+            RefreshPreviewStrip();
+        }
+
+        // 대상을 바꿨을 때(체크박스/라디오) - 요약 줄, 제목의 상태 뱃지, 왼쪽 목록, 미리보기만 갱신하고
+        // 목록 자체는 손대지 않는다(체크한 항목이 눈앞에서 사라지거나 스크롤이 튀지 않도록).
+        private void OnTargetChanged()
+        {
+            _refreshTargetSummary?.Invoke();
+            _refreshEditTitle?.Invoke();
+            RefreshButtonList();
+            RefreshPreviewStrip();
+        }
+
+        private static bool HasTargetPicker(QuickToggleCategory category) =>
+            category != QuickToggleCategory.LinkedCad && category != QuickToggleCategory.LinkedModel &&
+            category != QuickToggleCategory.LinkedAll;
+
+        // ===== ③ 대상: 공통 부품 =====
+
+        // 검색 입력칸 + 현재 선택 요약 + (여러 개 고르는 목록만) 전체 해제. 목록을 필터링할 때는 이 줄을
+        // 다시 만들지 않고 결과 패널만 다시 그려야 한다 - 안 그러면 한 글자 입력할 때마다 입력칸 자체가
+        // 새 인스턴스로 교체되어 포커스가 끊긴다(2026-07-30에 이미 겪은 함정).
+        private static WpfGrid BuildSearchRow(out TextBox searchBox, out TextBlock summaryLabel, out Button clearButton)
+        {
+            WpfGrid row = new WpfGrid { Margin = new Thickness(26, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            TextBlock label = new TextBlock
+            {
+                Text = "검색",
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Theme.TextSecondary,
+                Margin = new Thickness(0, 0, 6, 0),
+            };
+            WpfGrid.SetColumn(label, 0);
+            row.Children.Add(label);
+
+            TextBox box = new TextBox { Width = 180, VerticalContentAlignment = VerticalAlignment.Center };
+            WpfGrid.SetColumn(box, 1);
+            row.Children.Add(box);
+
+            TextBlock summary = new TextBlock
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(10, 0, 8, 0),
+            };
+            WpfGrid.SetColumn(summary, 2);
+            row.Children.Add(summary);
+
+            Button clear = new Button
+            {
+                Content = "전체 해제",
+                Padding = new Thickness(8, 2, 8, 2),
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = System.Windows.Visibility.Collapsed,
+            };
+            WpfGrid.SetColumn(clear, 3);
+            row.Children.Add(clear);
+
+            searchBox = box;
+            summaryLabel = summary;
+            clearButton = clear;
+            return row;
+        }
+
+        private static bool MatchesSearch(string name, string filter) =>
+            string.IsNullOrEmpty(filter) || name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        private static StackPanel CreateResultsHost() => new StackPanel { Margin = new Thickness(26, 0, 0, 0) };
+
+        // "③ 대상" 위에 붙는 설명.
+        //
+        // 2026-09-17 실측 피드백: *"단면상자 기능에 '3.잘라 볼 레벨 두 개' 밑에 설명이 너무 많아서 아래에
+        // 레벨을 선택하는 영역이 너무 작아 굉장히 불편하다. 다른 기능에도 저런 부분 있으면 불편하지 않도록
+        // 개선해 달라."* 설명이 네 줄씩 자리를 차지하는 바람에 정작 고르는 목록이 쪼그라들어 있었다.
+        //
+        // 고정: **긴 설명은 한 줄 요약 + "자세히"로 접어 둔다.** 이 함수 하나만 고치면 이 창의 모든 설명
+        // (층 범위·색상 카테고리·기능 검색)에 한꺼번에 적용된다 - 그래서 각 기능마다 따로 손대지 않았다.
+        // 짧은 설명은 접을 이유가 없으므로 예전처럼 그냥 보여준다.
+        //
+        // 펼침 상태는 창이 열려 있는 동안 공유한다 - 설명을 보고 싶은 사람은 한 번만 펼치면 다른 버튼을
+        // 골라도 계속 펼쳐져 있고, 평소에는 목록이 넓게 보인다.
+        private bool _notesExpanded;
+
+        private UIElement CreateNote(string text)
+        {
+            SplitNote(text, out string summary, out string rest);
+
+            if (string.IsNullOrEmpty(rest))
+            {
+                return new TextBlock
+                {
+                    Text = text,
+                    Foreground = Theme.TextSecondary,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(26, 0, 0, 8),
+                };
             }
 
-            StackPanel resultsPanel = new StackPanel();
-            panel.Children.Add(BuildSearchRow(out TextBox searchBox));
-            panel.Children.Add(resultsPanel);
-            searchBox.TextChanged += (s, e) => RenderCategoryList(cfg, resultsPanel, topCategories, searchBox.Text, isColorTool: false);
-            RenderCategoryList(cfg, resultsPanel, topCategories, "", isColorTool: false);
+            StackPanel host = new StackPanel { Margin = new Thickness(26, 0, 0, 8) };
 
-            return panel;
+            WpfGrid header = new WpfGrid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            TextBlock line = new TextBlock
+            {
+                Text = summary,
+                Foreground = Theme.TextSecondary,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            WpfGrid.SetColumn(line, 0);
+            header.Children.Add(line);
+
+            TextBlock toggleText = new TextBlock
+            {
+                Margin = new Thickness(5, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Theme.TextSecondary,
+                FontSize = 11,
+            };
+            Border toggleGlyphHost = new Border { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
+            StackPanel toggleContent = new StackPanel { Orientation = Orientation.Horizontal };
+            toggleContent.Children.Add(toggleGlyphHost);
+            toggleContent.Children.Add(toggleText);
+            Button toggle = new Button
+            {
+                Content = toggleContent,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(6, 0, 0, 0),
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            WpfGrid.SetColumn(toggle, 1);
+            header.Children.Add(toggle);
+
+            TextBlock full = new TextBlock
+            {
+                Text = text,
+                Foreground = Theme.TextSecondary,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+
+            host.Children.Add(header);
+            host.Children.Add(full);
+
+            void Render()
+            {
+                toggleGlyphHost.Child = CreateExpandGlyph(_notesExpanded);
+                toggleText.Text = _notesExpanded ? "접기" : "자세히";
+                full.Visibility = _notesExpanded ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+                // 펼쳤을 때는 같은 내용이 두 번 보이지 않도록 요약 줄을 감춘다.
+                line.Visibility = _notesExpanded ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+            }
+
+            toggle.Click += (s, e) =>
+            {
+                _notesExpanded = !_notesExpanded;
+                // 지금 화면에 떠 있는 설명 전부가 같이 열리고 닫혀야 한다 - 편집 영역을 다시 그린다.
+                if (_selected != null) SelectButton(_selected);
+            };
+
+            Render();
+            return host;
+        }
+
+        // 첫 문장(또는 첫 줄)만 요약으로 쓰고 나머지는 접는다. 나머지가 얼마 안 되면 접을 가치가 없다.
+        private static void SplitNote(string text, out string summary, out string rest)
+        {
+            summary = text;
+            rest = "";
+            if (string.IsNullOrEmpty(text)) return;
+
+            int cut = text.IndexOf('\n');
+            if (cut < 0)
+            {
+                int period = text.IndexOf(". ", StringComparison.Ordinal);
+                int korean = text.IndexOf("다. ", StringComparison.Ordinal);
+                if (korean >= 0) cut = korean + 2;
+                else if (period >= 0) cut = period + 1;
+            }
+
+            if (cut <= 0 || cut >= text.Length - 10) return;   // 접어도 얻는 게 없다
+            summary = text.Substring(0, cut).Trim();
+            rest = text.Substring(cut).Trim();
+        }
+
+        private static TextBlock CreateEmptyResult(string text) => new TextBlock
+        {
+            Text = text,
+            Foreground = Theme.TextSecondary,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+
+        // ===== ③ 대상: 링크 버튼 (고를 대상이 없음) =====
+
+        private void BuildLinkedInfo(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
+        {
+            string what;
+            string caveat;
+            switch (cfg.Category)
+            {
+                case QuickToggleCategory.LinkedAll:
+                    what = "커스텀 버튼바에서 누르면 지금 보고 있는 뷰의 링크를 종류에 상관없이 전부 한 번에 끄고, " +
+                           "다시 누르면 켭니다 - 링크된 CAD 도면, Revit 모델, IFC, 지형(지형솔리드) 링크, " +
+                           "DWF 마크업, 포인트 클라우드, 외부 좌표 모델이 대상입니다.";
+                    caveat = "Revit의 가시성/그래픽 설정에서 그 카테고리들을 끄고 켜는 것과 같은 동작이라 V/G 대화상자에서도 " +
+                             "그대로 확인·복구할 수 있습니다. 이 뷰에 링크가 하나도 없으면 버튼이 회색(비활성)으로 표시됩니다. " +
+                             "'링크된 모델만' 버튼으로 링크 하나만 따로 꺼 둔 것이 있으면, 이 버튼으로 전체를 켜도 그 링크는 꺼진 채로 남습니다.";
+                    break;
+
+                case QuickToggleCategory.LinkedCad:
+                    what = "커스텀 버튼바에서 누르면 지금 보고 있는 뷰에 링크된 CAD 도면을 한 번에 끄고, 다시 누르면 켭니다" +
+                           "(Revit의 가시성/그래픽 설정 - '가져온 카테고리'를 끄고 켜는 것과 같습니다). DWF 마크업도 Revit에서 " +
+                           "같은 '가져온 카테고리'로 들어오므로 함께 꺼지고 켜집니다.";
+                    caveat = "링크된 도면이 없는 뷰에서는 버튼이 회색(비활성)으로 표시됩니다. 도면을 '링크'가 아니라 '가져오기'로 넣은 경우는 대상이 아닙니다.";
+                    break;
+
+                default:
+                    what = "커스텀 버튼바에서 누르면 지금 보고 있는 뷰에 링크된 Revit 모델 목록이 열리고, 거기서 링크를 " +
+                           "하나씩 끄고 켤 수 있습니다('전체 켜기'/'전체 끄기' 버튼도 있습니다). IFC 링크는 Revit이 내부적으로 " +
+                           "Revit 링크로 만들기 때문에 이 목록에 함께 나옵니다.";
+                    caveat = "링크된 모델이 없는 뷰에서는 버튼이 회색(비활성)으로 표시됩니다. 버튼 색은 지금 이 뷰에 보이는 링크가 하나라도 있는지를 알려줍니다.";
+                    break;
+            }
+
+            Border note = new Border
+            {
+                BorderBrush = Theme.Border,
+                BorderThickness = new Thickness(1),
+                // 이 안내 상자는 Surface 배경 카드 안에 들어가므로 창 바탕색으로 칠해야 구분된다.
+                Background = Theme.WindowBackground,
+                Padding = new Thickness(12),
+                Margin = new Thickness(26, 0, 0, 0),
+            };
+            StackPanel content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = what,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8),
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = caveat,
+                Foreground = Theme.TextSecondary,
+                TextWrapping = TextWrapping.Wrap,
+            });
+            note.Child = content;
+            target.Children.Add(note);
+        }
+
+        // ===== ③ 대상: 뷰템플릿 =====
+
+        private void BuildViewTemplatePicker(QuickToggleButtonConfig cfg,
+            System.Windows.Controls.Panel headerHost, System.Windows.Controls.Panel scrollHost)
+        {
+            StackPanel results = CreateResultsHost();
+            headerHost.Children.Add(BuildSearchRow(out TextBox searchBox, out TextBlock summary, out Button clearButton));
+            scrollHost.Children.Add(results);
+
+            _refreshTargetSummary = () => summary.Text = "현재 선택: " +
+                (string.IsNullOrEmpty(cfg.ViewTemplateName)
+                    ? (cfg.ViewTemplateId == null ? "없음" : "뷰템플릿 1개")
+                    : cfg.ViewTemplateName!);
+            _refreshTargetSummary();
+
+            searchBox.TextChanged += (s, e) => RenderViewTemplateList(cfg, results, searchBox.Text);
+            RenderViewTemplateList(cfg, results, "");
+        }
+
+        private void RenderViewTemplateList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        {
+            resultsPanel.Children.Clear();
+
+            // <없음>은 검색어와 무관하게 항상 보여준다 - 이름으로 검색할 대상이 아니라 "선택 해제"라는
+            // 별도 기능이라서.
+            bool noneSelected = cfg.ViewTemplateId == null && string.IsNullOrEmpty(cfg.ViewTemplateName);
+            RadioButton noneRadio = new RadioButton { Content = "<없음>", GroupName = "vt_" + cfg.Id, IsChecked = noneSelected, Margin = new Thickness(0, 3, 0, 3) };
+            noneRadio.Checked += (s, e) => { cfg.ViewTemplateId = null; cfg.ViewTemplateName = null; OnTargetChanged(); };
+            resultsPanel.Children.Add(noneRadio);
+
+            bool any = false;
+            foreach (View vt in _viewTemplates.Where(v => MatchesSearch(v.Name, filter)))
+            {
+                any = true;
+                int id = vt.Id.ToInt();
+                string name = vt.Name;
+                // 저장된 ElementId가 아니라 이름으로 맞춰본다 - 설정이 PC 전역이라(2026-09-03) 다른
+                // 프로젝트에서 만든 버튼은 ID가 이 문서와 전혀 맞지 않는다.
+                RadioButton r = new RadioButton { Content = vt.Name, GroupName = "vt_" + cfg.Id, IsChecked = cfg.ViewTemplateName == name, Margin = new Thickness(0, 3, 0, 3) };
+                r.Checked += (s, e) => { cfg.ViewTemplateId = id; cfg.ViewTemplateName = name; OnTargetChanged(); };
+                resultsPanel.Children.Add(r);
+            }
+
+            if (_viewTemplates.Count == 0)
+                resultsPanel.Children.Add(CreateEmptyResult("이 문서에 뷰템플릿이 없습니다."));
+            else if (!any && !string.IsNullOrEmpty(filter))
+                resultsPanel.Children.Add(CreateEmptyResult("검색 결과가 없습니다."));
+        }
+
+        // ===== ③ 대상: 필터 =====
+
+        private void BuildFilterPicker(QuickToggleButtonConfig cfg,
+            System.Windows.Controls.Panel headerHost, System.Windows.Controls.Panel scrollHost)
+        {
+            StackPanel results = CreateResultsHost();
+            headerHost.Children.Add(BuildSearchRow(out TextBox searchBox, out TextBlock summary, out Button clearButton));
+            scrollHost.Children.Add(results);
+
+            _refreshTargetSummary = () =>
+            {
+                summary.Text = "선택됨 " + cfg.FilterNames.Count + "개";
+                clearButton.Visibility = cfg.FilterNames.Count > 0
+                    ? System.Windows.Visibility.Visible
+                    : System.Windows.Visibility.Collapsed;
+            };
+            _refreshTargetSummary();
+
+            clearButton.Click += (s, e) =>
+            {
+                cfg.FilterIds.Clear();
+                cfg.FilterNames.Clear();
+                RenderFilterList(cfg, results, searchBox.Text);
+                OnTargetChanged();
+            };
+            searchBox.TextChanged += (s, e) => RenderFilterList(cfg, results, searchBox.Text);
+            RenderFilterList(cfg, results, "");
+        }
+
+        private void RenderFilterList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        {
+            resultsPanel.Children.Clear();
+
+            bool any = false;
+            foreach (ParameterFilterElement f in _filters.Where(f => MatchesSearch(f.Name, filter)))
+            {
+                any = true;
+                int id = f.Id.ToInt();
+                string name = f.Name;
+                CheckBox cb = new CheckBox { Content = f.Name, IsChecked = cfg.FilterNames.Contains(name), Margin = new Thickness(0, 3, 0, 3) };
+                cb.Checked += (s, e) =>
+                {
+                    if (!cfg.FilterIds.Contains(id)) cfg.FilterIds.Add(id);
+                    if (!cfg.FilterNames.Contains(name)) cfg.FilterNames.Add(name);
+                    OnTargetChanged();
+                };
+                cb.Unchecked += (s, e) => { cfg.FilterIds.Remove(id); cfg.FilterNames.Remove(name); OnTargetChanged(); };
+                resultsPanel.Children.Add(cb);
+            }
+
+            if (_filters.Count == 0)
+                resultsPanel.Children.Add(CreateEmptyResult("이 문서에 필터가 없습니다."));
+            else if (!any && !string.IsNullOrEmpty(filter))
+                resultsPanel.Children.Add(CreateEmptyResult("검색 결과가 없습니다."));
+        }
+
+        // ===== ③ 대상: 작업세트 =====
+
+        private void BuildWorksetPicker(QuickToggleButtonConfig cfg,
+            System.Windows.Controls.Panel headerHost, System.Windows.Controls.Panel scrollHost)
+        {
+            if (!_isWorkshared)
+            {
+                scrollHost.Children.Add(new TextBlock
+                {
+                    Text = "이 문서는 작업공유(워크셰어링)가 설정되어 있지 않아 작업세트를 고를 수 없습니다.",
+                    Foreground = Theme.WarningText,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(26, 0, 0, 0),
+                });
+                return;
+            }
+
+            StackPanel results = CreateResultsHost();
+            headerHost.Children.Add(BuildSearchRow(out TextBox searchBox, out TextBlock summary, out Button clearButton));
+            scrollHost.Children.Add(results);
+
+            _refreshTargetSummary = () =>
+            {
+                summary.Text = "선택됨 " + cfg.WorksetNames.Count + "개";
+                clearButton.Visibility = cfg.WorksetNames.Count > 0
+                    ? System.Windows.Visibility.Visible
+                    : System.Windows.Visibility.Collapsed;
+            };
+            _refreshTargetSummary();
+
+            clearButton.Click += (s, e) =>
+            {
+                cfg.WorksetIds.Clear();
+                cfg.WorksetNames.Clear();
+                RenderWorksetList(cfg, results, searchBox.Text);
+                OnTargetChanged();
+            };
+            searchBox.TextChanged += (s, e) => RenderWorksetList(cfg, results, searchBox.Text);
+            RenderWorksetList(cfg, results, "");
+        }
+
+        private void RenderWorksetList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        {
+            resultsPanel.Children.Clear();
+
+            bool any = false;
+            foreach (Workset w in _worksets.Where(w => MatchesSearch(w.Name, filter)))
+            {
+                any = true;
+                int id = w.Id.IntegerValue;
+                string name = w.Name;
+                CheckBox cb = new CheckBox { Content = w.Name, IsChecked = cfg.WorksetNames.Contains(name), Margin = new Thickness(0, 3, 0, 3) };
+                cb.Checked += (s, e) =>
+                {
+                    if (!cfg.WorksetIds.Contains(id)) cfg.WorksetIds.Add(id);
+                    if (!cfg.WorksetNames.Contains(name)) cfg.WorksetNames.Add(name);
+                    OnTargetChanged();
+                };
+                cb.Unchecked += (s, e) => { cfg.WorksetIds.Remove(id); cfg.WorksetNames.Remove(name); OnTargetChanged(); };
+                resultsPanel.Children.Add(cb);
+            }
+
+            if (_worksets.Count == 0)
+                resultsPanel.Children.Add(CreateEmptyResult("이 문서에 사용자 작업세트가 없습니다."));
+            else if (!any && !string.IsNullOrEmpty(filter))
+                resultsPanel.Children.Add(CreateEmptyResult("검색 결과가 없습니다."));
+        }
+
+        // ===== ③ 대상: 색상 버튼의 모델 카테고리 트리 =====
+
+        private void BuildColorToolPicker(QuickToggleButtonConfig cfg,
+            System.Windows.Controls.Panel headerHost, System.Windows.Controls.Panel scrollHost)
+        {
+            headerHost.Children.Add(CreateNote(
+                "실제 색상/투명도 값은 저장하지 않습니다 - 여기서는 '어떤 모델 카테고리에 적용할지'만 고르고, " +
+                "색과 투명도는 커스텀 버튼바에서 이 버튼을 눌렀을 때 뜨는 패널에서 그때그때 조절합니다."));
+
+            List<Category> topCategories = QuickToggleService.TopLevelCategoriesOfType(_doc, CategoryType.Model);
+            StackPanel results = CreateResultsHost();
+            headerHost.Children.Add(BuildSearchRow(out TextBox searchBox, out TextBlock summary, out Button clearButton));
+            scrollHost.Children.Add(results);
+
+            _refreshTargetSummary = () =>
+            {
+                summary.Text = "선택됨 " + cfg.ColorButtonCategories.Count + "개";
+                clearButton.Visibility = cfg.ColorButtonCategories.Count > 0
+                    ? System.Windows.Visibility.Visible
+                    : System.Windows.Visibility.Collapsed;
+            };
+            _refreshTargetSummary();
+
+            clearButton.Click += (s, e) =>
+            {
+                cfg.ColorButtonCategories.Clear();
+                RenderCategoryList(cfg, results, topCategories, searchBox.Text);
+                OnTargetChanged();
+            };
+            searchBox.TextChanged += (s, e) => RenderCategoryList(cfg, results, topCategories, searchBox.Text);
+            RenderCategoryList(cfg, results, topCategories, "");
         }
 
         // 2026-07-30, "대상을 선택할 때 검색할 수 있는 입력칸" 요청으로 추가 - 검색어가 비어있으면 기존
         // 트리(펼침/접힘) 그대로 보여주고, 검색어가 있으면 깊이와 무관하게 이름이 일치하는 카테고리를
-        // 평평하게 나열한다(하위 카테고리를 찾으려고 매번 상위를 펼쳐야 하는 불편을 없애기 위함). 프리셋의
-        // 카테고리(V/G) 탭과 색상 버튼의 카테고리 선택이 이 메서드 하나를 공유한다 - 목록을 그리는 로직
-        // 자체(BuildCategoryRow/BuildColorToolCategoryRow)는 그대로 두고 어떤 카테고리 집합을 넘길지만 다르다.
-        private void RenderCategoryList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, List<Category> topCategories, string filter, bool isColorTool)
+        // 평평하게 나열한다(하위 카테고리를 찾으려고 매번 상위를 펼쳐야 하는 불편을 없애기 위함).
+        private void RenderCategoryList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel,
+            List<Category> topCategories, string filter)
         {
             resultsPanel.Children.Clear();
+
+            // 펼침/접힘 토글이 목록만 다시 그리도록 자기 자신을 넘긴다 - 예전엔 BuildEditPanel로 편집
+            // 패널 전체를 다시 그려서 검색어까지 날아갔다.
+            void Rerender() => RenderCategoryList(cfg, resultsPanel, topCategories, filter);
 
             if (string.IsNullOrEmpty(filter))
             {
                 foreach (Category top in topCategories)
-                    resultsPanel.Children.Add(isColorTool ? BuildColorToolCategoryRow(cfg, top, 0) : BuildCategoryRow(cfg, top, 0));
+                    resultsPanel.Children.Add(BuildColorToolCategoryRow(cfg, top, 0, Rerender));
                 return;
             }
 
@@ -396,33 +2219,17 @@ namespace WallSplitter
 
             if (flatMatches.Count == 0)
             {
-                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
+                resultsPanel.Children.Add(CreateEmptyResult("검색 결과가 없습니다."));
                 return;
             }
 
             foreach (Category cat in flatMatches.OrderBy(c => c.Name))
-                resultsPanel.Children.Add(isColorTool ? BuildColorToolCategoryRow(cfg, cat, 0) : BuildCategoryRow(cfg, cat, 0));
+                resultsPanel.Children.Add(BuildColorToolCategoryRow(cfg, cat, 0, Rerender));
         }
 
-        // 검색 입력칸 한 줄 - 뷰템플릿/필터/작업세트 목록, 카테고리 트리(프리셋/색상 버튼)가 전부 이 UI를
-        // 공유한다("대상을 선택할 때 검색할 수 있는 입력칸을 작게 하나 만들어줘" 요청, 2026-07-30). 목록을
-        // 필터링할 때는 이 검색 입력칸을 포함한 전체를 다시 그리지 않고 결과 패널만 다시 그려야 한다 -
-        // 안 그러면 한 글자 입력할 때마다 입력칸 자체가 새로 만들어져 포커스가 끊긴다(이 창의 다른 곳,
-        // QuickToggleToolbar의 "매 틱 재대입" 버그와 근본적으로 같은 종류의 함정).
-        private static StackPanel BuildSearchRow(out TextBox searchBox)
-        {
-            StackPanel row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            row.Children.Add(new TextBlock { Text = "검색", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.TextSecondary, Margin = new Thickness(0, 0, 6, 0) });
-            TextBox box = new TextBox { Width = 140 };
-            row.Children.Add(box);
-            searchBox = box;
-            return row;
-        }
-
-        private static bool MatchesSearch(string name, string filter) =>
-            string.IsNullOrEmpty(filter) || name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
-
-        private UIElement BuildCategoryRow(QuickToggleButtonConfig cfg, Category category, int depth)
+        // 색상 버튼의 대상 카테고리 트리 - 체크박스로 포함 여부만 고른다(실제 색상/투명도 값은
+        // 여기서 정하지 않고 툴바에서 이 버튼을 눌렀을 때 뜨는 팝업에서 그때그때 고르므로).
+        private UIElement BuildColorToolCategoryRow(QuickToggleButtonConfig cfg, Category category, int depth, Action rerender)
         {
             StackPanel container = new StackPanel();
             int catId = category.Id.ToInt();
@@ -431,117 +2238,7 @@ namespace WallSplitter
             bool expanded = _expandedCategoryIds.Contains(catId);
 
             WpfGrid row = new WpfGrid { Margin = new Thickness(depth * 18, 1, 0, 1) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            if (hasChildren)
-            {
-                Button expandButton = new Button
-                {
-                    Content = CreateExpandGlyph(expanded),
-                    Width = 18, Height = 18, Padding = new Thickness(3),
-                    Background = Brushes.Transparent, BorderThickness = new Thickness(0),
-                };
-                expandButton.Click += (s, e) =>
-                {
-                    if (expanded) _expandedCategoryIds.Remove(catId); else _expandedCategoryIds.Add(catId);
-                    BuildEditPanel(cfg);
-                };
-                WpfGrid.SetColumn(expandButton, 0);
-                row.Children.Add(expandButton);
-            }
-
-            CategoryOverrideConfig? existing = cfg.CategoryOverrides.FirstOrDefault(c => c.CategoryId == catId);
-            CheckBox includeBox = new CheckBox { IsChecked = existing != null, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 4, 0) };
-            WpfGrid.SetColumn(includeBox, 1);
-            row.Children.Add(includeBox);
-
-            TextBlock label = new TextBlock
-            {
-                Text = existing == null ? category.Name : category.Name + SummarizeOverride(existing),
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            };
-            WpfGrid.SetColumn(label, 2);
-            row.Children.Add(label);
-
-            Button editButton = new Button { Content = "편집", Padding = new Thickness(8, 2, 8, 2), IsEnabled = existing != null };
-            editButton.Click += (s, e) =>
-            {
-                CategoryOverrideConfig current = cfg.CategoryOverrides.First(c => c.CategoryId == catId);
-                CategoryOverrideEditWindow dlg = new CategoryOverrideEditWindow(_doc, category, current.Clone()) { Owner = this };
-                if (dlg.ShowDialog() == true && dlg.Result != null)
-                {
-                    int idx = cfg.CategoryOverrides.FindIndex(c => c.CategoryId == catId);
-                    cfg.CategoryOverrides[idx] = dlg.Result;
-                    BuildEditPanel(cfg);
-                }
-            };
-            WpfGrid.SetColumn(editButton, 3);
-            row.Children.Add(editButton);
-
-            includeBox.Checked += (s, e) =>
-            {
-                if (cfg.CategoryOverrides.Any(c => c.CategoryId == catId)) return;
-                // 기본값: 표시=false(숨김) - 프리셋에 카테고리를 포함시키는 가장 흔한 목적이 "이 프리셋이
-                // 켜지면 이 카테고리를 숨긴다"이므로, 체크만 해도 바로 의미 있는 동작을 하도록 했다. 더
-                // 세밀한 재정의(선/패턴/투명도 등)는 "편집" 버튼에서 추가로 설정한다.
-                cfg.CategoryOverrides.Add(new CategoryOverrideConfig
-                {
-                    CategoryId = catId,
-                    CategoryName = category.Name,
-                    ParentCategoryName = category.Parent?.Name,
-                    Visible = false,
-                });
-                BuildEditPanel(cfg);
-            };
-            includeBox.Unchecked += (s, e) =>
-            {
-                cfg.CategoryOverrides.RemoveAll(c => c.CategoryId == catId);
-                BuildEditPanel(cfg);
-            };
-
-            container.Children.Add(row);
-
-            if (hasChildren && expanded)
-                foreach (Category sub in subs)
-                    container.Children.Add(BuildCategoryRow(cfg, sub, depth + 1));
-
-            return container;
-        }
-
-        // 접었다 펼치지 않고도 목록에서 바로 뭐가 설정됐는지 알 수 있도록 짧은 요약을 붙인다 - 카테고리가
-        // 많을 때 하나하나 "편집"을 눌러보지 않아도 되게 하기 위함.
-        private static string SummarizeOverride(CategoryOverrideConfig co)
-        {
-            List<string> parts = new List<string>();
-            if (co.Visible == false) parts.Add("숨김");
-            else if (co.Visible == true) parts.Add("표시");
-            if (co.Halftone == true) parts.Add("하프톤");
-            if (co.Transparency.HasValue) parts.Add($"투명도 {co.Transparency}%");
-            if (co.ProjectionLineColor.HasValue || co.ProjectionLineWeight.HasValue || co.ProjectionLinePatternName != null) parts.Add("투영선 재정의");
-            if (co.CutLineColor.HasValue || co.CutLineWeight.HasValue || co.CutLinePatternName != null) parts.Add("절단선 재정의");
-            if (co.SurfaceForegroundPatternName != null || co.SurfaceBackgroundPatternName != null) parts.Add("표면패턴 재정의");
-            if (co.CutForegroundPatternName != null || co.CutBackgroundPatternName != null) parts.Add("절단패턴 재정의");
-            return parts.Count == 0 ? "" : "  —  " + string.Join(", ", parts);
-        }
-
-        // 색상 버튼 설정 - BuildCategoryRow와 거의 같은 모양이지만 훨씬 단순하다(체크박스만, "편집" 버튼도
-        // 재정의 요약도 없음 - 실제 색상/투명도 값은 여기서 정하지 않고 툴바 팝업에서 그때그때 고르므로).
-        // 별도 메서드로 둔 이유는 이 코드베이스의 "작은 UI는 공유 대신 복제" 관례와, 프리셋의 카테고리
-        // 트리(BuildCategoryRow)를 이 단순한 용도 때문에 매개변수로 복잡하게 만들고 싶지 않아서다.
-        private UIElement BuildColorToolCategoryRow(QuickToggleButtonConfig cfg, Category category, int depth)
-        {
-            StackPanel container = new StackPanel();
-            int catId = category.Id.ToInt();
-            List<Category> subs = QuickToggleService.SubCategoriesOf(category);
-            bool hasChildren = subs.Count > 0;
-            bool expanded = _expandedCategoryIds.Contains(catId);
-
-            WpfGrid row = new WpfGrid { Margin = new Thickness(depth * 18, 1, 0, 1) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -550,13 +2247,18 @@ namespace WallSplitter
                 Button expandButton = new Button
                 {
                     Content = CreateExpandGlyph(expanded),
-                    Width = 18, Height = 18, Padding = new Thickness(3),
-                    Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                    Width = 18,
+                    Height = 18,
+                    Padding = new Thickness(3),
+                    Background = Brushes.Transparent,
+                    BorderThickness = new Thickness(0),
+                    Cursor = Cursors.Hand,
+                    ToolTip = expanded ? "하위 카테고리 접기" : "하위 카테고리 펼치기",
                 };
                 expandButton.Click += (s, e) =>
                 {
                     if (expanded) _expandedCategoryIds.Remove(catId); else _expandedCategoryIds.Add(catId);
-                    BuildEditPanel(cfg);
+                    rerender();
                 };
                 WpfGrid.SetColumn(expandButton, 0);
                 row.Children.Add(expandButton);
@@ -565,7 +2267,7 @@ namespace WallSplitter
             CheckBox includeBox = new CheckBox
             {
                 Content = category.Name,
-                IsChecked = cfg.ColorButtonCategories.Any(c => c.CategoryId == catId),
+                IsChecked = cfg.ColorButtonCategories.Any(c => c.CategoryName == category.Name && (c.ParentCategoryName ?? "") == (category.Parent?.Name ?? "")),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(2, 0, 4, 0),
             };
@@ -574,23 +2276,136 @@ namespace WallSplitter
 
             includeBox.Checked += (s, e) =>
             {
-                if (cfg.ColorButtonCategories.Any(c => c.CategoryId == catId)) return;
-                cfg.ColorButtonCategories.Add(new CategoryOverrideConfig
+                if (cfg.ColorButtonCategories.Any(c => c.CategoryName == category.Name && (c.ParentCategoryName ?? "") == (category.Parent?.Name ?? ""))) return;
+                cfg.ColorButtonCategories.Add(new ColorToolCategoryConfig
                 {
                     CategoryId = catId,
                     CategoryName = category.Name,
                     ParentCategoryName = category.Parent?.Name,
                 });
+                OnTargetChanged();
             };
-            includeBox.Unchecked += (s, e) => { cfg.ColorButtonCategories.RemoveAll(c => c.CategoryId == catId); };
+            includeBox.Unchecked += (s, e) =>
+            {
+                cfg.ColorButtonCategories.RemoveAll(c => c.CategoryName == category.Name && (c.ParentCategoryName ?? "") == (category.Parent?.Name ?? ""));
+                OnTargetChanged();
+            };
 
             container.Children.Add(row);
 
             if (hasChildren && expanded)
                 foreach (Category sub in subs)
-                    container.Children.Add(BuildColorToolCategoryRow(cfg, sub, depth + 1));
+                    container.Children.Add(BuildColorToolCategoryRow(cfg, sub, depth + 1, rerender));
 
             return container;
+        }
+
+        // ===== ③ 대상: 기능 버튼 (2026-08-03 추가) =====
+
+        // Sunny Tools 자체 명령은 개수가 적어(SunnyToolsCommands.All) 검색어 없이 항상 보여주고, Revit
+        // 기본 명령(PostableCommand)은 수백 개라 검색어를 입력해야만 나타난다(SunnyToolsCommands.
+        // SearchNativeCommands) - 필터 없이 전부 그리면 창이 느려지고 오히려 원하는 걸 찾기 어렵다.
+        private void BuildCommandPicker(QuickToggleButtonConfig cfg,
+            System.Windows.Controls.Panel headerHost, System.Windows.Controls.Panel scrollHost)
+        {
+            headerHost.Children.Add(CreateNote(
+                "Sunny Tools 자체 기능은 아래 목록에 항상 나타나고, Revit 기본 기능은 한글과 영문 중 어느 쪽으로 " +
+                "검색해도 찾을 수 있습니다. 결과 이름은 현재 Revit 언어로 표시됩니다."));
+
+            StackPanel results = CreateResultsHost();
+            headerHost.Children.Add(BuildSearchRow(out TextBox searchBox, out TextBlock summary, out Button clearButton));
+            scrollHost.Children.Add(results);
+
+            // 검색어를 바꾸면 고른 항목이 결과 목록에서 사라질 수 있어(예: NAMER를 고른 뒤 "동기화"로
+            // 검색하면 그 라디오가 안 보임) 현재 선택을 항상 요약 줄에 띄워 시각적으로 잃어버리지 않게 한다.
+            _refreshTargetSummary = () =>
+            {
+                string displayLabel = SunnyToolsCommands.DisplayLabelFor(
+                    cfg.CommandKind, cfg.CommandId, _revitLanguage, cfg.CommandLabel);
+                summary.Text = "현재 선택: " + (string.IsNullOrEmpty(displayLabel) ? "(아직 없음)" : displayLabel);
+            };
+            _refreshTargetSummary();
+
+            searchBox.TextChanged += (s, e) => RenderCommandList(cfg, results, searchBox.Text);
+            RenderCommandList(cfg, results, "");
+        }
+
+        private void RenderCommandList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        {
+            resultsPanel.Children.Clear();
+
+            resultsPanel.Children.Add(new TextBlock { Text = "Sunny Tools", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
+            List<(string Label, string ClassName)> sunnyMatches = SunnyToolsCommands.All.Where(c => MatchesSearch(c.Label, filter)).ToList();
+            if (sunnyMatches.Count == 0)
+            {
+                resultsPanel.Children.Add(CreateEmptyResult("검색 결과가 없습니다."));
+            }
+            else
+            {
+                foreach ((string label, string className) in sunnyMatches)
+                    AddCommandRadio(cfg, resultsPanel, QuickToggleCommandKind.SunnyTool, className, label);
+            }
+
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                resultsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Revit 기본 기능 - 개수가 매우 많아 검색어를 입력해야 표시됩니다 (한글·영문 모두 검색 가능).",
+                    Foreground = Theme.TextSecondary,
+                    Margin = new Thickness(0, 12, 0, 0),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+                return;
+            }
+
+            const int maxNativeResults = 60;
+            resultsPanel.Children.Add(new TextBlock { Text = "Revit 기본 기능", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 12, 0, 2) });
+            List<(string Label, string Name)> nativeMatches = SunnyToolsCommands.SearchNativeCommands(
+                filter, maxNativeResults, _revitLanguage);
+            if (nativeMatches.Count == 0)
+            {
+                resultsPanel.Children.Add(CreateEmptyResult("검색 결과가 없습니다."));
+                return;
+            }
+
+            foreach ((string label, string name) in nativeMatches)
+                AddCommandRadio(cfg, resultsPanel, QuickToggleCommandKind.NativeRevit, name, label);
+
+            if (nativeMatches.Count >= maxNativeResults)
+                resultsPanel.Children.Add(new TextBlock
+                {
+                    Text = "결과가 많아 상위 " + maxNativeResults + "개만 표시합니다 - 검색어를 더 구체적으로 입력해 보세요.",
+                    Foreground = Theme.TextSecondary,
+                    Margin = new Thickness(0, 4, 0, 0),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+        }
+
+        private void AddCommandRadio(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel,
+            QuickToggleCommandKind kind, string id, string label)
+        {
+            bool isChecked = cfg.CommandKind == kind && cfg.CommandId == id;
+            RadioButton r = new RadioButton { Content = label, GroupName = "cmd_" + cfg.Id, IsChecked = isChecked, Margin = new Thickness(0, 3, 0, 3) };
+            r.Checked += (s, e) =>
+            {
+                cfg.CommandKind = kind;
+                cfg.CommandId = id;
+                cfg.CommandLabel = label;
+                OnTargetChanged();
+            };
+            resultsPanel.Children.Add(r);
+        }
+
+        // ===== 작은 도형 부품 =====
+
+        // 이 코드베이스는 텍스트 글리프(✕ 등) 대신 도형을 직접 그린다 - 폰트/테마에 따라 안 보일 수
+        // 있어서. 작은 UI 패턴을 공유 컴포넌트로 뽑지 않고 각 창에 복제하는 관례도 그대로 따른다.
+        private static UIElement CreateXMark()
+        {
+            Canvas canvas = new Canvas { Width = 12, Height = 12 };
+            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 0, X2 = 12, Y2 = 12, Stroke = Theme.TextPrimary, StrokeThickness = 2 });
+            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 12, X2 = 12, Y2 = 0, Stroke = Theme.TextPrimary, StrokeThickness = 2 });
+            return canvas;
         }
 
         private static Polygon CreateExpandGlyph(bool expanded)
@@ -602,14 +2417,56 @@ namespace WallSplitter
             return new Polygon { Points = points, Fill = Theme.TextSecondary, Width = 10, Height = 10 };
         }
 
-        // 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가 -
-        // 카테고리 대상 목록과 달리 이 버튼 자체의 표시 방식이라 스크롤 안 되는 EditHeaderHost에 넣는다.
-        // 색상은 별도 컬러피커 컨트롤 없이(이 프로젝트가 커스텀 컨트롤을 안 쓰는 관례) 미리 정한 팔레트
-        // 스와치 중에서 고르는 방식으로 단순화했다.
+        // ①②③ 같은 원문자 글리프는 폰트에 따라 안 보일 수 있어 강조색 사각 뱃지 안에 숫자를 넣어 그린다
+        // (Industry 디자인 시스템: 모서리 반지름 0, 강조색으로 채운 오브젝트는 소수로 제한).
+        private static UIElement CreateStepHeader(int step, string title, string? hint)
+        {
+            StackPanel row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            row.Children.Add(new Border
+            {
+                Width = 18,
+                Height = 18,
+                Background = Theme.Accent,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = step.ToString(),
+                    Foreground = Theme.OnAccent,
+                    FontSize = 11,
+                    FontWeight = FontWeights.Bold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            });
+            row.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            if (!string.IsNullOrEmpty(hint))
+                row.Children.Add(new TextBlock
+                {
+                    Text = hint,
+                    Foreground = Theme.TextSecondary,
+                    FontSize = 11,
+                    Margin = new Thickness(8, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+            return row;
+        }
+
+        private static Border CreateDivider() =>
+            new Border { Height = 1, Background = Theme.Divider, Margin = new Thickness(0, 6, 0, 12) };
+
+
+        // 버튼마다 아이콘 모양/on 상태 색을 직접 고를 수 있게 해달라는 요청(2026-07-27)으로 추가된 팔레트.
+        // 이 프로젝트는 전체 색상환 같은 커스텀 컨트롤을 쓰지 않으므로 미리 정한 스와치 중에서만 고른다.
         private static readonly (string Hex, string Name)[] ColorPalette =
         {
-            ("#5980A6", "스틸블루(기본)"),
-            ("#3D8F5C", "초록"),
+            ("#5980A6", "스틸블루(실행 기본)"),
+            ("#3D8F5C", "초록(켜짐 기본)"),
             ("#A6595D", "빨강"),
             ("#A67B3D", "호박"),
             ("#6B5DA6", "보라"),
@@ -618,284 +2475,46 @@ namespace WallSplitter
             ("#59748F", "슬레이트"),
         };
 
-        private void BuildIconAndColorPicker(QuickToggleButtonConfig cfg)
+        private static string ColorNameOf(string hex)
         {
-            QuickToggleIconShape currentShape = cfg.IconShape ?? QuickToggleIcons.DefaultFor(cfg.Category);
-            string currentColor = string.IsNullOrEmpty(cfg.OnColorHex) ? ColorPalette[0].Hex : cfg.OnColorHex;
-
-            EditHeaderHost.Children.Add(new TextBlock { Text = "아이콘", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
-            WrapPanel iconRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-            foreach (QuickToggleIconShape shape in Enum.GetValues(typeof(QuickToggleIconShape)))
-            {
-                bool isSelected = shape == currentShape;
-                Border swatch = new Border
-                {
-                    Width = 24,
-                    Height = 24,
-                    Margin = new Thickness(0, 0, 4, 4),
-                    BorderThickness = new Thickness(isSelected ? 2 : 1),
-                    BorderBrush = isSelected ? (Brush)new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(currentColor)) : Theme.Border,
-                    Background = Theme.Surface,
-                    Cursor = Cursors.Hand,
-                    ToolTip = QuickToggleIcons.LabelFor(shape),
-                    Child = new Viewbox
-                    {
-                        Width = 16, Height = 13,
-                        Child = QuickToggleIcons.Create(shape, Theme.TextPrimary),
-                    },
-                };
-                swatch.MouseLeftButtonDown += (s, e) => { cfg.IconShape = shape; BuildEditPanel(cfg); };
-                iconRow.Children.Add(swatch);
-            }
-            EditHeaderHost.Children.Add(iconRow);
-
-            EditHeaderHost.Children.Add(new TextBlock { Text = "켜짐 색상", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
-            WrapPanel colorRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-            foreach ((string hex, string name) in ColorPalette)
-            {
-                bool isSelected = string.Equals(hex, currentColor, StringComparison.OrdinalIgnoreCase);
-                Border swatch = new Border
-                {
-                    Width = 20,
-                    Height = 20,
-                    Margin = new Thickness(0, 0, 4, 0),
-                    BorderThickness = new Thickness(isSelected ? 3 : 1),
-                    BorderBrush = isSelected ? Theme.TextPrimary : Theme.Border,
-                    Background = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(hex)),
-                    Cursor = Cursors.Hand,
-                    ToolTip = name,
-                };
-                swatch.MouseLeftButtonDown += (s, e) => { cfg.OnColorHex = hex; BuildEditPanel(cfg); };
-                colorRow.Children.Add(swatch);
-            }
-            EditHeaderHost.Children.Add(colorRow);
+            foreach ((string paletteHex, string name) in ColorPalette)
+                if (string.Equals(paletteHex, hex, StringComparison.OrdinalIgnoreCase)) return name;
+            return hex;
         }
 
-        private void BuildViewTemplatePicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
+        // ===== 고급 (내보내기/가져오기/툴바 위치) =====
+
+        private void AdvancedToggleButton_Click(object sender, RoutedEventArgs e)
         {
-            StackPanel resultsPanel = new StackPanel();
-            target.Children.Add(BuildSearchRow(out TextBox searchBox));
-            target.Children.Add(resultsPanel);
-            searchBox.TextChanged += (s, e) => RenderViewTemplateList(cfg, resultsPanel, searchBox.Text);
-            RenderViewTemplateList(cfg, resultsPanel, "");
+            _advancedExpanded = !_advancedExpanded;
+            UpdateAdvancedSection();
         }
 
-        private void RenderViewTemplateList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
+        private void UpdateAdvancedSection()
         {
-            resultsPanel.Children.Clear();
-
-            // <없음>은 검색어와 무관하게 항상 보여준다 - 이름으로 검색할 대상이 아니라 "선택 해제"라는
-            // 별도 기능이라서.
-            RadioButton noneRadio = new RadioButton { Content = "<없음>", GroupName = "vt_" + cfg.Id, IsChecked = cfg.ViewTemplateId == null, Margin = new Thickness(0, 2, 0, 2) };
-            noneRadio.Checked += (s, e) => { cfg.ViewTemplateId = null; cfg.ViewTemplateName = null; };
-            resultsPanel.Children.Add(noneRadio);
-
-            bool any = false;
-            foreach (View vt in _viewTemplates.Where(v => MatchesSearch(v.Name, filter)))
-            {
-                any = true;
-                int id = vt.Id.ToInt();
-                string name = vt.Name;
-                RadioButton r = new RadioButton { Content = vt.Name, GroupName = "vt_" + cfg.Id, IsChecked = cfg.ViewTemplateId == id, Margin = new Thickness(0, 2, 0, 2) };
-                r.Checked += (s, e) => { cfg.ViewTemplateId = id; cfg.ViewTemplateName = name; };
-                resultsPanel.Children.Add(r);
-            }
-
-            if (_viewTemplates.Count == 0)
-                resultsPanel.Children.Add(new TextBlock { Text = "이 문서에 뷰템플릿이 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0) });
-            else if (!any && !string.IsNullOrEmpty(filter))
-                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0) });
+            AdvancedGlyphHost.Child = CreateExpandGlyph(_advancedExpanded);
+            AdvancedToggleText.Text = _advancedExpanded
+                ? "고급 설정 접기"
+                : "고급 설정 (내보내기 · 가져오기 · 툴바 위치)";
+            AdvancedPanel.Visibility = _advancedExpanded
+                ? System.Windows.Visibility.Visible
+                : System.Windows.Visibility.Collapsed;
         }
 
-        private void BuildFilterPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
-        {
-            StackPanel resultsPanel = new StackPanel();
-            target.Children.Add(BuildSearchRow(out TextBox searchBox));
-            target.Children.Add(resultsPanel);
-            searchBox.TextChanged += (s, e) => RenderFilterList(cfg, resultsPanel, searchBox.Text);
-            RenderFilterList(cfg, resultsPanel, "");
-        }
-
-        private void RenderFilterList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
-        {
-            resultsPanel.Children.Clear();
-
-            bool any = false;
-            foreach (ParameterFilterElement f in _filters.Where(f => MatchesSearch(f.Name, filter)))
-            {
-                any = true;
-                int id = f.Id.ToInt();
-                string name = f.Name;
-                CheckBox cb = new CheckBox { Content = f.Name, IsChecked = cfg.FilterIds.Contains(id), Margin = new Thickness(0, 2, 0, 2) };
-                cb.Checked += (s, e) => { if (!cfg.FilterIds.Contains(id)) cfg.FilterIds.Add(id); if (!cfg.FilterNames.Contains(name)) cfg.FilterNames.Add(name); };
-                cb.Unchecked += (s, e) => { cfg.FilterIds.Remove(id); cfg.FilterNames.Remove(name); };
-                resultsPanel.Children.Add(cb);
-            }
-
-            if (_filters.Count == 0)
-                resultsPanel.Children.Add(new TextBlock { Text = "이 문서에 필터가 없습니다.", Foreground = Theme.TextSecondary });
-            else if (!any && !string.IsNullOrEmpty(filter))
-                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
-        }
-
-        private void BuildWorksetPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
-        {
-            if (!_isWorkshared)
-            {
-                target.Children.Add(new TextBlock
-                {
-                    Text = "이 문서는 작업공유(워크셰어링)가 설정되어 있지 않습니다.",
-                    Foreground = Theme.WarningText,
-                    TextWrapping = TextWrapping.Wrap,
-                });
-                return;
-            }
-
-            StackPanel resultsPanel = new StackPanel();
-            target.Children.Add(BuildSearchRow(out TextBox searchBox));
-            target.Children.Add(resultsPanel);
-            searchBox.TextChanged += (s, e) => RenderWorksetList(cfg, resultsPanel, searchBox.Text);
-            RenderWorksetList(cfg, resultsPanel, "");
-        }
-
-        private void RenderWorksetList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter)
-        {
-            resultsPanel.Children.Clear();
-
-            bool any = false;
-            foreach (Workset w in _worksets.Where(w => MatchesSearch(w.Name, filter)))
-            {
-                any = true;
-                int id = w.Id.IntegerValue;
-                string name = w.Name;
-                CheckBox cb = new CheckBox { Content = w.Name, IsChecked = cfg.WorksetIds.Contains(id), Margin = new Thickness(0, 2, 0, 2) };
-                cb.Checked += (s, e) => { if (!cfg.WorksetIds.Contains(id)) cfg.WorksetIds.Add(id); if (!cfg.WorksetNames.Contains(name)) cfg.WorksetNames.Add(name); };
-                cb.Unchecked += (s, e) => { cfg.WorksetIds.Remove(id); cfg.WorksetNames.Remove(name); };
-                resultsPanel.Children.Add(cb);
-            }
-
-            if (_worksets.Count == 0)
-                resultsPanel.Children.Add(new TextBlock { Text = "이 문서에 사용자 작업세트가 없습니다.", Foreground = Theme.TextSecondary });
-            else if (!any && !string.IsNullOrEmpty(filter))
-                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
-        }
-
-        // ===== "기능 버튼" 편집 (2026-08-03 추가) =====
-
-        // Sunny Tools 자체 명령은 개수가 적어(SunnyToolsCommands.All) 검색어 없이 항상 보여주고, Revit
-        // 기본 명령(PostableCommand)은 수백 개라 검색어를 입력해야만 나타난다(SunnyToolsCommands.
-        // SearchNativeCommands) - 필터 없이 전부 그리면 창이 느려지고 오히려 원하는 걸 찾기 어렵다.
-        private void BuildCommandPicker(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel target)
-        {
-            target.Children.Add(new TextBlock
-            {
-                Text = "클릭하면 즉시 실행할 기능을 하나 선택하세요. Sunny Tools 자체 기능은 아래 목록에 항상 나타나고, " +
-                       "Revit 기본 기능(동기화, 저장, 인쇄 등)은 검색어를 입력하면 나타납니다.",
-                Foreground = Theme.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
-            });
-
-            TextBlock currentLabel = new TextBlock { Foreground = Theme.TextSecondary, Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap };
-            UpdateCurrentCommandLabel(currentLabel, cfg);
-            target.Children.Add(currentLabel);
-
-            StackPanel resultsPanel = new StackPanel();
-            target.Children.Add(BuildSearchRow(out TextBox searchBox));
-            target.Children.Add(resultsPanel);
-            searchBox.TextChanged += (s, e) => RenderCommandList(cfg, resultsPanel, searchBox.Text, currentLabel);
-            RenderCommandList(cfg, resultsPanel, "", currentLabel);
-        }
-
-        private static void UpdateCurrentCommandLabel(TextBlock label, QuickToggleButtonConfig cfg) =>
-            label.Text = "현재 선택: " + (string.IsNullOrEmpty(cfg.CommandLabel) ? "(아직 없음)" : cfg.CommandLabel);
-
-        private void RenderCommandList(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel, string filter, TextBlock currentLabel)
-        {
-            resultsPanel.Children.Clear();
-
-            resultsPanel.Children.Add(new TextBlock { Text = "Sunny Tools", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
-            List<(string Label, string ClassName)> sunnyMatches = SunnyToolsCommands.All.Where(c => MatchesSearch(c.Label, filter)).ToList();
-            if (sunnyMatches.Count == 0)
-            {
-                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary, Margin = new Thickness(0, 0, 0, 6) });
-            }
-            else
-            {
-                foreach ((string label, string className) in sunnyMatches)
-                    AddCommandRadio(cfg, resultsPanel, QuickToggleCommandKind.SunnyTool, className, label, currentLabel);
-            }
-
-            if (string.IsNullOrWhiteSpace(filter))
-            {
-                resultsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Revit 기본 기능 - 개수가 매우 많아 검색어를 입력해야 표시됩니다 (예: 동기화, 저장, 인쇄...).",
-                    Foreground = Theme.TextSecondary, Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap,
-                });
-                return;
-            }
-
-            const int maxNativeResults = 60;
-            resultsPanel.Children.Add(new TextBlock { Text = "Revit 기본 기능", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 10, 0, 2) });
-            List<(string Label, string Name)> nativeMatches = SunnyToolsCommands.SearchNativeCommands(filter, maxNativeResults);
-            if (nativeMatches.Count == 0)
-            {
-                resultsPanel.Children.Add(new TextBlock { Text = "검색 결과가 없습니다.", Foreground = Theme.TextSecondary });
-                return;
-            }
-
-            foreach ((string label, string name) in nativeMatches)
-                AddCommandRadio(cfg, resultsPanel, QuickToggleCommandKind.NativeRevit, name, label, currentLabel);
-
-            if (nativeMatches.Count >= maxNativeResults)
-                resultsPanel.Children.Add(new TextBlock
-                {
-                    Text = "결과가 많아 상위 " + maxNativeResults + "개만 표시합니다 - 검색어를 더 구체적으로 입력해 보세요.",
-                    Foreground = Theme.TextSecondary, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
-                });
-        }
-
-        private void AddCommandRadio(QuickToggleButtonConfig cfg, System.Windows.Controls.Panel resultsPanel,
-            QuickToggleCommandKind kind, string id, string label, TextBlock currentLabel)
-        {
-            bool isChecked = cfg.CommandKind == kind && cfg.CommandId == id;
-            RadioButton r = new RadioButton { Content = label, GroupName = "cmd_" + cfg.Id, IsChecked = isChecked, Margin = new Thickness(0, 2, 0, 2) };
-            r.Checked += (s, e) =>
-            {
-                cfg.CommandKind = kind;
-                cfg.CommandId = id;
-                cfg.CommandLabel = label;
-                UpdateCurrentCommandLabel(currentLabel, cfg);
-            };
-            resultsPanel.Children.Add(r);
-        }
-
-        // 위/아래 이동·삭제 버튼 아이콘 - SettingsWindow의 CreateTriangle/CreateXMark와 동일한 방식
-        // (텍스트 글리프는 폰트/테마에 따라 안 보일 수 있어 도형으로 직접 그림) - 이 코드베이스는 이런 작은
-        // UI 패턴을 공유 컴포넌트로 뽑지 않고 각 창에 그대로 복제하는 관례를 따른다.
-        private static Polygon CreateTriangle(bool pointingUp)
-        {
-            PointCollection points = pointingUp
-                ? new PointCollection { new System.Windows.Point(6, 0), new System.Windows.Point(12, 10), new System.Windows.Point(0, 10) }
-                : new PointCollection { new System.Windows.Point(0, 0), new System.Windows.Point(12, 0), new System.Windows.Point(6, 10) };
-            return new Polygon { Points = points, Fill = Theme.TextPrimary, Width = 12, Height = 10 };
-        }
-
-        private static UIElement CreateXMark()
-        {
-            Canvas canvas = new Canvas { Width = 12, Height = 12 };
-            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 0, X2 = 12, Y2 = 12, Stroke = Theme.TextPrimary, StrokeThickness = 2 });
-            canvas.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = 12, X2 = 12, Y2 = 0, Stroke = Theme.TextPrimary, StrokeThickness = 2 });
-            return canvas;
-        }
-
-        // ===== 저장/취소 =====
+        // ===== 툴바 위치 초기화 =====
 
         // 툴바가 화면 밖이나 다시 찾기 힘든 위치로 드래그된 경우를 위한 안전장치 - 기본 오프셋으로 되돌린다.
         // 2026-07-28부터 툴바 위치는 프로젝트별이 아니라 PC 전역 설정이라, 이 창의 "저장"을 거치지 않고
         // 여기서 바로 리셋·저장하고 열려 있는 툴바에도 즉시 반영한다.
         private void ResetPositionButton_Click(object sender, RoutedEventArgs e)
         {
-            new QuickToggleGlobalSettings().Save();
+            // WPF 이벤트 핸들러에서 예외가 새어나가면 Revit 프로세스가 그대로 죽는다 (SettingsWindow와 같은 방침).
+            try { new QuickToggleGlobalSettings().Save(); }
+            catch (Exception ex)
+            {
+                MessageBox.Show("툴바 위치 설정을 저장하지 못했습니다: " + ex.Message, "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
             QuickToggleToolbar.Instance?.ReloadGlobalSettings();
             MessageBox.Show("툴바 위치를 기본값으로 되돌렸습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -912,8 +2531,8 @@ namespace WallSplitter
         {
             Microsoft.Win32.SaveFileDialog dialog = new Microsoft.Win32.SaveFileDialog
             {
-                Filter = "JSON 파일 (*.json)|*.json",
-                FileName = "커스텀버튼_설정.json",
+                Filter = "Sunny Tools 버튼모음 (*.json)|*.json",
+                FileName = "커스텀버튼_버튼모음.json",
             };
             if (dialog.ShowDialog(this) != true) return;
 
@@ -933,7 +2552,7 @@ namespace WallSplitter
         {
             Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "JSON 파일 (*.json)|*.json",
+                Filter = "Sunny Tools 버튼모음 (*.json)|*.json",
             };
             if (dialog.ShowDialog(this) != true) return;
 
@@ -948,364 +2567,54 @@ namespace WallSplitter
                 MessageBox.Show("가져오기에 실패했습니다: " + ex.Message, "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
+            // 이전 버전에서 내보낸 삭제된 버튼은 설정을 불러올 때와 동일하게 제외한다.
+            imported?.RemoveAll(QuickToggleSettings.IsRemovedButton);
             if (imported == null || imported.Count == 0)
             {
                 MessageBox.Show("가져올 버튼이 없습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            // JSON 파일엔 이름 문자열만 있고 실제 뷰템플릿/필터 요소(소스 문서)가 없어 복사가 불가능하다 -
-            // sourceDoc: null로 넘겨 이름 매칭만 하는 기존 동작을 그대로 쓴다.
-            if (!TransferButtons(imported, sourceDoc: null, _doc, _settings)) return;
-
-            RefreshButtonList();
-            SelectButton(imported[0]);
-            MessageBox.Show($"{imported.Count}개 버튼을 가져왔습니다. '저장'을 눌러야 반영됩니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
-        // 2026-07-30 추가 - "설정해둔 버튼에 해당하는 대상(필터, 작업세트 등)을 함께 내보내고 가져오기가
-        // 되었으면 좋겠다"는 요청은 JSON 파일로는 근본적으로 불가능하다(파일엔 이름만 남고 실제 Revit
-        // 요소는 못 담는다) - 대신 같은 Revit 세션에 열려 있는 다른 프로젝트 문서와는 실제 요소(살아있는
-        // Document 참조)를 주고받을 수 있으므로, 이 "모델로 내보내기/모델에서 가져오기" 경로에서만 실제
-        // 복사가 가능하다.
-        private List<Document> OpenOtherDocuments()
-        {
-            List<Document> result = new List<Document>();
-            foreach (Document d in _doc.Application.Documents)
+            // 2026-09-03, 설정이 PC 전역이 되면서 이 단계가 크게 단순해졌다. 예전에는 가져온 버튼의
+            // ViewTemplateId/FilterIds를 "이 문서 기준"으로 다시 풀어줘야 했지만(TransferButtons/
+            // ResolveNamedTargets), 이제 대상은 툴바가 실제로 켜고 끄는 순간 그 문서에서 이름으로 다시
+            // 찾으므로(QuickToggleService.Resolve*) 여기서는 이름만 그대로 들고 오면 된다.
+            // Id는 새로 발급한다 - 같은 파일을 두 번 가져와도 기존 버튼과 Id가 겹치지 않도록.
+            foreach (QuickToggleButtonConfig cfg in imported)
             {
-                if (d.IsLinked || d.IsFamilyDocument) continue;
-                if (d.Equals(_doc)) continue;
-                result.Add(d);
-            }
-            return result;
-        }
-
-        private void ExportToModelButton_Click(object sender, RoutedEventArgs e)
-        {
-            List<Document> others = OpenOtherDocuments();
-            OpenDocumentPickerWindow picker = new OpenDocumentPickerWindow(
-                "내보낼 문서 선택",
-                "이 커스텀 버튼 설정을 어느 문서로 내보낼까요? 대상 문서에 없는 뷰템플릿/필터는 이 문서에서 그대로 복사됩니다.",
-                others) { Owner = this };
-            if (picker.ShowDialog() != true || picker.SelectedDocument == null) return;
-
-            Document targetDoc = picker.SelectedDocument;
-            QuickToggleSettings targetSettings = QuickToggleSettings.Load(targetDoc);
-
-            // 내보낼 버튼 자체를 복제해서 넘긴다 - TransferButtons가 ViewTemplateId/FilterIds 등을 대상
-            // 문서 기준으로 덮어써버리므로, 원본(_settings.Buttons, 이 창이 계속 쓰고 있는 목록)이 오염되면
-            // 안 된다.
-            List<QuickToggleButtonConfig> toExport = _settings.Buttons
-                .Select(cfg => JsonSerializer.Deserialize<QuickToggleButtonConfig>(JsonSerializer.Serialize(cfg, ExportJsonOptions), ExportJsonOptions)!)
-                .ToList();
-            if (toExport.Count == 0)
-            {
-                MessageBox.Show("내보낼 버튼이 없습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            if (!TransferButtons(toExport, _doc, targetDoc, targetSettings)) return;
-
-            try
-            {
-                targetSettings.Save(targetDoc);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("대상 문서에 저장하지 못했습니다: " + ex.Message, "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
-            MessageBox.Show($"{toExport.Count}개 버튼을 '{targetDoc.Title}' 문서로 내보냈습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
-        private void ImportFromModelButton_Click(object sender, RoutedEventArgs e)
-        {
-            List<Document> others = OpenOtherDocuments();
-            OpenDocumentPickerWindow picker = new OpenDocumentPickerWindow(
-                "가져올 문서 선택",
-                "어느 문서의 커스텀 버튼 설정을 가져올까요? 이 문서에 없는 뷰템플릿/필터는 그 문서에서 그대로 복사됩니다.",
-                others) { Owner = this };
-            if (picker.ShowDialog() != true || picker.SelectedDocument == null) return;
-
-            Document sourceDoc = picker.SelectedDocument;
-            QuickToggleSettings sourceSettings = QuickToggleSettings.Load(sourceDoc);
-            if (sourceSettings.Buttons.Count == 0)
-            {
-                MessageBox.Show("그 문서에는 등록된 커스텀 버튼이 없습니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            if (!TransferButtons(sourceSettings.Buttons, sourceDoc, _doc, _settings)) return;
-
-            RefreshButtonList();
-            SelectButton(sourceSettings.Buttons[0]);
-            MessageBox.Show($"{sourceSettings.Buttons.Count}개 버튼을 '{sourceDoc.Title}' 문서에서 가져왔습니다. '저장'을 눌러야 반영됩니다.", "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
-        // 이식 로직의 핵심 - JSON 가져오기(sourceDoc==null)와 모델 간 내보내기/가져오기(sourceDoc!=null)가
-        // 전부 이 메서드 하나를 공유한다. sourceDoc가 있으면 대상 문서에 없는 뷰템플릿/필터를 실제로
-        // 복사하고(QuickToggleTransferService.CopyNamedElement), 작업세트는 없으면 새로 만든다
-        // (EnsureWorkset) - "설정해둔 버튼에 해당하는 대상을 함께 내보내고 가져오기" 요청. sourceDoc가
-        // null이면(JSON) 파일에 이름만 있고 실제 요소가 없어 복사 자체가 불가능하므로 기존처럼 이름
-        // 매칭만 한다. 카테고리는 어느 경로든 복사 대상이 아니다(고정된 분류 체계라 이름으로만 다시 찾음).
-        // targetDoc에 열린 트랜잭션이 없어야 한다 - 이 메서드가 필요할 때만 직접 연다(복사/작업세트 생성이
-        // 전혀 없으면 트랜잭션도 안 연다).
-        // 반환값 false = 사용자가 확인 대화상자에서 취소함(호출자는 아무것도 하지 않아야 함).
-        private bool TransferButtons(List<QuickToggleButtonConfig> buttons, Document? sourceDoc, Document targetDoc, QuickToggleSettings targetSettings)
-        {
-            List<View> targetViewTemplates = new FilteredElementCollector(targetDoc)
-                .OfClass(typeof(View)).Cast<View>().Where(v => v.IsTemplate).ToList();
-            List<ParameterFilterElement> targetFilters = new FilteredElementCollector(targetDoc)
-                .OfClass(typeof(ParameterFilterElement)).Cast<ParameterFilterElement>().ToList();
-            List<Workset> targetWorksets = targetDoc.IsWorkshared
-                ? new FilteredWorksetCollector(targetDoc).OfKind(WorksetKind.UserWorkset).ToList()
-                : new List<Workset>();
-
-            Dictionary<string, int> viewTemplateByName = targetViewTemplates.ToDictionary(v => v.Name, v => v.Id.ToInt());
-            Dictionary<string, int> filterByName = targetFilters.ToDictionary(f => f.Name, f => f.Id.ToInt());
-            Dictionary<string, int> worksetByName = targetWorksets.ToDictionary(w => w.Name, w => w.Id.IntegerValue);
-
-            Dictionary<(string Name, string? Parent), int> categoryByName = new Dictionary<(string, string?), int>();
-            foreach (Category c in QuickToggleService.AllCategoriesForNameMatching(targetDoc))
-            {
-                var key = (c.Name, c.Parent?.Name);
-                if (!categoryByName.ContainsKey(key)) categoryByName[key] = c.Id.ToInt();
-            }
-
-            // 소스 문서가 있을 때만(모델 간 이동) 실제 복사가 가능하다 - 이름으로 원본 요소를 찾기 위한 인덱스.
-            Dictionary<string, View>? sourceViewTemplatesByName = null;
-            Dictionary<string, ParameterFilterElement>? sourceFiltersByName = null;
-            if (sourceDoc != null)
-            {
-                sourceViewTemplatesByName = new FilteredElementCollector(sourceDoc).OfClass(typeof(View)).Cast<View>()
-                    .Where(v => v.IsTemplate).GroupBy(v => v.Name).ToDictionary(g => g.Key, g => g.First());
-                sourceFiltersByName = new FilteredElementCollector(sourceDoc).OfClass(typeof(ParameterFilterElement)).Cast<ParameterFilterElement>()
-                    .GroupBy(f => f.Name).ToDictionary(g => g.Key, g => g.First());
-            }
-
-            HashSet<string> neededViewTemplateNames = buttons.Where(b => !string.IsNullOrEmpty(b.ViewTemplateName)).Select(b => b.ViewTemplateName!).ToHashSet();
-            HashSet<string> neededFilterNames = buttons.SelectMany(b => b.FilterNames).ToHashSet();
-            HashSet<string> neededWorksetNames = buttons.SelectMany(b => b.WorksetNames).ToHashSet();
-
-            // 대상에도 있고 소스에도 있는(=진짜로 "덮어쓸지" 물어봐야 하는) 항목만 모은다 - 소스가 없으면
-            // (JSON 가져오기) 애초에 복사 후보가 없으므로 이 목록은 항상 비어있다.
-            List<(string Kind, string Name)> conflicts = new List<(string, string)>();
-            if (sourceDoc != null)
-            {
-                foreach (string name in neededViewTemplateNames)
-                    if (viewTemplateByName.ContainsKey(name) && sourceViewTemplatesByName!.ContainsKey(name))
-                        conflicts.Add(("뷰템플릿", name));
-                foreach (string name in neededFilterNames)
-                    if (filterByName.ContainsKey(name) && sourceFiltersByName!.ContainsKey(name))
-                        conflicts.Add(("필터", name));
-            }
-
-            bool overwrite = false;
-            if (conflicts.Count > 0)
-            {
-                TaskDialog conflictDlg = new TaskDialog("WallSplitter")
-                {
-                    MainInstruction = "같은 이름이 이미 있습니다",
-                    MainContent = "다음 항목이 대상 문서에 이미 있습니다:\n\n" +
-                                   string.Join("\n", conflicts.Select(c => $"{c.Kind} '{c.Name}'")) +
-                                   "\n\n원본 문서의 것으로 덮어쓰시겠습니까? (예=덮어쓰기, 아니오=대상 문서에 있는 것을 그대로 사용)",
-                    CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
-                    DefaultButton = TaskDialogResult.No,
-                };
-                overwrite = conflictDlg.Show() == TaskDialogResult.Yes;
-            }
-
-            List<string> missing = new List<string>();
-
-            Dictionary<string, ElementId>? sourceViewTemplateIdByName = sourceViewTemplatesByName?
-                .ToDictionary(kv => kv.Key, kv => kv.Value.Id);
-            Dictionary<string, ElementId>? sourceFilterIdByName = sourceFiltersByName?
-                .ToDictionary(kv => kv.Key, kv => kv.Value.Id);
-
-            // 뷰템플릿/필터 복사, 작업세트 생성은 대상 문서를 실제로 바꾸는 작업이라 전부 트랜잭션 하나로
-            // 묶는다(소스가 없는 JSON 가져오기는 아무것도 바꾸지 않으므로 트랜잭션 자체가 필요 없다).
-            Dictionary<string, int> resolvedViewTemplateId;
-            Dictionary<string, int> resolvedFilterId;
-            Dictionary<string, int> resolvedWorksetId = new Dictionary<string, int>();
-
-            if (sourceDoc != null)
-            {
-                using Transaction tx = new Transaction(targetDoc, "커스텀 버튼: 대상 이식");
-                FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
-                failureOptions.SetFailuresPreprocessor(new QuickToggleTransferService.SilentWarningsPreprocessor());
-                tx.SetFailureHandlingOptions(failureOptions);
-                tx.Start();
-
-                resolvedViewTemplateId = ResolveNamedTargets(
-                    neededViewTemplateNames, viewTemplateByName, sourceViewTemplateIdByName, sourceDoc, targetDoc, overwrite, "뷰템플릿", missing);
-                resolvedFilterId = ResolveNamedTargets(
-                    neededFilterNames, filterByName, sourceFilterIdByName, sourceDoc, targetDoc, overwrite, "필터", missing);
-
-                // 작업세트는 "덮어쓰기" 개념이 없다(이름 하나뿐) - 대상에 없으면 새로 만든다.
-                foreach (string name in neededWorksetNames)
-                {
-                    if (worksetByName.TryGetValue(name, out int existingId))
-                    {
-                        resolvedWorksetId[name] = existingId;
-                    }
-                    else
-                    {
-                        int? created = QuickToggleTransferService.EnsureWorkset(targetDoc, name);
-                        if (created.HasValue) resolvedWorksetId[name] = created.Value;
-                        else missing.Add($"작업세트 '{name}' (만들지 못함 - 대상 문서가 작업공유 상태가 아닐 수 있음)");
-                    }
-                }
-
-                tx.Commit();
-            }
-            else
-            {
-                // JSON 가져오기 - 대상 문서를 건드리지 않고 이미 있는 것만 이름으로 찾는다(기존 동작 그대로).
-                resolvedViewTemplateId = ResolveNamedTargets(
-                    neededViewTemplateNames, viewTemplateByName, null, null, targetDoc, false, "뷰템플릿", missing);
-                resolvedFilterId = ResolveNamedTargets(
-                    neededFilterNames, filterByName, null, null, targetDoc, false, "필터", missing);
-                foreach (string name in neededWorksetNames)
-                {
-                    if (worksetByName.TryGetValue(name, out int existingId)) resolvedWorksetId[name] = existingId;
-                    else missing.Add($"작업세트 '{name}'");
-                }
-            }
-
-            // 카테고리(프리셋/색상 버튼)는 어느 경로든 복사 대상이 아니라 이름 매칭만 하므로, 여기서
-            // 미리 대상 문서에 없는 카테고리를 missing에 모아둔다 - 실제 필터링/제거는 아래 최종 루프에서.
-            foreach (QuickToggleButtonConfig cfg in buttons)
-            {
-                foreach (CategoryOverrideConfig co in cfg.CategoryOverrides)
-                    if (!categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
-                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
-                foreach (CategoryOverrideConfig co in cfg.ColorButtonCategories)
-                    if (!categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
-                        missing.Add($"{cfg.Name} - 카테고리 '{co.CategoryName}'");
-            }
-
-            if (missing.Count > 0)
-            {
-                TaskDialog missingDlg = new TaskDialog("WallSplitter")
-                {
-                    MainInstruction = "대상 문서에 없는 항목이 있습니다",
-                    MainContent = "다음 항목을 대상 문서에서 찾거나 만들지 못했습니다:\n\n" + string.Join("\n", missing) +
-                                   "\n\n그래도 가져오시겠습니까? (없는 항목은 비워진 채로 가져와집니다)",
-                    CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
-                    DefaultButton = TaskDialogResult.Yes,
-                };
-                if (missingDlg.Show() != TaskDialogResult.Yes) return false;
-            }
-
-            foreach (QuickToggleButtonConfig cfg in buttons)
-            {
-                if (string.IsNullOrEmpty(cfg.ViewTemplateName))
-                {
-                    cfg.ViewTemplateId = null;
-                }
-                else if (resolvedViewTemplateId.TryGetValue(cfg.ViewTemplateName, out int vtId))
-                {
-                    cfg.ViewTemplateId = vtId;
-                }
-                else
-                {
-                    cfg.ViewTemplateId = null;
-                }
-
-                List<int> resolvedFilterIds = new List<int>();
-                List<string> resolvedFilterNames = new List<string>();
-                foreach (string name in cfg.FilterNames)
-                {
-                    if (resolvedFilterId.TryGetValue(name, out int filterId))
-                    {
-                        resolvedFilterIds.Add(filterId);
-                        resolvedFilterNames.Add(name);
-                    }
-                }
-                cfg.FilterIds = resolvedFilterIds;
-                cfg.FilterNames = resolvedFilterNames;
-
-                List<int> resolvedWorksetIds = new List<int>();
-                List<string> resolvedWorksetNames = new List<string>();
-                foreach (string name in cfg.WorksetNames)
-                {
-                    if (resolvedWorksetId.TryGetValue(name, out int worksetId))
-                    {
-                        resolvedWorksetIds.Add(worksetId);
-                        resolvedWorksetNames.Add(name);
-                    }
-                }
-                cfg.WorksetIds = resolvedWorksetIds;
-                cfg.WorksetNames = resolvedWorksetNames;
-
-                cfg.CategoryOverrides = cfg.CategoryOverrides
-                    .Where(co => categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
-                    .Select(co => { co.CategoryId = categoryByName[(co.CategoryName, co.ParentCategoryName)]; return co; })
-                    .ToList();
-
-                cfg.ColorButtonCategories = cfg.ColorButtonCategories
-                    .Where(co => categoryByName.ContainsKey((co.CategoryName, co.ParentCategoryName)))
-                    .Select(co => { co.CategoryId = categoryByName[(co.CategoryName, co.ParentCategoryName)]; return co; })
-                    .ToList();
-
                 cfg.Id = Guid.NewGuid().ToString();
-                targetSettings.Buttons.Add(cfg);
+                _settings.Buttons.Add(cfg);
             }
+            _settings.NormalizeGrouping();
 
-            return true;
+            RefreshButtonList();
+            RefreshPreviewStrip();
+            SelectButton(imported[0]);
+
+            MessageBox.Show(
+                $"{imported.Count}개 버튼을 가져왔습니다. '저장'을 눌러야 반영됩니다.\n\n" +
+                "대상(뷰템플릿/필터/작업세트)은 이름으로 다시 찾으므로, 지금 열려 있는 프로젝트에 같은 이름이 " +
+                "없으면 그 버튼은 회색으로 표시됩니다.",
+                "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        // neededNames 각각을 대상 문서 기준 ElementId(int)로 확정한다:
-        //  - 소스가 있고(모델 간 이동) 대상에 없거나 덮어쓰기가 확정되면 실제로 복사한다.
-        //  - 소스가 없거나(JSON) 이미 대상에 있고 덮어쓰기가 아니면 대상에 있는 것을 그대로 쓴다.
-        //  - 어느 쪽도 안 되면 missing에 추가.
-        // 복사가 실제로 필요할 수 있는 경우(sourceDoc != null) 호출자가 이미 targetDoc에 트랜잭션을 열어둔
-        // 상태여야 한다 - 이 메서드 자체는 트랜잭션을 열지 않는다(TransferButtons가 뷰템플릿/필터/작업세트
-        // 복사·생성을 전부 트랜잭션 하나로 묶어야 하므로).
-        private static Dictionary<string, int> ResolveNamedTargets(
-            HashSet<string> neededNames, Dictionary<string, int> targetByName, Dictionary<string, ElementId>? sourceIdByName,
-            Document? sourceDoc, Document targetDoc, bool overwrite, string kindLabel, List<string> missing)
-        {
-            Dictionary<string, int> resolved = new Dictionary<string, int>();
-
-            foreach (string name in neededNames)
-            {
-                bool existsInTarget = targetByName.TryGetValue(name, out int existingId);
-                bool existsInSource = sourceDoc != null && sourceIdByName != null && sourceIdByName.ContainsKey(name);
-
-                if (existsInTarget && (!existsInSource || !overwrite))
-                {
-                    resolved[name] = existingId;
-                    continue;
-                }
-
-                if (existsInSource)
-                {
-                    ElementId? copied = QuickToggleTransferService.CopyNamedElement(
-                        sourceDoc!, sourceIdByName![name], targetDoc, existsInTarget ? new ElementId(existingId) : null);
-                    if (copied != null) resolved[name] = copied.ToInt();
-                    else missing.Add($"{kindLabel} '{name}' (복사 실패)");
-                    continue;
-                }
-
-                missing.Add($"{kindLabel} '{name}'");
-            }
-
-            return resolved;
-        }
+        // ===== 저장/취소 =====
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                _settings.Save(_doc);
+                _settings.Save();
             }
             catch (Exception ex)
             {
                 MessageBox.Show("설정 저장에 실패했습니다: " + ex.Message, "WallSplitter", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
+
+            // 방금 고른 대상이 툴바에 바로 반영되도록 이름→ElementId 캐시를 버린다 - 안 그러면 최대
+            // 2초간(TargetIndexLifetime) 예전 해석 결과가 남는다.
+            QuickToggleService.InvalidateTargetIndex();
 
             // 열려 있는 커스텀 툴바가 있으면 저장한 값이 바로 반영되도록 강제 재로드.
             QuickToggleToolbar.Instance?.ForceReloadSettings(_doc);

@@ -18,6 +18,8 @@ namespace WallSplitter
         {
             public ElementType Type = null!;
             public MaterialSlot Slot;
+            public readonly Dictionary<ElementId, ElementId> InstanceMaterials = new();
+            public bool IsInstance => Slot.Kind == MaterialSlotKind.InstanceParameter;
         }
 
         // 유형 하나가 슬롯(레이어/재료 파라미터)을 여러 개 가질 수 있게 되면서, "체크됐는지/무엇으로 바뀔
@@ -86,6 +88,8 @@ namespace WallSplitter
         {
             public Material Material { get; set; } = null!;
             public string DisplayName { get; set; } = "";
+            // 자체 ComboBox 템플릿이 선택된 값을 문자열로 표시하는 경우에도 재료명으로 보이게 한다.
+            public override string ToString() => DisplayName;
         }
 
         private readonly Document _doc;
@@ -95,7 +99,7 @@ namespace WallSplitter
         // "적용"은 이 두 딕셔너리만 갱신하고 모델은 건드리지 않는다 - NamerWindow의 2단계 적용
         // (_trueOriginalNames/_workingNames)과 동일한 설계이며, 최종 적용도 체크 여부와 무관하게
         // _workingMaterialIds를 기준으로 반영한다(NamerWindow의 최근 수정과 동일한 이유).
-        private readonly Dictionary<CandidateKey, ElementId> _trueOriginalMaterialIds = new();
+        private readonly Dictionary<CandidateKey, HashSet<ElementId>> _trueOriginalMaterialIds = new();
         private readonly Dictionary<CandidateKey, ElementId> _workingMaterialIds = new();
 
         private List<MaterialCandidate> _allCandidates = new();
@@ -156,6 +160,7 @@ namespace WallSplitter
         // MaterialAssignCommand만 읽으므로 public일 필요가 애초에 없었다.
         internal List<(ElementId TypeId, MaterialSlot Slot, ElementId NewMaterialId)>? Result { get; private set; }
         public List<ElementId>? DeleteResult { get; private set; }
+        internal List<MaterialInstanceAssignment>? InstanceResult { get; private set; }
 
         public MaterialAssignWindow(Document doc, List<ElementId> preSelectedIds)
         {
@@ -222,7 +227,7 @@ namespace WallSplitter
         private string MaterialDisplayName(Material m)
         {
             string name = m.Name ?? "";
-            return _usedMaterialIds.Contains(m.Id) ? name : $"{name} (지정된 유형 없음)";
+            return _usedMaterialIds.Contains(m.Id) ? name : $"{name} (수집된 재료 슬롯에서 미사용)";
         }
 
         // 문서의 모든 ElementType 중 MaterialSlotFinder가 "재료 지정" 슬롯을 찾을 수 있는 것만 후보로 삼는다 -
@@ -242,10 +247,28 @@ namespace WallSplitter
                     _candidatesById[new CandidateKey(type.Id, slot)] = candidate;
                 }
             }
-            _allCandidates = _allCandidates.OrderBy(c => c.Type.Name).ThenBy(c => c.Slot.LayerIndex).ToList();
+            // 인스턴스 값은 유형/파라미터별로 묶되 실제 요소 ID와 원래 값을 모두 보존한다.
+            var typesById = allTypes.OfType<ElementType>().ToDictionary(type => type.Id);
+            foreach (Element instance in new FilteredElementCollector(_doc).WhereElementIsNotElementType())
+            {
+                if (!typesById.TryGetValue(instance.GetTypeId(), out ElementType? type)) continue;
+                foreach (MaterialSlot slot in MaterialSlotFinder.FindAll(instance))
+                {
+                    var key = new CandidateKey(type.Id, slot);
+                    if (!_candidatesById.TryGetValue(key, out MaterialCandidate? candidate))
+                    {
+                        candidate = new MaterialCandidate { Type = type, Slot = slot };
+                        _candidatesById[key] = candidate;
+                        _allCandidates.Add(candidate);
+                    }
+                    candidate.InstanceMaterials[instance.Id] = slot.MaterialId;
+                }
+            }
+            _allCandidates = _allCandidates.OrderBy(c => c.Type.FamilyName).ThenBy(c => c.Type.Name)
+                .ThenBy(c => c.Slot.Kind).ThenBy(c => c.Slot.LayerIndex).ThenBy(c => c.Slot.Label).ToList();
 
             _usedMaterialIds = new HashSet<ElementId>(_allCandidates
-                .Select(c => c.Slot.MaterialId)
+                .SelectMany(OriginalMaterialIds)
                 .Where(id => id != ElementId.InvalidElementId));
         }
 
@@ -271,10 +294,42 @@ namespace WallSplitter
 
         private static CandidateKey KeyOf(MaterialCandidate candidate) => new(candidate.Type.Id, candidate.Slot);
 
-        private ElementId CurrentMaterialId(MaterialCandidate candidate) =>
-            _workingMaterialIds.TryGetValue(KeyOf(candidate), out ElementId workingId) ? workingId : candidate.Slot.MaterialId;
+        private static IEnumerable<ElementId> OriginalMaterialIds(MaterialCandidate candidate) =>
+            candidate.IsInstance ? candidate.InstanceMaterials.Values.Distinct() : new[] { candidate.Slot.MaterialId };
 
-        private string CurrentMaterialName(MaterialCandidate candidate) => MaterialNameOf(CurrentMaterialId(candidate));
+        private IEnumerable<ElementId> CurrentMaterialIds(MaterialCandidate candidate) =>
+            _workingMaterialIds.TryGetValue(KeyOf(candidate), out ElementId? workingId)
+                ? new[] { workingId } : OriginalMaterialIds(candidate);
+
+        private string CurrentMaterialName(MaterialCandidate candidate)
+        {
+            var names = CurrentMaterialIds(candidate).Select(MaterialNameOf).Distinct().ToList();
+            return names.Count > 1 ? "<다양함>" : names[0];
+        }
+
+        private static string CandidateName(MaterialCandidate candidate)
+        {
+            string family = candidate.Type.FamilyName ?? "";
+            string name = string.IsNullOrEmpty(family) ? candidate.Type.Name : $"{family} : {candidate.Type.Name}";
+            string scope = candidate.IsInstance ? $"인스턴스 {candidate.InstanceMaterials.Count}개 전체" : "유형";
+            return $"{name} · [{scope}]" + (string.IsNullOrEmpty(candidate.Slot.Label) ? "" : $" · {candidate.Slot.Label}");
+        }
+
+        private bool MatchesFilter(MaterialCandidate candidate, string filter, int mode, bool byMaterial)
+        {
+            // 부정 검색은 일부 재료가 일치하지 않는지가 아니라, 일치하는 재료가 하나도 없는지를 본다.
+            var names = byMaterial ? CurrentMaterialIds(candidate).Select(MaterialNameOf)
+                : new[] { candidate.Type.Name ?? "", candidate.Type.FamilyName ?? "" };
+            bool Matches(string name) => mode switch
+            {
+                2 or 3 => string.Equals(name, filter, StringComparison.CurrentCultureIgnoreCase),
+                4 => name.StartsWith(filter, StringComparison.CurrentCultureIgnoreCase),
+                5 => name.EndsWith(filter, StringComparison.CurrentCultureIgnoreCase),
+                _ => name.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0
+            };
+            bool any = names.Any(Matches);
+            return mode == 1 || mode == 3 ? !any : any;
+        }
 
         private string MaterialNameOf(ElementId id)
         {
@@ -317,7 +372,7 @@ namespace WallSplitter
 
             if (filterTarget == 2)
             {
-                _filteredCandidates = _allCandidates.Where(c => CurrentMaterialId(c) == ElementId.InvalidElementId).ToList();
+                _filteredCandidates = _allCandidates.Where(c => CurrentMaterialIds(c).Any(id => _doc.GetElement(id) is not Material)).ToList();
             }
             else
             {
@@ -331,24 +386,7 @@ namespace WallSplitter
                 }
                 else
                 {
-                    _filteredCandidates = _allCandidates.Where(c =>
-                    {
-                        string name = filterByMaterial ? CurrentMaterialName(c) : (c.Type.Name ?? "");
-                        bool contains = name.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0;
-                        bool exact = string.Equals(name, filter, StringComparison.CurrentCultureIgnoreCase);
-                        bool startsWith = name.StartsWith(filter, StringComparison.CurrentCultureIgnoreCase);
-                        bool endsWith = name.EndsWith(filter, StringComparison.CurrentCultureIgnoreCase);
-                        return filterMode switch
-                        {
-                            0 => contains,
-                            1 => !contains,
-                            2 => exact,
-                            3 => !exact,
-                            4 => startsWith,
-                            5 => endsWith,
-                            _ => contains,
-                        };
-                    }).ToList();
+                    _filteredCandidates = _allCandidates.Where(c => MatchesFilter(c, filter, filterMode, filterByMaterial)).ToList();
                 }
             }
 
@@ -391,9 +429,7 @@ namespace WallSplitter
                 // 슬롯이 여러 개인 유형은 같은 유형 이름이 여러 행에 걸쳐 나타나므로, 라벨(레이어 2, 파라미터
                 // 이름 등)을 이름 뒤에 덧붙여 어느 슬롯의 행인지 구분할 수 있게 한다. 슬롯이 하나뿐인 유형은
                 // Label==""이라 기존과 완전히 동일하게 보인다.
-                string displayName = string.IsNullOrEmpty(candidate.Slot.Label)
-                    ? candidate.Type.Name ?? ""
-                    : $"{candidate.Type.Name} · {candidate.Slot.Label}";
+                string displayName = CandidateName(candidate);
                 var row = new MaterialRow { Key = KeyOf(candidate), TypeName = displayName };
 
                 var rowPanel = new StackPanel
@@ -420,6 +456,7 @@ namespace WallSplitter
                 var typeNameText = new TextBlock
                 {
                     Text = row.TypeName,
+                    ToolTip = row.TypeName,
                     Width = TypeNameColumn.ActualWidth,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     VerticalAlignment = VerticalAlignment.Center
@@ -486,6 +523,7 @@ namespace WallSplitter
 
             string currentName = CurrentMaterialName(candidate);
             row.CurrentMaterialText.Text = currentName;
+            row.CurrentMaterialText.ToolTip = string.Join("\n", CurrentMaterialIds(candidate).Select(MaterialNameOf).Distinct());
 
             bool isChecked = _checkedIds.Contains(row.Key);
             if (isChecked && _selectedMaterialId != ElementId.InvalidElementId)
@@ -629,12 +667,11 @@ namespace WallSplitter
                 CandidateKey key = KeyOf(candidate);
                 if (!_checkedIds.Contains(key)) continue;
 
-                ElementId current = _workingMaterialIds.TryGetValue(key, out ElementId w) ? w : candidate.Slot.MaterialId;
-                if (_selectedMaterialId == current) continue;
+                if (CurrentMaterialIds(candidate).All(id => id == _selectedMaterialId)) continue;
 
                 // 이 슬롯이 세션 중 처음으로 실제 바뀌는 순간에만 "진짜 원래 재료"를 기록한다.
                 if (!_trueOriginalMaterialIds.ContainsKey(key))
-                    _trueOriginalMaterialIds[key] = candidate.Slot.MaterialId;
+                    _trueOriginalMaterialIds[key] = new HashSet<ElementId>(OriginalMaterialIds(candidate));
                 _workingMaterialIds[key] = _selectedMaterialId;
                 appliedKeys.Add(key);
             }
@@ -656,24 +693,41 @@ namespace WallSplitter
 
         // NamerWindow.FinalApplyButton_Click과 동일하게, 체크 여부와 무관하게 _workingMaterialIds에 누적된
         // (=지난 "적용" 클릭들로 확정된) 변경 사항만 그대로 모델에 옮겨 쓴다.
-        private void FinalApplyButton_Click(object sender, RoutedEventArgs e)
+        private void BuildAssignmentResults(out List<(ElementId, MaterialSlot, ElementId)> result,
+            out List<MaterialInstanceAssignment> instanceResult)
         {
-            var result = new List<(ElementId, MaterialSlot, ElementId)>();
+            result = new List<(ElementId, MaterialSlot, ElementId)>();
+            instanceResult = new List<MaterialInstanceAssignment>();
             foreach (KeyValuePair<CandidateKey, ElementId> kvp in _workingMaterialIds)
             {
-                ElementId trueOriginal = _trueOriginalMaterialIds.TryGetValue(kvp.Key, out ElementId orig) ? orig : kvp.Value;
-                if (kvp.Value == trueOriginal) continue;
+                if (!_trueOriginalMaterialIds.TryGetValue(kvp.Key, out HashSet<ElementId>? originals)
+                    || originals.All(id => id == kvp.Value)) continue;
                 if (!_candidatesById.TryGetValue(kvp.Key, out MaterialCandidate? candidate)) continue;
-                result.Add((candidate.Type.Id, candidate.Slot, kvp.Value));
+                if (candidate.IsInstance)
+                    instanceResult.Add(new MaterialInstanceAssignment(candidate.Type.Id, candidate.Slot,
+                        candidate.InstanceMaterials.Keys.ToList(), kvp.Value));
+                else result.Add((candidate.Type.Id, candidate.Slot, kvp.Value));
             }
+        }
 
-            if (result.Count == 0)
+        private void FinalApplyButton_Click(object sender, RoutedEventArgs e)
+        {
+            BuildAssignmentResults(out var result, out var instanceResult);
+            if (result.Count == 0 && instanceResult.Count == 0)
             {
                 MessageBox.Show("모델에 적용할 변경 사항이 없습니다. 먼저 유형을 선택하고 재료를 지정한 뒤 '적용'을 눌러보세요.", "재료 지정", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
+            if (instanceResult.Count > 0 && MessageBox.Show(
+                $"인스턴스 재료 {instanceResult.Count}개 항목을 유형별 전체 인스턴스에 적용합니다.\n" +
+                $"대상 인스턴스 {instanceResult.SelectMany(item => item.InstanceIds).Distinct().Count()}개\n" +
+                "재료 검색과 관계없이 해당 유형의 모든 인스턴스가 변경됩니다. 계속할까요?",
+                "인스턴스 재료 일괄 지정", MessageBoxButton.YesNo, MessageBoxImage.Warning,
+                MessageBoxResult.No) != MessageBoxResult.Yes) return;
+
             Result = result;
+            InstanceResult = instanceResult;
             DialogResult = true;
             Close();
         }
@@ -687,7 +741,7 @@ namespace WallSplitter
         private void UpdatePendingChangesText()
         {
             int pending = _workingMaterialIds.Count(kvp =>
-                _trueOriginalMaterialIds.TryGetValue(kvp.Key, out ElementId orig) && kvp.Value != orig);
+                _trueOriginalMaterialIds.TryGetValue(kvp.Key, out HashSet<ElementId>? originals) && originals.Any(id => kvp.Value != id));
             PendingChangesText.Text = pending == 0
                 ? "모델에 아직 반영되지 않은 변경 사항이 없습니다."
                 : $"아직 모델에 반영되지 않은 변경 사항 {pending}개 — '최종 적용'을 눌러야 실제로 저장됩니다.";

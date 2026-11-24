@@ -1,5 +1,18 @@
 # 경고Pick (Warning Pick)
 
+## 2026-09-29 — 선택/전체 요소 삭제 (v92)
+
+- 사용자 요청으로 하단에 별도 삭제 영역과 빨간 `DangerButtonStyle` 버튼 두 개를 추가했다. '선택한 요소 삭제'는 **현재 목록의 체크박스**, '전체 삭제'는 **현재 필터 결과 전체(접힌 항목 포함)**가 대상이다. Revit 자체 선택이나 프로젝트의 모든 요소를 뜻하지 않는다. 화면·툴팁·확인창에 범위를 명시한다.
+- 실제 요소 삭제이며 '경고 자동 해결/경고 문구 삭제' 기능이 아니다. 아래 자동 해결 보류 결정과 구분할 것.
+- `WarningPickDeleteRequest`는 요청 당시 문서와 중복 제거한 ID 목록을 고정한다. 창 종료/문서 갱신 시 대기 삭제를 폐기하고, 실행 시 문서 유효성·경로/제목·ProjectInformation.UniqueId를 대조한다. UIApplication을 창에 저장하지 않는다.
+- `WarningPickDeleteService.Delete`는 유효한 ExternalEvent 컨텍스트에서만 실행한다. 현재 경고에 여전히 속하는 요소인지 재검사하고, **사전 삭제 트랜잭션을 반드시 RollBack**해 Revit이 반환하는 전체 삭제 집합(의존 요소 포함)을 구한다. 실패하면 적용하지 않는다.
+- 사전 트랜잭션이 완전히 되돌아간 뒤 TaskDialog 경고 아이콘·문서·범위·대상/의존/합계 개수 및 펼친 상세 목록(카테고리/이름/ID)을 표시한다. **Yes/No + DefaultButton=No + AllowCancellation=true**. 오직 명시적 Yes 응답만 별도 실제 삭제 트랜잭션으로 연결된다. 취소 시 모델 변경 없음.
+- 실제 삭제 집합이 사전 확인 집합과 다르면 롤백한다. 한 번의 트랜잭션으로 처리해 실패 시 부분 삭제하지 않으며, 핀/그룹/소유권을 강제로 풀지 않는다. 실패 전처리기로 경고를 무시하지 않는다. 실패 처리는 모달로 설정하고 Commit 결과가 Committed인 경우에만 완료로 보고한다.
+- 삭제 요청을 일반 선택/격리보다 먼저 소비하고 재실행되지 않게 PendingDelete를 먼저 비운다. 실행 중 DocumentChanged의 중복 갱신은 생략하고 finally에서 한 번 갱신한다. 창의 삭제 버튼은 대기/실행 중 비활성화하며 새 WPF 핸들러 예외는 밖으로 내보내지 않는다.
+- 관련 안전 수정: 문서를 교체할 때 이전 체크박스 목록을 비워, RenderTypeGroups가 이전 문서의 체크를 동일 숫자 ID의 새 문서 요소에 복원하지 않게 했다. XAML 초기 TextChanged는 컨트롤/목록 초기화 전이면 넘긴다.
+- 검증: `.codex-build/release-v92/DeleteSmoke.csproj`는 실제 삭제 서비스를 링크하고 Revit API만 대역으로 치환했다. 명시적 동의/취소/중복/의존 요소/빈 목록/누락/해결된 경고/읽기전용/기존 트랜잭션/범위 변경/삭제 예외/Commit 롤백 테스트 통과. 실제 XAML과 Theme를 읽은 WPF 렌더에서 기본 820×700 및 최소 680×560 하단 빨간 버튼을 확인했다(이벤트 연결은 렌더 하네스에서만 제거).
+- Revit 2023~2027 빌드 오류 0개. **라이브 Revit 삭제·실행 취소·문/창 의존 삭제·워크셰어링 제한은 미검증**이며 복사한 테스트 모델에서 확인할 것. 작업 중 실제 사용자 모델은 삭제하지 않았다.
+
 `WarningPick*.cs`를 건드리기 전에 이 문서를 읽을 것.
 
 Added 2026-08-25 on request: Revit 기본 경고 대화상자는 경고를 클릭하면 뷰에서 하이라이트만 해 주고,
@@ -101,3 +114,35 @@ Added 2026-08-25 on request: Revit 기본 경고 대화상자는 경고를 클�
   이 설계안을 사용자에게 설명한 뒤(위험성·불확실성 포함), **사용자가 지금은 넣지 말자고 결정했다** — 요청
   없이 먼저 구현하지 말 것. 나중에 다시 요청이 오면 이 설계안부터 재검토.
 - 아이콘은 별도 PNG 없이 `App.CreateWarningIcon`이 실행 시점에 그린다(패턴 스튜디오 아이콘과 같은 방식).
+- **ExternalEvent 예외 차단 (2026-09-01, 선제 보강)**: `WarningPickExternalEventHandler.Execute`의 본문을
+  `ExecuteCore`로 옮기고 최상위에서 예외를 잡아 `TaskDialog`로 알린다. `IExternalEventHandler.Execute`에서
+  예외가 밖으로 나가면 Revit은 사용자에게 아무 것도 보여주지 않아 "버튼을 눌러도 반응이 없다"는 증상으로만
+  남는다(`docs/quick-toggle/CLAUDE.md`에 기록된 것과 같은 문제). 문서 불일치·요소 삭제 같은 예상 가능한 경우는
+  기존처럼 각 `Execute*` 메서드가 직접 안내하고, 이 최상위 catch는 예상 못 한 예외 전용이다.
+- **실시간 갱신 (2026-09-03)**: 사용자 요청 — *"경고가 없어지거나 생겼을때 새로고침을 누르지않아도
+  실시간으로 경고가 사라지고 나타나는게 창에서 바로 보였으면 좋겠어."* `App.OnStartup`이
+  `ControlledApplication.DocumentChanged`를 구독하고(`OnWarningPickDocumentChanged`),
+  `WarningPickWindow.RequestLiveRefresh(changedDoc)`가 기존 "새로고침"과 **똑같은** `ExternalEvent`
+  경로에 요청만 넣는다. **`Idling`을 쓰지 않은 이유**: 경고는 모델이 바뀔 때만 달라지는데 `Idling`은
+  초당 여러 번 발생한다 - `DocumentChanged`는 트랜잭션이 커밋될 때마다 한 번씩이라 이 용도에 정확히
+  맞고, `docs/quick-toggle/CLAUDE.md`가 세 번 기록한 "Idling 콜백에서 매 틱 비싼 일을 한다" 문제도
+  애초에 생기지 않는다. `DocumentChanged` 콜백 자체에서는 조회를 전혀 하지 않는다(그 콜백은 Revit이
+  문서를 정리하는 도중이라 가볍게 끝내야 한다) - 실제 `GetWarnings()`는 `ExecuteRefresh`가 유효한
+  컨텍스트에서 한다.
+  - **경고가 실제로 달라졌을 때만 다시 그린다** (`WarningPickTypeGroup.SignatureOf` ↔
+    `_lastSignature`). 트랜잭션마다 무조건 다시 그리면 체크 상태·펼침·스크롤이 계속 튀고, 이 프로젝트가
+    여러 번 겪은 "필요 없는데 다시 그려서 클릭이 씹힌다" 문제가 그대로 재현된다. 지문은 발생 건별
+    `WarningPickGroup.Key`(설명 문구 + **정렬한** 요소 ID 집합)를 모아 정렬해 이은 문자열이다 -
+    `FailureMessage`에는 세션을 넘어 안정적인 식별자가 없고, 목록 안 순서(index)는 다른 발생 건이
+    사라지면 밀려서 키로 쓸 수 없다.
+  - **다시 그릴 때 사용자 상태를 살린다**: 체크된 요소 ID(`_checkedElementIds`), 펼쳐 둔 발생 건
+    (`_expandedOccurrenceKeys`, `WarningPickGroup.Key` 기준), 스크롤 위치를 보존한다. 스크롤 복원은
+    `Dispatcher.BeginInvoke(..., DispatcherPriority.Loaded)`로 미뤄야 한다 - 방금 지웠다 다시 채운
+    직후에는 `ScrollableHeight`가 아직 0이라 `ScrollToVerticalOffset`이 잘린다. 상위(종류/발생 건)
+    체크박스는 되살리지 않는다(하위를 향한 캐스케이드만 있고 역방향 로직이 없으므로 - 위 항목 참고).
+  - **자동 갱신은 문서 불일치를 조용히 넘긴다** (`PendingRefreshSilent`). 요청을 넣은 시점엔 대상
+    문서가 맞았어도 `ExternalEvent`가 실제로 실행될 때까지 사용자가 다른 프로젝트로 전환했을 수 있는데,
+    그때 `ShowDocumentMismatch()`를 띄우면 **다른 프로젝트에서 작업하는 내내 대화상자가 저절로
+    튀어나온다**(구현 중 발견해 미리 막은 것). 수동 "새로고침"은 예전처럼 그대로 알려준다.
+  - 수동 "새로고침" 버튼은 남겨 뒀다 - 문서 변경 없이 다시 확인하고 싶을 때, 또는 자동 갱신이 어떤
+    이유로 놓쳤을 때의 확실한 수단이다. 눌렀는데 목록이 그대로면 "새로고침됨 - 변경 없음"으로 알려준다.

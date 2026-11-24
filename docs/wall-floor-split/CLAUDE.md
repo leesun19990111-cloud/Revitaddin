@@ -1,5 +1,41 @@
 # 벽체 분리 / 바닥 분리
 
+## 2026-11-12 — 문·창 기반 벽 개구부 기능 삭제 (v117)
+
+사용자 요청으로 벽 개구부와 벽 쌍 개구부 명령, 호스트 이동 및 타공 전용 코드를 제거했다. 아래 v113~v116 항목은 과거 이력이다. 기존 RVT에 있는 개구부 요소에 대한 삭제나 마이그레이션은 실행하지 않는다.
+
+## 2026-11-12 — 결합 벽의 독립 개구부 (v116)
+
+- 실모델의 두 벽 쌍을 읽기 전용으로 확인했다. 벽 결합으로 문 절단이 상대 벽까지 전파돼 그 위치의 솔리드 교차 부피가 0이었으며, 상대 벽의 FindInserts에 독립 Opening은 없었다. v115는 이를 이동 불가/이미 타공으로 오판했다.
+- 완전히 비어 있는 범위도 벽 경계를 통과하면 생성 대상으로 둔다. 동일 벽에 위치·크기가 일치하는 직사각형 Opening 요소가 있을 때만 재사용한다. 커밋 후 독립 요소의 호스트와 관통 상태를 재검증한다. 호스트 이동 검토 시 실제 상대 벽에 붙어 있는 다른 문·창과의 충돌은 별도로 검사한다.
+- Revit 2026에서 실제 결합 벽·문을 임시 모델에 복사해 결합을 유지한 독립 Opening 생성과 중복 인식을 검사했다. 이동 후 상태를 임시 모델에서 구성해 원래 벽에 독립 Opening이 생성되고 결합이 유지됨을 확인했다. 방향이 바뀐 문·창은 위치·치수·유형·마크가 일치하면 이동을 인정하고, 적용 전에 변경된 방향을 표시한다. 기본 새 호스트 선택은 직접 진행한다. 저널에서 확인한 해당 명령 ID는 CanPostCommand가 false였다. 제외 사유는 결과 본문과 저널에 표시한다.
+
+## 2026-11-12 — 벽 개구부와 벽 쌍 개구부 역할 구분 (v115)
+
+- 현재 모델에서 기본벽 두 개를 먼저 선택한다. 구조 속성은 두 기능 모두 사용하지 않는다. 선택한 두 벽에 직접 호스트된 문·창을 양쪽에서 찾아 문·창마다 상대 벽을 결정한다. 수직 직선 기본벽, 평행한 벽면, 5 mm 간격 허용과 실제 직사각형 윤곽·벽 경계 검증을 적용한다.
+- **벽 개구부**는 기존 호스트를 유지하고 상대 벽을 관통한다. **벽 쌍 개구부**는 Revit 기본 새 호스트 선택으로 상대 벽에 옮긴 문·창의 유형·마크·방향·윤곽을 확인하고, 이동 전 치수와 위치로 원래 벽을 관통한다. 두 모드의 타공은 같은 검증·롤백 경로를 사용한다.
+- 벽 쌍 개구부는 새 호스트 위치에 다른 개구부가 겹치거나 이미 구멍이 있으면 이동 대상으로 잡지 않는다. 호스트 이동과 개구부 적용은 별도의 실행 취소 단계다.
+
+## 2026-11-12 — 벽 쌍 개구부
+
+- 기존 구조벽 개구부와 별도 버튼. 현재 모델에서 수직 직선 기본벽 두 개 이상을 먼저 선택하면 해당 벽의 문·창을 자동으로 찾는다. 한 문·창에 맞는 상대 벽이 여러 개면 검토 목록에 제외 사유를 표시한다. 평행하고 벽면 간격이 5 mm 이내이며 대상 벽이 문·창 구간을 덮어야 한다. 건축+구조에서는 구조벽을, 구조+구조에서는 문·창별 반대쪽 벽을 타공한다.
+- 구조벽에서 건축벽으로 옮길 경우 원래 윤곽·유형·마크·방향을 실행 중인 Revit에 임시 기록한다. 사용자가 기본 새 호스트 선택을 사용한 뒤 같은 버튼에서 이어서 진행한다. 기존 요소 또는 건축벽의 새 문·창 한 개가 원래 정보와 일치할 때만 타공 검토로 넘어간다. 네이티브 호스트 이동은 사용자 동작으로서 개구부 생성과 별도의 실행 취소 단계다.
+- 기존 개구부와 일부만 겹치거나 벽 경계를 벗어나면 제외한다. 양쪽 벽에 생성한 새 개구부는 한 실행 취소 단위로 확정하고, 관통 검증 실패 시 일괄 롤백한다.
+
+## 2026-11-12 — 구조벽 개구부
+
+- 현재 프로젝트의 구조 체크된 벽 한 개와 인접 기본벽의 문·창 여러 개를 선택한다. 양쪽은 수직 직선 기본벽이며 평행한 면 간격은 5 mm 이내다.
+- 설치된 RevitAPIIFC의 GetInstanceCutoutFromWall에서 실제 윤곽을 읽고 수평·수직 네 변을 가진 사각형을 구조벽 양면 사이 중심에 투영한다. 문틀·창틀 바운딩박스나 유형의 명목 폭·높이를 사용하지 않는다.
+- 구조벽 솔리드와 교차해 경계 이탈·기존 구멍·부분 겹침을 제외한다. 문·창 ID별 치수와 제외 사유를 확인한 뒤 기본 Opening을 생성한다. 커밋 후 타공 구간의 솔리드 잔류를 검사한 뒤 트랜잭션 그룹을 확정한다. 실패하면 해당 실행을 롤백한다. 결과는 Revit 실행 취소로 되돌릴 수 있다.
+- Revit 2026 임시 프로젝트에서 기본 문 915×2134 mm, 창 406×610 mm를 한 구조벽에 생성해 두 구간 모두 잔류 벽 부피 0과 올바른 호스트를 확인했다. 떨어진 벽은 제외했고 관통 검증 실패를 유도한 경우 생성된 개구부가 롤백됐다.
+
+## 2026-10-30 — 끝 레이어 한 층 분리
+
+- `SplitWallOneLayerCommand`와 `SplitFloorOneLayerCommand`는 기존 전체 분리 엔진의 별도 진입점이다. 원본 전체 분리 버튼의 삭제 동작은 그대로 둔다. 유형별 선택 창에서 벽 외측/내측 또는 바닥 상단/하단 중 하나를 고른다. 중간 레이어는 잔여 층을 한 요소로 유지할 수 없어 지원하지 않는다.
+- 벽은 기본벽, 수평 복합구조, 중심선 위치 기준, 직선/호, 미고정, 프로파일 미편집, 문·창·개구부 없음만 처리한다. 새 단층 벽은 기존 오프셋 경로로 만들고, 원본 벽은 복제한 유형의 `CompoundStructure.DeleteLayer(rawIndex)`로 선택 층만 제거한 뒤 잔여 두께 중심만큼 위치선을 이동한다. 한 층 작업의 기존 Tx1/Tx2는 `TransactionGroup`으로 묶어 실패 시 함께 취소한다. 프로파일 복사 단계는 지원 대상에서 제외하므로 실행되지 않는다.
+- 바닥은 기존 평바닥/경계 스케치 제한에 더해 미고정·호스트 개구부 없음·양 끝 유효 두께를 요구한다. 새 단층 바닥은 기존 경계와 `OriginalHeightOffset - TopOffset`으로 만들고, 원본 유형은 `DeleteLayer`로 한 층만 제거한다. 위층을 떼면 원본 높이 오프셋을 그 두께만큼 낮추고 아래층을 떼면 오프셋을 유지한다. `SetLayers`로 잔여 구조를 재조립하면 구조재료/가변/코어 정보가 초기화될 수 있으므로 사용하지 않는다.
+- Revit 2023~2027 API 빌드는 통과했으나 실제 Revit 모델에서 벽 접합·바닥 구멍·유형 제약에 따른 커밋은 아직 테스트하지 않았다. 새 단층 요소는 기존 전체 분리와 같이 원본의 모든 인스턴스 속성을 복제하지는 않는다.
+
 `Class1.cs`(`SplitWallCommand`), `SplitFloorCommand.cs`, `NamingSettings.cs` + `SettingsWindow.xaml(.cs)` + `SettingsCommand.cs`(유형 이름 규칙, 단일/복수 설정)를 건드리기 전에 반드시 이 문서를 읽을 것 — 특히 트랜잭션을 3단계로 나눈 이유와, 라이브 QA로 확정된 근본 원인 수정들(오프셋/프로파일 복사/코너 조인)은 재테스트 없이 되돌리지 말 것.
 
 - `WallSplitter/NamingSettings.cs` + `SettingsWindow.xaml(.cs)` + `SettingsCommand.cs` — the "설정" button opens a WPF window (owned by the Revit main window via `WindowInteropHelper` so it can't hide behind Revit) where the user builds the single-layer `WallType` naming template as an ordered, reorderable list of tokens (`ProjectName`/`BuildingName`/`Custom` are free-text typed in the window; `Material`/`Thickness` are **not editable** there — resolved per-layer at split time), each followed by a chosen separator (`""`/`-`/`_`). Saved as JSON to `%APPDATA%\WallSplitter\naming-settings.json` (global, cross-project; save failures are caught and shown in a MessageBox, never thrown out of the WPF handler); `Load()` falls back to the default template (`단일_{재질명}_{두께mm}mm`) if the file is missing/corrupt. `BuildName` strips Revit-forbidden name characters (`\ : { } [ ] | ; < > ? ` ~` + control chars) and falls back to the default template if the result is blank. Naming logic is Revit-independent and covered by a console smoke test (scratchpad `NamingTest`, all passing as of 2026-07-09). The move-up/move-down/remove row buttons use hand-drawn `Polygon`/`Line` shapes (`CreateTriangle`/`CreateXMark`), not text glyphs (`▲`/`▼`/`✕`) — live-tested invisible, likely because this WPF window shares Revit's process and Revit's own (possibly dark) global style resources bled into it, and/or the glyphs weren't in the button font. `SettingsWindow.xaml` also pins `Window.Resources` styles forcing black text on light `Button`/`TextBox`/`ComboBox`/`TextBlock` backgrounds for the same reason — don't remove either fix without re-testing live.
@@ -21,3 +57,10 @@
 - **First use of year-conditional compilation** (`WallSplitter.csproj`'s `DefineConstants`, added 2026-07-13 for the floor feature): `Floor.SlabShapeEditor` is a property in the 2023 API, a `GetSlabShapeEditor()` method from 2024 on (2024/2025 expose both, deprecated property removed by 2026) — confirmed by reflecting all 5 years' `Nice3point.Revit.Api.RevitAPI` packages via `MetadataLoadContext` (scratchpad `ApiProbe`), not guessed. Gated with `#if REVIT2023 / #else` in `SplitFloorCommand.cs`, using a `REVIT2023`/`REVIT2024_OR_GREATER` constant pair defined per `$(RevitVersion)` in the csproj (Nice3point SDK's `_OR_GREATER` naming convention, hand-rolled since we don't use their SDK — see `docs/build-system/CLAUDE.md`). This is the first time this pattern was needed since the project's start; add more such constants the same way if another API is found to differ by year.
 
 **Known limitations** (QA-reviewed 2026-07-09, accepted for now): doors/windows hosted on an original wall are deleted with it (not re-hosted onto the new layer walls); `TrimToIntersection` only handles Line-based wall pairs (Arc corners still rely on bare `AllowWallJoinAtEnd`, untested); only end-joins between *selected* walls are restored — T-joins/`JoinGeometryUtils` geometry joins are not; thickness display rounds to whole mm so 12.3mm vs 12.4mm layers merge into one type name; new walls are always non-structural and default room-bounding; stacked/vertically-compound wall types are skipped or untested; net48 payload's `System.Text.Json` can theoretically version-conflict with other net48 add-ins in Revit 2023/2024.
+
+- **널 가드 추가 (2026-09-01, 전체 점검에서 선제 보강 — 재현된 버그는 아님)**: `SplitWallCommand`에서 원인을
+  알기 어려운 `NullReferenceException`으로 끝날 수 있던 세 곳에 사유를 알려주는 예외를 넣었다. (1) `DirectType`
+  모드에서 `doc.GetElement(prep.DirectTypeIds[layerIndex]) as WallType`이 null인 경우(유형을 고른 뒤 삭제/교체됨),
+  (2) `GetOrCreateSingleLayerWallType`의 `sourceType.Duplicate(name) as WallType`과 `created.GetCompoundStructure()`가
+  null인 경우, (3) 프로파일 복사 단계에서 `doc.GetElement(task.SketchId) as Sketch`가 null인 경우.
+  전부 기존 try/catch 안이라 동작 흐름은 그대로이고, 사용자가 보는 메시지만 원인을 알 수 있게 바뀐다.

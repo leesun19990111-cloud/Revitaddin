@@ -1,0 +1,6 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Audit20261023\SunnyParameterManager.Tests.csproj.AssemblyReference.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Audit20261023\SunnyParameterManager.Tests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Audit20261023\SunnyParameterManager.Tests.AssemblyInfoInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Audit20261023\SunnyParameterManager.Tests.AssemblyInfo.cs
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Audit20261023\SunnyParameterManager.Tests.csproj.CoreCompileInputs.cache
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Tests\obj\Audit20261023\SunnyParameterManager.Tests.sourcelink.json

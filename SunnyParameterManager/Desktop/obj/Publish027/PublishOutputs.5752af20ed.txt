@@ -1,0 +1,7 @@
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v027\Desktop\SunnyParameterManager.exe
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v027\Desktop\SunnyParameterManager.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v027\Desktop\SunnyParameterManager.deps.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v027\Desktop\SunnyParameterManager.runtimeconfig.json
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v027\Desktop\SunnyParameterManager.pdb
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v027\Desktop\SunnyParameterManager.Core.dll
+C:\Users\User\Desktop\Sunny\자동화 작업\wall addin\WallSplitter\SunnyParameterManager\Build\v027\Desktop\SunnyParameterManager.Core.pdb
