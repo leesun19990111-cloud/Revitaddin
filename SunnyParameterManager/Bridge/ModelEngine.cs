@@ -158,6 +158,7 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                 result.Success = true;
                 result.Message = metadata.CentralRebuild != null ? "선택한 RVT를 새 중앙으로 만들 수 있는지 검토했습니다. 원본을 저장하지 않았습니다." :
                     metadata.ProjectBasePointAudit is { } point ? $"프로젝트 기준점 점검: {point.Status}. 원본을 저장하지 않았습니다." :
+                    metadata.TypePropertyReview is { } review ? $"KAC 건축·구조 유형 {review.Types.Count:N0}개를 조회했습니다." :
                     metadata.MaterialAuditItems is { } audit ? $"재료 점검 {audit.Count:N0}건을 읽었습니다. 원본을 저장하지 않았습니다." :
                     $"{metadata.Rows.Count:N0}개 매개변수 값을 읽었습니다. 원본을 저장하지 않았습니다.";
             }

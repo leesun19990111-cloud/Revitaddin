@@ -26,6 +26,7 @@ public sealed class RuleSet
     public RoomUseProfile? RoomUse { get; set; }
     // Room 전체를 읽기 전용 20열 Excel로 내보낸다.
     public bool RoomReview { get; set; }
+    public TypePropertyReviewProfile? TypePropertyReview { get; set; }
     public bool GuardhouseRooms { get; set; }
 }
 
@@ -98,6 +99,11 @@ public static class RulePlanner
 
     public static void Validate(RuleSet? file)
     {
+        if (file?.Version == 14 || file?.TypePropertyReview != null)
+        {
+            TypePropertyReview.Validate(file!);
+            return;
+        }
         if (file?.Version == 13 || file?.GuardhouseRooms == true)
         {
             GuardhouseRoomRules.Validate(file);
@@ -216,6 +222,7 @@ public static class RulePlanner
         if (file.Version == 3) return SpaceRulePlanner.Plan(file, available, pending);
         if (file.Version == 11) return RoomUsePlanner.Plan(file, available, pending);
         if (file.Version == 13) return GuardhouseRoomRules.Plan(file, available, pending);
+        if (file.Version == 14) throw new InvalidOperationException("유형속성검토는 읽기 전용입니다. 룰셋 변경 검토에서 엑셀을 만듭니다.");
         if (file.Version == 12) throw new InvalidOperationException("룸 검토 룰셋은 읽기 전용입니다. '룰셋 변경 검토'에서 엑셀만 만듭니다.");
         var owners = available.GroupBy(r => (r.ModelPath, r.OwnerId, r.Scope)).Select(g => g.ToList()).ToList();
         var assignments = new Dictionary<string, (ParameterRow Row, string Value, string Rule)>();

@@ -28,6 +28,7 @@ internal static class Program
             RoomProcedureTests.Run(Check, Reject);
             GuardhouseRoomTests.Run(Check, Reject);
             RoomReviewTests.Run(Check, Reject);
+            TypePropertyReviewTests.Run(Check, Reject);
             TransferTempCleanupTests.Run(Check);
             SpecRuleTests.Run(Check, Reject);
             SpecRemoveOnlyTests.Run(Check, Reject);

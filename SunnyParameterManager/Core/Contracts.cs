@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.8.0";
+    public const string Release = "0.8.1";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -53,6 +53,7 @@ public sealed class ModelSnapshot
     // 속성규격 룰셋(버전5)으로 조회할 때만 채운다. 매개변수 정의(바인딩) 목록.
     public DefinitionSnapshot? Definitions { get; set; }
     public List<MaterialAuditItem>? MaterialAuditItems { get; set; }
+    public TypePropertyReviewSnapshot? TypePropertyReview { get; set; }
     public ProjectBasePointAudit? ProjectBasePointAudit { get; set; }
     public CentralRebuildEvidence? CentralRebuild { get; set; }
     public void ConnectCatalogs() { foreach (var row in Rows) row.Choices = Catalogs.GetValueOrDefault(row.ChoiceCatalog, []); }

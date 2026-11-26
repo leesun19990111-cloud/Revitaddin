@@ -29,7 +29,20 @@ public static class RoomReviewWorkbook
         if (modelList.Count == 0) throw new InvalidOperationException("공간정보를 점검할 모델이 없습니다.");
         var unplaced = modelList.Select(m => (Model: m, Rooms: RoomReviewRules.UnplacedRooms(m))).ToList();
         var findingList = findings.ToList();
-        var names = SheetNames(modelList);
+        var names = SheetNames(modelList, UnplacedSheetName);
+        return SaveStyled(path, [UnplacedSheetName, .. names], (zip, number) =>
+        {
+            if (number == 1) WriteUnplacedSheet(zip, unplaced);
+            else
+            {
+                var model = modelList[number - 2];
+                WriteSheet(zip, number, model, findingList.Where(f => string.Equals(f.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
+            }
+        });
+    }
+
+    internal static string SaveStyled(string path, IReadOnlyList<string> names, Action<ZipArchive, int> writeSheet)
+    {
         var fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         var temporary = fullPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -41,21 +54,16 @@ public static class RoomReviewWorkbook
                 var contentTypes = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>");
                 var workbook = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets>");
                 var relationships = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">");
-                for (var i = 0; i <= modelList.Count; i++)
+                for (var i = 0; i < names.Count; i++)
                 {
                     var number = i + 1;
                     contentTypes.Append($"<Override PartName=\"/xl/worksheets/sheet{number}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>");
-                    workbook.Append($"<sheet name=\"{SecurityElement.Escape(i == 0 ? UnplacedSheetName : names[i - 1])}\" sheetId=\"{number}\" r:id=\"rId{number}\"/>");
+                    workbook.Append($"<sheet name=\"{SecurityElement.Escape(names[i])}\" sheetId=\"{number}\" r:id=\"rId{number}\"/>");
                     relationships.Append($"<Relationship Id=\"rId{number}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet{number}.xml\"/>");
-                    if (i == 0) WriteUnplacedSheet(zip, unplaced);
-                    else
-                    {
-                        var model = modelList[i - 1];
-                        WriteSheet(zip, number, model, findingList.Where(f => string.Equals(f.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
-                    }
+                    writeSheet(zip, number);
                 }
                 contentTypes.Append("<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>");
-                relationships.Append($"<Relationship Id=\"rId{modelList.Count + 2}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>");
+                relationships.Append($"<Relationship Id=\"rId{names.Count + 1}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>");
                 contentTypes.Append("</Types>"); workbook.Append("</sheets></workbook>"); relationships.Append("</Relationships>");
                 Write(zip, "[Content_Types].xml", contentTypes.ToString());
                 Write(zip, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"utf-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>");
@@ -68,9 +76,10 @@ public static class RoomReviewWorkbook
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
-    private static List<string> SheetNames(IReadOnlyList<ModelSnapshot> models)
+    internal static List<string> SheetNames(IReadOnlyList<ModelSnapshot> models, string? reservedName = null)
     {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { UnplacedSheetName };
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (reservedName != null) used.Add(reservedName);
         var names = new List<string>(models.Count);
         for (var i = 0; i < models.Count; i++)
         {
@@ -177,7 +186,7 @@ public static class RoomReviewWorkbook
     private static string Value(ParameterRow row) => row.HasValue
         ? (row.Display.Length > 0 ? row.Display : row.Raw).Trim() : "";
 
-    private static void Row(StreamWriter writer, int number, IReadOnlyList<string> values, bool[]? problems = null,
+    internal static void Row(StreamWriter writer, int number, IReadOnlyList<string> values, bool[]? problems = null,
         bool header = false, bool[]? missingRequired = null, int numericColumn = -1)
     {
         writer.Write($"<row r=\"{number}\" ht=\"{(header ? 28 : 21)}\" customHeight=\"1\">");

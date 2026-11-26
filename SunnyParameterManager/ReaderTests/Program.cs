@@ -205,4 +205,17 @@ Check(auditSnapshot.MaterialAuditItems!.All(x => x.Material != "KAC-외장"), "�
 CleanupTests.Run(Check);
 TypeCodeReaderTests.Run(Check);
 GroupTests.Run(Check);
+var typeReviewDoc = new Document { ProjectInformation = new ProjectInfo(), IsWorkshared = true };
+typeReviewDoc.ProjectInformation.Parameters.Add(new Parameter { Definition = new() { Name = "공항코드" }, Value = "PUS" });
+typeReviewDoc.Worksets.Add(new Workset { Name = "01_건축" });
+var typeReviewType = new ElementType { Name = "KAC-A-WA1100" };
+typeReviewType.Parameters.Add(new Parameter { Id = new((long)BuiltInParameter.IFC_EXPORT_ELEMENT_TYPE_AS), Definition = new() { Name = "Export Type to IFC As" }, Value = "IfcWall" });
+var typeReviewInstance = new Element { TypeId = typeReviewType.Id };
+typeReviewInstance.Parameters.Add(new Parameter { Definition = new() { Name = "IsExternal" }, Value = "0", StorageType = StorageType.Integer });
+typeReviewDoc.Elements.AddRange([typeReviewType, typeReviewInstance, new ElementType { Name = "기본 벽" }]);
+var typeReview = TypePropertyReviewReader.Read(typeReviewDoc);
+Check(typeReview.Airport.Text == "PUS" && typeReview.Types.Count == 1, "실제 유형 조회 경로의 프로젝트 정보와 KAC 유형 선별");
+var audited = typeReview.Types.Single();
+Check(audited.TypeValues["다음으로 IFC로 내보내기"].Text == "IfcWall" && audited.InstanceValues["작업세트"].Single().Text == "01_건축" &&
+    audited.InstanceValues["IsExternal"].Single().Text == "0", "IFC 식별자·배치 작업세트·IsExternal 0 현장 데이터 형식 조회");
 Console.WriteLine($"TOTAL {count} PASS · 실제 ParameterReader/CleanupWriter의 API 대역 검사; RVT 저장 검증 아님");

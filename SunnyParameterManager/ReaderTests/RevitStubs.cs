@@ -5,7 +5,7 @@ namespace Autodesk.Revit.DB
  public enum CategoryType { Model, Annotation, Internal }
  public enum ViewType { Undefined, FloorPlan, CeilingPlan, Elevation, Section, Detail, DraftingView, Legend, Schedule, ThreeD, DrawingSheet, Internal, ProjectBrowser, SystemBrowser }
  public enum StorageType { String, Integer, Double, ElementId }
- public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053, ROOM_NAME = -1006900, ROOM_NUMBER = -1006901, ROOM_LEVEL_ID = -1006916, BASEPOINT_NORTHSOUTH_PARAM = -1150191, BASEPOINT_EASTWEST_PARAM = -1150192, BASEPOINT_ELEVATION_PARAM = -1150193, BASEPOINT_ANGLETON_PARAM = -1150194 }
+ public enum BuiltInParameter { ELEM_PARTITION_PARAM = -1002053, IFC_EXPORT_ELEMENT_TYPE_AS = -1019015, IFC_EXPORT_ELEMENT_AS = -1019014, ROOM_NAME = -1006900, ROOM_NUMBER = -1006901, ROOM_LEVEL_ID = -1006916, BASEPOINT_NORTHSOUTH_PARAM = -1150191, BASEPOINT_EASTWEST_PARAM = -1150192, BASEPOINT_ELEVATION_PARAM = -1150193, BASEPOINT_ANGLETON_PARAM = -1150194 }
  public enum BuiltInCategory { OST_Rooms = -2000160 }
  public enum WorksetKind { UserWorkset }
  public enum CheckoutStatus { NotOwned, OwnedByOtherUser }
@@ -50,6 +50,8 @@ namespace Autodesk.Revit.DB
   public List<ElementId> MaterialIds { get; } = []; public List<ElementId> PaintMaterialIds { get; } = [];
   public ICollection<ElementId> GetMaterialIds(bool returnPaintMaterials) => returnPaintMaterials ? PaintMaterialIds : MaterialIds;
   public ElementId GetTypeId() => TypeId;
+  public WorksetId WorksetId { get; set; } = new(1);
+  public IList<Parameter> GetParameters(string name) => Parameters.Where(p => p.Definition.Name == name).ToList();
   public Parameter? get_Parameter(BuiltInParameter id) => Parameters.SingleOrDefault(p => p.Id.Value == (long)id);
  }
  public class ElementType : Element { public string FamilyName { get; set; } = "패밀리"; public bool CanBeRenamed { get; set; } = true; }
