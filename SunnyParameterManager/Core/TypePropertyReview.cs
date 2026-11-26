@@ -31,7 +31,7 @@ public sealed class TypePropertyEntry
 
 public sealed record TypePropertyValue(string? Text = null, bool Ambiguous = false);
 public sealed record TypePropertyCell(string Value, string Issue = "");
-public sealed record TypePropertyRow(TypePropertyEntry? Type, List<TypePropertyCell> Cells);
+public sealed record TypePropertyRow(TypePropertyEntry Type, List<TypePropertyCell> Cells);
 
 public sealed partial class TypePropertyReview
 {
@@ -86,12 +86,11 @@ public sealed partial class TypePropertyReview
         var airportCell = Check([snapshot.Airport], value => Expected(value, airport, "파일명 공항코드를 확인할 수 없음"));
         var buildingCell = Check([snapshot.Building], value => Expected(value, building, buildingIssue));
 
-        if (snapshot.Types.Count == 0)
-        {
-            yield return new(null, Fields.Select(f => f == "공항코드" ? airportCell : f == "건축물번호" ? buildingCell : new TypePropertyCell("")).ToList());
-            yield break;
-        }
-        foreach (var type in snapshot.Types.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ThenBy(t => t.Family, StringComparer.Ordinal).ThenBy(t => t.ElementId, StringComparer.Ordinal))
+        var placedTypes = snapshot.Types.Where(t => t.InstanceCount > 0)
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(t => t.Family, StringComparer.Ordinal)
+            .ThenBy(t => t.ElementId, StringComparer.Ordinal);
+        foreach (var type in placedTypes)
         {
             var code = KacRulePlanner.TypeCode(type.Name.ToUpperInvariant());
             var ifc = _ifc.FirstOrDefault(i => code.StartsWith(i.Prefix, StringComparison.Ordinal))?.Value;
@@ -100,8 +99,7 @@ public sealed partial class TypePropertyReview
             {
                 "공항코드" => airportCell,
                 "건축물번호" => buildingCell,
-                "작업세트" => type.InstanceCount == 0 ? new("미배치") :
-                    Check(type.InstanceValues.GetValueOrDefault(field) ?? [new()], value =>
+                "작업세트" => Check(type.InstanceValues.GetValueOrDefault(field) ?? [new()], value =>
                     {
                         var expected = type.Name.StartsWith("KAC-A-", StringComparison.OrdinalIgnoreCase) ? "건축" : "구조";
                         return value != null && value.Contains(expected, StringComparison.Ordinal) ? "" : $"‘{expected}’이 포함된 작업세트 필요";

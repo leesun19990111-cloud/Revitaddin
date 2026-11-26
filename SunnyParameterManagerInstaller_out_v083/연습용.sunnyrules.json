@@ -1,0 +1,25 @@
+{
+  "Version": 1,
+  "Name": "샘플 벽체 업체명 입력 (연습 전용)",
+  "SampleOnly": true,
+  "Rules": [
+    {
+      "Name": "KAC-W 유형의 업체명",
+      "Match": {
+        "Scope": "유형",
+        "Category": "벽",
+        "Family": "기본 벽",
+        "Type": "KAC-W",
+        "TypeMatch": "시작"
+      },
+      "Set": [
+        {
+          "Name": "업체명",
+          "DataType": "text",
+          "Storage": "String",
+          "Value": "연습 업체"
+        }
+      ]
+    }
+  ]
+}

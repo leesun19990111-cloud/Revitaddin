@@ -44,10 +44,16 @@ internal static class TypePropertyReviewTests
             }
         };
         model.TypePropertyReview.Types.Add(column);
-        model.TypePropertyReview.Types.Add(new TypePropertyEntry { Name = "KAC-A-WA1110", ElementId = "13" });
+        model.TypePropertyReview.Types.Add(new TypePropertyEntry
+        {
+            Name = "KAC-A-WA1110", ElementId = "13", InstanceCount = 1,
+            InstanceValues = new() { ["작업세트"] = [new("01_건축")] }
+        });
+        var unplaced = new TypePropertyEntry { Name = "KAC-A-WA1111", ElementId = "14" };
+        model.TypePropertyReview.Types.Add(unplaced);
         var audit = new TypePropertyReview(rules.TypePropertyReview!);
         var rows = audit.Inspect(model).ToList();
-        check(rows.Count == 2 && rows[0].Cells[1].Value == "미배치" && rows[0].Cells[1].Issue == "", "미배치 유형도 표시하고 작업세트 판정 생략");
+        check(rows.Select(row => row.Type.ElementId).SequenceEqual(new[] { "13", "12" }) && rows[0].Cells[1].Issue == "", "미배치 유형을 제외하고 배치 유형만 점검");
         check(rows[0].Cells[8].Issue.Contains("조달청 기준값 없음"), "원본 조달청 매핑 공란은 붉은 셀에 사유 표시");
         check(rows[1].Cells.Select((c, i) => (c.Issue, i)).Where(c => c.Issue.Length > 0).Select(c => c.i).SequenceEqual(new[] { 1, 6, 9 }),
             "배치 작업세트·층 형식 오류·혼재 재료 공란만 강조");
@@ -59,18 +65,18 @@ internal static class TypePropertyReviewTests
         column.InstanceValues["다음으로 IFC로 내보내기"] = [new("IfcWall")];
         check(audit.Inspect(model).Last().Cells[0].Issue.Contains("IfcColumn"), "유형 IFC와 다른 배치 요소 IFC 검출");
         column.InstanceValues.Remove("다음으로 IFC로 내보내기");
-        var noTypes = new ModelSnapshot { Path = @"C:\GMP-99시범-SA.rvt", Title = "시범", TypePropertyReview = new() { Airport = new("GMP") } };
-        check(audit.Inspect(noTypes).Single().Cells[2].Issue == "" && audit.Inspect(noTypes).Single().Cells[3].Issue.Contains("없음"),
-            "GMP 공항코드 판정과 원본에 없는 건물 확인, 유형 없는 모델도 표시");
+        var gmpModel = new ModelSnapshot { Path = @"C:\GMP-99시범-SA.rvt", Title = "시범", TypePropertyReview = new() { Airport = new("GMP") } };
+        gmpModel.TypePropertyReview.Types.Add(new TypePropertyEntry { Name = "KAC-A-WA1110", InstanceCount = 1 });
+        check(audit.Inspect(gmpModel).Single().Cells[2].Issue == "" && audit.Inspect(gmpModel).Single().Cells[3].Issue.Contains("없음"),
+            "배치 유형이 있는 모델은 기존 GMP 공항코드 판정과 원본에 없는 건물 검토를 유지");
 
         var noIssues = new ModelSnapshot
         {
             Path = @"C:\local\미작성 매개변수 검토.rvt",
             Title = "여객터미널",
-            CentralPath = model.CentralPath,
-            TypePropertyReview = new() { Airport = new("MWX"), Building = new("1D001-1") }
+            TypePropertyReview = new() { Types = [unplaced] }
         };
-        ModelSnapshot[] models = [model, noTypes, noIssues];
+        ModelSnapshot[] models = [model, gmpModel, noIssues];
         var work = Path.Combine(Path.GetTempPath(), "SunnyTypeReview-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
         try
@@ -119,9 +125,11 @@ internal static class TypePropertyReviewTests
             }
             check(totals.Select((total, f) => total == SummaryCount((char)('B' + f), models.Length + 2)).All(matches => matches)
                 && SummaryCount('L', models.Length + 2) == issues, "매개변수별 총합과 보고서 문제 셀 합계 일치");
-            check(summary["A2"].Value != summary["A4"].Value && SummaryCount('L', 4) == 0, "동명 모델 구분 및 문제 없는 모델의 0건 표시");
+            check(summary["A2"].Value != summary["A4"].Value && SummaryCount('L', 4) == 0, "동명 모델 구분 및 미배치 유형만 있는 모델의 0건 표시");
+            check(ReadCells(4).Keys.All(reference => reference.EndsWith('1') && reference.Length == 2), "미배치 유형만 있는 상세 시트는 머리글만 표시");
             check(SummaryCount('G', 2) == 0 && SummaryCount('G', models.Length + 2) == 0, "IsExternal의 모델별 집계와 전체 합계는 0");
             var cells = ReadCells(2);
+            check(cells.Values.All(cell => cell.Value != unplaced.Name) && !cells.ContainsKey("D4"), "미배치 유형 행과 해당 강조 셀 모두 제외");
             check((string?)cells["H3"].Attribute("s") == "5" && (string?)cells["M3"].Attribute("s") == "5" && (string?)cells["L3"].Attribute("s") != "5" &&
                 (string?)cells["K3"].Attribute("s") != "5" && cells["Q3"].Value.Contains("재료명"), "문제 셀만 빨간 스타일로 표시하고 원인을 기록");
         }

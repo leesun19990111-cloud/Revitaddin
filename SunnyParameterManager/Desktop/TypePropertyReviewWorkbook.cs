@@ -47,9 +47,8 @@ public static class TypePropertyReviewWorkbook
         foreach (var row in review.Inspect(model))
         {
             var type = row.Type;
-            string[] values = [number == 1 ? model.Title : "", type?.Category ?? "", type?.Family ?? "",
-                type?.Name ?? "검토 대상 KAC 유형 없음", type?.ElementId ?? "",
-                type?.InstanceCount.ToString(CultureInfo.InvariantCulture) ?? "", .. row.Cells.Select(c => c.Value), ""];
+            string[] values = [number == 1 ? model.Title : "", type.Category, type.Family, type.Name, type.ElementId,
+                type.InstanceCount.ToString(CultureInfo.InvariantCulture), .. row.Cells.Select(c => c.Value), ""];
             var red = new bool[Headers.Length];
             var reasons = new List<string>();
             for (var i = 0; i < row.Cells.Count; i++)
@@ -61,7 +60,7 @@ public static class TypePropertyReviewWorkbook
                 reasons.Add($"{TypePropertyReview.Fields[i]} · {issue}");
             }
             values[^1] = string.Join(" | ", reasons);
-            RoomReviewWorkbook.Row(writer, ++number, values, missingRequired: red, numericColumn: type == null ? -1 : 5);
+            RoomReviewWorkbook.Row(writer, ++number, values, missingRequired: red, numericColumn: 5);
         }
         writer.Write($"</sheetData><autoFilter ref=\"A1:Q{number}\"/></worksheet>");
         return counts;
