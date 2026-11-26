@@ -28,7 +28,7 @@ internal static class TypePropertyReviewTests
         var model = new ModelSnapshot
         {
             Path = @"C:\local\개인 로컬.rvt", CentralPath = @"\\server\projects\MWX-15여객터미널-SA.rvt", Title = "여객터미널",
-            Query = query, TypePropertyReview = new() { FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion, Airport = new("MWX"), Building = new("1D001-1") }
+            Query = query, TypePropertyReview = new() { FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion, ProjectValues = new() { ["공항코드"] = new("MWX"), ["건축물번호"] = new("1D001-1") } }
         };
         var column = new TypePropertyEntry
         {
@@ -90,7 +90,7 @@ internal static class TypePropertyReviewTests
         column.InstanceValues["다음으로 IFC로 내보내기"] = [new("IfcWall")];
         check(audit.Inspect(model).Single(row => row.Type == column).Cells[0].Issue.Contains("IfcColumn"), "유형 IFC와 다른 배치 요소 IFC 검출");
         column.InstanceValues.Remove("다음으로 IFC로 내보내기");
-        var gmpModel = new ModelSnapshot { Path = @"C:\GMP-99시범-SA.rvt", Title = "시범", TypePropertyReview = new() { FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion, Airport = new("GMP") } };
+        var gmpModel = new ModelSnapshot { Path = @"C:\GMP-99시범-SA.rvt", Title = "시범", TypePropertyReview = new() { FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion, ProjectValues = new() { ["공항코드"] = new("GMP") } } };
         gmpModel.TypePropertyReview.Types.Add(new TypePropertyEntry { Name = "KAC-A-WA1110", InstanceCount = 1 });
         check(audit.Inspect(gmpModel).Single().Cells[2].Issue == "" && audit.Inspect(gmpModel).Single().Cells[3].Issue.Contains("없음"),
             "배치 유형이 있는 모델은 기존 GMP 공항코드 판정과 원본에 없는 건물 검토를 유지");
@@ -135,7 +135,7 @@ internal static class TypePropertyReviewTests
                 return (int)cell.Element(ns + "v")!;
             }
 
-            string[] checkedFields = ["유형명", .. TypePropertyReview.Fields];
+            string[] checkedFields = ["유형명", .. audit.Settings.Columns.Select(c => c.Name)];
             var totals = new int[checkedFields.Length];
             for (var m = 0; m < models.Length; m++)
             {
@@ -156,6 +156,40 @@ internal static class TypePropertyReviewTests
             check(summary["A2"].Value != summary["A4"].Value && SummaryCount('M', 4) == 0, "동명 모델 구분 및 미배치 유형만 있는 모델의 0건 표시");
             check(ReadCells(4).Keys.All(reference => reference.EndsWith('1') && reference.Length == 2), "미배치 유형만 있는 상세 시트는 머리글만 표시");
             check(SummaryCount('H', 2) == 0 && SummaryCount('H', models.Length + 2) == 0, "IsExternal의 모델별 집계와 전체 합계는 0");
+            const string customJson = """
+                {"Version":14,"Name":"사용자 점검","TypePropertyReview":{"Settings":{
+                "TypePrefixes":[],"IncludeUnplaced":true,"TypeNamePattern":"","ShowSummary":false,
+                "Columns":[{"Name":"층 확인","Parameter":"층","Scope":"인스턴스","Check":"AllowedValues","AllowedValues":["지상1층","지하2층"]},
+                {"Name":"발주처","Scope":"프로젝트 정보","Check":"Required"},{"Name":"재료명","Check":"Display"}]}}}
+                """;
+            var custom = RulePlanner.Parse(customJson);
+            var customQuery = QueryPlan.FromRules(custom);
+            var relaxed = RulePlanner.Parse(customJson.Replace("지상1층", "PIT층"));
+            var narrow = RulePlanner.Parse(customJson.Replace("\"TypePrefixes\":[]", "\"TypePrefixes\":[\"KAC-S-\"]"));
+            check(customQuery.Covers(QueryPlan.FromRules(relaxed)) && !query.Covers(customQuery) &&
+                customQuery.Covers(QueryPlan.FromRules(narrow)) && !QueryPlan.FromRules(narrow).Covers(customQuery),
+                "기준값 변경은 기존 조회 이용, 새 필드·범위는 다시 조회");
+            reject(() => RulePlanner.Parse(customJson.Replace("AllowedValues\",", "잘못된검사\",")), "잘못된 설정은 조회 전에 안내");
+            column.InstanceValues["층"] = [new("PIT층")];
+            model.TypePropertyReview.ProjectValues["발주처"] = new("발주 기관");
+            var customReview = new TypePropertyReview(custom.TypePropertyReview!);
+            var row = customReview.Inspect(model).Single(r => r.Type == column);
+            check(row.Cells[0].Issue.Length > 0 && row.Cells[1] == new TypePropertyCell("발주 기관") &&
+                row.Cells[2].Issue == "" && new TypePropertyReview(relaxed.TypePropertyReview!).Inspect(model)
+                    .Single(r => r.Type == column).Cells[0].Issue == "", "같은 조회값을 변경한 룰셋으로 즉시 재판정");
+            check(customReview.Inspect(model).Any(r => r.Type == unplaced && r.Cells[0].Issue.Length == 0),
+                "미배치 포함 설정과 인스턴스 필드 적용 범위");
+            var opts = custom.TypePropertyReview!.Settings!;
+            for (var i = 1; i <= 21; i++) opts.Columns.Add(new() { Name = "추가" + i, Width = 22 });
+            var (widePath, _) = TypePropertyReviewWorkbook.Save(rulePath, [model], custom.TypePropertyReview);
+            using var wide = ZipFile.OpenRead(widePath);
+            using var wideSheet = wide.GetEntry("xl/worksheets/sheet1.xml")!.Open();
+            var wideXml = XDocument.Load(wideSheet);
+            var header = wideXml.Descendants(ns + "row").First().Elements(ns + "c").ToList();
+            check(wide.GetEntry("xl/worksheets/sheet2.xml") == null && header[6].Value == "층 확인" &&
+                header[7].Value == "발주처" && header[26].Attribute("r")?.Value == "AA1" &&
+                wideXml.Descendants(ns + "autoFilter").Single().Attribute("ref")?.Value == "A1:AE5",
+                "룰셋 열 순서·요약 생략·Z 이후 열과 필터 범위");
             var cells = ReadCells(2);
             check((string?)cells["D4"].Attribute("s") == "5" && (string?)cells["D3"].Attribute("s") != "5" &&
                 cells["Q4"].Value.Contains("유형명 ·") && SummaryCount('B', 2) == 1 && SummaryCount('B', 5) == 1,

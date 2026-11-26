@@ -186,6 +186,17 @@ public static class RoomReviewWorkbook
     private static string Value(ParameterRow row) => row.HasValue
         ? (row.Display.Length > 0 ? row.Display : row.Raw).Trim() : "";
 
+    internal static string ColumnName(int index)
+    {
+        var name = "";
+        do
+        {
+            name = (char)('A' + index % 26) + name;
+            index = index / 26 - 1;
+        } while (index >= 0);
+        return name;
+    }
+
     internal static void Row(StreamWriter writer, int number, IReadOnlyList<string> values, bool[]? problems = null,
         bool header = false, bool[]? missingRequired = null, int numericColumn = -1, int numericColumnCount = 1)
     {
@@ -196,9 +207,9 @@ public static class RoomReviewWorkbook
             var styleNumber = header ? 2 : missingRequired?[i] == true ? 5 : problems?[i] == true ? 1 : i == 0 && safe.Length > 0 ? 4 : number % 2 == 0 ? 3 : 0;
             var style = $" s=\"{styleNumber}\"";
             if (i >= numericColumn && i < numericColumn + numericColumnCount)
-                writer.Write($"<c r=\"{(char)('A' + i)}{number}\"{style} t=\"n\"><v>{safe}</v></c>");
+                writer.Write($"<c r=\"{ColumnName(i)}{number}\"{style} t=\"n\"><v>{safe}</v></c>");
             else
-                writer.Write($"<c r=\"{(char)('A' + i)}{number}\"{style} t=\"inlineStr\"><is><t xml:space=\"preserve\">{SecurityElement.Escape(safe)}</t></is></c>");
+                writer.Write($"<c r=\"{ColumnName(i)}{number}\"{style} t=\"inlineStr\"><is><t xml:space=\"preserve\">{SecurityElement.Escape(safe)}</t></is></c>");
         }
         writer.Write("</row>");
     }

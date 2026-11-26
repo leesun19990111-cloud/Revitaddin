@@ -6,15 +6,17 @@ namespace SunnyParameterManager.Bridge;
 
 internal static class TypePropertyReviewReader
 {
-    internal static TypePropertyReviewSnapshot Read(Document doc)
+    internal static TypePropertyReviewSnapshot Read(Document doc, TypePropertyReviewQuery query)
     {
         var result = new TypePropertyReviewSnapshot
         {
-            FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion,
-            Airport = ReadNamed(doc.ProjectInformation, "공항코드"),
-            Building = ReadNamed(doc.ProjectInformation, "건축물번호")
+            FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion
         };
-        var entries = new Dictionary<ElementId, TypePropertyEntry>();
+        var projectInfo = query.ProjectParameters.Count > 0 ? doc.ProjectInformation : null;
+        foreach (var field in query.ProjectParameters) result.ProjectValues.Add(field, ReadNamed(projectInfo, field));
+        var fields = query.ElementParameters.Select(name => (Name: name, Key: TypePropertyReviewQuery.NamedElementKey(name), Ifc: false)).ToList();
+        if (query.ReadIfc) fields.Add((TypePropertyReviewQuery.IfcField, TypePropertyReviewQuery.IfcField, true));
+        var entries = new Dictionary<ElementId, (ElementType Element, TypePropertyEntry Entry, bool ReadAttributes)>();
         foreach (var type in new FilteredElementCollector(doc).WhereElementIsElementType().OfType<ElementType>())
         {
             if (type is RevitLinkType || type.Category?.CategoryType != CategoryType.Model) continue;
@@ -23,33 +25,42 @@ internal static class TypePropertyReviewReader
                 Name = type.Name, Family = type.FamilyName ?? "", Category = type.Category.Name,
                 ElementId = type.Id.Value.ToString(CultureInfo.InvariantCulture)
             };
-            if (TypePropertyReview.HasKacDiscipline(entry.Name))
-                foreach (var field in TypePropertyReview.ElementFields) entry.TypeValues.Add(field, ReadField(type, field, true));
-            entries.Add(type.Id, entry);
+            entries.Add(type.Id, (type, entry, query.IncludesAttributes(entry.Name)));
         }
         if (entries.Count == 0) return result;
-        var worksetTable = doc.IsWorkshared ? doc.GetWorksetTable() : null;
+        var worksetTable = query.ReadWorkset && doc.IsWorkshared ? doc.GetWorksetTable() : null;
         foreach (var element in new FilteredElementCollector(doc).WhereElementIsNotElementType())
         {
-            if (!entries.TryGetValue(element.GetTypeId(), out var entry)) continue;
+            if (!entries.TryGetValue(element.GetTypeId(), out var saved)) continue;
+            var entry = saved.Entry;
             entry.InstanceCount++;
-            if (!entry.InstanceValues.TryGetValue("작업세트", out var worksets)) entry.InstanceValues.Add("작업세트", worksets = []);
-            var name = worksetTable?.GetWorkset(element.WorksetId)?.Name;
-            worksets.Add(new TypePropertyValue(name));
-            if (!TypePropertyReview.HasKacDiscipline(entry.Name)) continue;
-            foreach (var field in TypePropertyReview.ElementFields)
+            if (query.ReadWorkset)
             {
-                if (!entry.InstanceValues.TryGetValue(field, out var values)) entry.InstanceValues.Add(field, values = []);
-                values.Add(ReadField(element, field, false));
+                if (!entry.InstanceValues.TryGetValue(TypePropertyReviewQuery.WorksetField, out var worksets))
+                    entry.InstanceValues.Add(TypePropertyReviewQuery.WorksetField, worksets = []);
+                worksets.Add(new TypePropertyValue(worksetTable?.GetWorkset(element.WorksetId)?.Name));
+            }
+            if (!saved.ReadAttributes) continue;
+            foreach (var field in fields)
+            {
+                if (!entry.InstanceValues.TryGetValue(field.Key, out var values)) entry.InstanceValues.Add(field.Key, values = []);
+                values.Add(ReadField(element, field.Name, false, field.Ifc));
             }
         }
-        result.Types = entries.Values.Where(entry => entry.InstanceCount > 0).ToList();
+        foreach (var saved in entries.Values)
+        {
+            if (saved.Entry.InstanceCount == 0 && !query.IncludeUnplaced) continue;
+            if (saved.ReadAttributes)
+                foreach (var field in fields)
+                    saved.Entry.TypeValues.Add(field.Key, ReadField(saved.Element, field.Name, true, field.Ifc));
+            result.Types.Add(saved.Entry);
+        }
         return result;
     }
 
-    private static TypePropertyValue ReadField(Element element, string field, bool type)
+    private static TypePropertyValue ReadField(Element element, string field, bool type, bool readIfc)
     {
-        if (field == "다음으로 IFC로 내보내기")
+        if (readIfc)
         {
             var parameter = element.get_Parameter(type ? BuiltInParameter.IFC_EXPORT_ELEMENT_TYPE_AS : BuiltInParameter.IFC_EXPORT_ELEMENT_AS);
             if (parameter != null) return ReadValue(parameter);

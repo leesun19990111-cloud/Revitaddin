@@ -49,6 +49,16 @@ internal static class Program
                 new() { CanContinueAfterPreflightFailure = true, CanRestartForRead = true } })
                 Check(!ApplyContinuation.CanOffer(blocked), "불명·반영·조회 응답은 계속 적용 금지");
             var a = Row();
+            const string conditionalJson = """
+                {"Version":1,"Name":"공란·ND 보완","Rules":[{"Name":"재료명","Match":{"Scope":"유형","Type":"W1"},
+                "Set":[{"Name":"재료명","DataType":"text","Storage":"String","OnlyWhenCurrentIn":["","ND"],"Value":"보완"}]}]}
+                """;
+            var conditional = RulePlanner.Parse(conditionalJson);
+            var emptyInput = Row(owner: "공란"); emptyInput.HasValue = false;
+            var ndInput = Row(owner: "ND"); ndInput.Display = "ND";
+            var edits = RulePlanner.Plan(conditional, [a, emptyInput, ndInput], [], false).Edits;
+            Check(edits.Select(e => e.Original.OwnerId).ToHashSet().SetEquals(["공란", "ND"]), "룰셋 현재값 조건으로 미지정·ND만 변경");
+            Reject(() => RulePlanner.Parse(conditionalJson.Replace("[\"\",\"ND\"]", "[]")), "빈 현재값 조건 거부");
             Check(EditPlanner.Stage([a], "새값").Single().Value == "새값", "텍스트 직접 입력");
             Check(a.Raw == "기존", "미리보기는 원본 불변");
             Check(EditPlanner.Stage([a], "").Single().Value == "", "빈 텍스트 명시 삭제");

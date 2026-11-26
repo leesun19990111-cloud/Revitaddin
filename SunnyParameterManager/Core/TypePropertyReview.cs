@@ -9,14 +9,14 @@ public sealed class TypePropertyReviewProfile
     public List<KacIfcMapping> Ifc { get; set; } = [];
     public List<SpaceBuilding> Buildings { get; set; } = [];
     public List<string> Sources { get; set; } = [];
+    public TypePropertyReviewSettings? Settings { get; set; }
 }
 
 public sealed class TypePropertyReviewSnapshot
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
     public int FormatVersion { get; set; }
-    public TypePropertyValue Airport { get; set; } = new();
-    public TypePropertyValue Building { get; set; } = new();
+    public Dictionary<string, TypePropertyValue> ProjectValues { get; set; } = [];
     public List<TypePropertyEntry> Types { get; set; } = [];
 }
 
@@ -37,25 +37,28 @@ public sealed record TypePropertyRow(TypePropertyEntry Type, string NameIssue, L
 
 public sealed partial class TypePropertyReview
 {
-    public static readonly string[] Fields =
-        ["다음으로 IFC로 내보내기", "작업세트", "공항코드", "건축물번호", "제작정보", "IsExternal",
-            "층", "KBIMS-부위코드", "조달청표준공사코드", "재료명"];
-
-    public static readonly string[] ElementFields = Fields.Where(f => f is not ("작업세트" or "공항코드" or "건축물번호")).ToArray();
-
+    private readonly TypePropertyReviewQuery _query;
+    private readonly Regex? _typeNamePattern;
+    private readonly List<(TypePropertyReviewColumn Config, Regex? Pattern)> _columns;
     private readonly Dictionary<string, KacClassification> _classification;
     private readonly List<KacIfcMapping> _ifc;
     private readonly ILookup<string, SpaceBuilding> _buildings;
 
+    public TypePropertyReviewSettings Settings { get; }
+
     public TypePropertyReview(TypePropertyReviewProfile profile)
     {
+        Settings = profile.Settings ?? new TypePropertyReviewSettings();
+        _query = TypePropertyReviewQuery.FromSettings(Settings);
+        _typeNamePattern = Settings.TypeNamePattern.Length == 0 ? null :
+            TypePropertyReviewSettings.CreatePattern(Settings.TypeNamePattern, false, "유형명");
+        _columns = Settings.Columns.Select(c => (c, c.Check == "Pattern"
+            ? TypePropertyReviewSettings.CreatePattern(c.Pattern, c.IgnoreCase, c.Name)
+            : null)).ToList();
         _classification = profile.Classification.ToDictionary(x => x.Code, StringComparer.Ordinal);
         _ifc = profile.Ifc.OrderByDescending(x => x.Prefix.Length).ToList();
         _buildings = profile.Buildings.ToLookup(x => x.Airport, StringComparer.Ordinal);
     }
-
-    public static bool HasKacDiscipline(string name) => name.StartsWith("KAC-A-", StringComparison.OrdinalIgnoreCase) ||
-        name.StartsWith("KAC-S-", StringComparison.OrdinalIgnoreCase);
 
     public static void Validate(RuleSet file)
     {
@@ -64,8 +67,9 @@ public sealed partial class TypePropertyReview
             file.Rules?.Count != 0 || file.Kac != null || file.Space != null || file.Spec != null || file.RoomUse != null ||
             file.Cleanup || file.MaterialAudit || file.TypeCodeFix || file.ProjectBasePointAudit || file.RebuildCentral ||
             file.ProjectParameterTransfer || file.RoomReview || file.GuardhouseRooms || file.PreserveWorksets?.Count != 0 ||
-            p.Classification?.Count is not (>= 1 and <= 10000) || p.Ifc?.Count is not (>= 1 and <= 200) ||
-            p.Buildings?.Count is not (>= 1 and <= 5000) || p.Sources?.Count is not (>= 1 and <= 10) ||
+            p.Classification?.Count is not (>= 0 and <= 10000) || p.Ifc?.Count is not (>= 0 and <= 200) ||
+            p.Buildings?.Count is not (>= 0 and <= 5000) || p.Sources?.Count is not (>= 0 and <= 10) ||
+            (p.Settings == null && p.Sources.Count == 0) ||
             p.Sources.Any(string.IsNullOrWhiteSpace) ||
             p.Classification.Any(c => c == null || c.Code == null || !CodeFormat().IsMatch(c.Code) || c.Kbims == null || c.Procurement == null) ||
             p.Classification.DistinctBy(c => c.Code).Count() != p.Classification.Count ||
@@ -75,63 +79,97 @@ public sealed partial class TypePropertyReview
                 string.IsNullOrWhiteSpace(b.Name) || b.Number == null || b.ManagementCode == null || b.Ownership == null ||
                 b.SourceRow < 1 || b.NameAliases == null || b.NameAliases.Any(string.IsNullOrWhiteSpace)))
             throw new InvalidOperationException("유형속성검토 룰셋의 버전과 IFC·유형 분류·건물 기준표를 확인하세요.");
+        (p.Settings ?? new TypePropertyReviewSettings()).Validate(p);
     }
 
     public IEnumerable<TypePropertyRow> Inspect(ModelSnapshot model)
     {
         if (model.TypePropertyReview is not { FormatVersion: TypePropertyReviewSnapshot.CurrentFormatVersion } snapshot)
-            throw new InvalidOperationException(model.Title + " · 유형명 형식을 점검하려면 유형속성검토 룰셋으로 다시 조회하세요.");
+            throw new InvalidOperationException(model.Title + " · 유형속성검토 룰셋으로 다시 조회하세요.");
+
         var path = string.IsNullOrWhiteSpace(model.CentralPath) ? model.Path : model.CentralPath;
         var fileName = Path.GetFileNameWithoutExtension(path);
         var prefix = fileName.Length >= 3 ? fileName[..3].ToUpperInvariant() : "";
         var airport = prefix is "CJU" or "MWX" or "PUS" or "GMP" ? prefix : "";
-        var (building, buildingIssue) = FindBuilding(airport, fileName);
-        var airportCell = Check([snapshot.Airport], value => Expected(value, airport, "파일명 공항코드를 확인할 수 없음"));
-        var buildingCell = Check([snapshot.Building], value => Expected(value, building, buildingIssue));
+        var (building, buildingIssue) = _columns.Any(c => c.Config.Check == "BuildingNumber") ? FindBuilding(airport, fileName) : (null, "");
 
-        var placedTypes = snapshot.Types.Where(t => t.InstanceCount > 0)
+        var types = snapshot.Types.Where(t => Settings.IncludeUnplaced || t.InstanceCount > 0)
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Family, StringComparer.Ordinal)
             .ThenBy(t => t.ElementId, StringComparer.Ordinal);
-        foreach (var type in placedTypes)
+        foreach (var type in types)
         {
-            var nameIssue = KacRulePlanner.TypeCode(type.Name).Length == 0
-                ? "KAC-A- 또는 KAC-S- 다음에 영문 대문자 2자와 숫자 4자가 필요합니다."
-                : "";
-            var worksets = type.InstanceValues.GetValueOrDefault("작업세트") ?? [new()];
-            if (!HasKacDiscipline(type.Name))
-            {
-                // 추가로 수집한 유형은 이름 형식만 판정하고 작업세트는 찾기 쉽도록 표시한다.
-                var cells = Fields.Select(field => field == "작업세트" ? Check(worksets) : new TypePropertyCell("")).ToList();
-                yield return new(type, nameIssue, cells);
-                continue;
-            }
-            var code = KacRulePlanner.TypeCode(type.Name.ToUpperInvariant());
+            var nameIssue = _typeNamePattern?.IsMatch(type.Name) == false
+                ? Issue(Settings.TypeNameMessage, "유형명 형식이 기준에 맞지 않습니다.") : "";
+            var matchesScope = _query.IncludesAttributes(type.Name);
+            var code = matchesScope ? KacRulePlanner.TypeCode(type.Name.ToUpperInvariant()) : "";
             var ifc = _ifc.FirstOrDefault(i => code.StartsWith(i.Prefix, StringComparison.Ordinal))?.Value;
             var classification = _classification.GetValueOrDefault(code);
-            yield return new(type, nameIssue, Fields.Select(field => field switch
+            yield return new(type, nameIssue, _columns.Select(c => InspectColumn(c.Config, c.Pattern)).ToList());
+
+            TypePropertyCell InspectColumn(TypePropertyReviewColumn column, Regex? pattern)
             {
-                "공항코드" => airportCell,
-                "건축물번호" => buildingCell,
-                "작업세트" => Check(worksets, value =>
+                if (column.Scope == "인스턴스" && type.InstanceCount == 0)
+                    return new(column.Source == "Workset" ? "미배치" : "");
+                if (!matchesScope)
+                    return column.Source == "Workset" ? Check(Values(type, column)) : new("");
+
+                IEnumerable<TypePropertyValue> values = column.Scope == "프로젝트 정보"
+                    ? [snapshot.ProjectValues.GetValueOrDefault(column.Field) ?? new()]
+                    : Values(type, column);
+                return column.Check == "Display" ? Check(values) : Check(values, Verify);
+
+                string Verify(string? value)
+                {
+                    var comparison = column.IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                    var result = column.Check switch
                     {
-                        var expected = type.Name.StartsWith("KAC-A-", StringComparison.OrdinalIgnoreCase) ? "건축" : "구조";
-                        return value != null && value.Contains(expected, StringComparison.Ordinal) ? "" : $"‘{expected}’이 포함된 작업세트 필요";
-                    }),
-                "다음으로 IFC로 내보내기" => Check(Values(type, field), v => Expected(v, ifc, "유형 코드의 IFC 기준값 없음")),
-                "KBIMS-부위코드" => Check(Values(type, field), v => Expected(v, classification?.Kbims, "유형 코드의 KBIMS 기준값 없음")),
-                "조달청표준공사코드" => Check(Values(type, field), v => Expected(v, classification?.Procurement, "유형 코드의 조달청 기준값 없음")),
-                "IsExternal" => Check(Values(type, field)),
-                "층" => Check(Values(type, field), v => !Blank(v) && FloorFormat().IsMatch(v!) ? "" : "지상/지하 숫자층, 지붕층, PIT층 또는 옥탑층 형식 필요"),
-                _ => Check(Values(type, field), v => Blank(v) ? "값 누락" : "")
-            }).ToList());
+                        "Required" => Blank(value) ? "값 누락" : "",
+                        "Equals" => string.Equals(value, column.Value, comparison) ? "" : $"기준값 {column.Value} 필요",
+                        "Contains" => value?.Contains(column.Value!, comparison) == true ? "" : $"‘{column.Value}’ 포함 필요",
+                        "AllowedValues" => !Blank(value) && column.AllowedValues!.Any(v => string.Equals(v, value, comparison))
+                            ? "" : "허용 목록에 있는 값이 필요합니다.",
+                        "Pattern" => !Blank(value) && pattern!.IsMatch(value!) ? "" : "입력 형식이 기준에 맞지 않습니다.",
+                        "ContainsByTypePrefix" => CheckPrefixValue(type.Name, value, column, comparison),
+                        "AirportCode" => Expected(value, airport, "파일명 공항코드를 확인할 수 없음"),
+                        "BuildingNumber" => Expected(value, building, buildingIssue),
+                        "IfcMapping" => Expected(value, ifc, "유형 코드의 IFC 기준값 없음"),
+                        "KbimsMapping" => Expected(value, classification?.Kbims, "유형 코드의 KBIMS 기준값 없음"),
+                        "ProcurementMapping" => Expected(value, classification?.Procurement, "유형 코드의 조달청 기준값 없음"),
+                        _ => throw new InvalidOperationException(column.Name + " · 지원하지 않는 점검 방식입니다.")
+                    };
+                    return result.Length == 0 ? "" : Issue(column.Message, result);
+                }
+            }
         }
     }
 
-    private static IEnumerable<TypePropertyValue> Values(TypePropertyEntry type, string field)
+    private static string Issue(string? message, string fallback) => string.IsNullOrWhiteSpace(message) ? fallback : message;
+
+    private static string CheckPrefixValue(string typeName, string? value, TypePropertyReviewColumn column, StringComparison comparison)
     {
-        var typeValue = type.TypeValues.GetValueOrDefault(field);
-        var instances = type.InstanceValues.GetValueOrDefault(field);
+        var expected = column.ValuesByTypePrefix!
+            .Where(pair => typeName.StartsWith(pair.Key, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(pair => pair.Key.Length).Select(pair => pair.Value).FirstOrDefault();
+        if (expected == null) return "해당 유형 접두어의 기준값을 확인할 수 없습니다.";
+        if (value?.Contains(expected, comparison) == true) return "";
+        return column.Source == "Workset" ? $"‘{expected}’이 포함된 작업세트 필요" : $"‘{expected}’ 포함 필요";
+    }
+
+    private static IEnumerable<TypePropertyValue> Values(TypePropertyEntry type, TypePropertyReviewColumn column)
+    {
+        var typeValue = type.TypeValues.GetValueOrDefault(column.ElementKey);
+        var instances = type.InstanceValues.GetValueOrDefault(column.ElementKey);
+        if (column.Scope == "유형")
+        {
+            yield return typeValue ?? new();
+            yield break;
+        }
+        if (column.Scope == "인스턴스")
+        {
+            foreach (var value in instances ?? [new()]) yield return value;
+            yield break;
+        }
         if (typeValue is { Text: not null } || typeValue?.Ambiguous == true) yield return typeValue;
         if (instances != null && instances.Any(v => v.Text != null || v.Ambiguous))
             foreach (var value in instances) yield return value;
@@ -198,8 +236,6 @@ public sealed partial class TypePropertyReview
     private static partial Regex CodeFormat();
     [GeneratedRegex(@"\AIfc[A-Za-z0-9]+\z", RegexOptions.CultureInvariant, 100)]
     private static partial Regex IfcFormat();
-    [GeneratedRegex(@"\A(?:(?:지상|지하)[0-9]+층|지붕층|PIT층|옥탑(?:[0-9]+)?층)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 100)]
-    private static partial Regex FloorFormat();
     [GeneratedRegex(@"[-_\s]+(?:SA|SP|AR|ST|S|A)(?:\s*\([^()]+\))?\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 100)]
     private static partial Regex FileDiscipline();
     [GeneratedRegex(@"\A([0-9][A-Z][0-9]{3}(?:[-_][0-9]+)?|[0-9]+(?:[-_][0-9]+)?)[-_\s]*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 100)]

@@ -55,6 +55,8 @@ public sealed class RuleValue
     public string? ParameterKey { get; set; }
     // 빈 문자열은 명시적 지우기지만 누락/null은 오류다.
     public string? Value { get; set; }
+    // 생략하면 모든 현재값에 적용한다. 빈 문자열은 미지정·공백 텍스트를 포함한다.
+    public List<string>? OnlyWhenCurrentIn { get; set; }
 }
 
 public sealed class RulePlan
@@ -201,6 +203,10 @@ public static class RulePlanner
             {
                 if (value == null || string.IsNullOrWhiteSpace(value.Name) || string.IsNullOrWhiteSpace(value.DataType) || value.Storage is not ("String" or "Integer" or "Double" or "ElementId") || value.Value == null)
                     throw new InvalidOperationException(rule.Name + ": 매개변수 이름·자료형·저장형식·입력값을 모두 지정하세요.");
+                if (value.OnlyWhenCurrentIn is { } allowed &&
+                    (allowed.Count is < 1 or > 500 || allowed.Any(text => text == null || text != text.Trim()) ||
+                     allowed.Distinct(StringComparer.Ordinal).Count() != allowed.Count))
+                    throw new InvalidOperationException(rule.Name + ": 현재값 조건에는 중복되지 않는 문자열 목록을 지정하세요. 공란은 빈 문자열로 지정합니다.");
                 if (value.ParameterKey != null &&
                     !(value.ParameterKey.StartsWith("guid:", StringComparison.Ordinal) && Guid.TryParse(value.ParameterKey[5..], out _) ||
                       value.ParameterKey.StartsWith("builtin:", StringComparison.Ordinal) && long.TryParse(value.ParameterKey[8..], out var id) && id < 0))
@@ -243,6 +249,8 @@ public static class RulePlanner
                     var label = $"{rule.Name} / {first.ModelTitle} / {first.TypeName} / {value.Name}";
                     if (candidates.Count != 1) { errors.Add(label + $": 매개변수 {candidates.Count}개 — 유일하게 연결되지 않습니다."); continue; }
                     var row = candidates[0];
+                    var current = row.HasValue ? row.Display.Trim() : "";
+                    if (value.OnlyWhenCurrentIn is { } allowed && !allowed.Contains(current, StringComparer.Ordinal)) continue;
                     var error = EditPlanner.Validate(row, value.Value!);
                     if (error.Length > 0) { errors.Add(label + ": " + error); continue; }
                     if (assignments.TryGetValue(row.Key, out var previous) && previous.Value != value.Value)

@@ -219,8 +219,12 @@ typeReviewDoc.Elements.AddRange([typeReviewType, typeReviewInstance, nonKacPlace
     new Element { TypeId = nonKacPlaced.Id }, new Element { TypeId = nonKacPlaced.Id },
     new ElementType { Name = "미배치" }, annotationType, new Element { TypeId = annotationType.Id },
     linkType, new RevitLinkInstance { TypeId = linkType.Id }]);
-var typeReview = TypePropertyReviewReader.Read(typeReviewDoc);
-Check(typeReview.FormatVersion == TypePropertyReviewSnapshot.CurrentFormatVersion && typeReview.Airport.Text == "PUS" &&
+var typeReview = TypePropertyReviewReader.Read(typeReviewDoc, new TypePropertyReviewQuery
+{
+    TypePrefixes = ["KAC-A-", "KAC-S-"], ProjectParameters = ["공항코드"], ElementParameters = ["IsExternal"],
+    ReadIfc = true, ReadWorkset = true
+});
+Check(typeReview.FormatVersion == TypePropertyReviewSnapshot.CurrentFormatVersion && typeReview.ProjectValues["공항코드"].Text == "PUS" &&
     typeReview.Types.Count == 2, "배치 모델 유형만 새 조회 결과에 기록");
 var additionalType = typeReview.Types.Single(t => t.Name == "기본 벽");
 Check(additionalType.InstanceCount == 2 && additionalType.TypeValues.Count == 0 &&
@@ -228,4 +232,19 @@ Check(additionalType.InstanceCount == 2 && additionalType.TypeValues.Count == 0 
 var audited = typeReview.Types.Single(t => t.Name == typeReviewType.Name);
 Check(audited.TypeValues["다음으로 IFC로 내보내기"].Text == "IfcWall" && audited.InstanceValues["작업세트"].Single().Text == "01_건축" &&
     audited.InstanceValues["IsExternal"].Single().Text == "0", "IFC 식별자·배치 작업세트·IsExternal 0 현장 데이터 형식 조회");
+typeReviewInstance.Parameters.Add(new Parameter { Definition = new() { Name = "작업세트" }, Value = "별도 문자열" });
+var sameNames = TypePropertyReviewReader.Read(typeReviewDoc, new TypePropertyReviewQuery
+{
+    ElementParameters = ["작업세트"], ReadWorkset = true
+}).Types.Single(t => t.Name == typeReviewType.Name);
+Check(sameNames.InstanceValues["작업세트"].Single().Text == "01_건축" &&
+    sameNames.InstanceValues[TypePropertyReviewQuery.NamedElementKey("작업세트")].Single().Text == "별도 문자열",
+    "동명의 일반 매개변수와 실제 작업세트를 분리해서 조회");
+var expandedReview = TypePropertyReviewReader.Read(typeReviewDoc, new TypePropertyReviewQuery
+{
+    IncludeUnplaced = true, ElementParameters = ["IsExternal"], ProjectParameters = ["공항코드"]
+});
+Check(expandedReview.Types.Any(t => t.Name == "미배치" && t.InstanceCount == 0) &&
+    expandedReview.Types.Single(t => t.Name == "기본 벽").TypeValues.ContainsKey("IsExternal") &&
+    !expandedReview.Types.Any(t => t.InstanceValues.ContainsKey("작업세트")), "설정으로 유형 접두어 전체·미배치·조회 필드 변경");
 Console.WriteLine($"TOTAL {count} PASS · 실제 ParameterReader/CleanupWriter의 API 대역 검사; RVT 저장 검증 아님");

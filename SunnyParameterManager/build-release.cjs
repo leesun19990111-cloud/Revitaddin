@@ -4,9 +4,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, 'SunnyParameterManagerInstaller_out_v084');
-const zip = path.join(root, 'SunnyParameterManager_Installer_v.0.8.4.zip');
-const scratch = path.join(root, 'SunnyParameterManager', 'Build', 'v084');
+const output = path.join(root, 'SunnyParameterManagerInstaller_out_v085');
+const zip = path.join(root, 'SunnyParameterManager_Installer_v.0.8.5.zip');
+const scratch = path.join(root, 'SunnyParameterManager', 'Build', 'v085');
 const extras = ['먼저 읽어주세요.md', '룰셋 파일 안내.md', '연습용.sunnyrules.json', '중앙모델_분리재생성.sunnyrules.json', '프로젝트매개변수_표준전송.sunnyrules.json', '빌드정보.json'];
 const sha = data => crypto.createHash('sha256').update(data).digest('hex').toUpperCase();
 const files = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(path.join(dir, e.name)) : [path.join(dir, e.name)]);
@@ -33,26 +33,26 @@ if (!packageOnly && (fs.existsSync(output) || fs.existsSync(zip))) throw Error('
 if (!packageOnly) {
 fs.mkdirSync(scratch, { recursive: true });
 dotnet(['run', '--project', 'SunnyParameterManager/Tests/SunnyParameterManager.Tests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Tests084/', '-p:OutputPath=bin/Tests084/']);
+  '-p:IntermediateOutputPath=obj/Tests085/', '-p:OutputPath=bin/Tests085/']);
 dotnet(['run', '--project', 'SunnyParameterManager/LifecycleTests/SunnyParameterManager.LifecycleTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Release084/', '-p:OutputPath=bin/Release084/']);
+  '-p:IntermediateOutputPath=obj/Release085/', '-p:OutputPath=bin/Release085/']);
 dotnet(['run', '--project', 'SunnyParameterManager/MaterialTests/SunnyParameterManager.MaterialTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Material084/', '-p:OutputPath=bin/Material084/']);
+  '-p:IntermediateOutputPath=obj/Material085/', '-p:OutputPath=bin/Material085/']);
 dotnet(['run', '--project', 'SunnyParameterManager/ReaderTests/SunnyParameterManager.ReaderTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Reader084/', '-p:OutputPath=bin/Reader084/']);
+  '-p:IntermediateOutputPath=obj/Reader085/', '-p:OutputPath=bin/Reader085/']);
 dotnet(['run', '--project', 'SunnyParameterManager/LinkTests/SunnyParameterManager.LinkTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Links084/', '-p:OutputPath=bin/Links084/']);
+  '-p:IntermediateOutputPath=obj/Links085/', '-p:OutputPath=bin/Links085/']);
 dotnet(['run', '--project', 'SunnyParameterManager/WorkerTests/SunnyParameterManager.WorkerTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Worker084/', '-p:OutputPath=bin/Worker084/']);
+  '-p:IntermediateOutputPath=obj/Worker085/', '-p:OutputPath=bin/Worker085/']);
 dotnet(['run', '--project', 'SunnyParameterManager/DefinitionTests/SunnyParameterManager.DefinitionTests.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Definitions084/', '-p:OutputPath=bin/Definitions084/']);
+  '-p:IntermediateOutputPath=obj/Definitions085/', '-p:OutputPath=bin/Definitions085/']);
 dotnet(['publish', 'SunnyParameterManager/Desktop/SunnyParameterManager.Desktop.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Publish084/', '-p:OutputPath=bin/Publish084/', '-o', path.join(scratch, 'Desktop')]);
+  '-p:IntermediateOutputPath=obj/Publish085/', '-p:OutputPath=bin/Publish085/', '-o', path.join(scratch, 'Desktop')]);
 dotnet(['build', 'SunnyParameterManager/Bridge/SunnyParameterManager.Bridge.csproj', '-c', 'Release',
-  '-p:IntermediateOutputPath=obj/Bridge084/', '-p:OutputPath=bin/Bridge084/', '-o', path.join(scratch, 'Bridge')]);
+  '-p:IntermediateOutputPath=obj/Bridge085/', '-p:OutputPath=bin/Bridge085/', '-o', path.join(scratch, 'Bridge')]);
 dotnet(['publish', 'SunnyToolsInstaller/SunnyToolsInstaller.csproj', '-c', 'Release', '-p:ParameterManagerOnly=true',
-  '-p:BaseIntermediateOutputPath=obj/ParameterManager084/', '-p:MSBuildProjectExtensionsPath=obj/ParameterManager084/',
-  '-p:BaseOutputPath=bin/ParameterManager084/', '-o', output]);
+  '-p:BaseIntermediateOutputPath=obj/ParameterManager085/', '-p:MSBuildProjectExtensionsPath=obj/ParameterManager085/',
+  '-p:BaseOutputPath=bin/ParameterManager085/', '-o', output]);
 }
 const payload = path.join(output, 'ParameterManager');
 fs.mkdirSync(path.join(payload, 'Bridge'), { recursive: true });
@@ -77,7 +77,7 @@ for (const file of files(path.join(root, 'SunnyParameterManager'))) {
   if (!/[/\\](bin|obj|Build)[/\\]/.test(file) && /\.(cs|csproj|xaml|cjs|ps1)$/.test(file)) sourceChecks[rel(root, file)] = sha(fs.readFileSync(file));
 }
 for (const name of ['Program.cs', 'ParameterManagerInstaller.cs', 'SunnyToolsInstaller.csproj']) sourceChecks['SunnyToolsInstaller/' + name] = sha(fs.readFileSync(path.join(root, 'SunnyToolsInstaller', name)));
-fs.writeFileSync(path.join(output, '빌드정보.json'), JSON.stringify({ version: '0.8.4', builtUtc: new Date().toISOString(), tests: 'Core/WPF·Lifecycle·Material·Reader·Links·Worker·Definition 전체 (빌드 전 실행)', liveRevitTested: false, liveDiagnostic: '배치 유형명 형식 점검, 유형명 셀 강조, 모델별 집계와 이전 조회의 재조회 안내를 검증했다. 실제 사용자 RVT 저장은 수행하지 않았다.', sourceChecks }, null, 2));
+fs.writeFileSync(path.join(output, '빌드정보.json'), JSON.stringify({ version: '0.8.5', builtUtc: new Date().toISOString(), tests: 'Core/WPF·Lifecycle·Material·Reader·Links·Worker·Definition 전체 (빌드 전 실행)', liveRevitTested: false, liveDiagnostic: '룰셋 설정에 따른 선택 조회, 열 순서와 강조, 요약 및 기존 기본값 호환을 검증했다. 실제 사용자 RVT 저장은 수행하지 않았다.', sourceChecks }, null, 2));
 // 보안 제품이 폴더 열거 시 만드는 임시 미끼 파일을 읽거나 배포하지 않는다. 검증한 파일만 지정한다.
 const archiveFiles = ['SunnyTools_Install.exe', 'SunnyTools_Install.pdb', ...extras, 'ParameterManager/files.sha256.json', ...Object.keys(hashes).map(n => 'ParameterManager/' + n)];
 archive('Create');

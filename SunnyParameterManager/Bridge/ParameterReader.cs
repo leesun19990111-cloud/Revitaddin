@@ -24,8 +24,8 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         query?.Validate(); model.Query = query; model.Owners.Clear(); model.RoomIdentityVersion = 0;
         if (query?.IncludeTypePropertyReview == true)
         {
-            model.TypePropertyReview = TypePropertyReviewReader.Read(doc);
-            Notices.Add($"유형속성검토: 배치 유형 {model.TypePropertyReview.Types.Count:N0}개를 읽었습니다.");
+            model.TypePropertyReview = TypePropertyReviewReader.Read(doc, query.TypeReview!);
+            Notices.Add($"유형속성검토: 대상 유형 {model.TypePropertyReview.Types.Count:N0}개를 읽었습니다.");
             return [];
         }
         if (query?.IncludeProjectBasePointAudit == true)
