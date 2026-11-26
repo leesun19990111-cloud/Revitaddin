@@ -49,8 +49,12 @@ internal static class TypePropertyReviewTests
         var rows = audit.Inspect(model).ToList();
         check(rows.Count == 2 && rows[0].Cells[1].Value == "미배치" && rows[0].Cells[1].Issue == "", "미배치 유형도 표시하고 작업세트 판정 생략");
         check(rows[0].Cells[8].Issue.Contains("조달청 기준값 없음"), "원본 조달청 매핑 공란은 붉은 셀에 사유 표시");
-        check(rows[1].Cells.Select((c, i) => (c.Issue, i)).Where(c => c.Issue.Length > 0).Select(c => c.i).SequenceEqual(new[] { 1, 5, 6, 9 }),
-            "배치 작업세트·IsExternal 아니요·층 형식 오류·혼재 재료 공란만 강조");
+        check(rows[1].Cells.Select((c, i) => (c.Issue, i)).Where(c => c.Issue.Length > 0).Select(c => c.i).SequenceEqual(new[] { 1, 6, 9 }),
+            "배치 작업세트·층 형식 오류·혼재 재료 공란만 강조");
+        check(rows[0].Cells[5] == new TypePropertyCell("") && rows[1].Cells[5] == new TypePropertyCell("아니요"), "빈 IsExternal과 아니요는 값 표시만");
+        column.InstanceValues["IsExternal"] = [new("예"), new("아니요"), new(Ambiguous: true)];
+        var external = audit.Inspect(model).Last().Cells[5];
+        check(external.Value.Contains("예") && external.Value.Contains("아니요") && external.Issue == "", "여러 IsExternal 값과 동명 필드도 강조하지 않음");
         check(rows[1].Cells[2].Value == "MWX" && rows[1].Cells[3].Value == "1D001-1", "로컬명이 다르더라도 중앙파일명 기준 공항·건축물번호");
         column.InstanceValues["다음으로 IFC로 내보내기"] = [new("IfcWall")];
         check(audit.Inspect(model).Last().Cells[0].Issue.Contains("IfcColumn"), "유형 IFC와 다른 배치 요소 IFC 검출");
@@ -59,24 +63,66 @@ internal static class TypePropertyReviewTests
         check(audit.Inspect(noTypes).Single().Cells[2].Issue == "" && audit.Inspect(noTypes).Single().Cells[3].Issue.Contains("없음"),
             "GMP 공항코드 판정과 원본에 없는 건물 확인, 유형 없는 모델도 표시");
 
+        var noIssues = new ModelSnapshot
+        {
+            Path = @"C:\local\미작성 매개변수 검토.rvt",
+            Title = "여객터미널",
+            CentralPath = model.CentralPath,
+            TypePropertyReview = new() { Airport = new("MWX"), Building = new("1D001-1") }
+        };
+        ModelSnapshot[] models = [model, noTypes, noIssues];
         var work = Path.Combine(Path.GetTempPath(), "SunnyTypeReview-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
         try
         {
             var rulePath = Path.Combine(work, "유형속성검토.sunnyrules.json");
             File.WriteAllText(rulePath, definition);
-            var (file, issues) = TypePropertyReviewWorkbook.Save(rulePath, [model, noTypes], rules.TypePropertyReview!);
+            var (file, issues) = TypePropertyReviewWorkbook.Save(rulePath, models, rules.TypePropertyReview!);
             var first = File.ReadAllBytes(file);
-            var (repeat, _) = TypePropertyReviewWorkbook.Save(rulePath, [model, noTypes], rules.TypePropertyReview!);
+            var (repeat, _) = TypePropertyReviewWorkbook.Save(rulePath, models, rules.TypePropertyReview!);
             check(Path.GetFileNameWithoutExtension(repeat).EndsWith("_2") && first.SequenceEqual(File.ReadAllBytes(file)) && issues > 4,
                 "엑셀 다시 저장 시 새 이름 생성 및 기존 보고서 보존");
             using var zip = ZipFile.OpenRead(file);
             XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             using var bookStream = zip.GetEntry("xl/workbook.xml")!.Open();
-            check(XDocument.Load(bookStream).Descendants(ns + "sheet").Count() == 2, "파일별 워크시트 2개");
-            using var sheet = zip.GetEntry("xl/worksheets/sheet1.xml")!.Open();
-            var cells = XDocument.Load(sheet).Descendants(ns + "c").ToDictionary(c => (string)c.Attribute("r")!);
-            check((string?)cells["H3"].Attribute("s") == "5" && (string?)cells["L3"].Attribute("s") == "5" &&
+            var names = XDocument.Load(bookStream).Descendants(ns + "sheet").Select(s => (string)s.Attribute("name")!).ToList();
+            check(names.Count == 4 && names[0] == TypePropertyReviewWorkbook.SummarySheetName &&
+                names[^1] == TypePropertyReviewWorkbook.SummarySheetName + " (2)", "첫 시트 요약 및 동일한 이름의 모델 시트 구분");
+
+            Dictionary<string, XElement> ReadCells(int index)
+            {
+                using var sheet = zip.GetEntry($"xl/worksheets/sheet{index}.xml")!.Open();
+                return XDocument.Load(sheet).Descendants(ns + "c").ToDictionary(c => (string)c.Attribute("r")!);
+            }
+
+            var summary = ReadCells(1);
+            int SummaryCount(char column, int row)
+            {
+                var cell = summary[$"{column}{row}"];
+                if ((string?)cell.Attribute("t") != "n") throw new Exception("유형속성검토 집계가 숫자 셀이 아닙니다.");
+                return (int)cell.Element(ns + "v")!;
+            }
+
+            var totals = new int[TypePropertyReview.Fields.Length];
+            for (var m = 0; m < models.Length; m++)
+            {
+                var detailed = ReadCells(m + 2);
+                var modelTotal = 0;
+                for (var f = 0; f < totals.Length; f++)
+                {
+                    int count = detailed.Count(c => c.Key[0] == 'G' + f && (string?)c.Value.Attribute("s") == "5");
+                    check(SummaryCount((char)('B' + f), m + 2) == count, $"모델 {m + 1}의 {TypePropertyReview.Fields[f]} 집계가 빨간 셀 수와 일치");
+                    totals[f] += count;
+                    modelTotal += count;
+                }
+                check(SummaryCount('L', m + 2) == modelTotal, $"모델 {m + 1} 집계 합계");
+            }
+            check(totals.Select((total, f) => total == SummaryCount((char)('B' + f), models.Length + 2)).All(matches => matches)
+                && SummaryCount('L', models.Length + 2) == issues, "매개변수별 총합과 보고서 문제 셀 합계 일치");
+            check(summary["A2"].Value != summary["A4"].Value && SummaryCount('L', 4) == 0, "동명 모델 구분 및 문제 없는 모델의 0건 표시");
+            check(SummaryCount('G', 2) == 0 && SummaryCount('G', models.Length + 2) == 0, "IsExternal의 모델별 집계와 전체 합계는 0");
+            var cells = ReadCells(2);
+            check((string?)cells["H3"].Attribute("s") == "5" && (string?)cells["M3"].Attribute("s") == "5" && (string?)cells["L3"].Attribute("s") != "5" &&
                 (string?)cells["K3"].Attribute("s") != "5" && cells["Q3"].Value.Contains("재료명"), "문제 셀만 빨간 스타일로 표시하고 원인을 기록");
         }
         finally

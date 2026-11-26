@@ -679,7 +679,7 @@ public partial class MainWindow : Window
             var snapshots = _models.Select(m => m.Snapshot!).ToList();
             var (path, issueCount) = TypePropertyReviewWorkbook.Save(_loadedRulePath, snapshots, typeReview);
             RuleSummary.Text = $"유형속성검토 완료 · {snapshots.Count:N0}개 모델 · 유형 {snapshots.Sum(m => m.TypePropertyReview!.Types.Count):N0}개 · 확인할 셀 {issueCount:N0}개\n" +
-                "모델별 시트에서 빨간 셀과 점검 사유를 확인하세요.\n엑셀: " + path;
+                "첫 시트 ‘미작성 매개변수 검토’에 모델·매개변수별 문제 셀 수가 나옵니다. 모델별 시트에는 빨간 셀과 점검 사유가 표시됩니다.\n엑셀: " + path;
             RuleSummaryPanel.Visibility = Visibility.Visible;
             ReportBox.AppendText("\n" + RuleSummary.Text + "\n");
             StatusText.Text = "유형속성검토 엑셀을 저장했습니다: " + path;

@@ -30,18 +30,18 @@ public static class RoomReviewWorkbook
         var unplaced = modelList.Select(m => (Model: m, Rooms: RoomReviewRules.UnplacedRooms(m))).ToList();
         var findingList = findings.ToList();
         var names = SheetNames(modelList, UnplacedSheetName);
-        return SaveStyled(path, [UnplacedSheetName, .. names], (zip, number) =>
+        return SaveStyled(path, [UnplacedSheetName, .. names], zip =>
         {
-            if (number == 1) WriteUnplacedSheet(zip, unplaced);
-            else
+            WriteUnplacedSheet(zip, unplaced);
+            for (var i = 0; i < modelList.Count; i++)
             {
-                var model = modelList[number - 2];
-                WriteSheet(zip, number, model, findingList.Where(f => string.Equals(f.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
+                var model = modelList[i];
+                WriteSheet(zip, i + 2, model, findingList.Where(f => string.Equals(f.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
             }
         });
     }
 
-    internal static string SaveStyled(string path, IReadOnlyList<string> names, Action<ZipArchive, int> writeSheet)
+    internal static string SaveStyled(string path, IReadOnlyList<string> names, Action<ZipArchive> writeSheets)
     {
         var fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
@@ -60,8 +60,8 @@ public static class RoomReviewWorkbook
                     contentTypes.Append($"<Override PartName=\"/xl/worksheets/sheet{number}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>");
                     workbook.Append($"<sheet name=\"{SecurityElement.Escape(names[i])}\" sheetId=\"{number}\" r:id=\"rId{number}\"/>");
                     relationships.Append($"<Relationship Id=\"rId{number}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet{number}.xml\"/>");
-                    writeSheet(zip, number);
                 }
+                writeSheets(zip);
                 contentTypes.Append("<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>");
                 relationships.Append($"<Relationship Id=\"rId{names.Count + 1}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>");
                 contentTypes.Append("</Types>"); workbook.Append("</sheets></workbook>"); relationships.Append("</Relationships>");
@@ -187,7 +187,7 @@ public static class RoomReviewWorkbook
         ? (row.Display.Length > 0 ? row.Display : row.Raw).Trim() : "";
 
     internal static void Row(StreamWriter writer, int number, IReadOnlyList<string> values, bool[]? problems = null,
-        bool header = false, bool[]? missingRequired = null, int numericColumn = -1)
+        bool header = false, bool[]? missingRequired = null, int numericColumn = -1, int numericColumnCount = 1)
     {
         writer.Write($"<row r=\"{number}\" ht=\"{(header ? 28 : 21)}\" customHeight=\"1\">");
         for (var i = 0; i < values.Count; i++)
@@ -195,7 +195,7 @@ public static class RoomReviewWorkbook
             var safe = new string((values[i] ?? "").Where(XmlConvert.IsXmlChar).Take(32767).ToArray());
             var styleNumber = header ? 2 : missingRequired?[i] == true ? 5 : problems?[i] == true ? 1 : i == 0 && safe.Length > 0 ? 4 : number % 2 == 0 ? 3 : 0;
             var style = $" s=\"{styleNumber}\"";
-            if (i == numericColumn)
+            if (i >= numericColumn && i < numericColumn + numericColumnCount)
                 writer.Write($"<c r=\"{(char)('A' + i)}{number}\"{style} t=\"n\"><v>{safe}</v></c>");
             else
                 writer.Write($"<c r=\"{(char)('A' + i)}{number}\"{style} t=\"inlineStr\"><is><t xml:space=\"preserve\">{SecurityElement.Escape(safe)}</t></is></c>");
@@ -212,6 +212,7 @@ public static class RoomReviewWorkbook
           <borders count="2"><border/><border><left style="thin"><color rgb="FFB91C1C"/></left><right style="thin"><color rgb="FFB91C1C"/></right><top style="thin"><color rgb="FFB91C1C"/></top><bottom style="thin"><color rgb="FFB91C1C"/></bottom></border></borders>
           <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
           <cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="4" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs>
+          <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
         </styleSheet>
         """;
 

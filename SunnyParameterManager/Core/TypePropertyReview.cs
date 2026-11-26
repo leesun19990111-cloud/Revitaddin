@@ -109,7 +109,7 @@ public sealed partial class TypePropertyReview
                 "다음으로 IFC로 내보내기" => Check(Values(type, field), v => Expected(v, ifc, "유형 코드의 IFC 기준값 없음")),
                 "KBIMS-부위코드" => Check(Values(type, field), v => Expected(v, classification?.Kbims, "유형 코드의 KBIMS 기준값 없음")),
                 "조달청표준공사코드" => Check(Values(type, field), v => Expected(v, classification?.Procurement, "유형 코드의 조달청 기준값 없음")),
-                "IsExternal" => Check(Values(type, field), v => Blank(v) ? "" : "공란이어야 함"),
+                "IsExternal" => Check(Values(type, field)),
                 "층" => Check(Values(type, field), v => !Blank(v) && FloorFormat().IsMatch(v!) ? "" : "지상/지하 숫자층, 지붕층, PIT층 또는 옥탑층 형식 필요"),
                 _ => Check(Values(type, field), v => Blank(v) ? "값 누락" : "")
             }).ToList());
@@ -126,14 +126,16 @@ public sealed partial class TypePropertyReview
         else if (typeValue?.Text == null && typeValue?.Ambiguous != true) yield return new();
     }
 
-    private static TypePropertyCell Check(IEnumerable<TypePropertyValue> values, Func<string?, string> verify)
+    private static TypePropertyCell Check(IEnumerable<TypePropertyValue> values, Func<string?, string>? verify = null)
     {
         var items = values.Distinct().OrderBy(v => v.Text, StringComparer.OrdinalIgnoreCase).ThenBy(v => v.Ambiguous).ToList();
-        var issues = items.Select(v => v.Ambiguous ? "동명 매개변수가 여러 개 있습니다" : verify(v.Text)).Where(s => s.Length > 0).Distinct();
         var display = items.Select(v => v.Ambiguous ? "동명 매개변수 여러 개" : Blank(v.Text) ? "(공란)" : v.Text!).Distinct().ToList();
         var shown = display.Count == 1 && display[0] == "(공란)" ? "" : string.Join(" / ", display.Take(8));
         if (display.Count > 8) shown += $" 외 {display.Count - 8:N0}개";
-        return new(shown, string.Join(", ", issues));
+        var issue = verify == null ? "" : string.Join(", ", items
+            .Select(v => v.Ambiguous ? "동명 매개변수가 여러 개 있습니다" : verify(v.Text))
+            .Where(s => s.Length > 0).Distinct());
+        return new(shown, issue);
     }
 
     private static bool Blank(string? value) => string.IsNullOrWhiteSpace(value);

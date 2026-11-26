@@ -1,0 +1,6 @@
+{
+  "Version": 9,
+  "Name": "중앙모델 분리 재생성 · 작업세트 유지",
+  "Rules": [],
+  "RebuildCentral": true
+}
