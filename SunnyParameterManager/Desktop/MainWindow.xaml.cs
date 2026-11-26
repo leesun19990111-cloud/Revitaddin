@@ -497,7 +497,7 @@ public partial class MainWindow : Window
         }
         if (!_loadedRules!.ProjectParameterTransfer && _models.Count > 0 && _models.All(m => m.Snapshot != null && !m.Snapshot.RequiresRequery &&
             (!_loadedRules!.MaterialAudit || m.Snapshot.MaterialAuditItems != null) &&
-            (_loadedRules.TypePropertyReview == null || m.Snapshot.TypePropertyReview != null) &&
+            (_loadedRules.TypePropertyReview == null || m.Snapshot.TypePropertyReview?.FormatVersion == TypePropertyReviewSnapshot.CurrentFormatVersion) &&
             (!_loadedRules.ProjectBasePointAudit || m.Snapshot.ProjectBasePointAudit != null) &&
             (!_loadedRules.RebuildCentral || m.Snapshot.CentralRebuild != null) &&
             (m.Snapshot.Query == null || m.Snapshot.Query.Covers(QueryPlan.FromRules(_loadedRules!)))))
@@ -521,7 +521,7 @@ public partial class MainWindow : Window
         CopyExpander.IsExpanded = file.ProjectParameterTransfer;
         TransferSourceHint.Visibility = file.ProjectParameterTransfer ? Visibility.Visible : Visibility.Collapsed;
         EditActions.Visibility = file.ProjectParameterTransfer ? Visibility.Collapsed : Visibility.Visible;
-        ReviewExplanation.Text = file.GuardhouseRooms ? "파일명에 초소 또는 망루가 포함된 RVT의 룸을 정리합니다. 배치된 룸의 번호는 001로 설정하고 미배치 룸은 삭제 예정으로 표시합니다." : file.TypePropertyReview != null ? "건축·구조 유형의 속성 10개를 모델별 엑셀로 검토합니다." : file.RoomReview ? "ROOM 전체를 모델별 20열 엑셀로 저장합니다. RVT 값은 변경하지 않습니다." : file.ProjectParameterTransfer
+        ReviewExplanation.Text = file.GuardhouseRooms ? "파일명에 초소 또는 망루가 포함된 RVT의 룸을 정리합니다. 배치된 룸의 번호는 001로 설정하고 미배치 룸은 삭제 예정으로 표시합니다." : file.TypePropertyReview != null ? "배치 유형의 이름 형식과 KAC 속성을 모델별 엑셀로 검토합니다." : file.RoomReview ? "ROOM 전체를 모델별 20열 엑셀로 저장합니다. RVT 값은 변경하지 않습니다." : file.ProjectParameterTransfer
             ? "기준 파일과 대상 파일을 확인합니다. 적용할 때 각 대상에서 Revit 기본 '프로젝트 표준 전송'을 실행하고 '프로젝트 매개변수'만 선택합니다."
             : file.RoomUse?.EstimateUncertain == true ? "애매한 실명의 임시값과 근거를 변경 목록에서 확인하세요. 최종 적용 후 룰셋 폴더에 결과 엑셀을 저장합니다."
             : file.RoomUse?.SpaceClassification == true ? "실명으로 용도와 공간분류코드를 판정합니다. 각 필드의 기존 값·제안 값·근거를 확인한 뒤 저장하세요. 공간분류코드를 확정할 수 없는 룸은 기존 값을 유지합니다."
@@ -850,7 +850,7 @@ public partial class MainWindow : Window
         QuerySummary.FontWeight = _loadedRules == null ? FontWeights.Normal : FontWeights.SemiBold;
         QuerySummary.Foreground = new System.Windows.Media.SolidColorBrush(_loadedRules == null ? System.Windows.Media.Color.FromRgb(104, 119, 133) : System.Windows.Media.Color.FromRgb(40, 100, 61));
         QuerySummary.Text = _loadedRules == null ? "조회 방식: 전체 항목 · 룰셋을 먼저 불러오면 필요한 항목만 조회합니다." :
-            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · Revit 기본 표준 전송의 프로젝트 매개변수 항목" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트·측량 기준점 공유대지 점검·엑셀 2개 시트" : _loadedRules.TypePropertyReview != null ? "KAC 건축·구조 유형 · 읽기 전용 엑셀" : _loadedRules.RoomReview ? "ROOM 전체 · 읽기 전용 20열 엑셀" : _loadedRules.RoomUse?.SpaceClassification == true ? "Room 실명 기준 용도·공간분류코드 판정·변경" : _loadedRules.RoomUse != null ? "Room 실명 기준 용도 판정·변경" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
+            "✓ 룰셋 선택 완료: " + _loadedRules.Name + " · 다음 조회에 사용 (모델 적용 전) · " + (_loadedRules.ProjectParameterTransfer ? "기준 RVT 1개 → 나머지 RVT · Revit 기본 표준 전송의 프로젝트 매개변수 항목" : _loadedRules.RebuildCentral ? "작업세트 유지 · 새 중앙 재생성" : _loadedRules.ProjectBasePointAudit ? "프로젝트·측량 기준점 공유대지 점검·엑셀 2개 시트" : _loadedRules.TypePropertyReview != null ? "배치 유형명·KAC 속성 · 읽기 전용 엑셀" : _loadedRules.RoomReview ? "ROOM 전체 · 읽기 전용 20열 엑셀" : _loadedRules.RoomUse?.SpaceClassification == true ? "Room 실명 기준 용도·공간분류코드 판정·변경" : _loadedRules.RoomUse != null ? "Room 실명 기준 용도 판정·변경" : _loadedRules.Version == 5 ? $"{(_loadedRules.Spec!.RemoveOnly ? "정확한 이름 삭제 전용" : "매개변수 정의 검사")} ({SpecRulePlanner.EntryCount(_loadedRules.Spec):N0}개)" : _loadedRules.TypeCodeFix ? "세 자리 유형 코드 점검·이름 보정·엑셀 목록" : _loadedRules.Cleanup ? "유형명·총 두께·작업세트·ID 데이터·룸 경계·IFC" + (_loadedRules.PreserveWorksets.Count > 0 ? " · 00_외장 유지" : "") : string.Join(", ", QueryPlan.FromRules(_loadedRules).Names));
         QuerySummary.ToolTip = QuerySummary.Text + "\n선택 조회에 없는 항목은 미조회이며 빈 값이 아닙니다. RVT 자체를 여는 시간은 별도로 필요합니다.";
         if (_additionalRules.Count > 0) QuerySummary.Text = $"룰셋 {_additionalRules.Count + 1}개 선택 · {selectedNames}";
         QuerySummary.ToolTip = selectedNames;

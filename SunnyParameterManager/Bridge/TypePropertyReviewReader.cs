@@ -10,36 +10,40 @@ internal static class TypePropertyReviewReader
     {
         var result = new TypePropertyReviewSnapshot
         {
+            FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion,
             Airport = ReadNamed(doc.ProjectInformation, "공항코드"),
             Building = ReadNamed(doc.ProjectInformation, "건축물번호")
         };
         var entries = new Dictionary<ElementId, TypePropertyEntry>();
         foreach (var type in new FilteredElementCollector(doc).WhereElementIsElementType().OfType<ElementType>())
         {
-            if (type is RevitLinkType || type.Category?.CategoryType != CategoryType.Model || !TypePropertyReview.IncludesType(type.Name)) continue;
+            if (type is RevitLinkType || type.Category?.CategoryType != CategoryType.Model) continue;
             var entry = new TypePropertyEntry
             {
                 Name = type.Name, Family = type.FamilyName ?? "", Category = type.Category.Name,
                 ElementId = type.Id.Value.ToString(CultureInfo.InvariantCulture)
             };
-            foreach (var field in TypePropertyReview.ElementFields) entry.TypeValues.Add(field, ReadField(type, field, true));
+            if (TypePropertyReview.HasKacDiscipline(entry.Name))
+                foreach (var field in TypePropertyReview.ElementFields) entry.TypeValues.Add(field, ReadField(type, field, true));
             entries.Add(type.Id, entry);
         }
         if (entries.Count == 0) return result;
+        var worksetTable = doc.IsWorkshared ? doc.GetWorksetTable() : null;
         foreach (var element in new FilteredElementCollector(doc).WhereElementIsNotElementType())
         {
             if (!entries.TryGetValue(element.GetTypeId(), out var entry)) continue;
             entry.InstanceCount++;
             if (!entry.InstanceValues.TryGetValue("작업세트", out var worksets)) entry.InstanceValues.Add("작업세트", worksets = []);
-            var name = doc.IsWorkshared ? doc.GetWorksetTable().GetWorkset(element.WorksetId)?.Name : null;
+            var name = worksetTable?.GetWorkset(element.WorksetId)?.Name;
             worksets.Add(new TypePropertyValue(name));
+            if (!TypePropertyReview.HasKacDiscipline(entry.Name)) continue;
             foreach (var field in TypePropertyReview.ElementFields)
             {
                 if (!entry.InstanceValues.TryGetValue(field, out var values)) entry.InstanceValues.Add(field, values = []);
                 values.Add(ReadField(element, field, false));
             }
         }
-        result.Types = entries.Values.ToList();
+        result.Types = entries.Values.Where(entry => entry.InstanceCount > 0).ToList();
         return result;
     }
 

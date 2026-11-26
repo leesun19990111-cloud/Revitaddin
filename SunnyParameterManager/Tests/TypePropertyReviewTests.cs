@@ -20,13 +20,15 @@ internal static class TypePropertyReviewTests
         var query = QueryPlan.FromRules(rules);
         check(query.IncludeTypePropertyReview && query.Names.Count == 10, "유형속성검토 10항목 전용 조회");
         reject(() => QueryPlan.RequireCoverage([new ModelSnapshot()], rules), "전용 조회값 없는 캐시 재조회 요구");
+        reject(() => QueryPlan.RequireCoverage([new ModelSnapshot { Query = query, TypePropertyReview = new() }], rules),
+            "유형명 범위가 좁았던 이전 조회 결과를 새 검토에 사용하지 않음");
         reject(() => RulePlanner.Plan(rules, [], [], false), "유형속성검토는 저장 가능한 변경을 만들지 않음");
         reject(() => RulePlanner.Parse(definition.Replace("\"Rules\":[]", "\"Rules\":[],\"Cleanup\":true")), "쓰기 모드와 검토 룰셋 혼합 차단");
 
         var model = new ModelSnapshot
         {
             Path = @"C:\local\개인 로컬.rvt", CentralPath = @"\\server\projects\MWX-15여객터미널-SA.rvt", Title = "여객터미널",
-            Query = query, TypePropertyReview = new() { Airport = new("MWX"), Building = new("1D001-1") }
+            Query = query, TypePropertyReview = new() { FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion, Airport = new("MWX"), Building = new("1D001-1") }
         };
         var column = new TypePropertyEntry
         {
@@ -51,21 +53,44 @@ internal static class TypePropertyReviewTests
         });
         var unplaced = new TypePropertyEntry { Name = "KAC-A-WA1111", ElementId = "14" };
         model.TypePropertyReview.Types.Add(unplaced);
+        model.TypePropertyReview.Types.Add(new TypePropertyEntry
+        {
+            Name = "기본 벽", ElementId = "15", InstanceCount = 1,
+            InstanceValues = new() { ["작업세트"] = [new("01_건축")] }
+        });
         var audit = new TypePropertyReview(rules.TypePropertyReview!);
         var rows = audit.Inspect(model).ToList();
-        check(rows.Select(row => row.Type.ElementId).SequenceEqual(new[] { "13", "12" }) && rows[0].Cells[1].Issue == "", "미배치 유형을 제외하고 배치 유형만 점검");
+        check(rows.Select(row => row.Type.ElementId).SequenceEqual(new[] { "13", "12", "15" }) && rows[0].Cells[1].Issue == "", "미배치 유형을 제외하고 배치 유형만 점검");
+        check(rows[2].NameIssue.Length != 0 && rows[2].Cells[1].Value == "01_건축" &&
+            rows[2].Cells.All(cell => cell.Issue.Length == 0), "기본 유형명은 이름만 강조하고 실제 작업세트 표시");
+        QueryPlan.RequireCoverage([model], rules);
+        (string Name, bool Valid)[] formats = [("KAC-A-WA1100_벽체", true), ("KAC-S-CL1210-기둥", true),
+            ("KAC-A-WA1100", true), ("KAC-A-WA110 벽", false), ("KAC-S-CL12101", false), ("KAC-A-WA1100A", false),
+            ("kac-a-wa1100", false), ("KAC-M-WA1100", false)];
+        var examples = new ModelSnapshot
+        {
+            Path = model.Path, CentralPath = model.CentralPath,
+            TypePropertyReview = new()
+            {
+                FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion,
+                Types = formats.Select(example => new TypePropertyEntry { Name = example.Name, InstanceCount = 1 }).ToList()
+            }
+        };
+        var inspectedFormats = audit.Inspect(examples).ToDictionary(row => row.Type.Name);
+        check(formats.All(example => (inspectedFormats[example.Name].NameIssue.Length == 0) == example.Valid),
+            "KAC-A/S·대문자 2자·숫자 4자리와 코드 경계의 이름 형식 점검");
         check(rows[0].Cells[8].Issue.Contains("조달청 기준값 없음"), "원본 조달청 매핑 공란은 붉은 셀에 사유 표시");
         check(rows[1].Cells.Select((c, i) => (c.Issue, i)).Where(c => c.Issue.Length > 0).Select(c => c.i).SequenceEqual(new[] { 1, 6, 9 }),
             "배치 작업세트·층 형식 오류·혼재 재료 공란만 강조");
         check(rows[0].Cells[5] == new TypePropertyCell("") && rows[1].Cells[5] == new TypePropertyCell("아니요"), "빈 IsExternal과 아니요는 값 표시만");
         column.InstanceValues["IsExternal"] = [new("예"), new("아니요"), new(Ambiguous: true)];
-        var external = audit.Inspect(model).Last().Cells[5];
+        var external = audit.Inspect(model).Single(row => row.Type == column).Cells[5];
         check(external.Value.Contains("예") && external.Value.Contains("아니요") && external.Issue == "", "여러 IsExternal 값과 동명 필드도 강조하지 않음");
         check(rows[1].Cells[2].Value == "MWX" && rows[1].Cells[3].Value == "1D001-1", "로컬명이 다르더라도 중앙파일명 기준 공항·건축물번호");
         column.InstanceValues["다음으로 IFC로 내보내기"] = [new("IfcWall")];
-        check(audit.Inspect(model).Last().Cells[0].Issue.Contains("IfcColumn"), "유형 IFC와 다른 배치 요소 IFC 검출");
+        check(audit.Inspect(model).Single(row => row.Type == column).Cells[0].Issue.Contains("IfcColumn"), "유형 IFC와 다른 배치 요소 IFC 검출");
         column.InstanceValues.Remove("다음으로 IFC로 내보내기");
-        var gmpModel = new ModelSnapshot { Path = @"C:\GMP-99시범-SA.rvt", Title = "시범", TypePropertyReview = new() { Airport = new("GMP") } };
+        var gmpModel = new ModelSnapshot { Path = @"C:\GMP-99시범-SA.rvt", Title = "시범", TypePropertyReview = new() { FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion, Airport = new("GMP") } };
         gmpModel.TypePropertyReview.Types.Add(new TypePropertyEntry { Name = "KAC-A-WA1110", InstanceCount = 1 });
         check(audit.Inspect(gmpModel).Single().Cells[2].Issue == "" && audit.Inspect(gmpModel).Single().Cells[3].Issue.Contains("없음"),
             "배치 유형이 있는 모델은 기존 GMP 공항코드 판정과 원본에 없는 건물 검토를 유지");
@@ -74,7 +99,7 @@ internal static class TypePropertyReviewTests
         {
             Path = @"C:\local\미작성 매개변수 검토.rvt",
             Title = "여객터미널",
-            TypePropertyReview = new() { Types = [unplaced] }
+            TypePropertyReview = new() { FormatVersion = TypePropertyReviewSnapshot.CurrentFormatVersion, Types = [unplaced] }
         };
         ModelSnapshot[] models = [model, gmpModel, noIssues];
         var work = Path.Combine(Path.GetTempPath(), "SunnyTypeReview-" + Guid.NewGuid().ToString("N"));
@@ -102,6 +127,7 @@ internal static class TypePropertyReviewTests
             }
 
             var summary = ReadCells(1);
+            check(summary["B1"].Value == "유형명", "요약 첫 항목은 유형명 오류 수");
             int SummaryCount(char column, int row)
             {
                 var cell = summary[$"{column}{row}"];
@@ -109,27 +135,32 @@ internal static class TypePropertyReviewTests
                 return (int)cell.Element(ns + "v")!;
             }
 
-            var totals = new int[TypePropertyReview.Fields.Length];
+            string[] checkedFields = ["유형명", .. TypePropertyReview.Fields];
+            var totals = new int[checkedFields.Length];
             for (var m = 0; m < models.Length; m++)
             {
                 var detailed = ReadCells(m + 2);
                 var modelTotal = 0;
                 for (var f = 0; f < totals.Length; f++)
                 {
-                    int count = detailed.Count(c => c.Key[0] == 'G' + f && (string?)c.Value.Attribute("s") == "5");
-                    check(SummaryCount((char)('B' + f), m + 2) == count, $"모델 {m + 1}의 {TypePropertyReview.Fields[f]} 집계가 빨간 셀 수와 일치");
+                    var detailColumn = f == 0 ? 'D' : (char)('F' + f);
+                    int count = detailed.Count(c => c.Key[0] == detailColumn && (string?)c.Value.Attribute("s") == "5");
+                    check(SummaryCount((char)('B' + f), m + 2) == count, $"모델 {m + 1}의 {checkedFields[f]} 집계가 빨간 셀 수와 일치");
                     totals[f] += count;
                     modelTotal += count;
                 }
-                check(SummaryCount('L', m + 2) == modelTotal, $"모델 {m + 1} 집계 합계");
+                check(SummaryCount('M', m + 2) == modelTotal, $"모델 {m + 1} 집계 합계");
             }
             check(totals.Select((total, f) => total == SummaryCount((char)('B' + f), models.Length + 2)).All(matches => matches)
-                && SummaryCount('L', models.Length + 2) == issues, "매개변수별 총합과 보고서 문제 셀 합계 일치");
-            check(summary["A2"].Value != summary["A4"].Value && SummaryCount('L', 4) == 0, "동명 모델 구분 및 미배치 유형만 있는 모델의 0건 표시");
+                && SummaryCount('M', models.Length + 2) == issues, "매개변수별 총합과 보고서 문제 셀 합계 일치");
+            check(summary["A2"].Value != summary["A4"].Value && SummaryCount('M', 4) == 0, "동명 모델 구분 및 미배치 유형만 있는 모델의 0건 표시");
             check(ReadCells(4).Keys.All(reference => reference.EndsWith('1') && reference.Length == 2), "미배치 유형만 있는 상세 시트는 머리글만 표시");
-            check(SummaryCount('G', 2) == 0 && SummaryCount('G', models.Length + 2) == 0, "IsExternal의 모델별 집계와 전체 합계는 0");
+            check(SummaryCount('H', 2) == 0 && SummaryCount('H', models.Length + 2) == 0, "IsExternal의 모델별 집계와 전체 합계는 0");
             var cells = ReadCells(2);
-            check(cells.Values.All(cell => cell.Value != unplaced.Name) && !cells.ContainsKey("D4"), "미배치 유형 행과 해당 강조 셀 모두 제외");
+            check((string?)cells["D4"].Attribute("s") == "5" && (string?)cells["D3"].Attribute("s") != "5" &&
+                cells["Q4"].Value.Contains("유형명 ·") && SummaryCount('B', 2) == 1 && SummaryCount('B', 5) == 1,
+                "기본 이름의 상세 셀과 점검 사유 강조 및 요약에서 한 건 집계");
+            check(cells.Values.All(cell => cell.Value != unplaced.Name) && !cells.ContainsKey("D5"), "미배치 유형 행과 해당 강조 셀 모두 제외");
             check((string?)cells["H3"].Attribute("s") == "5" && (string?)cells["M3"].Attribute("s") == "5" && (string?)cells["L3"].Attribute("s") != "5" &&
                 (string?)cells["K3"].Attribute("s") != "5" && cells["Q3"].Value.Contains("재료명"), "문제 셀만 빨간 스타일로 표시하고 원인을 기록");
         }

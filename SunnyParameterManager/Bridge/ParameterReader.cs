@@ -25,7 +25,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         if (query?.IncludeTypePropertyReview == true)
         {
             model.TypePropertyReview = TypePropertyReviewReader.Read(doc);
-            Notices.Add($"유형속성검토: KAC 건축·구조 유형 {model.TypePropertyReview.Types.Count:N0}개를 읽었습니다.");
+            Notices.Add($"유형속성검토: 배치 유형 {model.TypePropertyReview.Types.Count:N0}개를 읽었습니다.");
             return [];
         }
         if (query?.IncludeProjectBasePointAudit == true)

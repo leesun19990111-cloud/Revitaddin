@@ -13,6 +13,8 @@ public sealed class TypePropertyReviewProfile
 
 public sealed class TypePropertyReviewSnapshot
 {
+    public const int CurrentFormatVersion = 1;
+    public int FormatVersion { get; set; }
     public TypePropertyValue Airport { get; set; } = new();
     public TypePropertyValue Building { get; set; } = new();
     public List<TypePropertyEntry> Types { get; set; } = [];
@@ -31,7 +33,7 @@ public sealed class TypePropertyEntry
 
 public sealed record TypePropertyValue(string? Text = null, bool Ambiguous = false);
 public sealed record TypePropertyCell(string Value, string Issue = "");
-public sealed record TypePropertyRow(TypePropertyEntry Type, List<TypePropertyCell> Cells);
+public sealed record TypePropertyRow(TypePropertyEntry Type, string NameIssue, List<TypePropertyCell> Cells);
 
 public sealed partial class TypePropertyReview
 {
@@ -52,7 +54,7 @@ public sealed partial class TypePropertyReview
         _buildings = profile.Buildings.ToLookup(x => x.Airport, StringComparer.Ordinal);
     }
 
-    public static bool IncludesType(string name) => name.StartsWith("KAC-A-", StringComparison.OrdinalIgnoreCase) ||
+    public static bool HasKacDiscipline(string name) => name.StartsWith("KAC-A-", StringComparison.OrdinalIgnoreCase) ||
         name.StartsWith("KAC-S-", StringComparison.OrdinalIgnoreCase);
 
     public static void Validate(RuleSet file)
@@ -77,7 +79,8 @@ public sealed partial class TypePropertyReview
 
     public IEnumerable<TypePropertyRow> Inspect(ModelSnapshot model)
     {
-        var snapshot = model.TypePropertyReview ?? throw new InvalidOperationException(model.Title + " · 유형속성검토 룰셋으로 다시 조회하세요.");
+        if (model.TypePropertyReview is not { FormatVersion: TypePropertyReviewSnapshot.CurrentFormatVersion } snapshot)
+            throw new InvalidOperationException(model.Title + " · 유형명 형식을 점검하려면 유형속성검토 룰셋으로 다시 조회하세요.");
         var path = string.IsNullOrWhiteSpace(model.CentralPath) ? model.Path : model.CentralPath;
         var fileName = Path.GetFileNameWithoutExtension(path);
         var prefix = fileName.Length >= 3 ? fileName[..3].ToUpperInvariant() : "";
@@ -92,14 +95,25 @@ public sealed partial class TypePropertyReview
             .ThenBy(t => t.ElementId, StringComparer.Ordinal);
         foreach (var type in placedTypes)
         {
+            var nameIssue = KacRulePlanner.TypeCode(type.Name).Length == 0
+                ? "KAC-A- 또는 KAC-S- 다음에 영문 대문자 2자와 숫자 4자가 필요합니다."
+                : "";
+            var worksets = type.InstanceValues.GetValueOrDefault("작업세트") ?? [new()];
+            if (!HasKacDiscipline(type.Name))
+            {
+                // 추가로 수집한 유형은 이름 형식만 판정하고 작업세트는 찾기 쉽도록 표시한다.
+                var cells = Fields.Select(field => field == "작업세트" ? Check(worksets) : new TypePropertyCell("")).ToList();
+                yield return new(type, nameIssue, cells);
+                continue;
+            }
             var code = KacRulePlanner.TypeCode(type.Name.ToUpperInvariant());
             var ifc = _ifc.FirstOrDefault(i => code.StartsWith(i.Prefix, StringComparison.Ordinal))?.Value;
             var classification = _classification.GetValueOrDefault(code);
-            yield return new(type, Fields.Select(field => field switch
+            yield return new(type, nameIssue, Fields.Select(field => field switch
             {
                 "공항코드" => airportCell,
                 "건축물번호" => buildingCell,
-                "작업세트" => Check(type.InstanceValues.GetValueOrDefault(field) ?? [new()], value =>
+                "작업세트" => Check(worksets, value =>
                     {
                         var expected = type.Name.StartsWith("KAC-A-", StringComparison.OrdinalIgnoreCase) ? "건축" : "구조";
                         return value != null && value.Contains(expected, StringComparison.Ordinal) ? "" : $"‘{expected}’이 포함된 작업세트 필요";

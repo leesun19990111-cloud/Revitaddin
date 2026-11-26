@@ -9,12 +9,13 @@ namespace SunnyParameterManager.Desktop;
 public static class TypePropertyReviewWorkbook
 {
     public const string SummarySheetName = "미작성 매개변수 검토";
+    private const int TypeNameColumn = 3;
     private const int FirstPropertyColumn = 6;
     private static readonly string[] Headers =
         ["모델명", "카테고리", "패밀리", "유형명", "유형 ID", "배치 수", .. TypePropertyReview.Fields, "점검 사유"];
     private static readonly int[] Widths = [42, 18, 28, 46, 16, 12, 30, 26, 14, 18, 17, 16, 20, 21, 25, 26, 110];
-    private static readonly string[] SummaryHeaders = ["모델명", .. TypePropertyReview.Fields, "문제 셀 합계"];
-    private static readonly int[] SummaryWidths = [55, 30, 12, 13, 16, 14, 13, 9, 20, 26, 12, 18];
+    private static readonly string[] SummaryHeaders = ["모델명", "유형명", .. TypePropertyReview.Fields, "문제 셀 합계"];
+    private static readonly int[] SummaryWidths = [55, 13, 30, 12, 13, 16, 14, 13, 9, 20, 26, 12, 18];
 
     public static (string Path, int IssueCount) Save(string? rulePath, IReadOnlyList<ModelSnapshot> models, TypePropertyReviewProfile profile)
     {
@@ -38,7 +39,7 @@ public static class TypePropertyReviewWorkbook
 
     private static int[] WriteModelSheet(ZipArchive zip, int index, ModelSnapshot model, TypePropertyReview review)
     {
-        var counts = new int[TypePropertyReview.Fields.Length];
+        var counts = new int[1 + TypePropertyReview.Fields.Length];
         using var stream = zip.CreateEntry($"xl/worksheets/sheet{index}.xml", CompressionLevel.Optimal).Open();
         using var writer = new StreamWriter(stream, new UTF8Encoding(false));
         StartSheet(writer, Widths);
@@ -51,12 +52,18 @@ public static class TypePropertyReviewWorkbook
                 type.InstanceCount.ToString(CultureInfo.InvariantCulture), .. row.Cells.Select(c => c.Value), ""];
             var red = new bool[Headers.Length];
             var reasons = new List<string>();
+            if (row.NameIssue.Length != 0)
+            {
+                red[TypeNameColumn] = true;
+                counts[0]++;
+                reasons.Add("유형명 · " + row.NameIssue);
+            }
             for (var i = 0; i < row.Cells.Count; i++)
             {
                 var issue = row.Cells[i].Issue;
                 if (issue.Length == 0) continue;
                 red[FirstPropertyColumn + i] = true;
-                counts[i]++;
+                counts[i + 1]++;
                 reasons.Add($"{TypePropertyReview.Fields[i]} · {issue}");
             }
             values[^1] = string.Join(" | ", reasons);
@@ -76,7 +83,7 @@ public static class TypePropertyReviewWorkbook
 
         var repeatedTitles = models.GroupBy(model => model.Title, StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var total = new int[TypePropertyReview.Fields.Length];
+        var total = new int[1 + TypePropertyReview.Fields.Length];
         for (var i = 0; i < models.Count; i++)
         {
             var title = models[i].Title;
@@ -86,7 +93,7 @@ public static class TypePropertyReviewWorkbook
             for (var field = 0; field < total.Length; field++) total[field] += counts[i][field];
         }
         WriteSummaryRow(writer, models.Count + 2, "전체 합계", total, totalRow: true);
-        writer.Write($"</sheetData><autoFilter ref=\"A1:L{models.Count + 1}\"/></worksheet>");
+        writer.Write($"</sheetData><autoFilter ref=\"A1:M{models.Count + 1}\"/></worksheet>");
     }
 
     private static void WriteSummaryRow(StreamWriter writer, int number, string label, int[] counts, bool totalRow = false)
