@@ -68,6 +68,20 @@ internal static class KacRuleTests
         file = File(); file.Kac!.MaterialPolicy = "임의"; reject(() => Plan(Rows(), file), "임의 재료 정책 거부");
         file = File(); file.Kac!.Scope = "인스턴스"; reject(() => Plan(Rows(), file), "KAC 범위 무단 확장 거부");
         reject(() => RulePlanner.Parse(JsonSerializer.Serialize(File()).Replace("\"Company\":", "\"Typo\":")), "KAC 알 수 없는 속성 거부");
+        var retry = File();
+        retry.Kac!.Buildings = [new() { Airport="CJU", Name="구관제탑", ManagementCode="CJU1A002", Ownership="1", SourceRow=82 }];
+        retry.Kac.SelectedFields = ["KBIMS-부위코드","조달청표준공사코드","제작정보"];
+        var retryPath = "CJU-1A002-1-구관제탑-SA.rvt";
+        var retryRows = Rows(path:retryPath);
+        var projectNumber = new ParameterRow { Scope="프로젝트 정보", ModelPath=retryPath, OwnerId="project", Name="건축물번호",
+            DataType="autodesk.spec:spec.string-2.0.0", ParameterKey="id:42", Storage="String", Editor="텍스트", Display="1A001-1", HasValue=true };
+        retryRows.Add(projectNumber);
+        var retryPlan = Plan(retryRows, retry);
+        check(retryPlan.Edits.Count==4 && retryPlan.Edits.Single(e=>e.Field=="건축물번호").Value=="1A002-1" &&
+            retryPlan.Edits.All(e=>e.Field=="건축물번호" || retry.Kac.SelectedFields.Contains(e.Field)) &&
+            !QueryPlan.FromRules(retry).IncludeOuterMaterial, "프로젝트정보와 지정한 세 속성만 재검토·복구");
+        projectNumber.Display="1A002-1";
+        check(Plan(retryRows,retry).Edits.All(e=>e.Field!="건축물번호"), "재실행 때 정상 건축물번호 변경 없음");
         var materialEdit = Plan(Rows()).Edits.Single(e => e.Field == "재료명");
         KacRulePlanner.CheckMaterial(materialEdit, materialEdit.MaterialSource); check(true, "재료 최신성 일치");
         reject(() => KacRulePlanner.CheckMaterial(materialEdit, new() { Name = "KAC-철근콘크리트", Basis = "유형 단일 재료", Fingerprint = "다른층" }), "외측층 변경 차단");

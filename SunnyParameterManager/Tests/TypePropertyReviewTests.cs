@@ -87,6 +87,11 @@ internal static class TypePropertyReviewTests
         var external = audit.Inspect(model).Single(row => row.Type == column).Cells[5];
         check(external.Value.Contains("예") && external.Value.Contains("아니요") && external.Issue == "", "여러 IsExternal 값과 동명 필드도 강조하지 않음");
         check(rows[1].Cells[2].Value == "MWX" && rows[1].Cells[3].Value == "1D001-1", "로컬명이 다르더라도 중앙파일명 기준 공항·건축물번호");
+        model.CentralPath = @"C:\중앙\MWX-1D001-1-여객터미널 (국제국내)-SA.rvt";
+        check(audit.Inspect(model).Single(row => row.Type == column).Cells[3].Issue == "", "검토도 전체 관리코드와 원본 기준을 함께 판정");
+        model.CentralPath = @"C:\중앙\MWX-1D999-1-여객터미널 (국제국내)-SA.rvt";
+        check(audit.Inspect(model).Single(row => row.Type == column).Cells[3].Issue.Contains("불일치"), "파일명·건물 기준 충돌을 검토에 표시");
+        model.CentralPath = @"\\server\projects\MWX-15여객터미널-SA.rvt";
         column.InstanceValues["다음으로 IFC로 내보내기"] = [new("IfcWall")];
         check(audit.Inspect(model).Single(row => row.Type == column).Cells[0].Issue.Contains("IfcColumn"), "유형 IFC와 다른 배치 요소 IFC 검출");
         column.InstanceValues.Remove("다음으로 IFC로 내보내기");

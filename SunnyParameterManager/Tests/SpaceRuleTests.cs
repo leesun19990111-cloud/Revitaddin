@@ -22,6 +22,32 @@ internal static class SpaceRuleTests
         check(SpaceRulePlanner.FileKey("MWX-150시험-SP.rvt") == ("MWX", "150"), "15와 150 부분 일치 방지");
         foreach (var invalid in new[] { "MWX-15시험-ME.rvt", "MWX-15시험-SP_사용자.rvt", "MWX-15시험-SP.0001.rvt", "MWX-15시험-SP.rfa", "XXX-15시험-SP.rvt", "접두-MWX-15시험-SP.rvt", "MWX-15-SP.rvt", "MWX-15-1-2시험-SP.rvt", "" })
             check(SpaceRulePlanner.FileKey(invalid) == null, "공간 파일명 미확정 제외 " + invalid);
+        var buildings = File();
+        buildings.Space!.Buildings = [
+            new() { Airport="CJU", Number="1", Name="신 관제탑", ManagementCode="CJU1A001", Ownership="1", SourceRow=81 },
+            new() { Airport="CJU", Number="2", Name="구 관제탑", ManagementCode="CJU1A002", Ownership="1", SourceRow=82 },
+            new() { Airport="CJU", Number="4", Name="화물터미널", ManagementCode="CJU1B001", Ownership="0", SourceRow=84 }];
+        var filenames = new[] { "CJU-1A001-1-신관제탑-SA.rvt", "CJU-1A002-1-구관제탑-SA.rvt", "CJU-1B001-0-화물터미널-SA.rvt" };
+        var multi = Plan(buildings, filenames.SelectMany(p => new[] { Row("공항코드",p), Row("건축물번호",p) }).ToArray());
+        check(multi.Edits.Where(e => e.Field == "건축물번호").Select(e => e.Value).SequenceEqual(["1A001-1","1A002-1","1B001-0"]),
+            "CJU 관리코드 전체와 소유구분 0을 모델별로 대조");
+        var oldPlan = new ValueEdit { Original = Row("건축물번호",filenames[1]), Value = "1A001-1", Reason = "룰셋: 이전 표 / Model Data 작성 / 81행" };
+        reject(() => SpaceRulePlanner.VerifySavedBuildingPlan(oldPlan, filenames[1]), "구버전 저장 작업의 잘못된 1번 건물 값을 적용 전에 차단");
+        oldPlan.Reason = "직접 입력";
+        SpaceRulePlanner.VerifySavedBuildingPlan(oldPlan, filenames[1]);
+        string bad = "CJU-1A001-1-구관제탑-SA.rvt";
+        check(!Plan(buildings, Row("공항코드",bad), Row("건축물번호",bad)).Edits.Any(e => e.Field=="건축물번호"), "파일 코드와 원본 건물명 충돌 시 보류");
+        var otherAirport = "PUS-1A002-1-구관제탑-SA.rvt";
+        check(Plan(buildings, Row("공항코드",otherAirport), Row("건축물번호",otherAirport)).Edits.All(e => e.Field != "건축물번호"), "다른 공항의 건물코드 사용 차단");
+        buildings.Space.Buildings.Add(new() { Airport="CJU", Number="9", Name="등록초소", SourceRow=90 });
+        buildings.Space.MissingBuildingNumberValue = "ND";
+        var missingPath = "CJU-9X999-9-등록초소-SA.rvt";
+        check(Plan(buildings,Row("공항코드",missingPath),Row("건축물번호",missingPath)).Edits.Single(e=>e.Field=="건축물번호").Value=="ND", "관리코드 누락·건물명 확인 시 ND");
+        string malformed = "CJU-1A002-구관제탑-SA.rvt";
+        check(Plan(buildings, Row("공항코드",malformed), Row("건축물번호",malformed)).Edits.Count==0, "소유구분 빠진 파일을 구식 일련번호 1로 읽지 않음");
+        var projectRows = new[] {Row("공항코드",filenames[0]), Row("건축물번호",filenames[0])};
+        foreach (var r in projectRows) r.ProjectCentralPath = filenames[1];
+        check(Plan(buildings,projectRows).Edits.Single(e=>e.Field=="건축물번호").Value=="1A002-1","로컬 파일명보다 실제 중앙파일명 우선");
         var wrong = Row("공항코드", "MWX-15시험-ME.rvt"); wrong.ModelTitle = fileName;
         check(Plan(file, wrong).Edits.Count == 0, "표시 제목 대신 등록 원본 경로 기준");
         const string saPath = "MWX-15시험건물-SA.rvt";

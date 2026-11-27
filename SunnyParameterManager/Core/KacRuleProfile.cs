@@ -19,6 +19,9 @@ public sealed class KacRuleProfile
     public string UnresolvedMaterialValue { get; set; } = "";
     // 기존 '층' 텍스트만 정리한다. 레벨 참조나 빈 값을 추정해 채우지 않는다.
     public bool NormalizeFloorName { get; set; }
+    public List<string> SelectedFields { get; set; } = [];
+    public List<SpaceBuilding> Buildings { get; set; } = [];
+    public string MissingBuildingNumberValue { get; set; } = "";
 }
 public sealed class KacClassification
 {
@@ -41,6 +44,9 @@ public static class KacRulePlanner
     public const string IfcTypeKey = "builtin:-1019015";
     public const string IfcInstanceKey = "builtin:-1019014";
     private static readonly string[] Fields = ["다음으로 IFC로 내보내기", "제작정보", "KBIMS-부위코드", "조달청표준공사코드", "재료명", "업체명"];
+    public static IEnumerable<string> TargetFields(KacRuleProfile profile) => profile.SelectedFields.Count > 0
+        ? profile.SelectedFields : profile.NormalizeFloorName ? [.. Fields, "층"] : Fields;
+
     private static bool Format(string value, string pattern) => value != null && Regex.IsMatch(value, pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     public static string TypeCode(string name)
     {
@@ -56,6 +62,13 @@ public static class KacRulePlanner
             string.IsNullOrWhiteSpace(p.ManufacturerInfo) || string.IsNullOrWhiteSpace(p.Company) || p.Sources == null ||
             p.Classification == null || p.Classification.Count is < 1 or > 5000 || p.Ifc == null || p.Ifc.Count is < 1 or > 200 ||
             p.UnresolvedMaterialValue is not ("" or "ND") ||
+            p.SelectedFields == null || p.SelectedFields.Distinct().Count() != p.SelectedFields.Count ||
+            p.SelectedFields.Any(n => !Fields.Contains(n) && !(n == "층" && p.NormalizeFloorName)) ||
+            p.MissingBuildingNumberValue is not ("" or "ND") || p.Buildings == null || p.Buildings.Count > 5000 ||
+            p.Buildings.Any(b => b == null || b.Airport is not ("CJU" or "PUS" or "MWX" or "GMP") ||
+                string.IsNullOrWhiteSpace(b.Name) || b.ManagementCode == null || b.Ownership == null ||
+                b.SourceRow < 1 || b.NameAliases == null || b.NameAliases.Any(string.IsNullOrWhiteSpace)) ||
+            p.Buildings.DistinctBy(b => b.SourceRow).Count() != p.Buildings.Count ||
             p.InstanceFields == null || p.InstanceFields.Distinct().Count() != p.InstanceFields.Count ||
             p.InstanceFields.Any(n => !Fields.Contains(n) && !(n == "층" && p.NormalizeFloorName)))
             throw new InvalidOperationException("버전2 KAC 룰셋의 유형 범위·재료/미확인 정책·고정값·매핑표를 확인하세요. 일반 규칙과 혼합할 수 없습니다.");
@@ -102,6 +115,46 @@ public static class KacRulePlanner
             throw new InvalidOperationException(edit.Type + ": 조회 후 외측 재료 또는 층 구성이 달라졌습니다. 다시 조회하고 룰셋을 불러오세요.");
     }
 
+    private static void PlanBuildingNumbers(KacRuleProfile profile, List<ParameterRow> all,
+        Dictionary<string, ValueEdit> pending, RulePlan plan)
+    {
+        var projects = all.Where(r => r.Scope == "프로젝트 정보").ToLookup(r => r.ModelPath, StringComparer.OrdinalIgnoreCase);
+        foreach (var modelPath in all.Select(r => r.ModelPath).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var info = projects[modelPath];
+            var path = info.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.ProjectCentralPath))?.ProjectCentralPath ?? modelPath;
+            var coded = BuildingFileMatch.Parse(path);
+            var label = Path.GetFileNameWithoutExtension(path) + " / 건축물번호";
+            if (coded == null)
+            {
+                plan.Notes.Add(label + ": 확인 필요 — 중앙파일명에서 관리코드·소유구분을 확인할 수 없습니다.");
+                continue;
+            }
+            var decision = coded.Resolve(profile.Buildings, profile.MissingBuildingNumberValue);
+            var candidates = info.Where(r => r.Name == "건축물번호").ToList();
+            if (decision.Value == null || candidates.Count != 1)
+            {
+                plan.Notes.Add($"{label}: 확인 필요 — {decision.Reason} · 건축물번호 매개변수 {candidates.Count}개");
+                continue;
+            }
+            var row = candidates[0];
+            if (!row.Editable || row.Storage != "String" || row.Editor != "텍스트" || row.DataType != "autodesk.spec:spec.string-2.0.0")
+            {
+                plan.Notes.Add($"{label}: 확인 필요 — {row.Status} / {row.DataType}");
+                continue;
+            }
+            if (pending.TryGetValue(row.Key, out var prior) && (prior.Mode != "입력" || prior.Value != decision.Value))
+                throw new InvalidOperationException(label + ": 기존 변경 예정과 기준값이 다릅니다. 다시 검토하세요.");
+            foreach (var edit in EditPlanner.Stage([row], decision.Value))
+            {
+                edit.CheckedBuildingNumber = true;
+                edit.Reason = label + " / " + decision.Reason;
+                plan.Edits.Add(edit);
+            }
+            plan.Notes.Add($"{label}: {row.Display} → {decision.Value} · {decision.Reason}");
+        }
+    }
+
     public static RulePlan Plan(RuleSet file, IEnumerable<ParameterRow> available, IEnumerable<ValueEdit> pending, bool sample)
     {
         var profile = file.Kac!;
@@ -119,7 +172,7 @@ public static class KacRulePlanner
                 t[0].TypeName == r.TypeName && t[0].Family == r.Family && t[0].CategoryKey == r.CategoryKey)
             .GroupBy(r => (r.ModelPath.ToUpperInvariant(), r.TypeOwnerId))
             .ToDictionary(g => g.Key, g => g.Select(r => r.Name).ToHashSet(StringComparer.Ordinal));
-        string[] fields = profile.NormalizeFloorName ? [.. Fields, "층"] : Fields;
+        var fields = TargetFields(profile).ToArray();
         var changed = fields.ToDictionary(n => n, _ => 0);
         var same = fields.ToDictionary(n => n, _ => 0);
         var skipped = fields.ToDictionary(n => n, _ => 0);
@@ -142,7 +195,7 @@ public static class KacRulePlanner
                     linkedRows[0].TypeName != first.TypeName || linkedRows[0].Family != first.Family || linkedRows[0].CategoryKey != first.CategoryKey)
                 {
                     notes.Add($"{label}: 실제 소속 유형 식별 정보 없음/불일치 — 모델 다시 조회 필요. 이름만으로 연결하지 않습니다");
-                    foreach (var name in profile.InstanceFields) skipped[name]++;
+                    foreach (var name in fields.Where(profile.InstanceFields.Contains)) skipped[name]++;
                     continue;
                 }
                 sourceRows = linkedRows;
@@ -152,7 +205,7 @@ public static class KacRulePlanner
             else plan.MatchedOwners++;
             void Assign(string name, string? value, string basis, MaterialEvidence? material = null)
             {
-                if (instance && !profile.InstanceFields.Contains(name)) return;
+                if (!changed.ContainsKey(name) || instance && !profile.InstanceFields.Contains(name)) return;
                 void Skip(string why) { skipped[name]++; notes.Add($"{label} / {name}: 확인 필요 — {why}. 기존값 유지"); }
                 // 한 범위에만 있는 필드를 반대 범위의 누락으로 중복 보고하지 않는다.
                 // 양쪽 모두 없거나 실제 필드가 모호/읽기전용이면 아래에서 사유를 표시한다.
@@ -198,7 +251,7 @@ public static class KacRulePlanner
                 materialOk ? material!.Basis + " / " + material.Name : fallback ? "재료 미확인 → ND / " + material!.Reason : material?.Reason is { Length: > 0 } mr ? mr : "외측 재료 정보 없음 — 모델 다시 조회 필요",
                 materialOk || fallback ? material : null);
             Assign("업체명", profile.Company, "고정값");
-            if (profile.NormalizeFloorName && (!instance || profile.InstanceFields.Contains("층")))
+            if (changed.ContainsKey("층") && (!instance || profile.InstanceFields.Contains("층")))
             {
                 var floors = rows.Where(r => r.Name == "층").ToList();
                 if (floors.Count > 1)
@@ -216,10 +269,11 @@ public static class KacRulePlanner
         }
         plan.Notes.Add($"KAC-A-/KAC-S- 유형 {plan.MatchedOwners:N0}개 · 배치 요소 {instances:N0}개 · 변경 {plan.Edits.Count:N0}개 · 동일값 {identical:N0}개 · 확인 필요 {notes.Count:N0}개 · 코드 형식 제외 {outside:N0}개");
         foreach (var name in fields) plan.Notes.Add($"{name}: 변경 예정 {changed[name]:N0}개 · 이미 동일 {same[name]:N0}개 · 확인 필요 {skipped[name]:N0}개");
-        if (profile.NormalizeFloorName) plan.Notes.Add($"층: 빈 값 {emptyFloors:N0}개 유지. 각 유형/요소의 현재 텍스트만 정리하며 실제 레벨·위치·높이는 변경하지 않습니다.");
-        if (profile.UnresolvedMaterialValue == "ND") plan.Notes.Add($"재료 미확인 → ND 변경 예정 {materialFallbacks:N0}개. 기존 KAC 대상만 적용하며, 재료 조회 실패·정보 누락·실제 읽기전용은 제외합니다.");
-        plan.Notes.Add(profile.InstanceFields.Count == 0 ? "유형 매개변수만 변경합니다." : "배치 요소 추가 대상: " + string.Join(", ", profile.InstanceFields) + ". 실제 유형 식별자로 연결합니다.");
-        plan.Notes.Add("프로젝트 정보·실제 재료/층 구성·매개변수 바인딩·IFC 내보내기 여부/미리 정의된 유형은 변경하지 않습니다. 확인 필요 항목은 기존값을 유지합니다.");
+        if (changed.ContainsKey("층")) plan.Notes.Add($"층: 빈 값 {emptyFloors:N0}개 유지. 각 유형/요소의 현재 텍스트만 정리하며 실제 레벨·위치·높이는 변경하지 않습니다.");
+        if (changed.ContainsKey("재료명") && profile.UnresolvedMaterialValue == "ND") plan.Notes.Add($"재료 미확인 → ND 변경 예정 {materialFallbacks:N0}개. 기존 KAC 대상만 적용하며, 재료 조회 실패·정보 누락·실제 읽기전용은 제외합니다.");
+        plan.Notes.Add(profile.InstanceFields.Count == 0 ? "유형 매개변수만 변경합니다." : "배치 요소 추가 대상: " + string.Join(", ", fields.Where(profile.InstanceFields.Contains)) + ". 실제 유형 식별자로 연결합니다.");
+        if (profile.Buildings.Count > 0) PlanBuildingNumbers(profile, all, pendingByKey, plan);
+        plan.Notes.Add("확인 필요 항목은 기존값을 유지합니다.");
         plan.Notes.AddRange(notes);
         return plan;
     }

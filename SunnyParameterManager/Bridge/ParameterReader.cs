@@ -82,6 +82,12 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
                     if (parameter != null && parameters.All(p => p.Id != parameter.Id)) parameters.Add(parameter);
                 }
             }
+            if (query?.Keys.Contains(KacRulePlanner.IfcTypeKey) == true || query?.Keys.Contains(KacRulePlanner.IfcInstanceKey) == true)
+            {
+                var id = element is ElementType ? BuiltInParameter.IFC_EXPORT_ELEMENT_TYPE_AS : BuiltInParameter.IFC_EXPORT_ELEMENT_AS;
+                var parameter = element.get_Parameter(id);
+                if (parameter != null && parameters.All(p => p.Id != parameter.Id)) parameters.Add(parameter);
+            }
             // 소속 작업세트는 일부 요소의 열거에 없더라도 직접 접근이 지원된다.
             if (element is not ElementType && element is not ProjectInfo && element is not View && doc.IsWorkshared)
             {
@@ -128,6 +134,7 @@ internal sealed class ParameterReader(Document doc, ModelSnapshot model)
         {
             ModelPath = model.Path, ModelTitle = model.Title, OwnerId = owner.UniqueId, ElementId = owner.Id.Value.ToString(Invariant),
             Scope = owner is ProjectInfo ? "프로젝트 정보" : owner is ViewSheet ? "시트" : owner is View ? "뷰" : owner is ElementType ? "유형" : "인스턴스",
+            ProjectCentralPath = owner is ProjectInfo && model.CentralPath.Length > 0 ? model.CentralPath : null,
             Category = owner is ProjectInfo ? "프로젝트 정보" : owner.Category?.Name ?? "기타",
             CategoryKey = owner is ProjectInfo ? "project" : (owner.Category?.Id.Value ?? 0).ToString(Invariant),
             Family = type?.FamilyName ?? "", TypeName = owner is ProjectInfo ? "프로젝트 정보" : type?.Name ?? (owner is View ? "" : owner.Name ?? ""),

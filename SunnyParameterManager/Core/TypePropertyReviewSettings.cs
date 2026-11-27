@@ -23,7 +23,7 @@ public sealed class TypePropertyReviewSettings
             ValuesByTypePrefix = new() { ["KAC-A-"] = "건축", ["KAC-S-"] = "구조" } },
         new() { Name = "공항코드", Scope = "프로젝트 정보", Check = "AirportCode", Width = 14, SummaryWidth = 13 },
         new() { Name = "건축물번호", Scope = "프로젝트 정보", Check = "BuildingNumber", Width = 18, SummaryWidth = 16 },
-        new() { Name = "제작정보", Check = "Required", Width = 17, SummaryWidth = 14 },
+        new() { Name = "제작정보", Check = "Equals", Value = "KAC-v1.0", Width = 17, SummaryWidth = 14 },
         new() { Name = "IsExternal", Width = 16, SummaryWidth = 13 },
         new() { Name = "층", Check = "Pattern", Pattern = @"\A(?:(?:지상|지하)[0-9]+층|지붕층|PIT층|옥탑(?:[0-9]+)?층)\z", IgnoreCase = true,
             Message = "지상/지하 숫자층, 지붕층, PIT층 또는 옥탑층 형식 필요", Width = 20, SummaryWidth = 9 },

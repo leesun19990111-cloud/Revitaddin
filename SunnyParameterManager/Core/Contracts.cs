@@ -6,7 +6,7 @@ namespace SunnyParameterManager.Core;
 public static class Protocol
 {
     public const int Version = 1;
-    public const string Release = "0.8.5";
+    public const string Release = "0.8.6";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     public static string SessionsRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SunnyTools", "ParameterManager", "Sessions");
     public static string SessionFolder(string id) => Path.Combine(SessionsRoot, Guid.ParseExact(id, "N").ToString("N"));
@@ -56,7 +56,12 @@ public sealed class ModelSnapshot
     public TypePropertyReviewSnapshot? TypePropertyReview { get; set; }
     public ProjectBasePointAudit? ProjectBasePointAudit { get; set; }
     public CentralRebuildEvidence? CentralRebuild { get; set; }
-    public void ConnectCatalogs() { foreach (var row in Rows) row.Choices = Catalogs.GetValueOrDefault(row.ChoiceCatalog, []); }
+    public void ConnectCatalogs()
+    {
+        foreach (var row in Rows) row.Choices = Catalogs.GetValueOrDefault(row.ChoiceCatalog, []);
+        if (CentralPath.Length > 0)
+            foreach (var row in Owners.Concat(Rows).Where(r => r.Scope == "프로젝트 정보")) row.ProjectCentralPath = CentralPath;
+    }
 }
 
 // 활성 공유대지에서 프로젝트 기준점의 표시 매개변수를 읽은 결과.
@@ -107,6 +112,8 @@ public sealed class ParameterRow
 {
     public string ModelPath { get; set; } = "";
     public string ModelTitle { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProjectCentralPath { get; set; }
     public string OwnerId { get; set; } = "";
     public string ElementId { get; set; } = "";
     public string Scope { get; set; } = "유형";
@@ -172,6 +179,8 @@ public sealed class ValueEdit
     public string Value { get; set; } = "";
     public string Mode { get; set; } = "입력";
     public string RawValue { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool CheckedBuildingNumber { get; set; }
     public string ReferenceKey { get; set; } = "";
     public string Reason { get; set; } = "직접 입력";
     public string RoomName { get; set; } = "";

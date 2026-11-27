@@ -51,6 +51,8 @@ public static class SpaceRulePlanner
         if (string.IsNullOrWhiteSpace(path) || path.Length > 4096) return null;
         var filename = path.Replace('\\', '/').Split('/').Last();
         if (!filename.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase)) return null;
+        // 관리코드를 옛 일련번호로 축약해 읽으면 1A002, 1B003 등이 모두 1번 건물에 연결된다.
+        if (Regex.IsMatch(filename, @"\A[A-Za-z]{3}[-_][0-9]+[A-Za-z][0-9]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))) return null;
         var m = Regex.Match(filename[..^4], @"\A(PUS|MWX|CJU)-([0-9]+(?:-[0-9]+)?)[_\-]?([^0-9_\-\s].*)-(?:SP|SA)\z",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
         return m.Success ? (m.Groups[1].Value.ToUpperInvariant(), Number(m.Groups[2].Value), m.Groups[3].Value) : null;
@@ -102,6 +104,17 @@ public static class SpaceRulePlanner
         return b.ManagementCode[3..] + "-" + b.Ownership;
     }
 
+    public static void VerifySavedBuildingPlan(ValueEdit edit, string sourcePath)
+    {
+        if (edit.Original.Scope != "프로젝트 정보" || edit.Field != "건축물번호") return;
+        var previousRule = edit.Reason.StartsWith("룰셋: ", StringComparison.Ordinal) &&
+            edit.Reason.Contains("Model Data 작성", StringComparison.OrdinalIgnoreCase);
+        if (!edit.CheckedBuildingNumber && !previousRule) return;
+        var file = BuildingFileMatch.Parse(sourcePath);
+        if (file == null || edit.Value == file.Code || edit.CheckedBuildingNumber && edit.Value == "ND") return;
+        throw new InvalidOperationException($"건축물번호 변경 예정 {edit.Value}와 중앙파일명 {file.Code}의 근거가 다릅니다. 이전 변경 예정을 제외하고 새 룰셋으로 다시 조회·검토하세요.");
+    }
+
     public static RulePlan Plan(RuleSet file, IEnumerable<ParameterRow> available, IEnumerable<ValueEdit> pending)
     {
         Validate(file);
@@ -117,7 +130,9 @@ public static class SpaceRulePlanner
         foreach (var model in all.GroupBy(r => r.ModelPath, StringComparer.OrdinalIgnoreCase))
         {
             var label = model.First().ModelTitle;
-            var identity = FileIdentity(model.Key);
+            var path = model.FirstOrDefault(r => r.Scope == "프로젝트 정보" && !string.IsNullOrWhiteSpace(r.ProjectCentralPath))?.ProjectCentralPath ?? model.Key;
+            var coded = BuildingFileMatch.Parse(path);
+            var identity = coded == null ? FileIdentity(path) : (coded.Airport, coded.Code, coded.Name);
             var key = identity == null ? ((string Airport, string Number)?)null : (identity.Value.Airport, identity.Value.Number);
             if (key == null)
             {
@@ -135,12 +150,14 @@ public static class SpaceRulePlanner
             table.TryGetValue(key.Value, out var matches);
             var aliasMatched = aliases.TryGetValue((key.Value.Airport, Alias(identity!.Value.Name)), out var aliasEntry);
             var entry = aliasMatched ? aliasEntry : matches?.Count == 1 ? matches[0] : null;
-            if (aliasMatched) plan.Notes.Add($"{label}: 확정 별칭 '{identity.Value.Name}' → {entry!.Name} ({entry.Airport}-{entry.Number}).");
-            var building = entry == null ? null : BuildingValue(entry);
-            var source = entry == null ? "파일명" : profile.Source + " / " + entry.SourceRow + "행";
+            if (coded == null && aliasMatched) plan.Notes.Add($"{label}: 확정 별칭 '{identity.Value.Name}' → {entry!.Name} ({entry.Airport}-{entry.Number}).");
+            var decision = coded?.Resolve(profile.Buildings, profile.MissingBuildingNumberValue);
+            if (decision != null) entry = decision.Entry;
+            var building = decision != null ? decision.Value : entry == null ? null : BuildingValue(entry);
+            var source = decision != null ? profile.Source + " / " + decision.Reason : entry == null ? "파일명" : profile.Source + " / " + entry.SourceRow + "행";
             var missingReason = "";
             var assetReason = "";
-            if (entry != null && profile.MissingBuildingNumberValue == "ND" &&
+            if (decision == null && entry != null && profile.MissingBuildingNumberValue == "ND" &&
                 (string.IsNullOrWhiteSpace(entry.ManagementCode) || string.IsNullOrWhiteSpace(entry.Ownership)))
             {
                 missingReason = string.Join("·", new[] {
@@ -151,7 +168,7 @@ public static class SpaceRulePlanner
             }
             if (building == null)
             {
-                var why = entry != null ? "건축물 관리코드 또는 소유구분 숫자 누락/형식 확인" : matches == null ? "엑셀에 건물번호 없음" : "동일 건물번호가 여러 행에 존재";
+                var why = decision != null ? decision.Reason : entry != null ? "건축물 관리코드 또는 소유구분 숫자 누락/형식 확인" : matches == null ? "엑셀에 건물번호 없음" : "동일 건물번호가 여러 행에 존재";
                 plan.Notes.Add($"{label}: 확인 필요 — {why}. 공항코드만 입력하고 건축물번호는 기존 값 유지. ({source})");
             }
             Assign("공항코드", key.Value.Airport);
@@ -215,7 +232,7 @@ public static class SpaceRulePlanner
             throw new InvalidOperationException("공간파일 룰셋 전체를 보류했습니다. 기존 변경 예정 목록은 그대로입니다.\n" + string.Join("\n", errors.Take(12)) + (errors.Count > 12 ? $"\n외 {errors.Count - 12}개 문제" : ""));
         foreach (var a in assignments.Values)
             foreach (var edit in EditPlanner.Stage([a.Row], a.Value))
-            { edit.Reason = a.Reason; edit.AddParameter = additions.GetValueOrDefault(a.Row.Key); plan.Edits.Add(edit); }
+            { edit.Reason = a.Reason; edit.CheckedBuildingNumber = edit.Field == "건축물번호"; edit.AddParameter = additions.GetValueOrDefault(a.Row.Key); plan.Edits.Add(edit); }
         plan.Notes.Insert(0, $"SP·SA 파일 {plan.MatchedOwners:N0}개 · 프로젝트 정보 변경 {plan.Edits.Count:N0}개 · 동일값 {assignments.Count - plan.Edits.Count:N0}개 제외");
         return plan;
     }

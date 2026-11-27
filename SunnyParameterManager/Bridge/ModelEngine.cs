@@ -69,6 +69,8 @@ public sealed class ModelEngine(string folder, Action<Response> progress)
                     }
                 }
             }
+            if (req.Operation == "적용")
+                foreach (var edit in req.Edits) SpaceRulePlanner.VerifySavedBuildingPlan(edit, central.Length > 0 ? central : source);
             var isCentral = rebuildQuery ? rebuildKind == "중앙" : info.IsWorkshared && string.Equals(source, central, StringComparison.OrdinalIgnoreCase);
             if (!rebuildQuery && info.IsWorkshared && !isCentral && !string.Equals(info.Username, app.Username, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"다른 사용자의 로컬 파일입니다. 원래 중앙파일을 선택하세요.\n파일 사용자: {info.Username} / 현재 Revit 사용자: {app.Username}\n중앙 경로: {central}\n보관용 복사본·스캔 전 파일을 현재 중앙으로 추정하지 않습니다. 사용자 이름을 바꾸어 우회하지 마세요.");

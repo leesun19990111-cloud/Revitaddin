@@ -185,6 +185,8 @@ public sealed partial class TypePropertyReview
         var issue = verify == null ? "" : string.Join(", ", items
             .Select(v => v.Ambiguous ? "동명 매개변수가 여러 개 있습니다" : verify(v.Text))
             .Where(s => s.Length > 0).Distinct());
+        if (issue.Length > 0 && items.Count > 0 && items.All(v => v.Text == null && !v.Ambiguous))
+            issue += " · 매개변수 미조회/해당 범위에 없음";
         return new(shown, issue);
     }
 
@@ -200,6 +202,12 @@ public sealed partial class TypePropertyReview
     private (string? Value, string Issue) FindBuilding(string airport, string fileName)
     {
         if (airport.Length == 0) return (null, "파일명 공항코드를 확인할 수 없음");
+        var coded = BuildingFileMatch.Parse(fileName + ".rvt");
+        if (coded != null)
+        {
+            var decision = coded.Resolve(_buildings[airport], "ND");
+            return (decision.Value, decision.Reason);
+        }
         var stem = FileDiscipline().Replace(fileName[3..].TrimStart('-', '_', ' '), "");
         var match = FileBuildingPrefix().Match(stem);
         var name = match.Success ? stem[match.Length..] : stem;

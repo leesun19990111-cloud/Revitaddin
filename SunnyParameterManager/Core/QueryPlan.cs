@@ -146,10 +146,15 @@ public sealed class QueryPlan
         {
             // 반대 범위의 필드 존재도 기존 KAC 누락 판단에 필요하다. 바인딩/적용 범위는 바꾸지 않는다.
             plan.Scopes = ["유형", "인스턴스"];
-            plan.Names = ["다음으로 IFC로 내보내기", "제작정보", "KBIMS-부위코드", "조달청표준공사코드", "재료명", "업체명"];
-            if (rules.Kac!.NormalizeFloorName) plan.Names.Add("층");
-            plan.Keys = [KacRulePlanner.IfcTypeKey, KacRulePlanner.IfcInstanceKey];
-            plan.IncludeOuterMaterial = true;
+            var profile = rules.Kac!;
+            plan.Names = KacRulePlanner.TargetFields(profile).ToList();
+            if (plan.Names.Contains("다음으로 IFC로 내보내기")) plan.Keys = [KacRulePlanner.IfcTypeKey, KacRulePlanner.IfcInstanceKey];
+            plan.IncludeOuterMaterial = plan.Names.Contains("재료명");
+            if (profile.Buildings.Count > 0)
+            {
+                plan.Scopes.Add("프로젝트 정보");
+                plan.Names.Add("건축물번호");
+            }
         }
         else
         {
